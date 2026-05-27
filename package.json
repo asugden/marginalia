@@ -1,0 +1,21 @@
+{
+  "name": "marginalia",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace apps/worker",
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:mock": "npm run dev:mock --workspace apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:migrate": "npm run db:migrate --workspace apps/worker"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

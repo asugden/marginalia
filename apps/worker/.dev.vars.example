@@ -1,0 +1,24 @@
+# Copy to .dev.vars (gitignored) and fill in. Used by `wrangler dev`.
+#
+# In local dev you typically don't want to round-trip through Google OAuth on
+# every change. Set DEV_AUTH_BYPASS + DEV_AUTH_EMAIL and authenticate() will
+# treat each request as that user — but ONLY when ENVIRONMENT=dev.
+
+# Local environment selector. The dev bypass below is ignored in any other.
+ENVIRONMENT=dev
+
+# Bring-your-own-key: your LLM provider credential.
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Google OAuth client secret (paired with AUTH_GOOGLE_CLIENT_ID in wrangler.toml).
+# Only needed if you want to test the real sign-in flow locally; the bypass
+# below skips this path entirely.
+AUTH_GOOGLE_CLIENT_SECRET=
+
+# HMAC key for the oidc_state cookie + session IP hashing. 32+ random bytes.
+# Generate one with:  openssl rand -base64 48
+SESSION_SIGNING_KEY=
+
+# Dev auth bypass — wrangler dev runs as this user. Refused unless ENVIRONMENT=dev.
+DEV_AUTH_BYPASS=true
+DEV_AUTH_EMAIL=admin@example.com

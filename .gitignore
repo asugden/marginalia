@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.wrangler/
+*.tsbuildinfo
+.DS_Store
+
+# Local secrets — never commit.
+.dev.vars
+
+# Per-deploy config — copy from wrangler.toml.example.
+apps/worker/wrangler.toml
+
+# Local theme overlay — copy/symlink from your private branding repo.
+apps/web/src/branding/theme.yaml
+
+# Brand assets dropped in by a deploy overlay. Public repo ships only .gitkeep.
+apps/web/public/branding/*
+!apps/web/public/branding/.gitkeep
+
+# Local seed.sql — copy from seed.sql.example.
+apps/worker/seed.sql
+
+# DB backups may contain student PII — never commit.
+apps/worker/backup*.sql
+apps/worker/backups/
+*.sqlite3
+*.db

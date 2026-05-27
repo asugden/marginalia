@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // fetch / ReadableStream / TextDecoderStream are provided by the Workers
+    // runtime; pull in the DOM lib so tsc sees them when typechecking here.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

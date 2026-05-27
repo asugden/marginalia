@@ -1,0 +1,1176 @@
+/*
+ * Marginalia — visual styles.
+ *
+ * Brand-tunable values live in CSS custom properties below. The committed
+ * defaults are deliberately brand-neutral; deployers override at build time
+ * via apps/web/src/branding/theme.yaml (see docs/theming.md). The Vite
+ * theme plugin injects a :root override block from that file into the page;
+ * if it's absent, the defaults below take effect.
+ *
+ * The body::before watermark rule lower in this file reads its
+ * url + opacity from --brand-watermark-url / --brand-watermark-opacity,
+ * defaulting to "none" / 0 so the public build has no watermark at all.
+ */
+
+:root {
+  /* --- Brand tokens (override these in theme.yaml) --------------------- */
+  --brand-primary:           #5b6cff;
+  --brand-primary-dark:      #4a5ad8;
+  --brand-watermark-url:     none;
+  --brand-watermark-opacity: 0;
+  --font-sans:    -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+
+  /* --- Non-brand UI tokens (rarely overridden) ------------------------- */
+  --ink: #1a1c20;
+  --ink-soft: #4a4f57;
+  --muted: #6b7280;
+  --line: #e3e5e9;
+  --panel: #ffffff;
+  --bg: #f6f7f9;
+  --assistant-bg: #eef0f3;
+  --user-bg: var(--brand-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/*
+ * Optional brand watermark — fixed bottom-left, ~30% viewport width with a
+ * 750px floor, behind all content. Pages that should NOT show it (like
+ * ConversationPage) opt out by setting `.no-watermark` on a wrapper.
+ *
+ * Off by default. To enable, set brand.watermark_url + brand.watermark_opacity
+ * in theme.yaml; the Vite theme plugin emits the override.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  min-width: 750px;
+  aspect-ratio: 1 / 1;
+  background: var(--brand-watermark-url) bottom left / contain no-repeat;
+  opacity: var(--brand-watermark-opacity);
+  pointer-events: none;
+  z-index: -1;
+}
+
+body:has(.no-watermark)::before {
+  display: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+h1 {
+  font-weight: 900;
+  font-size: 2.25rem;
+  margin: 0 0 0.5rem;
+}
+h2 {
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.page {
+  min-height: 100vh;
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--brand-primary);
+  font-size: 0.9rem;
+}
+
+/* --- Landing (HomePage) — centered card over the watermark. --------------- */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.hero .card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  max-width: 460px;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.hero .card p {
+  color: var(--ink-soft);
+  margin-bottom: 1.5rem;
+}
+
+/* --- Buttons --------------------------------------------------------------- */
+/* Flat brand red, no gradient. Polish comes from the hover darken, a soft
+ * neutral lift shadow on hover, and a 1 px press translation. Composer & icon
+ * buttons opt out below.
+ */
+button {
+  background: var(--brand-primary);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.6rem 1.15rem;
+  font: 600 0.92rem var(--font-sans);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition:
+    background 160ms ease,
+    transform 120ms ease,
+    box-shadow 220ms ease;
+}
+button:hover:not(:disabled) {
+  background: var(--brand-primary-dark);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+button:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* --- ConversationPage — deliberately NO background image behind chat. ------ */
+.chat-layout {
+  --sidebar-w: 280px;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  background: var(--panel);
+  min-height: 100vh;
+  position: relative;
+  transition: grid-template-columns 220ms ease;
+}
+.chat-layout.sidebar-collapsed {
+  grid-template-columns: 0 1fr;
+}
+
+.sidebar {
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+  transition: opacity 180ms ease;
+}
+.chat-layout.sidebar-collapsed .sidebar {
+  opacity: 0;
+  pointer-events: none;
+  border-right-color: transparent;
+}
+.sidebar-inner {
+  width: var(--sidebar-w);
+  padding: 1.75rem 1.25rem;
+  position: sticky;
+  top: 0;
+}
+.sidebar h2 {
+  margin-top: 0;
+  font-size: 0.78rem;
+}
+.sidebar-subhead {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin: 1.5rem 0 0.5rem;
+}
+.progress {
+  list-style: none;
+  padding: 0;
+  font-size: 0.9rem;
+}
+.progress li {
+  margin-bottom: 1rem;
+  color: var(--ink-soft);
+}
+.progress strong {
+  color: var(--ink);
+}
+.source-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.88rem;
+}
+.source-list li {
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.35rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* New-chat link at the top of the in-conversation sidebar. */
+.sidebar-new-chat {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.9rem;
+  text-align: center;
+}
+.sidebar-new-chat:hover {
+  background: var(--panel-hover, var(--panel));
+  border-color: var(--ink-soft);
+}
+
+.sidebar-divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1rem 0;
+}
+
+.conversation-history {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+}
+.conversation-history li {
+  margin-bottom: 0.2rem;
+}
+.conversation-history a {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.conversation-history a:hover {
+  background: var(--panel);
+}
+.conversation-history li.active a {
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.history-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+.history-time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.1rem;
+}
+.sidebar-see-all {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.3rem 0.6rem;
+}
+.sidebar-see-all:hover { color: var(--ink); }
+
+.completed-banner {
+  margin: 0 1rem 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.completed-banner a { color: var(--ink); }
+
+/* Scrim is only visible on narrow viewports — see media query below. */
+.sidebar-scrim { display: none; }
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 0; /* let messages shrink inside the grid track */
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.chat-header-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 0.98rem;
+  margin-left: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  /* Reset the gradient/shadow inherited from the global button rule. */
+  box-shadow: none;
+  background: transparent;
+  color: var(--ink-soft);
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+.icon-button:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+.icon-button:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1.5rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+/* Default centering for non-bubble children (status notices, separators). The
+   bubbles themselves opt out and handle their own width/alignment so the user
+   bubble can right-flush against the chat pane. (v0.5 §6) */
+.messages > *:not(.bubble) {
+  width: 100%;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 0.65rem 1.05rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 0.98rem;
+}
+.bubble.user {
+  background: var(--user-bg);
+  color: #fff;
+  /* Right-flush against the chat pane (defeats the centering wrapper). */
+  margin-left: auto;
+  margin-right: 0;
+  max-width: 70%;
+}
+.bubble.assistant {
+  background: transparent;
+  color: var(--ink);
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.bubble.system {
+  background: #fff7ed;
+  border-left: 3px solid var(--brand-primary);
+  border-radius: 8px;
+  font-style: italic;
+  color: var(--ink-soft);
+  width: 100%;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.composer {
+  padding: 0.75rem 1.5rem 1.25rem;
+  background: var(--panel);
+}
+.composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0.5rem 0.5rem 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.composer-field:focus-within {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(186, 1, 0, 0.12);
+}
+.composer-field textarea {
+  flex: 1;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding: 0.55rem 0.25rem;
+  font: 0.98rem var(--font-sans);
+  color: var(--ink);
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.composer-field textarea::placeholder { color: var(--muted); }
+
+.send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  border: 0;
+  /* Keep the chat composer immune from the global gradient + shadow. */
+  box-shadow: none;
+  cursor: pointer;
+  transform: scale(0.9);
+  opacity: 0.55;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 140ms ease,
+              background 140ms ease;
+}
+.composer-field.can-send .send-button {
+  background: var(--brand-primary);
+  opacity: 1;
+  transform: scale(1);
+}
+.composer-field.can-send .send-button:hover {
+  background: var(--brand-primary-dark);
+  transform: scale(1.06);
+}
+.send-button:disabled { cursor: default; }
+.send-button svg {
+  transition: transform 180ms ease;
+}
+.composer-field.can-send .send-button:hover svg {
+  transform: translateY(-1px);
+}
+
+/* Narrow viewports: sidebar overlays the conversation. */
+@media (max-width: 720px) {
+  .chat-layout {
+    grid-template-columns: 1fr;
+  }
+  .chat-layout.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(82vw, 320px);
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 220ms ease, opacity 180ms ease;
+    opacity: 1;
+  }
+  .chat-layout:not(.sidebar-collapsed) .sidebar {
+    transform: translateX(0);
+  }
+  .chat-layout.sidebar-collapsed .sidebar {
+    transform: translateX(-100%);
+    opacity: 1;
+  }
+  .chat-layout:not(.sidebar-collapsed) .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 15;
+  }
+}
+
+/* --- Wider card variant (assignment list, author form) -------------------- */
+.card.wide { max-width: 760px; text-align: left; }
+
+.card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.card-header h1 { margin: 0; }
+.card-header .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+/* Header action zones (v0.7 §3.2). Student verbs on the left, staff
+ * destinations on the right, separated by a thin divider so the eye reads
+ * them as different kinds of action. Staff links are demoted to muted text.
+ */
+.header-actions .header-divider {
+  display: inline-block;
+  width: 1px;
+  height: 1.1rem;
+  background: var(--line);
+  margin: 0 0.35rem;
+}
+.header-actions .header-nav-link {
+  color: var(--ink-soft);
+  font: 500 0.88rem var(--font-sans);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.header-actions .header-nav-link:hover {
+  color: var(--ink);
+  background: var(--bg);
+}
+
+/* Circular icon-only "new" button used inline next to Continue in the
+ * student-register agent list (v0.7 §3.1). Inherits .icon-button geometry
+ * but is a perfect circle and a touch smaller. */
+.icon-button.round {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.icon-button.round:hover {
+  background: var(--bg);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+/* --- Assignment list (used on Home and Author index) ---------------------- */
+.assignment-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+  border-top: 1px solid var(--line);
+}
+.assignment-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.assignment-list li > div { min-width: 0; }
+.small { font-size: 0.85rem; }
+
+/* --- Link-styled buttons -------------------------------------------------- */
+.link-button {
+  display: inline-block;
+  background: var(--brand-primary);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 10px;
+  padding: 0.5rem 1rem;
+  font: 600 0.88rem var(--font-sans);
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition:
+    background 160ms ease,
+    box-shadow 220ms ease,
+    transform 120ms ease;
+}
+.link-button:hover {
+  background: var(--brand-primary-dark);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+}
+.link-button:active { transform: translateY(1px); }
+
+.link-button.subtle,
+button.subtle {
+  background: transparent;
+  color: var(--brand-primary);
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.95rem;
+  box-shadow: none;
+  font-weight: 600;
+}
+.link-button.subtle:hover,
+button.subtle:hover:not(:disabled) {
+  background: var(--bg);
+  border-color: rgba(186, 1, 0, 0.35);
+  color: var(--brand-primary-dark);
+  box-shadow: none;
+}
+
+/* Danger link — destructive actions (Delete, Remove, Revoke). Red text on
+ * transparent fill so destruction never looks like the primary action.
+ * See docs/style.md §2.
+ */
+.danger-link,
+button.danger-link {
+  background: transparent;
+  color: var(--brand-primary);
+  border: 0;
+  padding: 0.45rem 0.6rem;
+  box-shadow: none;
+  font: 600 0.88rem var(--font-sans);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.danger-link:hover:not(:disabled),
+button.danger-link:hover:not(:disabled) {
+  background: rgba(186, 1, 0, 0.08);
+  color: var(--brand-primary-dark);
+}
+.danger-link:disabled,
+button.danger-link:disabled { opacity: 0.5; cursor: default; }
+
+/* --- Staff register (Admin, Roster, Author, Collections, Users) ----------
+ * Full-bleed page, no white card, watermark suppressed. Brand red is reserved
+ * for create/save primary actions; .link-button.subtle is demoted to ink
+ * inside this scope so dense staff tables don't fill with competing reds.
+ * See docs/style.md §1, §2.
+ */
+.page.staff {
+  padding: 2rem;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+.page.staff .staff-frame {
+  width: 100%;
+  max-width: 760px;
+  padding: 0 0.25rem;
+}
+/* Watermark off everywhere in the staff register. The body:has() opt-out
+ * already powers ConversationPage; reuse the same primitive. */
+body:has(.page.staff)::before { display: none; }
+
+.page.staff h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.75rem;
+  letter-spacing: -0.01em;
+}
+.page.staff .scope-note {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  margin: -0.25rem 0 1.5rem;
+}
+
+/* In the staff register, subtle buttons are ink-coloured. */
+.page.staff .link-button.subtle,
+.page.staff button.subtle {
+  color: var(--ink);
+  border-color: var(--line);
+}
+.page.staff .link-button.subtle:hover,
+.page.staff button.subtle:hover:not(:disabled) {
+  background: var(--bg);
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+
+/* In staff lists, the row identifier (strong inside a link) reads as a
+ * regular row title — no underline by default; underline on hover signals
+ * the affordance. */
+.page.staff .assignment-list a {
+  color: inherit;
+  text-decoration: none;
+}
+.page.staff .assignment-list a:hover strong {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-soft);
+  text-underline-offset: 3px;
+}
+
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+.field.small { max-width: 200px; }
+.field-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+/* Global input normalisation (v0.7 §3.7 + §3.10) — every text input in the
+ * app matches the "New collection name" reference. The .field nested
+ * selectors above used to be the only inputs styled; bare inputs outside
+ * .field (Admin promote, Roster filter, join-code form, etc.) inherited
+ * browser defaults and drifted. Style by element so they all match.
+ */
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="password"],
+input[type="url"],
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  font: 0.95rem var(--font-sans);
+  color: var(--ink);
+  background: #fff;
+}
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="password"]:focus,
+input[type="url"]:focus,
+textarea:focus {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.field-group {
+  border-top: 1px solid var(--line);
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+}
+.field-group > h2 {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.4rem;
+}
+.field-group > p.muted { margin: 0 0 0.9rem; }
+
+.inline-fields { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+.checkbox {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.checkbox input { margin-top: 0.25rem; }
+.checkbox.disabled { color: var(--muted); cursor: not-allowed; }
+.checkbox.disabled em { font-style: normal; }
+
+/* --- Radio cards (agent + model pickers) ---------------------------------- */
+.radio-cards {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.radio-cards.inline {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.radio-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 120ms, background 120ms;
+  position: relative;
+}
+.radio-card:hover { border-color: var(--brand-primary); }
+.radio-card.selected { border-color: var(--brand-primary); background: #fff5f5; }
+.radio-card input { position: absolute; opacity: 0; pointer-events: none; }
+.radio-card.compact { padding: 0.6rem 0.75rem; }
+
+/* --- Topics editor -------------------------------------------------------- */
+.backbone-editor { margin-top: 1rem; }
+.topics {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #fafbfc;
+}
+.topics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.topic-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 0.6rem;
+}
+.topic-row:last-child { margin-bottom: 0; }
+.topic-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.topic-row-actions { display: flex; gap: 0.25rem; }
+button.subtle.icon {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+button.subtle.icon.danger { color: var(--brand-primary); }
+
+/* --- Form actions --------------------------------------------------------- */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+/* --- Source tabs + chips (v0.4 §4) --------------------------------------- */
+/* Segmented control. The container holds a faint background and the active
+ * pill sits on top; the inactive buttons stay flush so the eye reads the
+ * three options as one unit instead of three competing red buttons.
+ */
+.tab-row {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 1.25rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.tab-button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  padding: 0.45rem 0.95rem;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font: 600 0.88rem var(--font-sans);
+  letter-spacing: 0.02em;
+  /* Override the inherited gradient + shadow from the global button rule. */
+  box-shadow: none;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.tab-button:hover:not(.active) {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.6);
+}
+.tab-button.active {
+  background: var(--panel);
+  color: var(--brand-primary);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.tab-panel { margin-bottom: 0.5rem; }
+.inline-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.inline-form input { flex: 1; }
+/* Compact primary button at the end of an inline-form input bar — keeps the
+   form from out-shouting the rest of the page (v0.5 §9). */
+.inline-form button {
+  padding: 0.45rem 0.95rem;
+  font-size: 0.9rem;
+}
+
+/* Native <select> styling — applied globally so any picker matches the rest of
+   the app's controls. Padding chosen to match button.subtle so they line up
+   when they sit next to each other in a .row-actions (v0.5 §2 + §9). */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    no-repeat right 0.7rem center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  font: 500 0.92rem var(--font-sans);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+select:hover:not(:disabled) { border-color: rgba(186, 1, 0, 0.35); }
+select:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+  border-color: var(--brand-primary);
+}
+select:disabled { opacity: 0.5; cursor: default; }
+
+.kind-chip {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--surface-2, #eee);
+  color: var(--ink-2, #555);
+  vertical-align: 0.05rem;
+}
+.kind-chip.kind-pdf      { background: #fde2e2; color: #8b1a1a; }
+.kind-chip.kind-markdown { background: #e2ecfd; color: #1a4a8b; }
+.kind-chip.kind-text     { background: #e8f1e1; color: #2d5a1a; }
+.kind-chip.kind-url      { background: #fff1d6; color: #8a5a0e; }
+
+.status-badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+.status-pending { background: #fff4cc; color: #715b0a; }
+.status-indexed { background: #d8efd8; color: #20532a; }
+.status-failed  { background: #fadbd8; color: #7a1f1f; }
+
+.row-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* --- RAG citation pills (v0.5 §3) --------------------------------------- */
+.citation-pill {
+  display: inline-block;
+  padding: 0 0.4rem;
+  margin: 0 0.1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: 4px;
+  background: #f0e6e6;
+  color: var(--brand-primary-dark);
+  text-decoration: none;
+  vertical-align: 0.1rem;
+}
+.citation-pill:hover {
+  background: var(--brand-primary);
+  color: #fff;
+}
+.citation-pill.disabled {
+  background: #eee;
+  color: var(--ink-soft);
+  cursor: default;
+}
+.citation-pill.small { font-size: 0.7rem; }
+
+.sources-strip {
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.sources-strip a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.sources-strip a:hover { color: var(--brand-primary); }
+.sources-strip-item { white-space: normal; }
+
+/* --- History page (v0.4 §5) --------------------------------------------- */
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.history-list li {
+  border-bottom: 1px solid var(--line);
+}
+.history-list li:last-child { border-bottom: 0; }
+.history-list li > a {
+  display: block;
+  padding: 0.85rem 0.25rem;
+  text-decoration: none;
+  color: inherit;
+  transition: background 140ms ease;
+  border-radius: 8px;
+}
+.history-list li > a:hover { background: var(--bg); }
+.history-list li.done > a { opacity: 0.78; }
+.history-line-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+.history-line-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+}
+.history-title {
+  font-weight: 600;
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+.history-pill {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #d8efd8;
+  color: #20532a;
+  letter-spacing: 0.02em;
+}
+
+/* --- Markdown rendering (v0.4 §12) --------------------------------------- */
+/* Scoped so user bubbles and other plain-text areas stay unaffected. The
+ * assistant bubble already strips its own background; .markdown-body sits
+ * inside that and just sets typographic defaults that read well against the
+ * page panel.
+ */
+.markdown-body {
+  font: 0.98rem/1.65 var(--font-sans);
+  color: var(--ink);
+}
+.markdown-body > *:first-child { margin-top: 0; }
+.markdown-body > *:last-child  { margin-bottom: 0; }
+.markdown-body p { margin: 0 0 0.85em; }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  margin: 1.1em 0 0.4em;
+  text-transform: none;
+  color: var(--ink);
+}
+.markdown-body h1 { font-size: 1.45rem; font-weight: 700; }
+.markdown-body h2 { font-size: 1.2rem;  font-weight: 700; letter-spacing: 0; }
+.markdown-body h3 { font-size: 1.05rem; font-weight: 600; }
+.markdown-body h4 { font-size: 0.98rem; font-weight: 600; }
+
+.markdown-body ul,
+.markdown-body ol { margin: 0 0 0.85em; padding-left: 1.5em; }
+.markdown-body li { margin-bottom: 0.25em; }
+.markdown-body li > p { margin: 0 0 0.4em; }
+
+.markdown-body strong { font-weight: 700; }
+.markdown-body em { font-style: italic; }
+
+.markdown-body a {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-body a:hover { color: var(--brand-primary-dark); }
+
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--bg);
+  padding: 0.08em 0.35em;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+.markdown-body pre {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  margin: 0 0 0.85em;
+  font-size: 0.88em;
+  line-height: 1.55;
+}
+.markdown-body pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.markdown-body blockquote {
+  margin: 0 0 0.85em;
+  padding: 0.1rem 0.9rem;
+  border-left: 3px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0 0 0.85em;
+  font-size: 0.92em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.65rem;
+  text-align: left;
+}
+.markdown-body th { background: var(--bg); font-weight: 600; }
+
+.markdown-body hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.1em 0;
+}
+
+/* KaTeX override: the default font sizes look slightly large against our
+ * 0.98rem body. Tighten a hair so inline math doesn't jump above the line. */
+.markdown-body .katex { font-size: 1em; }
+.markdown-body .katex-display { margin: 0.4em 0; overflow-x: auto; overflow-y: hidden; }

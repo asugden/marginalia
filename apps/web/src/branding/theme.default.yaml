@@ -1,0 +1,36 @@
+# theme.default.yaml — brand-neutral defaults for Marginalia.
+#
+# To brand your deploy, copy or symlink this file to theme.yaml in the same
+# directory and edit. theme.yaml is gitignored; the Vite theme plugin reads
+# theme.yaml if present, else falls back to theme.default.yaml.
+#
+# All fields are optional — anything you omit keeps the default below.
+# See docs/theming.md for the full schema and per-deployer examples.
+
+brand:
+  # Browser tab title and (by default) the <h1> on the home page.
+  page_title: "Marginalia"
+
+  # Primary accent. Used for primary buttons, focus outlines, link colour,
+  # the user-message bubble background, etc. Pick something with enough
+  # contrast that white text reads on it.
+  primary: "#5b6cff"
+  # Slightly darker shade for hover/active states. Aim for ~10% darker.
+  primary_dark: "#4a5ad8"
+
+  # Body and display fonts. Strings are pasted verbatim as the CSS value of
+  # font-family — quote any name with a space and supply fallbacks.
+  font_sans: '-apple-system, system-ui, "Segoe UI", Roboto, sans-serif'
+  font_display: 'Georgia, "Times New Roman", serif'
+
+  # Optional background watermark. Set watermark_url to a path under
+  # /branding/ (Vite serves apps/web/public/branding/ at /branding/*) or
+  # null to disable. Opacity 0.03 matches what most institutions use.
+  watermark_url: null
+  watermark_opacity: 0
+
+  # Footer text shown on the home page.
+  footer_text: "Marginalia · open source under Apache 2.0"
+
+  # Favicon. Defaults to the SVG shipped at apps/web/public/favicon.svg.
+  favicon_url: "/favicon.svg"

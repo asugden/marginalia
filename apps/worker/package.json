@@ -1,0 +1,30 @@
+{
+  "name": "@marginalia/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "db:seed": "wrangler d1 execute DB --local --file ./seed.sql"
+  },
+  "dependencies": {
+    "@marginalia/auth": "*",
+    "@marginalia/backbone": "*",
+    "@marginalia/providers": "*",
+    "@marginalia/schema": "*",
+    "@marginalia/voices": "*",
+    "@mozilla/readability": "^0.6.0",
+    "jose": "^5.9.6",
+    "linkedom": "^0.18.12",
+    "unpdf": "^1.6.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@types/node": "^22.10.5",
+    "wrangler": "^4.86.0"
+  }
+}

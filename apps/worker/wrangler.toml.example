@@ -1,0 +1,110 @@
+# Marginalia Worker configuration.
+#
+# Copy this file to wrangler.toml and fill in the placeholders, then run:
+#   wrangler d1 create <your-d1-name>          # paste returned id below
+#   wrangler r2 bucket create <your-r2-name>
+#   wrangler vectorize create <your-vec-name> --dimensions=768 --metric=cosine
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put AUTH_GOOGLE_CLIENT_SECRET
+#   wrangler secret put SESSION_SIGNING_KEY    # openssl rand -base64 48
+#   wrangler d1 migrations apply <your-d1-name> --remote
+#   wrangler deploy
+#
+# wrangler.toml is gitignored — only wrangler.toml.example ships in the repo.
+
+name = "marginalia"
+main = "src/index.ts"
+compatibility_date = "2025-01-09"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain only. The worker handles both the SPA (static assets from
+# apps/web/dist) and /api/* routes from one origin — same-site means no CORS
+# and no cross-site cookie hand-wringing. workers.dev stays off so the only
+# reachable URL is the production custom domain (gated by the worker's own
+# session-cookie auth).
+workers_dev = false
+routes = [
+  { pattern = "<your-domain.example.com>", custom_domain = true }
+]
+
+# Static assets: serve apps/web/dist at "/" with SPA fallback. /api/* and
+# /auth/* are routed through the worker first; "/" too so the worker can
+# server-render bootstrap data into the SPA shell.
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/auth/*", "/"]
+
+# D1 — relational data.
+[[d1_databases]]
+binding = "DB"
+database_name = "<your-d1-name>"
+database_id = "<your-d1-id>"
+migrations_dir = "../../packages/schema/migrations"
+
+# R2 — original source files (PDFs, etc.) backing each indexed corpus.
+[[r2_buckets]]
+binding = "SOURCES"
+bucket_name = "<your-r2-name>"
+
+# Vectorize — RAG index. Per-collection namespace at query time.
+# BGE base produces 768-dim vectors; keep cosine to match the embeddings.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "<your-vec-name>"
+
+# Workers AI — default embeddings provider. Pluggable later.
+[ai]
+binding = "AI"
+
+# Optional: enable the scheduled expired-session sweep by uncommenting:
+#   [triggers]
+#   crons = ["0 4 * * *"]
+# A manual sweep command lives in docs/operations.md if you'd rather run
+# it once a semester at classroom scale.
+
+[vars]
+# Non-secret config. Bring-your-own-key model: no provider data here.
+ENVIRONMENT = "production"
+DEFAULT_MODEL = "claude-sonnet-4-6"
+# Workers AI embeddings model. BGE base — 768-dim, English-leaning, cheap.
+EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5"
+# Empty: SPA and API share an origin, so the browser never issues cross-origin
+# requests. Set only if you serve the frontend from a different host.
+CORS_ALLOWED_ORIGINS = ""
+
+# ── App-level OAuth/OIDC (the only auth layer) ────────────────────────────
+# "google" or "oidc".
+AUTH_PROVIDER = "google"
+# Google OAuth 2.0 Web client ID (non-secret).
+# Created in: Google Cloud Console → APIs & Services → Credentials → OAuth
+# client ID → Web app. Register both redirect URIs with the client:
+#   https://<your-domain.example.com>/auth/callback
+#   http://localhost:8787/auth/callback
+AUTH_GOOGLE_CLIENT_ID = "<your-google-client-id>.apps.googleusercontent.com"
+# Google `hd` parameter — restricts the picker to a single GSuite domain.
+# Leave empty (or remove) to allow any Google account. With this set, the
+# server-side gate (ALLOWED_EMAIL_DOMAINS below) is the second line of defense.
+AUTH_GOOGLE_HD = ""
+# Seed list for instance admins. The env list is the FLOOR — it never demotes.
+# Comma-separated, case-insensitive. Promote/demote anyone else via the
+# /admin UI after bootstrap.
+INSTANCE_ADMIN_EMAILS = "<your-admin-email@example.com>"
+# Comma-separated email domains permitted to claim join codes.
+# Empty/unset = no instance-wide gate (only useful for local dev). Domains
+# from INSTANCE_ADMIN_EMAILS are implicitly trusted in addition to this list.
+ALLOWED_EMAIL_DOMAINS = "<your-domain.example.com>"
+# Rolling session TTL in days.
+SESSION_TTL_DAYS = "30"
+
+# Secrets, NOT committed:
+#   ANTHROPIC_API_KEY          (your LLM provider key)
+#   AUTH_GOOGLE_CLIENT_SECRET  (from Google Cloud Console)
+#   SESSION_SIGNING_KEY        (openssl rand -base64 48)
+#
+# Local dev: put them in apps/worker/.dev.vars (gitignored).
+# Deployed:  wrangler secret put <NAME>
+#
+# The local-dev auth bypass (DEV_AUTH_BYPASS / DEV_AUTH_EMAIL) lives in
+# .dev.vars too. Authenticate() refuses to honor it unless ENVIRONMENT="dev".

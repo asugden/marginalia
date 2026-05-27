@@ -1,0 +1,55 @@
+-- seed.sql.example — minimal data so the app runs end-to-end in local dev.
+--
+-- Copy to seed.sql, edit the admin email to match the address you sign in
+-- with locally, then apply after migrations:
+--
+--   npm run db:seed --workspace apps/worker
+--
+-- For local dev you also need apps/worker/.dev.vars:
+--   DEV_AUTH_BYPASS=true
+--   DEV_AUTH_EMAIL=<the same email you used below>
+--   ENVIRONMENT=dev
+--
+-- seed.sql is gitignored so your local edits don't get committed.
+
+INSERT OR IGNORE INTO organizations (id, name, created_at)
+VALUES ('default', 'Default Org', 0);
+
+INSERT OR IGNORE INTO users (id, org_id, email, display_name, created_at)
+VALUES ('user_dev', 'default', 'admin@example.com', 'Dev Instructor', 0);
+
+INSERT OR IGNORE INTO courses (id, org_id, name, created_at)
+VALUES ('course_demo', 'default', 'Demo Course', 0);
+
+INSERT OR IGNORE INTO enrollments (id, course_id, user_id, role, created_at)
+VALUES ('enr_dev', 'course_demo', 'user_dev', 'instructor', 0);
+
+INSERT OR IGNORE INTO agents (id, course_id, title, definition, created_at, updated_at)
+VALUES ('agent_demo', 'course_demo', 'Demo agent', '{
+  "version": 2,
+  "model": "claude-sonnet-4-6",
+  "voice": { "kind": "library", "id": "socratic" },
+  "backbone": {
+    "defaultTurnBudget": 3,
+    "exitCondition": "Student can summarise the topic in their own words.",
+    "completionMessage": "Nice work — that''s the shape of the topic.",
+    "topics": [
+      {
+        "id": "intro",
+        "title": "Introduce the topic",
+        "guidance": "Ask the student what they already know.",
+        "turnBudget": 2
+      },
+      {
+        "id": "explore",
+        "title": "Explore one dimension of the topic",
+        "turnBudget": 3
+      },
+      {
+        "id": "summarise",
+        "title": "Have the student summarise in their own words",
+        "turnBudget": 2
+      }
+    ]
+  }
+}', 0, 0);

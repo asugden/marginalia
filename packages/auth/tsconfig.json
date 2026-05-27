@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // fetch / URL / crypto / Request are provided by the Workers runtime;
+    // pull in the DOM lib so tsc sees them when typechecking here.
+    "lib": ["ES2022", "DOM"],
+    // D1Database, VectorizeIndex, etc. live in @cloudflare/workers-types.
+    // We only need D1Database here, but the convention across this repo is
+    // to pull the whole types package.
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src"]
+}
