@@ -1174,3 +1174,586 @@ select:disabled { opacity: 0.5; cursor: default; }
  * 0.98rem body. Tighten a hair so inline math doesn't jump above the line. */
 .markdown-body .katex { font-size: 1em; }
 .markdown-body .katex-display { margin: 0.4em 0; overflow-x: auto; overflow-y: hidden; }
+
+/* ── Provenance module ─────────────────────────────────────────────────
+ * Slice 1: document list + plain editor with a bubble menu.
+ * Provenance coloring (yellow/red/green words) lands in slice 2.
+ */
+.provenance-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.provenance-doc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.provenance-doc-list li {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  background: var(--surface, #fff);
+}
+.provenance-doc-link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  color: inherit;
+}
+.provenance-doc-link .title { font-weight: 600; }
+.provenance-doc-link .meta { font-size: 0.85em; opacity: 0.7; margin-top: 0.15rem; }
+.provenance-doc-link:hover { background: var(--hover, rgba(0, 0, 0, 0.03)); }
+.provenance-doc-delete {
+  background: transparent;
+  border: 0;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0 0.85rem;
+  cursor: pointer;
+  color: var(--muted, #888);
+}
+.provenance-doc-delete:hover { color: #c00; }
+
+.provenance-editor-page { max-width: 780px; }
+.provenance-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.provenance-back {
+  text-decoration: none;
+  color: var(--muted, #666);
+  font-size: 0.9em;
+}
+.provenance-title {
+  flex: 1;
+  font-size: 1.4rem;
+  font-weight: 600;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+}
+.provenance-title:focus { outline: 1px dashed var(--line); outline-offset: 4px; }
+.provenance-save-state {
+  font-size: 0.85em;
+  opacity: 0.7;
+  min-width: 5.5rem;
+  text-align: right;
+}
+.provenance-save-state.save-error { color: #c00; opacity: 1; }
+
+.provenance-editor {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+}
+.provenance-editor-surface {
+  min-height: 60vh;
+  padding: 1.25rem 1.5rem;
+}
+.provenance-editor-surface .ProseMirror {
+  outline: none;
+  min-height: 55vh;
+  line-height: 1.55;
+}
+.provenance-editor-surface .ProseMirror p:first-child:empty::before {
+  content: "Start writing…";
+  color: var(--muted, #999);
+  pointer-events: none;
+  float: left;
+}
+.provenance-bubble {
+  display: flex;
+  gap: 2px;
+  background: #222;
+  border-radius: 4px;
+  padding: 2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+.provenance-bubble button {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 3px;
+  min-width: 1.8rem;
+}
+.provenance-bubble button:hover { background: rgba(255, 255, 255, 0.12); }
+.provenance-bubble button.is-active { background: rgba(255, 255, 255, 0.22); }
+.provenance-counts {
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.55rem 1.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.82em;
+  color: var(--muted, #666);
+  background: var(--soft, rgba(0, 0, 0, 0.02));
+}
+
+/* Provenance coloring (slice 2). Soft pastel backgrounds so prose stays
+ * readable while the origin is at-a-glance visible. Human typed text gets
+ * no coloring (the "default" state). */
+.provenance-editor-surface [data-origin="llm"] {
+  background: rgba(255, 220, 80, 0.30);   /* yellow */
+  border-radius: 2px;
+}
+.provenance-editor-surface [data-origin="pasted"] {
+  background: rgba(255, 100, 100, 0.22);  /* red */
+  border-radius: 2px;
+}
+.provenance-editor-surface [data-origin="edited"] {
+  background: rgba(100, 200, 120, 0.22);  /* green — reserved for slice 7 */
+  border-radius: 2px;
+}
+
+/* Legend in the editor footer. */
+.provenance-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  font-size: 0.8em;
+}
+.provenance-legend .legend-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin: 0 0.2rem 0 0.6rem;
+}
+.provenance-legend .legend-swatch:first-child { margin-left: 0; }
+.provenance-legend .legend-human  { background: transparent; border: 1px dashed var(--muted, #999); }
+.provenance-legend .legend-pasted { background: rgba(255, 100, 100, 0.22); }
+.provenance-legend .legend-llm    { background: rgba(255, 220, 80, 0.30); }
+
+/* --- Attendance module ----------------------------------------------------
+ * Two registers in one module: the check-in page (student register, white
+ * card on brand-tinted page) and the instructor surfaces (staff register,
+ * full-bleed). See docs/style.md §1.
+ */
+
+/* Check-in card. Sits inside .hero, like JoinPage and the HomePage card. */
+.attendance-card {
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  padding: 2.25rem 1.75rem;
+}
+.attendance-card h1 {
+  margin: 0.25rem 0 0.5rem;
+}
+.attendance-card .attendance-date {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.attendance-card .attendance-fineprint {
+  margin-top: 1.25rem;
+}
+/* The single full-width "I'm present" button. Brand-red primary; matches the
+ * existing `button` style but stretches across the card so it's the obvious
+ * — and only — thing to tap on a phone. */
+.attendance-card .attendance-primary {
+  display: block;
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 1.25rem 1rem;
+  font-size: 1.25rem;
+  border-radius: 12px;
+}
+/* "Sign in" link styled as a primary button, full-width inside the card. */
+.attendance-card .link-button.block {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 1rem;
+  font-size: 1.05rem;
+}
+/* Big green checkmark. Matches the "single elegant element" brief — no
+ * decoration around it on the happy path. */
+.attendance-check {
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0 1rem;
+}
+.attendance-done-title {
+  margin: 0;
+  font-family: var(--font-display);
+}
+.attendance-flags {
+  margin-top: 1.25rem;
+  padding: 0.85rem 1rem;
+  background: #fff8e1;
+  border-radius: 8px;
+  text-align: left;
+}
+.attendance-flags p { margin: 0.25rem 0; }
+
+/* Instructor: open-session form. Inside .page.staff, so brand-red appears
+ * only on the "Open session" primary. */
+.attendance-open-card {
+  margin: 1.25rem 0 2rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.attendance-open-card h2 { margin-top: 0; }
+.attendance-geofence-toggle {
+  display: block;
+  margin: 0.75rem 0 1rem;
+  color: var(--ink-soft);
+}
+.attendance-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.attendance-history-h2 { margin-bottom: 0.5rem; }
+
+/* Past-sessions table. Reuses the staff-register typographic rhythm. */
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.attendance-table th,
+.attendance-table td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.attendance-table th {
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.attendance-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* Display (projector) layout: QR + roster side-by-side, stacks on mobile so
+ * an instructor can pull it up on a phone in a pinch. */
+.attendance-display {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+@media (max-width: 720px) {
+  .attendance-display { grid-template-columns: 1fr; }
+}
+.attendance-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.attendance-qr-button {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem;
+  width: min(100%, 520px);
+  cursor: zoom-in;
+  box-shadow: none;
+}
+.attendance-qr-button:hover {
+  background: #fff;
+  border-color: var(--brand-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: none;
+}
+.attendance-qr-button svg { width: 100%; height: auto; display: block; }
+.attendance-qr-closed {
+  padding: 3rem 2rem;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  color: var(--ink-soft);
+}
+
+.attendance-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.attendance-count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.attendance-count-num {
+  font-size: 3rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  line-height: 1;
+}
+.attendance-count-label { color: var(--ink-soft); }
+.attendance-flagged-count { color: #a86200; font-size: 0.9rem; }
+.attendance-roster-list {
+  max-height: 60vh;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 0.5rem;
+}
+.attendance-roster-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.95rem;
+}
+.attendance-row-flag { color: #a86200; font-size: 0.8rem; }
+.attendance-row-ok { color: #2e7d32; }
+
+/* Click-to-zoom QR overlay — fills the screen so a student in the back row
+ * can scan from a phone projected via mirroring or a laptop with no
+ * external display. */
+.attendance-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  border: 0;
+  cursor: zoom-out;
+  z-index: 1000;
+}
+.attendance-zoom-overlay:hover { background: rgba(255, 255, 255, 0.97); }
+.attendance-zoom-inner {
+  width: min(85vh, 85vw);
+  height: min(85vh, 85vw);
+}
+.attendance-zoom-inner svg { width: 100%; height: 100%; display: block; }
+.attendance-zoom-url {
+  font-family: var(--font-sans);
+  font-size: 1.1rem;
+  color: var(--ink-soft);
+}
+
+/* ── Provenance chat panel (slice 3) ───────────────────────────────────
+ * Side-by-side layout: editor on the left, chat on the right.
+ * Collapses to stacked on narrow viewports. */
+.provenance-editor-page.chat-open { max-width: 1280px; }
+.provenance-editor-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+.provenance-editor-page.chat-open .provenance-editor-layout {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+@media (max-width: 960px) {
+  .provenance-editor-page.chat-open .provenance-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.provenance-chat-toggle {
+  margin-left: 0.5rem;
+  font-size: 0.85em;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+}
+
+.provenance-chat {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  min-height: 60vh;
+  max-height: 80vh;
+}
+.provenance-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--soft, rgba(0, 0, 0, 0.02));
+}
+.provenance-chat-header select { flex: 1; }
+.provenance-chat-delete-conv {
+  background: transparent;
+  border: 0;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--muted, #888);
+  padding: 0 0.4rem;
+}
+.provenance-chat-delete-conv:hover { color: #c00; }
+
+.provenance-chat-empty {
+  padding: 1rem;
+}
+.provenance-chat-agent-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.provenance-chat-agent-list li { margin-bottom: 0.3rem; }
+.provenance-chat-agent-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  text-align: left;
+}
+.provenance-chat-agent-list button:hover { background: var(--soft, rgba(0,0,0,0.03)); }
+.provenance-chat-mine {
+  font-size: 0.7em;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--soft, rgba(0,0,0,0.06));
+  color: var(--muted, #666);
+}
+
+.provenance-chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.provenance-bubble-user,
+.provenance-bubble-assistant {
+  max-width: 92%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.92em;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.provenance-bubble-user {
+  align-self: flex-end;
+  background: var(--brand-primary, #5b6cff);
+  color: #fff;
+}
+.provenance-bubble-assistant {
+  align-self: flex-start;
+  background: var(--soft, rgba(0,0,0,0.05));
+}
+.provenance-bubble-assistant.is-pending { opacity: 0.8; }
+.provenance-bubble-actions {
+  margin-top: 0.4rem;
+  display: flex;
+  justify-content: flex-end;
+}
+.provenance-bubble-actions button {
+  font-size: 0.8em;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.provenance-chat-input {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border-top: 1px solid var(--line);
+  background: var(--soft, rgba(0,0,0,0.02));
+}
+.provenance-chat-input textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 2.4rem;
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.provenance-chat-input button {
+  align-self: flex-end;
+  padding: 0.45rem 0.9rem;
+  border: 0;
+  border-radius: 4px;
+  background: var(--brand-primary, #5b6cff);
+  color: #fff;
+  cursor: pointer;
+}
+.provenance-chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.provenance-chat-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: rgba(220, 0, 0, 0.08);
+  color: #a00;
+  border-top: 1px solid rgba(220, 0, 0, 0.18);
+  font-size: 0.88em;
+}
+
+.provenance-list-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+/* ── Agents page ───────────────────────────────────────────────────────── */
+.provenance-agents-page { max-width: 780px; }
+.provenance-agent-section {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #777);
+}
+.provenance-agent-editor {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.provenance-agent-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9em;
+}
+.provenance-agent-editor input,
+.provenance-agent-editor textarea {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+}
+.provenance-agent-editor textarea { min-height: 8rem; resize: vertical; }
+.provenance-agent-editor-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

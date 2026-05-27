@@ -62,6 +62,9 @@ export function AuthorListPage() {
             <Link to="/author/roster" className="link-button subtle">
               Roster
             </Link>
+            <Link to="/attendance" className="link-button subtle">
+              Attendance
+            </Link>
             <Link to="/author/agents/new" className="link-button">
               New agent
             </Link>

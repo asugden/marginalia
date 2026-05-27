@@ -202,6 +202,84 @@ export interface AuditLogRow {
   created_at: number;
 }
 
+/**
+ * Provenance module — writing tool that tracks word-level origin.
+ * Documents (slice 1) + append-only edit-event log (slice 2). Chat
+ * tables land later. See modules/provenance/README.md.
+ */
+export type ProvenanceEventKind = "insert" | "delete" | "paste" | "llm_insert";
+export type ProvenanceOrigin = "human" | "llm" | "pasted";
+
+export interface ProvenanceEventRow {
+  id: string;
+  document_id: string;
+  course_id: string;
+  user_id: string;
+  kind: ProvenanceEventKind;
+  offset: number;
+  length: number;
+  text: string | null;
+  origin: ProvenanceOrigin | null;
+  source_message_id: string | null;
+  timing_blob: string | null;
+  client_seq: number;
+  created_at: number;
+}
+
+export interface ProvenanceDocumentRow {
+  id: string;
+  course_id: string;
+  owner_user_id: string;
+  title: string;
+  /** Tiptap doc JSON, serialised. */
+  body_json: string;
+  word_count: number;
+  char_count: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Provenance chat (slice 3): per-document agents + conversations + messages.
+ * Separate from the existing agents/voices/conversations schema because the
+ * chat is structurally simpler and modules don't import each other's tables.
+ */
+export interface ProvenanceAgentRow {
+  id: string;
+  course_id: string;
+  /** NULL = course-default (instructor-authored). Non-null = student-private. */
+  owner_user_id: string | null;
+  name: string;
+  system_prompt: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ProvenanceConversationRow {
+  id: string;
+  document_id: string;
+  course_id: string;
+  user_id: string;
+  /** Nulled when the agent is deleted; snapshot fields keep the chat readable. */
+  agent_id: string | null;
+  agent_name_snapshot: string;
+  agent_prompt_snapshot: string;
+  title: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export type ProvenanceMessageRole = "user" | "assistant";
+
+export interface ProvenanceMessageRow {
+  id: string;
+  conversation_id: string;
+  role: ProvenanceMessageRole;
+  content: string;
+  seq: number;
+  created_at: number;
+}
+
 /** v0.5 §3 — citation a RAG-grounded assistant message leaned on. Display
  *  fields are snapshotted on insert so a citation pill survives the source
  *  later being removed from its collection. */

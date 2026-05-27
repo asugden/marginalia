@@ -45,6 +45,8 @@ import {
   type Retrieved,
 } from "./rag.js";
 import type { CollectionSourceKind, VoiceRow } from "@marginalia/schema";
+import { routeProvenance } from "./modules/provenance/routes.js";
+import { routeAttendance } from "./modules/attendance/routes.js";
 
 // v0.1 single-tenant default. Phase 2 derives org from the authenticated email.
 const DEFAULT_ORG = "default";
@@ -236,6 +238,20 @@ async function route(
       isAdmin: identity.isAdmin,
       via: identity.via,
     });
+  }
+
+  // /api/provenance/* — writing tool that tracks word-level origin.
+  // Self-contained module; see apps/worker/src/modules/provenance/README.md.
+  if (head === "provenance") {
+    const handled = await routeProvenance(req, env, url, identity, parts);
+    if (handled) return handled;
+  }
+
+  // /api/attendance/* — QR check-in for in-person attendance.
+  // Self-contained module; see apps/worker/src/modules/attendance/README.md.
+  if (head === "attendance") {
+    const handled = await routeAttendance(req, env, url, identity, parts);
+    if (handled) return handled;
   }
 
   // /api/voices  (v0.7 §1: per-author library + sharing)

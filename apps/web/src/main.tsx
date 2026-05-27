@@ -33,6 +33,20 @@ const AuthorVoicesPage = lazy(() =>
   import("./pages/AuthorVoicesPage.js").then((m) => ({ default: m.AuthorVoicesPage })));
 const AuthorVoiceEditPage = lazy(() =>
   import("./pages/AuthorVoiceEditPage.js").then((m) => ({ default: m.AuthorVoiceEditPage })));
+// Provenance module — see apps/web/src/modules/provenance/README.md.
+const ProvenanceDocumentListPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.DocumentListPage })));
+const ProvenanceEditorPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.EditorPage })));
+const ProvenanceAgentsPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.AgentsPage })));
+// Attendance module — see apps/web/src/modules/attendance/README.md.
+const AttendanceSessionListPage = lazy(() =>
+  import("./modules/attendance/index.js").then((m) => ({ default: m.SessionListPage })));
+const AttendanceDisplayPage = lazy(() =>
+  import("./modules/attendance/index.js").then((m) => ({ default: m.DisplayPage })));
+const AttendanceCheckInPage = lazy(() =>
+  import("./modules/attendance/index.js").then((m) => ({ default: m.CheckInPage })));
 
 // Wraps a lazy element so Suspense fallback renders while the chunk
 // downloads. The fallback is intentionally bare — pages render their own
@@ -64,6 +78,14 @@ const router = createBrowserRouter([
   // v0.7 §3.8 — per-user detail. Linked into from AdminPage Users tab and
   // RosterPage Students/Authors lists. Admin-only on the server.
   { path: "/users/:id", element: lz(<UserDetailPage />) },
+  // Provenance writing tool (slice 1+ — see modules/provenance/README.md).
+  { path: "/write", element: lz(<ProvenanceDocumentListPage />) },
+  { path: "/write/agents", element: lz(<ProvenanceAgentsPage />) },
+  { path: "/write/:id", element: lz(<ProvenanceEditorPage />) },
+  // Attendance: QR check-in for in-person sessions.
+  { path: "/attendance", element: lz(<AttendanceSessionListPage />) },
+  { path: "/attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
+  { path: "/a/:id", element: lz(<AttendanceCheckInPage />) },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
