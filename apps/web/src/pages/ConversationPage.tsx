@@ -14,7 +14,7 @@ const Markdown = lazy(() =>
 );
 import {
   citationOpenUrl,
-  getAgent,
+  getAgentById,
   getConversation,
   listConversations,
   sendMessage,
@@ -24,7 +24,7 @@ import {
   type ConversationSummary,
   type MessageSource,
 } from "../client.js";
-import { DEMO_COURSE } from "../course.js";
+import { clarityNoteFor } from "@marginalia/backbone";
 import { BackIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 
@@ -51,6 +51,16 @@ export function ConversationPage() {
   const [state, setState] = useState<BackboneState | null>(null);
   const [hasBackbone, setHasBackbone] = useState<boolean>(false);
   const [agentTitle, setAgentTitle] = useState<string | null>(null);
+  // v1.0 §7.1 — the conversation's course. Populated from getConversation
+  // (existing rows) or from the agent's row (compose mode); used only to
+  // build citation open-URLs. Null until we know it; citationOpenUrl
+  // gracefully degrades when the courseId is missing.
+  const [courseId, setCourseId] = useState<string | null>(null);
+  // v1.0 — the student-facing clarity line, shown as a quiet, persistent
+  // note at the top of the conversation. Resolved server-side for
+  // existing rows; computed locally from the agent definition in compose
+  // mode (before a row exists).
+  const [clarityNote, setClarityNote] = useState<string | null>(null);
   const [currentTopic, setCurrentTopic] = useState<string | null>(null);
   const [completion, setCompletion] = useState<string | null>(null);
   const [completedAt, setCompletedAt] = useState<number | null>(null);
@@ -104,6 +114,8 @@ export function ConversationPage() {
           setAgentTitle(c.agent?.title ?? null);
           setCurrentTopic(c.currentTopic?.title ?? null);
           setCompletedAt(c.completedAt);
+          setCourseId(c.courseId);
+          setClarityNote(c.clarityNote);
         })
         .catch((e) => {
           if (ctrl.signal.aborted) return;
@@ -113,10 +125,12 @@ export function ConversationPage() {
       // Compose mode (§14): no conversation row yet. Seed the sidebar from
       // the agent definition so the student sees the topic outline before
       // typing the first message.
-      getAgent(DEMO_COURSE, composeAgentId)
+      getAgentById(composeAgentId)
         .then((a) => {
           if (ctrl.signal.aborted) return;
           setAgentTitle(a.title);
+          setCourseId(a.courseId);
+          setClarityNote(clarityNoteFor(a.definition));
           const hasBb = !!a.definition.backbone;
           setHasBackbone(hasBb);
           if (hasBb) {
@@ -200,7 +214,7 @@ export function ConversationPage() {
     // combined start-and-run endpoint, which yields `started` first.
     const stream = activeConvId
       ? sendMessage(activeConvId, content, ctrl.signal)
-      : startConversation(DEMO_COURSE, composeAgentId!, content, ctrl.signal);
+      : startConversation(composeAgentId!, content, ctrl.signal);
 
     try {
       for await (const ev of stream) {
@@ -390,6 +404,15 @@ export function ConversationPage() {
           <div className="chat-header-title">{agentTitle}</div>
         </header>
 
+        {/* v1.0 — persistent, quiet clarity note. Always present (never
+            dismissible) because its job is trust: the student should be
+            able to glance up and see what this is and how it behaves. */}
+        {clarityNote && (
+          <div className="clarity-note" role="note">
+            {clarityNote}
+          </div>
+        )}
+
         <div className="messages">
           {messages.map((m, i) => {
             const placeholder =
@@ -404,7 +427,7 @@ export function ConversationPage() {
                   <Suspense fallback={<span className="md-loading">{m.content}</span>}>
                     <Markdown
                       citations={sources}
-                      citationHref={(c) => citationOpenUrl(c, DEMO_COURSE)}
+                      citationHref={(c) => citationOpenUrl(c, courseId)}
                     >
                       {m.content}
                     </Markdown>
@@ -413,7 +436,7 @@ export function ConversationPage() {
                   m.content || placeholder
                 )}
                 {m.role === "assistant" && sources && sources.length > 0 && (
-                  <SourcesStrip sources={sources} />
+                  <SourcesStrip sources={sources} courseId={courseId} />
                 )}
               </div>
             );
@@ -475,12 +498,18 @@ export function ConversationPage() {
 /** v0.5 §3 — compact strip below an assistant bubble listing the sources it
  *  cited, in citation order. Pills inline within the message use numeric
  *  labels; this strip keeps the full filenames discoverable. */
-function SourcesStrip({ sources }: { sources: MessageSource[] }) {
+function SourcesStrip({
+  sources,
+  courseId,
+}: {
+  sources: MessageSource[];
+  courseId: string | null;
+}) {
   return (
     <div className="sources-strip">
       <span className="muted small">Sources:</span>{" "}
       {sources.map((s, i) => {
-        const href = citationOpenUrl(s, DEMO_COURSE);
+        const href = citationOpenUrl(s, courseId);
         const inner = (
           <>
             <span className="citation-pill small">[{s.ordinal}]</span>{" "}

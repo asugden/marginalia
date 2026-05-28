@@ -172,17 +172,31 @@ export interface UserEnrollmentRow {
   courseName: string;
   role: EnrollmentRole;
   joinedAt: number;
+  /** v1.0 §6 — lazy-reveal flags for the per-course dashboard tab strip.
+   *  Defaults false until the feature is used once (see
+   *  markCourseFeatureShown), at which point the flag flips to true and
+   *  stays on. Read by the SPA's CourseDashboardPage to decide which
+   *  tabs render. */
+  showAttendance: boolean;
+  showCollections: boolean;
 }
 export async function listEnrollmentsForUserEnriched(
   db: D1Database,
   userId: string,
 ): Promise<UserEnrollmentRow[]> {
+  // LEFT JOIN course_settings so the missing-row case (most courses, until
+  // the first feature-use writes a row) shows as NULL → falsy → tab hidden.
+  // COALESCE in the SELECT keeps the column boolean-ish even when the row
+  // is absent.
   const { results } = await db
     .prepare(
       `SELECT e.course_id, c.name AS course_name, e.role,
-              e.created_at AS joined_at
+              e.created_at AS joined_at,
+              COALESCE(s.show_attendance, 0)  AS show_attendance,
+              COALESCE(s.show_collections, 0) AS show_collections
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
+       LEFT JOIN course_settings s ON s.course_id = e.course_id
        WHERE e.user_id = ?
        ORDER BY e.created_at DESC`,
     )
@@ -192,13 +206,46 @@ export async function listEnrollmentsForUserEnriched(
       course_name: string;
       role: EnrollmentRole;
       joined_at: number;
+      show_attendance: number;
+      show_collections: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
     courseName: r.course_name,
     role: r.role,
     joinedAt: r.joined_at,
+    showAttendance: r.show_attendance === 1,
+    showCollections: r.show_collections === 1,
   }));
+}
+
+/**
+ * v1.0 §6 — flip a per-course feature flag on. Called the first time an
+ * instructor opens an attendance session or creates a collection so the
+ * matching dashboard tab becomes visible. Idempotent — once on, stays
+ * on (subsequent writes are no-ops on the boolean but refresh
+ * updated_at).
+ *
+ * One round trip via INSERT … ON CONFLICT … DO UPDATE: avoids the
+ * read-then-write race that two concurrent first-time creators could
+ * otherwise lose.
+ */
+export async function markCourseFeatureShown(
+  db: D1Database,
+  courseId: string,
+  feature: "attendance" | "collections",
+): Promise<void> {
+  const column = feature === "attendance" ? "show_attendance" : "show_collections";
+  const ts = now();
+  await db
+    .prepare(
+      `INSERT INTO course_settings (course_id, ${column}, updated_at)
+       VALUES (?, 1, ?)
+       ON CONFLICT(course_id) DO UPDATE
+         SET ${column} = 1, updated_at = excluded.updated_at`,
+    )
+    .bind(courseId, ts)
+    .run();
 }
 
 /**
@@ -421,6 +468,23 @@ export async function listAgents(
     .bind(courseId)
     .all<AgentRow>();
   return results ?? [];
+}
+
+/**
+ * v1.0 §4 — find an agent by id alone, without requiring the caller to
+ * supply its course id. Used by the "duplicate into course" flow, where
+ * the source agent lives in some course the caller knows by id but not
+ * by name. The caller must still pass the row's `course_id` through an
+ * enrollment+role check before acting on the result.
+ */
+export async function findAgentById(
+  db: D1Database,
+  agentId: string,
+): Promise<AgentRow | null> {
+  return db
+    .prepare("SELECT * FROM agents WHERE id = ?")
+    .bind(agentId)
+    .first<AgentRow>();
 }
 
 /**
@@ -1517,6 +1581,47 @@ export async function listCourses(
     .bind(orgId)
     .all<CourseRow>();
   return results ?? [];
+}
+
+/**
+ * v1.0 §7.5 — admin listing with enrollment count per course. Used by
+ * AdminPage's Courses tab so an instance admin can spot "this course
+ * has no one in it; delete it." A scalar subquery instead of a
+ * GROUP BY join because we want a row per course even when there are
+ * zero enrollments.
+ */
+export interface CourseWithEnrollmentCount {
+  id: string;
+  name: string;
+  createdAt: number;
+  enrollmentCount: number;
+}
+export async function listCoursesWithEnrollmentCounts(
+  db: D1Database,
+  orgId: string,
+): Promise<CourseWithEnrollmentCount[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.id, c.name, c.created_at,
+              (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id)
+                AS enrollment_count
+         FROM courses c
+        WHERE c.org_id = ?
+        ORDER BY c.created_at DESC`,
+    )
+    .bind(orgId)
+    .all<{
+      id: string;
+      name: string;
+      created_at: number;
+      enrollment_count: number;
+    }>();
+  return (results ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    createdAt: r.created_at,
+    enrollmentCount: r.enrollment_count,
+  }));
 }
 
 export async function createCourse(

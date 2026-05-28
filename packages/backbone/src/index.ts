@@ -9,3 +9,4 @@ export {
 } from "./machine.js";
 export { buildPrompt, type AgentPrompt } from "./prompt.js";
 export type { AgentDefinition } from "./agent.js";
+export { clarityNoteFor } from "./agent.js";

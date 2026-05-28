@@ -291,6 +291,31 @@ npx wrangler d1 execute DB --remote --command \
 #    will set external_subject on the roster row.
 ```
 
+## Working across courses
+
+An instructor can teach any number of courses on one deployment.
+
+- **Signing in.** With a single enrollment you land straight in that
+  course (or, as a student, on its agent list) — no picker. With two or
+  more enrollments you get a course picker, most-recently-used first.
+- **Switching.** Inside a course, the dashboard header has a "Switch
+  course" menu listing your other courses. Picking one keeps you in the
+  per-course dashboard.
+- **Student view.** Every course page has a "← Student view" link that
+  drops you into `/` as your students see it. (You'll see the picker
+  there too if you're enrolled in more than one course.)
+- **Reusing an agent.** On a course's Agents tab, "+ From another course"
+  copies an agent you authored elsewhere into this course. The copy is
+  independent — editing it here doesn't touch the original. Its voice
+  comes along; a course-local source library is dropped (pick a new one
+  when prompted). Course creation itself stays admin-only.
+- **Tabs that appear over time.** Agents, Provenance, and Roster are
+  always shown. Attendance and Sources stay hidden until the course uses
+  them once, then become permanent — so a brand-new course starts simple.
+
+The `enrollments` count on the `/admin` Courses tab is the quickest way
+to spot an empty course that should be deleted.
+
 ## Deleting a course
 
 The `/admin` Courses tab exposes "Delete". This cascades through every

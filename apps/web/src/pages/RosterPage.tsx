@@ -21,7 +21,7 @@ import {
   type JoinCode,
   type RosterEntry,
 } from "../client.js";
-import { DEMO_COURSE } from "../course.js";
+import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
 
 type Tab = "students" | "authors";
@@ -31,6 +31,7 @@ function roleLabel(r: EnrollmentRole): string {
 }
 
 export function RosterPage() {
+  const { courseId } = useCourse();
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("students");
@@ -58,20 +59,22 @@ export function RosterPage() {
 
   function reload() {
     setError(null);
-    listRoster(DEMO_COURSE)
+    listRoster(courseId)
       .then((r) => setRoster(r.roster))
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }
   function reloadCodes() {
     setCodesError(null);
-    listJoinCodes(DEMO_COURSE)
+    listJoinCodes(courseId)
       .then((r) => setCodes(r.codes))
       .catch((e) =>
         setCodesError(e instanceof Error ? e.message : "Load failed"),
       );
   }
-  useEffect(reload, []);
-  useEffect(reloadCodes, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reload, [courseId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reloadCodes, [courseId]);
 
   async function onGenerateCode() {
     setCodeBusy(true);
@@ -80,7 +83,7 @@ export function RosterPage() {
       const maxUses = codeDraftMaxUses.trim()
         ? Number(codeDraftMaxUses.trim())
         : null;
-      await createJoinCode(DEMO_COURSE, {
+      await createJoinCode(courseId, {
         maxUses: maxUses !== null && Number.isFinite(maxUses) && maxUses > 0
           ? maxUses
           : null,
@@ -100,7 +103,7 @@ export function RosterPage() {
     setCodeBusy(true);
     setCodesError(null);
     try {
-      await revokeJoinCode(DEMO_COURSE, code);
+      await revokeJoinCode(courseId, code);
       reloadCodes();
     } catch (e) {
       setCodesError(e instanceof Error ? e.message : "Revoke failed");
@@ -157,7 +160,7 @@ export function RosterPage() {
     setBusy(true);
     setError(null);
     try {
-      await addRosterEntry(DEMO_COURSE, draftEmail.trim().toLowerCase(), draftRole);
+      await addRosterEntry(courseId, draftEmail.trim().toLowerCase(), draftRole);
       setDraftEmail("");
       setAddOpen(false);
       reload();
@@ -177,7 +180,7 @@ export function RosterPage() {
     setBusy(true);
     setError(null);
     try {
-      await patchRosterEntry(DEMO_COURSE, entry.userId, role);
+      await patchRosterEntry(courseId, entry.userId, role);
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
@@ -191,7 +194,7 @@ export function RosterPage() {
     setBusy(true);
     setError(null);
     try {
-      await removeRosterEntry(DEMO_COURSE, entry.userId);
+      await removeRosterEntry(courseId, entry.userId);
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Remove failed");
@@ -201,24 +204,15 @@ export function RosterPage() {
   }
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>Roster</h1>
-          <div className="header-actions">
-            <Link to="/author/agents" className="link-button subtle">
-              ← Agents
-            </Link>
-          </div>
-        </header>
-        <p className="scope-note">
-          Everyone enrolled in this course. Each row links into a per-user
-          page covering every course they're in.
-        </p>
+    <section>
+      <p className="scope-note">
+        Everyone enrolled in this course. Each row links into a per-user
+        page covering every course they're in.
+      </p>
 
-        {error && <p className="error">{error}</p>}
+      {error && <p className="error">{error}</p>}
 
-        <div className="tab-row" role="tablist">
+      <div className="sub-tab-row" role="tablist">
           {(["students", "authors"] as Tab[]).map((t) => (
             <button
               key={t}
@@ -431,7 +425,6 @@ export function RosterPage() {
             </ul>
           )}
         </section>
-      </div>
-    </div>
+    </section>
   );
 }

@@ -1,18 +1,19 @@
 // Instructor: open a new session or jump back into past ones.
-// Course id comes from ?courseId=, defaulting to DEMO_COURSE for the
-// current single-course deployment (matches AuthorListPage / RosterPage).
+// v1.0 §1 — courseId comes from the /course/:courseId/attendance URL
+// segment. The legacy /attendance route is served by LegacyCourseRedirect
+// (resolves the caller's default course and forwards), so this page is
+// always mounted with :courseId present.
 
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { DEMO_COURSE } from "../../../course.js";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { exportCsvUrl, listSessions, openSession, type SessionDTO } from "../api.js";
 
 const DEFAULT_RADIUS = 75;
 
 export function SessionListPage() {
-  const [search] = useSearchParams();
   const navigate = useNavigate();
-  const courseId = search.get("courseId") ?? DEMO_COURSE;
+  const params = useParams<{ courseId: string }>();
+  const courseId = params.courseId!;
 
   const [sessions, setSessions] = useState<SessionDTO[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export function SessionListPage() {
         centerLon: lon,
         radiusM: useGeofence ? DEFAULT_RADIUS : null,
       });
-      navigate(`/attendance/sessions/${s.id}`);
+      navigate(`/course/${courseId}/attendance/sessions/${s.id}`);
     } catch (e) {
       setErr(String((e as Error).message));
     } finally {
@@ -58,16 +59,12 @@ export function SessionListPage() {
   }, [courseId, label, useGeofence, navigate]);
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>Attendance</h1>
-          <div className="header-actions">
-            <Link to="/" className="link-button subtle">← Student view</Link>
-            <Link to="/author/agents" className="link-button subtle">Agents</Link>
-            <Link to="/author/roster" className="link-button subtle">Roster</Link>
-          </div>
-        </header>
+    <section>
+      <p className="scope-note">
+        Open a session and project the QR code; students scan it from their
+        phones to check in. The code rotates every few seconds, so a
+        screenshot won't travel.
+      </p>
 
         <section className="attendance-open-card">
           <h2>Open a new session</h2>
@@ -119,7 +116,7 @@ export function SessionListPage() {
                   <td>{s.label || <span className="muted">—</span>}</td>
                   <td>{s.closedAt ? "closed" : <strong>open</strong>}</td>
                   <td className="attendance-row-actions">
-                    <Link to={`/attendance/sessions/${s.id}`} className="link-button subtle">
+                    <Link to={`/course/${courseId}/attendance/sessions/${s.id}`} className="link-button subtle">
                       Open
                     </Link>
                     <a href={exportCsvUrl(s.id)} className="link-button subtle">CSV</a>
@@ -129,8 +126,7 @@ export function SessionListPage() {
             </tbody>
           </table>
         )}
-      </div>
-    </div>
+    </section>
   );
 }
 

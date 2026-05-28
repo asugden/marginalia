@@ -24,8 +24,11 @@ export type {
   UserDetail,
   CollectionSourceSummary,
   CollectionSummary,
+  DuplicableAgentsGroup,
+  DuplicableAgentSummary,
   EnrollmentRole,
   JoinCode,
+  MeEnrollment,
   MeResponse,
   MessageSource,
   RosterEntry,
@@ -67,9 +70,17 @@ export const createVoiceShare = (impl as typeof real).createVoiceShare;
 export const deleteVoiceShare = (impl as typeof real).deleteVoiceShare;
 export const listAgents = impl.listAgents;
 export const getAgent = impl.getAgent;
+// v1.0 §7.1 — compose mode (/new/:agentId) doesn't know the course;
+// the worker infers it from the agent row.
+export const getAgentById = (impl as typeof real).getAgentById;
 export const createAgent = impl.createAgent;
 export const updateAgent = impl.updateAgent;
 export const deleteAgent = impl.deleteAgent;
+// v1.0 §4 — cross-course duplicate. Mock mode doesn't implement these;
+// the UI calls them only inside the modal, which is unreachable under
+// mock auth.
+export const listDuplicableAgents = (impl as typeof real).listDuplicableAgents;
+export const duplicateAgentTo = (impl as typeof real).duplicateAgentTo;
 export const listCollections = impl.listCollections;
 export const createCollection = impl.createCollection;
 export const getCollection = impl.getCollection;

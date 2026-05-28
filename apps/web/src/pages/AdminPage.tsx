@@ -185,7 +185,9 @@ function CoursesTab() {
               <div>
                 <strong>{c.name}</strong>
                 <div className="muted small">
-                  Created {relativeTime(c.createdAt)} · {c.id}
+                  {c.enrollmentCount}{" "}
+                  {c.enrollmentCount === 1 ? "enrollment" : "enrollments"}
+                  {" · created "}{relativeTime(c.createdAt)} · {c.id}
                 </div>
               </div>
               <div className="row-actions">

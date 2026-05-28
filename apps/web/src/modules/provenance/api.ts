@@ -357,7 +357,18 @@ export function streamChatTurn(
       }
       if (buf.length > 0) dispatch(buf, cb);
     } catch (e) {
-      if ((e as Error).name === "AbortError") return;
+      // Abort path: AbortController.abort() rejects in-flight fetch and
+      // reader.read() with either an AbortError DOMException OR a generic
+      // DOMException whose message is "signal is aborted without reason"
+      // (the latter when the abort had no explicit reason). Both are
+      // benign — treat them as a clean cancel, not a stream failure.
+      if (
+        ctrl.signal.aborted ||
+        (e as Error).name === "AbortError" ||
+        /aborted/i.test((e as Error).message ?? "")
+      ) {
+        return;
+      }
       cb.onError?.(e instanceof Error ? e.message : "stream failed");
     }
   })();

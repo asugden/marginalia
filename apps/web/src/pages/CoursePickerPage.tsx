@@ -1,0 +1,102 @@
+// v1.0 §2 — multi-enrollment landing.
+//
+// Renders the list of courses the caller is enrolled in. Each card
+// navigates to the right per-course home depending on role:
+//   * instructor → /course/:courseId  (the v1.0 §3 dashboard)
+//   * student    → /                  (single-course landing, scoped via
+//                  the picker's choice — for v1.0 a student with two
+//                  enrollments still lands on the original / and the
+//                  agent list is for whichever course they pick. The
+//                  full per-student scoping is a v1.1 problem.)
+//
+// Reachable via:
+//   * GET / when the caller has >1 enrollments (HomePage redirects).
+//   * the dashboard's "Switch course" menu (the menu navigates directly,
+//     but the picker is also a deep-linkable surface for completeness).
+//
+// Staff-register page even when the caller is a student — the picker is
+// a meta-surface, not the inside of a course.
+
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { getMe, type MeEnrollment } from "../client.js";
+import { readBootstrap } from "../bootstrap.js";
+
+export function CoursePickerPage() {
+  const [enrollments, setEnrollments] = useState<MeEnrollment[] | null>(() => {
+    const boot = readBootstrap();
+    return boot && boot.kind === "picker" ? boot.enrollments : null;
+  });
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getMe(ctrl.signal)
+      .then((m) => {
+        if (ctrl.signal.aborted) return;
+        setEnrollments(m.enrollments);
+        // Lone enrollment? Send them where they'd have landed anyway.
+        if (m.enrollments.length === 1) {
+          const only = m.enrollments[0]!;
+          navigate(only.role === "instructor" ? `/course/${only.courseId}` : "/", {
+            replace: true,
+          });
+        }
+      })
+      .catch((e) => {
+        if (ctrl.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "Load failed");
+      });
+    return () => ctrl.abort();
+  }, [navigate]);
+
+  return (
+    <div className="page staff">
+      <div className="staff-frame">
+        <header className="card-header">
+          <h1>Pick a course</h1>
+        </header>
+        <p className="scope-note">
+          You're enrolled in more than one course on this instance. Pick the
+          one you want to open.
+        </p>
+        {error && <p className="error">{error}</p>}
+        {enrollments === null ? (
+          <p className="muted">Loading…</p>
+        ) : enrollments.length === 0 ? (
+          <p className="muted">
+            You aren't enrolled in any courses yet. Use a join code on the home
+            page to enroll.
+          </p>
+        ) : (
+          <ul className="assignment-list">
+            {enrollments.map((e) => (
+              <li key={e.courseId}>
+                <div>
+                  <strong>{e.courseName}</strong>
+                  <span className="muted small"> · {e.role}</span>
+                </div>
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() =>
+                      navigate(
+                        e.role === "instructor"
+                          ? `/course/${e.courseId}`
+                          : "/",
+                      )
+                    }
+                  >
+                    Open
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

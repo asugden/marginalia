@@ -55,7 +55,6 @@ const initialState = (): BackboneState => ({
  * the rest of the stream to sendMessage so the same fake reply lands.
  */
 export async function* startConversation(
-  _courseId: string,
   _agentId: string,
   content: string,
   _signal?: AbortSignal,
@@ -91,7 +90,11 @@ export async function getConversation(id: string): Promise<ConversationView> {
   const topic = MOCK_TOPICS[convo.state.currentTopicIndex];
   return {
     conversationId: id,
+    courseId: "course_demo",
     agent: { id: MOCK_AGENT_ID, title: MOCK_AGENT_TITLE },
+    clarityNote:
+      "Your instructor set this up to walk you through a sequence of topics, " +
+      "one at a time. It decides when you're ready to move on.",
     state: convo.state,
     currentTopic: topic
       ? { title: topic.title, index: convo.state.currentTopicIndex }
@@ -301,8 +304,30 @@ export async function getMe(): Promise<{
   email: string;
   registered: boolean;
   userId: string | null;
+  enrollments: Array<{
+    courseId: string;
+    courseName: string;
+    role: "student" | "instructor";
+    joinedAt: number;
+    showAttendance: boolean;
+    showCollections: boolean;
+  }>;
 }> {
-  return { email: "mock@marginalia.local", registered: true, userId: "user_mock" };
+  return {
+    email: "mock@marginalia.local",
+    registered: true,
+    userId: "user_mock",
+    enrollments: [
+      {
+        courseId: "course_demo",
+        courseName: "Demo course",
+        role: "instructor",
+        joinedAt: Date.now(),
+        showAttendance: true,
+        showCollections: true,
+      },
+    ],
+  };
 }
 
 export async function listRoster(): Promise<{ roster: never[] }> {

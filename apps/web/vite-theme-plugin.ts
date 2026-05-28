@@ -60,7 +60,12 @@ function buildRootCss(brand: BrandConfig): string {
     lines.push(`  --brand-watermark-opacity: ${brand.watermark_opacity ?? 0.03};`);
   }
   if (lines.length === 0) return "";
-  return `<style data-brand-overrides>\n:root {\n${lines.join("\n")}\n}\n</style>`;
+  // `:root:root` doubles the specificity (0,2,0 instead of 0,1,0) so this
+  // override beats the default `:root { ... }` block in styles.css even
+  // though Vite's HMR injects styles.css *after* this <style> block in DOM
+  // order. Without the bump, last-wins cascade hands victory to the
+  // defaults and the brand colors never actually take effect.
+  return `<style data-brand-overrides>\n:root:root {\n${lines.join("\n")}\n}\n</style>`;
 }
 
 export function themePlugin(): Plugin {

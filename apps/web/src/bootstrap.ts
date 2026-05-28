@@ -11,12 +11,19 @@
 // without the worker, second-page navigations after the data has gone
 // stale, etc.).
 
-import type { AgentSummary } from "./client.js";
+import type { AgentSummary, MeEnrollment } from "./client.js";
 
-export interface BootstrapPayload {
-  courseId: string;
-  agents: AgentSummary[];
-}
+/** v1.0 §2 — the bootstrap is one of three shapes:
+ *   * `agents` — single enrollment, agent list inlined. Same as v0.7.
+ *   * `picker` — multiple enrollments, no agent list yet; SPA renders
+ *     the picker server-side-first.
+ *   * absent — unauthenticated, zero enrollments, or fetch failed.
+ * The discriminator is `kind`. v0.7-shaped payloads (no `kind`) are
+ * still accepted as `agents` so a stale browser cache or an in-flight
+ * deploy doesn't break the page. */
+export type BootstrapPayload =
+  | { kind: "agents"; courseId: string; agents: AgentSummary[] }
+  | { kind: "picker"; enrollments: MeEnrollment[] };
 
 declare global {
   interface Window {
@@ -28,9 +35,26 @@ declare global {
 export function readBootstrap(): BootstrapPayload | null {
   const raw = typeof window !== "undefined" ? window.__BOOTSTRAP__ : undefined;
   if (!raw || typeof raw !== "object") return null;
-  const obj = raw as Partial<BootstrapPayload>;
-  if (typeof obj.courseId !== "string" || !Array.isArray(obj.agents)) return null;
-  return obj as BootstrapPayload;
+  const obj = raw as { kind?: string } & Record<string, unknown>;
+  // v0.7 shape: no kind, but has courseId + agents.
+  if (
+    !obj.kind &&
+    typeof obj.courseId === "string" &&
+    Array.isArray(obj.agents)
+  ) {
+    return { kind: "agents", courseId: obj.courseId, agents: obj.agents as AgentSummary[] };
+  }
+  if (
+    obj.kind === "agents" &&
+    typeof obj.courseId === "string" &&
+    Array.isArray(obj.agents)
+  ) {
+    return { kind: "agents", courseId: obj.courseId, agents: obj.agents as AgentSummary[] };
+  }
+  if (obj.kind === "picker" && Array.isArray(obj.enrollments)) {
+    return { kind: "picker", enrollments: obj.enrollments as MeEnrollment[] };
+  }
+  return null;
 }
 
 /**

@@ -1,17 +1,35 @@
 # Marginalia
 
-An open-source, self-hostable platform for instructor-authored AI tutoring
-agents. Built for classroom use; not a SaaS.
+Open-source, self-hostable AI tools for the classroom — built to give
+instructors a clear, trustworthy way to direct how their students use
+large language models.
 
-Two things Marginalia tries to do well:
+Most "AI in the classroom" conversations are about surveillance:
+detectors, lockdowns, catching people out. Marginalia is built on the
+opposite premise. It deals in **social contracts, not oversight.** An
+instructor sets up a tool for a specific purpose; the tool tells the
+student, up front and in plain language, what it is and how it behaves;
+the student uses it knowing the terms. The aim is to make AI a clearer,
+more honest part of coursework — and to bring some trust back to it.
 
-1. **Guided ("backbone") conversations.** An LLM-led tutoring session with
-   enforced structure — a defined sequence of topics, turn budgets per
-   topic, a persona, and an exit condition. Real state machine, not just a
-   system prompt. (NotebookLM and Custom GPTs can't enforce this.)
-2. **RAG-grounded Q&A.** Students ask questions, the platform answers using
-   a curated set of instructor-trusted sources with citations, in the
-   pedagogical style the instructor configures.
+Three things an instructor can build:
+
+1. **Agents** — AI tutors students chat with. Each carries a *voice* (how
+   it talks) and can be shaped two ways:
+   - **Outlines** — a guided conversation that walks the student through a
+     set sequence of topics, with a turn budget for each and a condition
+     that ends it. A real state machine, enforced in code — not a system
+     prompt that hopes the model behaves. (NotebookLM and Custom GPTs
+     can't enforce this.)
+   - **Sources** — answers grounded in a library of documents the
+     instructor chose, cited in line so students can check where an
+     answer came from.
+2. **Provenance** — writing assignments where every word is tagged by
+   where it came from: typed, pasted, or generated. An honest record of
+   how a piece of writing was made, for the student and instructor alike.
+
+Every tool explains itself to the student before they start. Nothing is
+hidden; nothing is doing oversight behind the scenes.
 
 Each institution runs its own deployment. No phone-home, no shared
 backend, bring your own API key.
@@ -60,8 +78,13 @@ cd ../worker && npx wrangler deploy
 
 # 6. Open the deploy URL. Sign in with the email you put in
 #    INSTANCE_ADMIN_EMAILS. You're now the admin; create your first
-#    course from the /admin page.
+#    course from the /admin page, then open it to start building agents.
 ```
+
+An instructor who teaches more than one course sees a course picker on
+sign-in and a "Switch course" menu inside each course; a student with a
+single enrollment lands straight in their course and never sees either.
+See [docs/operations.md](docs/operations.md) "Working across courses."
 
 For local development:
 
@@ -102,7 +125,7 @@ overlay layout.
   SPA from one origin (same-site, no CORS).
 - `packages/auth` — Google OAuth + generic OIDC adapter. Identity is
   `(provider_id, subject)`, never email.
-- `packages/backbone` — the conversation state machine.
+- `packages/backbone` — the conversation state machine behind Outlines.
 - `packages/providers` — LLM provider adapters (Anthropic first, OpenAI-
   compatible planned).
 - `packages/rag` (under `apps/worker/src/rag.ts`) — chunking, indexing,
@@ -112,9 +135,11 @@ overlay layout.
 
 ## Status
 
-Pre-1.0. The maintainer runs it for their own teaching at one institution.
-Open issues and PRs welcome but the surface area is deliberately small —
-"this is the tool I use; PRs welcome" is a sustainable stance.
+v1.0 — supports an instructor teaching more than one course at once, with
+copy-on-use agent reuse across courses. The maintainer runs it for their
+own teaching. Open issues and PRs welcome, but the surface area is
+deliberately small — "this is the tool I use; PRs welcome" is a
+sustainable stance, and staying small is a feature, not a gap.
 
 ## License
 

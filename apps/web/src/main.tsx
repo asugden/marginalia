@@ -48,6 +48,18 @@ const AttendanceDisplayPage = lazy(() =>
 const AttendanceCheckInPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.CheckInPage })));
 
+// v1.0 §1 — course-scoped routes mount under <CourseLayout>, which reads
+// :courseId from the URL and provides it via context. CourseDashboardPage
+// is the per-course instructor home (v1.0 §3).
+const CourseLayout = lazy(() =>
+  import("./pages/CourseLayout.js").then((m) => ({ default: m.CourseLayout })));
+const CourseDashboardPage = lazy(() =>
+  import("./pages/CourseDashboardPage.js").then((m) => ({ default: m.CourseDashboardPage })));
+const CoursePickerPage = lazy(() =>
+  import("./pages/CoursePickerPage.js").then((m) => ({ default: m.CoursePickerPage })));
+const LegacyCourseRedirect = lazy(() =>
+  import("./pages/LegacyCourseRedirect.js").then((m) => ({ default: m.LegacyCourseRedirect })));
+
 // Wraps a lazy element so Suspense fallback renders while the chunk
 // downloads. The fallback is intentionally bare — pages render their own
 // loading state on top of this almost immediately.
@@ -63,12 +75,15 @@ const router = createBrowserRouter([
   // URL with /c/:id.
   { path: "/new/:agentId", element: <ConversationPage /> },
   { path: "/history", element: lz(<HistoryPage />) },
-  { path: "/author/agents", element: lz(<AuthorListPage />) },
-  { path: "/author/agents/new", element: lz(<AuthorEditPage />) },
-  { path: "/author/agents/:id", element: lz(<AuthorEditPage />) },
-  { path: "/author/collections", element: lz(<CollectionsListPage />) },
-  { path: "/author/collections/:id", element: lz(<CollectionDetailPage />) },
-  { path: "/author/roster", element: lz(<RosterPage />) },
+  // v1.0 §7.2 — legacy /author/... paths redirect into the default course
+  // so bookmarks and Slack links keep working. Stay ≥6 months past v1.0
+  // before deletion.
+  { path: "/author/agents", element: lz(<LegacyCourseRedirect to="/agents" />) },
+  { path: "/author/agents/new", element: lz(<LegacyCourseRedirect to="/agents/new" />) },
+  { path: "/author/agents/:id", element: lz(<LegacyCourseRedirect to="/agents/:id" />) },
+  { path: "/author/collections", element: lz(<LegacyCourseRedirect to="/collections" />) },
+  { path: "/author/collections/:id", element: lz(<LegacyCourseRedirect to="/collections/:id" />) },
+  { path: "/author/roster", element: lz(<LegacyCourseRedirect to="/roster" />) },
   // v0.7 §1 — per-author voice library.
   { path: "/author/voices", element: lz(<AuthorVoicesPage />) },
   { path: "/author/voices/new", element: lz(<AuthorVoiceEditPage />) },
@@ -82,10 +97,37 @@ const router = createBrowserRouter([
   { path: "/write", element: lz(<ProvenanceDocumentListPage />) },
   { path: "/write/agents", element: lz(<ProvenanceAgentsPage />) },
   { path: "/write/:id", element: lz(<ProvenanceEditorPage />) },
-  // Attendance: QR check-in for in-person sessions.
-  { path: "/attendance", element: lz(<AttendanceSessionListPage />) },
-  { path: "/attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
+  // Attendance: QR check-in for in-person sessions. Legacy /attendance
+  // and /attendance/sessions/:id redirect into the course-scoped path
+  // (v1.0 §7.2). /a/:id stays as-is — it's the public QR target and is
+  // course-agnostic by design.
+  { path: "/attendance", element: lz(<LegacyCourseRedirect to="/attendance" />) },
+  {
+    path: "/attendance/sessions/:id",
+    element: lz(<LegacyCourseRedirect to="/attendance/sessions/:id" />),
+  },
   { path: "/a/:id", element: lz(<AttendanceCheckInPage />) },
+  // v1.0 §1 — course-scoped routes. Old `/author/...` and `/attendance`
+  // paths above keep working unchanged until each page is migrated to
+  // `useCourse()` (then they'll become <Navigate> shims per v1.0 §7.2).
+  // v1.0 §2 — explicit /courses entry point for the picker (deep-linkable
+  // from the dashboard's "Switch course" menu).
+  { path: "/courses", element: lz(<CoursePickerPage />) },
+  {
+    path: "/course/:courseId",
+    element: lz(<CourseLayout />),
+    children: [
+      { index: true, element: lz(<CourseDashboardPage />) },
+      { path: "agents", element: lz(<AuthorListPage />) },
+      { path: "agents/new", element: lz(<AuthorEditPage />) },
+      { path: "agents/:id", element: lz(<AuthorEditPage />) },
+      { path: "collections", element: lz(<CollectionsListPage />) },
+      { path: "collections/:id", element: lz(<CollectionDetailPage />) },
+      { path: "roster", element: lz(<RosterPage />) },
+      { path: "attendance", element: lz(<AttendanceSessionListPage />) },
+      { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
+    ],
+  },
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

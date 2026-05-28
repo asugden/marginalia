@@ -10,6 +10,7 @@
 
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
+import * as coreRepo from "../../repo.js";
 import * as repo from "./repo.js";
 import {
   parseFlags,
@@ -205,6 +206,9 @@ export async function openSessionRoute(
     radiusM,
     tokenKeyHex: randomHex(32),
   });
+  // v1.0 §6 — first session in this course makes the Attendance tab
+  // appear on the dashboard. Idempotent on subsequent opens.
+  await coreRepo.markCourseFeatureShown(env.DB, courseId, "attendance");
   return json({ session: rowToSession(row, url.origin) }, 201);
 }
 

@@ -1,5 +1,6 @@
 // List of the signed-in student's provenance documents in the current course.
-// Allows creating a new document and opening / deleting an existing one.
+// Visual shell matches the AuthorListPage staff-register style so the writing
+// tool reads as part of the same app, not a bolt-on.
 
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -22,7 +23,10 @@ export function DocumentListPage() {
     const ctrl = new AbortController();
     listDocuments(DEMO_COURSE, ctrl.signal)
       .then(setDocs)
-      .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
+      .catch((e) => {
+        if (ctrl.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "Load failed");
+      });
     return () => ctrl.abort();
   }, []);
 
@@ -50,46 +54,65 @@ export function DocumentListPage() {
   }
 
   return (
-    <main className="page provenance-list">
-      <header className="provenance-list-header">
-        <h1>Writing</h1>
-        <div className="provenance-list-actions">
-          <Link to="/write/agents" className="link-button subtle">My Agents</Link>
-          <button type="button" onClick={onCreate} disabled={busy}>
-            New document
-          </button>
-        </div>
-      </header>
+    <div className="page staff">
+      <div className="staff-frame">
+        <header className="card-header">
+          <h1>Writing</h1>
+          <div className="header-actions">
+            <Link to="/write/agents" className="link-button subtle">My agents</Link>
+            <Link to="/" className="link-button subtle">Home</Link>
+            <button
+              type="button"
+              className="link-button"
+              onClick={onCreate}
+              disabled={busy}
+            >
+              New document
+            </button>
+          </div>
+        </header>
 
-      {error && <p className="error">{error}</p>}
+        <p className="scope-note">
+          A writing space that records the origin of every word — typed,
+          pasted, or pulled from a chat agent — so you and your instructor
+          can have an honest conversation about how a piece came together.
+        </p>
 
-      {docs === null && <p>Loading…</p>}
-      {docs !== null && docs.length === 0 && (
-        <p className="empty">No documents yet. Start one to begin writing.</p>
-      )}
-      {docs !== null && docs.length > 0 && (
-        <ul className="provenance-doc-list">
-          {docs.map((d) => (
-            <li key={d.id}>
-              <Link to={`/write/${d.id}`} className="provenance-doc-link">
-                <span className="title">{d.title}</span>
-                <span className="meta">
-                  {d.wordCount.toLocaleString()} words ·{" "}
-                  {relativeTime(d.updatedAt)}
-                </span>
-              </Link>
-              <button
-                type="button"
-                className="provenance-doc-delete"
-                onClick={() => onDelete(d.id)}
-                aria-label={`Delete ${d.title}`}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+        {error && <p className="error">{error}</p>}
+
+        {docs === null && <p className="muted">Loading…</p>}
+        {docs !== null && docs.length === 0 && (
+          <p className="muted">No documents yet. Start one to begin writing.</p>
+        )}
+        {docs !== null && docs.length > 0 && (
+          <ul className="assignment-list">
+            {docs.map((d) => (
+              <li key={d.id}>
+                <div>
+                  <Link to={`/write/${d.id}`} className="prov-doc-row-link">
+                    <strong>{d.title}</strong>
+                  </Link>
+                  <div className="muted small">
+                    {d.wordCount.toLocaleString()} word{d.wordCount === 1 ? "" : "s"}
+                    {" · "}
+                    {relativeTime(d.updatedAt)}
+                  </div>
+                </div>
+                <div className="row-actions">
+                  <Link to={`/write/${d.id}`} className="link-button subtle">Open</Link>
+                  <button
+                    type="button"
+                    className="danger-link"
+                    onClick={() => onDelete(d.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }

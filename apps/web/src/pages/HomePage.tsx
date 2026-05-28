@@ -10,19 +10,26 @@ import {
   type AgentSummary,
 } from "../client.js";
 import { logPerf, readBootstrap } from "../bootstrap.js";
-import { DEMO_COURSE } from "../course.js";
 import { PlusIcon, SignOutIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 
 export function HomePage() {
-  // v0.7 §2 — consume the worker-injected bootstrap *synchronously* in the
-  // useState initializer so the very first render already has rows; without
-  // this we'd flash "Loading…" for one render cycle even when the data is
-  // sitting on the page. The useEffect below still refetches when stale.
-  const [agents, setAgents] = useState<AgentSummary[] | null>(() => {
+  // v0.7 §2 / v1.0 §7.1 — consume the worker-injected bootstrap *synchronously*
+  // in the useState initializer so the very first render already has rows;
+  // without this we'd flash "Loading…" for one render cycle even when the data
+  // is sitting on the page. The bootstrap also carries the courseId (the user's
+  // single enrollment), which we trust for the initial render and the refetch
+  // path; /api/me below is the source of truth when there is no bootstrap.
+  const initialBoot = (() => {
     const boot = readBootstrap();
-    return boot && boot.courseId === DEMO_COURSE ? boot.agents : null;
-  });
+    return boot && boot.kind === "agents" ? boot : null;
+  })();
+  const [agents, setAgents] = useState<AgentSummary[] | null>(
+    initialBoot?.agents ?? null,
+  );
+  const [courseId, setCourseId] = useState<string | null>(
+    initialBoot?.courseId ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   // v0.6 §4 — if listAgents 403s with "Not enrolled in this course", the
   // signed-in user isn't enrolled anywhere yet. Surface a join-code form.
@@ -39,30 +46,43 @@ export function HomePage() {
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setIsAdmin(Boolean((m as { isAdmin?: boolean }).isAdmin));
+        // v1.0 §2 — when the user has more than one enrollment, send them
+        // to the picker. Single-enrollment users (the ~99% case) stay
+        // here and see exactly today's UX.
+        if (m.enrollments.length > 1) {
+          navigate("/courses", { replace: true });
+          return;
+        }
+        if (m.enrollments.length === 1) {
+          // v1.0 §7.1 — discover the single-enrollment courseId from /me
+          // (the worker uses this user's enrollments to authorize the
+          // listAgents call below). The bootstrap may already have set
+          // this; /me confirms or fills in when the bootstrap is absent.
+          setCourseId((current) => current ?? m.enrollments[0]!.courseId);
+        } else {
+          setNotEnrolled(true);
+        }
       })
       .catch(() => {
         // /me failing means we're unauthenticated or offline; ignore.
       });
     return () => ctrl.abort();
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    // v0.7 §2 — the bootstrap (if any) was already consumed in the
-    // useState initializer above; here we just decide whether to refetch.
-    // Stale-after-30s rule: when the bootstrap is older than that, refetch
-    // immediately so the student sees their actual current state. Within
-    // 30 s we trust the bootstrap and skip the fetch entirely.
-    const boot = readBootstrap();
-    const useCachedBootstrap =
-      boot && boot.courseId === DEMO_COURSE &&
+    if (!courseId) return;
+    // v0.7 §2 — within 30s of the bootstrap, trust it and skip the
+    // refetch. Past that, refetch so the student sees current state.
+    const fresh =
+      initialBoot &&
       typeof window.__BOOTSTRAP_AT__ === "number" &&
       Date.now() - window.__BOOTSTRAP_AT__ < 30_000;
-    if (boot && boot.courseId === DEMO_COURSE) {
-      logPerf("agents-from-bootstrap", { count: boot.agents.length });
-      if (useCachedBootstrap) return;
+    if (initialBoot) {
+      logPerf("agents-from-bootstrap", { count: initialBoot.agents.length });
+      if (fresh) return;
     }
     const fetchStart = performance.now();
-    listAgents(DEMO_COURSE)
+    listAgents(courseId)
       .then((r) => {
         setAgents(r.agents);
         logPerf("agents-from-network", {
@@ -81,7 +101,7 @@ export function HomePage() {
           setError(message);
         }
       });
-  }, []);
+  }, [courseId, initialBoot]);
 
   async function onSubmitJoinCode(e: React.FormEvent) {
     e.preventDefault();
@@ -138,7 +158,10 @@ export function HomePage() {
             {/* Staff destinations — demoted to muted text links so a
                 student's eye doesn't read them as peer actions. v0.7 §3.2. */}
             <span className="header-divider" aria-hidden />
-            <Link to="/author/agents" className="header-nav-link">
+            {/* v1.0 §1 — Author now sends the user to the picker (which
+                redirects to the single-course dashboard when there's only
+                one enrollment, no extra click). */}
+            <Link to="/courses" className="header-nav-link">
               Author
             </Link>
             {isAdmin && (
@@ -148,23 +171,32 @@ export function HomePage() {
             )}
           </div>
         </header>
-        <p className="muted">
-          Pick an agent to begin. The agent leads you through the topics for
-          that session — it decides when you're ready to move on.
-        </p>
+        {!notEnrolled && (
+          <p className="muted">
+            Pick something below to begin. Each one is set up by your
+            instructor — it'll tell you up front how it works and what it's
+            for.
+          </p>
+        )}
 
         {error && <p className="error">{error}</p>}
 
         {notEnrolled ? (
           <section className="field-group">
-            <h2>Have a join code?</h2>
-            <p className="muted small">
-              Your instructor will share a short code. Paste it here to enroll.
+            <h2>Welcome — let's get you into your course.</h2>
+            <p className="muted">
+              This is where your course's AI tools live. Everything here was
+              set up by your instructor for a specific purpose, and each tool
+              explains itself before you start — no guessing, no surprises.
+            </p>
+            <p className="muted">
+              To join, paste the code your instructor gave you. It usually
+              looks something like <code>stats-A4B7C9</code>.
             </p>
             <form className="inline-form" onSubmit={onSubmitJoinCode}>
               <input
                 type="text"
-                placeholder="e.g. stats-A4B7C9"
+                placeholder="Enter your join code"
                 value={joinCode}
                 disabled={joinBusy}
                 autoFocus
@@ -174,14 +206,18 @@ export function HomePage() {
                 {joinBusy ? "Joining…" : "Join"}
               </button>
             </form>
+            <p className="muted small">
+              Don't have a code yet? Ask your instructor — they can share one
+              or add you directly.
+            </p>
             {joinError && <p className="error">{joinError}</p>}
           </section>
         ) : agents === null ? (
           <p className="muted">Loading…</p>
         ) : agents.length === 0 ? (
           <p className="muted">
-            No agents yet.{" "}
-            <Link to="/author/agents/new">Create the first one</Link>.
+            Your instructor hasn't set anything up in this course yet. Check
+            back soon.
           </p>
         ) : (
           <ul className="assignment-list">

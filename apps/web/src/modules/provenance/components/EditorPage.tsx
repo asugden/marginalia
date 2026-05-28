@@ -1,10 +1,22 @@
 // Per-document editor page. Loads the document, renders the editor,
-// debounces saves of the doc body, and (slice 2) buffers + flushes
-// provenance events to the worker on a separate cadence.
+// debounces saves of the doc body, and buffers provenance events on a
+// separate flush cadence.
+//
+// Layout (chat-open):
+//   ┌────────────────────────────────────────────────────────────────┐
+//   │ sticky header: ← Documents · {title} · {saved} · [Hide chat]   │
+//   ├──────────────────────────────────┬─┬───────────────────────────┤
+//   │                                  │ │                           │
+//   │  editor (Tiptap)                 │ │  chat panel               │
+//   │                                  │ │                           │
+//   ├──────────────────────────────────┴─┴───────────────────────────┤
+//
+// The divider between editor and chat is draggable. Persist the chosen
+// ratio in localStorage so it sticks across reloads.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { JSONContent } from "@tiptap/react";
+import type { Editor, JSONContent } from "@tiptap/react";
 import { DEMO_COURSE } from "../../../course.js";
 import {
   getDocument,
@@ -22,7 +34,23 @@ const EVENTS_FLUSH_MS = 3_000;
 const EVENTS_FLUSH_AT_COUNT = 50;
 const EMPTY_DOC: JSONContent = { type: "doc", content: [] };
 
+// Editor/chat split ratio (editor share of width), bounded so neither
+// pane vanishes. Persisted in localStorage under PROV_SPLIT_KEY.
+const PROV_SPLIT_KEY = "provenance.editorSplit";
+const SPLIT_MIN = 0.32;
+const SPLIT_MAX = 0.78;
+const SPLIT_DEFAULT = 0.62;
+
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+function loadSplit(): number {
+  if (typeof window === "undefined") return SPLIT_DEFAULT;
+  const raw = window.localStorage.getItem(PROV_SPLIT_KEY);
+  if (!raw) return SPLIT_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return SPLIT_DEFAULT;
+  return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, n));
+}
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +59,7 @@ export function EditorPage() {
   const [titleDraft, setTitleDraft] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [chatOpen, setChatOpen] = useState(true);
+  const [split, setSplit] = useState<number>(() => loadSplit());
 
   // ── Doc-body autosave (slice 1) ───────────────────────────────────────
   const pendingSaveRef = useRef<{
@@ -42,14 +71,17 @@ export function EditorPage() {
   const saveTimerRef = useRef<number | null>(null);
 
   // ── Event buffer (slice 2) ────────────────────────────────────────────
-  // clientSeqRef is a monotonic per-document counter. Initialised to the
-  // current wall clock so a freshly-opened doc never collides with the
-  // server's existing max — and even a clock-jump on the client just
-  // produces a larger seq, which appendEvents already accepts.
   const clientSeqRef = useRef<number>(Date.now());
   const eventBufRef = useRef<OutboundEvent[]>([]);
   const eventTimerRef = useRef<number | null>(null);
   const eventInFlightRef = useRef<Promise<void> | null>(null);
+
+  // Slice 4: held so the ChatPanel can call insertLlmText imperatively.
+  const editorRef = useRef<Editor | null>(null);
+
+  // Split-bar drag state.
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ rect: DOMRect } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -59,7 +91,10 @@ export function EditorPage() {
         setDoc(d);
         setTitleDraft(d.title);
       })
-      .catch((e) => setLoadError(e instanceof Error ? e.message : "Load failed"));
+      .catch((e) => {
+        if (ctrl.signal.aborted) return;
+        setLoadError(e instanceof Error ? e.message : "Load failed");
+      });
     return () => ctrl.abort();
   }, [id]);
 
@@ -97,14 +132,8 @@ export function EditorPage() {
   const flushEvents = useCallback(async () => {
     if (!id) return;
     if (eventBufRef.current.length === 0) return;
-    // Serialise flushes — if one is already in flight, await it before
-    // sending another so client_seq ordering is preserved on the wire.
     if (eventInFlightRef.current) {
-      try {
-        await eventInFlightRef.current;
-      } catch {
-        /* the prior flush logs its own error */
-      }
+      try { await eventInFlightRef.current; } catch { /* prior flush logs */ }
     }
     const batch = eventBufRef.current;
     eventBufRef.current = [];
@@ -113,18 +142,12 @@ export function EditorPage() {
         await postEvents(id, DEMO_COURSE, batch);
       } catch (e) {
         console.warn("Event flush failed:", e);
-        // Best-effort retry: prepend back so order is preserved. If we
-        // keep failing, eventually the next user keystroke will retry.
         eventBufRef.current = batch.concat(eventBufRef.current);
       }
     })();
     eventInFlightRef.current = send;
-    try {
-      await send;
-    } finally {
-      if (eventInFlightRef.current === send) {
-        eventInFlightRef.current = null;
-      }
+    try { await send; } finally {
+      if (eventInFlightRef.current === send) eventInFlightRef.current = null;
     }
   }, [id]);
 
@@ -144,7 +167,6 @@ export function EditorPage() {
     }, EVENTS_FLUSH_MS);
   }, [flushEvents]);
 
-  // Flush on tab hide and on unmount so a quick close doesn't drop edits.
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
@@ -161,6 +183,32 @@ export function EditorPage() {
       void flushEvents();
     };
   }, [flushSave, flushEvents]);
+
+  // ── Drag-to-resize the editor/chat split ─────────────────────────────
+  const onDividerPointerDown = useCallback((ev: React.PointerEvent) => {
+    const container = splitContainerRef.current;
+    if (!container) return;
+    (ev.target as HTMLElement).setPointerCapture(ev.pointerId);
+    dragRef.current = { rect: container.getBoundingClientRect() };
+    document.body.classList.add("prov-dragging");
+  }, []);
+
+  const onDividerPointerMove = useCallback((ev: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const { rect } = dragRef.current;
+    if (rect.width === 0) return;
+    const fraction = (ev.clientX - rect.left) / rect.width;
+    const clamped = Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, fraction));
+    setSplit(clamped);
+  }, []);
+
+  const onDividerPointerUp = useCallback((ev: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    (ev.target as HTMLElement).releasePointerCapture(ev.pointerId);
+    dragRef.current = null;
+    document.body.classList.remove("prov-dragging");
+    window.localStorage.setItem(PROV_SPLIT_KEY, String(split));
+  }, [split]);
 
   function onEditorChange(change: EditorChange) {
     pendingSaveRef.current.bodyJson = change.bodyJson;
@@ -195,68 +243,114 @@ export function EditorPage() {
 
   if (loadError) {
     return (
-      <main className="page provenance-editor-page">
-        <p className="error">{loadError}</p>
-        <p>
-          <Link to="/write">← Back to documents</Link>
-        </p>
-      </main>
+      <div className="page staff">
+        <div className="staff-frame">
+          <p className="error">{loadError}</p>
+          <p><Link to="/write" className="link-button subtle">← Back to documents</Link></p>
+        </div>
+      </div>
     );
   }
 
   if (!doc) {
     return (
-      <main className="page provenance-editor-page">
-        <p>Loading…</p>
-      </main>
+      <div className="page staff">
+        <div className="staff-frame">
+          <p className="muted">Loading…</p>
+        </div>
+      </div>
     );
   }
 
+  const gridTemplate = chatOpen
+    ? `${split}fr 6px ${1 - split}fr`
+    : "minmax(0, 1fr)";
+
   return (
-    <main className={`page provenance-editor-page${chatOpen ? " chat-open" : ""}`}>
-      <header className="provenance-editor-header">
-        <Link to="/write" className="provenance-back">
-          ← Documents
+    <div className="prov-shell no-watermark">
+      <header className="prov-shell-header">
+        <Link to="/write" className="icon-button" title="Back to documents" aria-label="Back to documents">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </Link>
         <input
-          className="provenance-title"
+          className="prov-shell-title"
           value={titleDraft}
           onChange={(e) => onTitleChange(e.target.value)}
           aria-label="Document title"
+          placeholder="Untitled"
         />
-        <span className={`provenance-save-state save-${saveState}`}>
-          {saveState === "saving" && "Saving…"}
-          {saveState === "saved" && "Saved"}
-          {saveState === "error" && "Save failed"}
-        </span>
+        <SaveStatus state={saveState} />
         <button
           type="button"
-          className="provenance-chat-toggle"
+          className="link-button subtle prov-shell-chat-toggle"
           onClick={() => setChatOpen((v) => !v)}
-          aria-label={chatOpen ? "Hide chat" : "Show chat"}
         >
-          {chatOpen ? "Hide chat" : "Show chat"}
+          {chatOpen ? "Hide chat" : "Open chat"}
         </button>
       </header>
 
-      <div className="provenance-editor-layout">
-        <ProvenanceEditor
-          initialContent={(doc.bodyJson as JSONContent | undefined) ?? EMPTY_DOC}
-          onChange={onEditorChange}
-          onEvents={onEditorEvents}
-        />
-        {chatOpen && doc && (
-          <ChatPanel
-            documentId={doc.id}
-            // Slice 4 will wire this to actually insert into the editor with
-            // origin="llm" and a source_message_id link. For now we no-op so
-            // the button shows up but doesn't pretend to do something.
-            onInsertAtCursor={(_text, _sourceMessageId) => {
-              // intentional no-op until slice 4
-            }}
-          />
+      <div
+        ref={splitContainerRef}
+        className={`prov-shell-body${chatOpen ? " chat-open" : ""}`}
+        style={{ gridTemplateColumns: gridTemplate }}
+      >
+        <section className="prov-editor-pane">
+          <div className="prov-editor-inner">
+            <ProvenanceEditor
+              initialContent={(doc.bodyJson as JSONContent | undefined) ?? EMPTY_DOC}
+              onChange={onEditorChange}
+              onEvents={onEditorEvents}
+              onEditorReady={(ed) => { editorRef.current = ed; }}
+            />
+          </div>
+        </section>
+
+        {chatOpen && (
+          <>
+            <div
+              className="prov-divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize editor and chat panels"
+              onPointerDown={onDividerPointerDown}
+              onPointerMove={onDividerPointerMove}
+              onPointerUp={onDividerPointerUp}
+              onDoubleClick={() => {
+                setSplit(SPLIT_DEFAULT);
+                window.localStorage.setItem(PROV_SPLIT_KEY, String(SPLIT_DEFAULT));
+              }}
+            >
+              <span className="prov-divider-grip" aria-hidden />
+            </div>
+            <section className="prov-chat-pane">
+              <ChatPanel
+                documentId={doc.id}
+                onInsertAtCursor={(text, sourceMessageId) => {
+                  const ed = editorRef.current;
+                  if (!ed) return;
+                  ed.commands.insertLlmText({ text, sourceMessageId });
+                }}
+              />
+            </section>
+          </>
         )}
       </div>
-    </main>
+    </div>
+  );
+}
+
+function SaveStatus({ state }: { state: SaveState }) {
+  if (state === "idle") return <span className="prov-save-state" />;
+  const label =
+    state === "saving" ? "Saving…" :
+    state === "saved" ? "Saved" :
+    "Save failed";
+  return (
+    <span className={`prov-save-state state-${state}`}>
+      <span className="prov-save-dot" aria-hidden />
+      {label}
+    </span>
   );
 }

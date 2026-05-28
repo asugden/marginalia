@@ -79,9 +79,13 @@ is never stored server-side.
    expansion is a separate track). Optimistic UI for user message;
    live `delta` ticker for assistant. "Insert at cursor" button is
    rendered but no-op until slice 4.
-4. **LLM insert.** Cursor-aware insertion from a chat message into
-   the document, emitting `llm_insert` events and stamping the
-   inserted text with `origin="llm"` + the source message id.
+4. ✅ **LLM insert.** "Insert at cursor" on an assistant bubble now
+   calls `editor.commands.insertLlmText({ text, sourceMessageId })`.
+   The tracker stashes a `next-op` hint of `llm_insert` and
+   `appendTransaction` stamps the inserted range with `origin="llm"`
+   + `sourceMessageId`, emits an `llm_insert` event into the buffer.
+   Smart-spaces if the cursor was mid-word so LLM text doesn't fuse
+   onto the previous word.
 5. **BYO key.** `localStorage["provenance.llmKey"]` + per-request
    `X-Provenance-LLM-Key` header + "Use my own key" affordance.
    Worker uses the supplied key transiently; never stored.

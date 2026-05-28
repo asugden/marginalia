@@ -20,6 +20,7 @@ import { AnthropicProvider, ProviderError } from "@marginalia/providers";
 import type { LLMProvider, Message as LLMMessage } from "@marginalia/providers";
 import {
   buildPrompt,
+  clarityNoteFor,
   cleanReply,
   currentTopic,
   initialState,
@@ -230,6 +231,13 @@ async function route(
   // v0.6: also exposes `isAdmin` so the SPA can show the /admin link.
   // `via` is kept for telemetry but in production it's always "session".
   if (req.method === "GET" && head === "me" && parts.length === 2) {
+    // v1.0 §1/§2 — include the caller's enrollments (with course names + role)
+    // so the SPA's CourseLayout can validate :courseId without a second
+    // round-trip, and HomePage can render the multi-enrollment picker.
+    // Empty array for unauthenticated / not-yet-registered users.
+    const enrollments = identity.userId
+      ? await repo.listEnrollmentsForUserEnriched(env.DB, identity.userId)
+      : [];
     return json({
       email: identity.email,
       registered: identity.userId !== null,
@@ -237,6 +245,7 @@ async function route(
       displayName: identity.displayName,
       isAdmin: identity.isAdmin,
       via: identity.via,
+      enrollments,
     });
   }
 
@@ -294,6 +303,13 @@ async function route(
 
   // /api/agents[/:id]  — top-level "what students pick", renamed from /assignments
   if (head === "agents") {
+    // v1.0 §4 — list the caller's agents across every course they
+    // instruct, for the "Duplicate from another course" picker. Tail
+    // before the :id branch because /api/agents/duplicable is shaped
+    // like /api/agents/:id otherwise.
+    if (req.method === "GET" && parts.length === 3 && tail === "duplicable") {
+      return listDuplicableAgentsRoute(env, identity);
+    }
     if (req.method === "GET" && parts.length === 2) {
       return listAgentsRoute(req, env, url, identity);
     }
@@ -302,6 +318,10 @@ async function route(
     }
     if (req.method === "POST" && parts.length === 2) {
       return createAgentRoute(req, env, identity);
+    }
+    // v1.0 §4 — POST /api/agents/:id/duplicate-to { targetCourseId }
+    if (req.method === "POST" && parts.length === 4 && sub === "duplicate-to") {
+      return duplicateAgentToRoute(req, env, identity, tail!);
     }
     if (req.method === "PUT" && parts.length === 3) {
       return updateAgentRoute(req, env, identity, tail!);
@@ -868,11 +888,23 @@ async function serveHomeWithBootstrap(
  * inline. Conservative: must complete fast on cold paths, so it does at
  * most three D1 reads (authenticate → enrollments → agents).
  */
+type BootstrapShape =
+  | { kind: "agents"; courseId: string; agents: AgentSummaryShape[] }
+  | {
+      kind: "picker";
+      enrollments: Array<{
+        courseId: string;
+        courseName: string;
+        role: "student" | "instructor";
+        joinedAt: number;
+      }>;
+    };
+
 async function buildBootstrap(
   req: Request,
   env: Env,
   _ctx: ExecutionContext,
-): Promise<{ courseId: string; agents: AgentSummaryShape[] } | null> {
+): Promise<BootstrapShape | null> {
   // Short-circuit before authenticate() if there's no session cookie at all.
   // Saves one D1 session-table read for unauthenticated GET / (search
   // bots, link previews, monitoring, first-touch students). authenticate()
@@ -882,14 +914,25 @@ async function buildBootstrap(
 
   const identity = await authenticate(req, env).catch(() => null);
   if (!identity || !identity.userId) return null;
-  // Pick the single enrolled course. With multiple enrollments we'd need
-  // a UX for which to bootstrap; defer that to the v0.3 dashboard work.
-  const enrollments = await repo.listEnrollmentsForUser(env.DB, identity.userId);
-  if (enrollments.length !== 1) return null;
-  const courseId = enrollments[0]!.course_id;
-  const r = await loadAgentsForCourse(env, identity, courseId);
-  if (r.status !== "ok") return null;
-  return { courseId, agents: r.agents };
+  // v1.0 §2 — branch on enrollment count.
+  //   * 0 → no bootstrap; the unauthenticated/no-enrollment empty state
+  //         on HomePage already handles it.
+  //   * 1 → inline the agent list, same as v0.7.
+  //   * 2+ → inline the picker payload so the picker page (the SPA's
+  //         CoursePickerPage / HomePage redirect target) paints with
+  //         real data on first frame.
+  const enrollments = await repo.listEnrollmentsForUserEnriched(
+    env.DB,
+    identity.userId,
+  );
+  if (enrollments.length === 0) return null;
+  if (enrollments.length === 1) {
+    const courseId = enrollments[0]!.courseId;
+    const r = await loadAgentsForCourse(env, identity, courseId);
+    if (r.status !== "ok") return null;
+    return { kind: "agents", courseId, agents: r.agents };
+  }
+  return { kind: "picker", enrollments };
 }
 
 /**
@@ -974,13 +1017,23 @@ async function getAgentRoute(
   identity: Identity,
   agentId: string,
 ): Promise<Response> {
-  const courseId = url.searchParams.get("courseId");
-  if (!courseId) return error("courseId is required", 400);
+  // v1.0 §7.1 — courseId is optional. When absent, infer it from the
+  // agent row and require the caller to be enrolled in that course.
+  // Lets the compose path (/new/:agentId) load the agent without
+  // knowing its course up-front, instead of forcing the SPA to keep a
+  // global course constant for callers who don't have one.
+  const courseIdParam = url.searchParams.get("courseId");
+  let row: Awaited<ReturnType<typeof repo.getAgent>>;
+  if (courseIdParam) {
+    row = await repo.getAgent(env.DB, courseIdParam, agentId);
+  } else {
+    row = await repo.findAgentById(env.DB, agentId);
+  }
+  if (!row) return error("Agent not found", 404);
+  const courseId = row.course_id;
   const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
   if (!resolved) return error("Not enrolled in this course", 403);
 
-  const row = await repo.getAgent(env.DB, courseId, agentId);
-  if (!row) return error("Agent not found", 404);
   return json({
     id: row.id,
     courseId: row.course_id,
@@ -1088,6 +1141,128 @@ async function deleteAgentRoute(
 
   await repo.deleteAgentAndOrphanConversations(env.DB, courseId, agentId);
   return new Response(null, { status: 204 });
+}
+
+/**
+ * v1.0 §4 — copy an existing agent into a target course. Both the source
+ * course (where the agent lives today) and the target course must have
+ * the caller enrolled as instructor. Voices come along untouched because
+ * v0.7 made them per-author and cross-course-portable; `collectionId` is
+ * dropped iff the source collection isn't accessible from the target
+ * course (the common case — collections are strictly per-course).
+ *
+ * The copy is independent of the source: editing the new agent in the
+ * target course doesn't touch the original. Matches the plan's
+ * copy-on-use model (v1.0 §4 "Why copy and not shared reference").
+ */
+async function duplicateAgentToRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  sourceAgentId: string,
+): Promise<Response> {
+  if (!identity.userId) return error("Sign in required", 401);
+  const body = (await req.json().catch(() => null)) as {
+    targetCourseId?: string;
+  } | null;
+  if (!body?.targetCourseId) {
+    return error("targetCourseId required", 400);
+  }
+
+  const source = await repo.findAgentById(env.DB, sourceAgentId);
+  if (!source) return error("Agent not found", 404);
+
+  // Authorize on both ends. Same-course duplication is allowed (it's how
+  // an instructor forks an agent within a course) but in practice the UI
+  // exposes the cross-course case.
+  const sourceAuth = await resolveUser(
+    env,
+    identity.email,
+    source.course_id,
+    identity.userId,
+  );
+  if (!sourceAuth || !isAuthor(sourceAuth.enrollment.role)) {
+    return error("Instructor on the source course required", 403);
+  }
+  const targetAuth = await resolveUser(
+    env,
+    identity.email,
+    body.targetCourseId,
+    identity.userId,
+  );
+  if (!targetAuth || !isAuthor(targetAuth.enrollment.role)) {
+    return error("Instructor on the target course required", 403);
+  }
+
+  const def = JSON.parse(source.definition) as AgentDefinition;
+  // If the source agent references a collection, keep the binding only
+  // when a collection with that id exists in the target course. The plan
+  // is explicit: scrub on inaccessible, otherwise leave alone. Today
+  // collection ids are random per-course, so this almost always scrubs;
+  // the branch is forward-compatible with any future shared-collections
+  // story.
+  let droppedCollection = false;
+  if (def.collectionId) {
+    const targetCollection = await repo.getCollection(
+      env.DB,
+      body.targetCourseId,
+      def.collectionId,
+    );
+    if (!targetCollection) {
+      delete def.collectionId;
+      droppedCollection = true;
+    }
+  }
+
+  const row = await repo.createAgent(env.DB, {
+    courseId: body.targetCourseId,
+    title: source.title,
+    definition: JSON.stringify(def),
+  });
+  return json({ id: row.id, droppedCollection }, 201);
+}
+
+/**
+ * v1.0 §4 — list every agent the caller can duplicate from. Walks the
+ * caller's instructor enrollments and returns each course's agents,
+ * grouped by source course. Excludes courses where the caller is only a
+ * student. Used by the "+ From another course" modal in the agent
+ * picker.
+ */
+async function listDuplicableAgentsRoute(
+  env: Env,
+  identity: Identity,
+): Promise<Response> {
+  if (!identity.userId) return error("Sign in required", 401);
+  const enrollments = await repo.listEnrollmentsForUserEnriched(
+    env.DB,
+    identity.userId,
+  );
+  const instructorEnrollments = enrollments.filter(
+    (e) => e.role === "instructor",
+  );
+  // Fan out per course; D1 reads are cheap and the instructor's course
+  // count is small (1–5 per the plan).
+  const groups = await Promise.all(
+    instructorEnrollments.map(async (e) => {
+      const rows = await repo.listAgents(env.DB, e.courseId);
+      return {
+        courseId: e.courseId,
+        courseName: e.courseName,
+        agents: rows.map((r) => {
+          const def = JSON.parse(r.definition) as AgentDefinition;
+          return {
+            id: r.id,
+            title: r.title,
+            hasBackbone: !!def.backbone,
+            hasCollection: !!def.collectionId,
+            updatedAt: r.updated_at,
+          };
+        }),
+      };
+    }),
+  );
+  return json({ courses: groups });
 }
 
 /**
@@ -1242,6 +1417,9 @@ async function createCollectionRoute(
     name: body.name,
     description: body.description?.trim() ? body.description.trim() : null,
   });
+  // v1.0 §6 — first collection in this course makes the Collections tab
+  // appear on the dashboard. Idempotent on subsequent creates.
+  await repo.markCourseFeatureShown(env.DB, body.courseId, "collections");
   return json(
     {
       id: row.id,
@@ -2184,14 +2362,8 @@ async function adminRoute(
 }
 
 async function listCoursesAdmin(env: Env): Promise<Response> {
-  const rows = await repo.listCourses(env.DB, DEFAULT_ORG);
-  return json({
-    courses: rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      createdAt: r.created_at,
-    })),
-  });
+  const rows = await repo.listCoursesWithEnrollmentCounts(env.DB, DEFAULT_ORG);
+  return json({ courses: rows });
 }
 
 async function createCourseAdmin(
@@ -2469,8 +2641,8 @@ async function startConversation(
     agentId?: string;
     content?: string;
   } | null;
-  if (!body?.courseId || !body?.agentId || !body?.content) {
-    return error("courseId, agentId, and content are required", 400);
+  if (!body?.agentId || !body?.content) {
+    return error("agentId and content are required", 400);
   }
   const content = body.content.trim();
   if (!content) return error("content is required", 400);
@@ -2481,11 +2653,16 @@ async function startConversation(
     );
   }
 
-  const resolved = await resolveUser(env, identity.email, body.courseId, identity.userId);
-  if (!resolved) return error("Not enrolled in this course", 403);
-
-  const agent = await repo.getAgent(env.DB, body.courseId, body.agentId);
+  // v1.0 §7.1 — courseId is optional. When absent, infer it from the
+  // agent row. Either way, the caller must be enrolled in the agent's
+  // course before we'll start a conversation against it.
+  const agent = body.courseId
+    ? await repo.getAgent(env.DB, body.courseId, body.agentId)
+    : await repo.findAgentById(env.DB, body.agentId);
   if (!agent) return error("Agent not found", 404);
+  const courseId = agent.course_id;
+  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  if (!resolved) return error("Not enrolled in this course", 403);
 
   // Snapshot the definition into the conversation row. If the instructor
   // edits the agent mid-flight, in-progress conversations keep running
@@ -2515,7 +2692,7 @@ async function startConversation(
     //
     // Find the agent's owning instructor by reading the course roster. With
     // multiple instructors we accept the voice if any of them can use it.
-    const courseInstructors = await repo.listRosterForCourse(env.DB, body.courseId);
+    const courseInstructors = await repo.listRosterForCourse(env.DB, courseId);
     const instructorIds = courseInstructors
       .filter((r) => r.role === "instructor")
       .map((r) => r.userId);
@@ -2527,7 +2704,7 @@ async function startConversation(
     if (!usableByAny) {
       console.warn(
         `Voice ${v.id} referenced by agent ${agent.id} is no longer usable by ` +
-        `any instructor on course ${body.courseId}. Continuing with materialised ` +
+        `any instructor on course ${courseId}. Continuing with materialised ` +
         `snapshot but the agent should be re-saved or deleted.`,
       );
     }
@@ -2544,7 +2721,7 @@ async function startConversation(
   const snapshotJson = JSON.stringify(def);
   const state = def.backbone ? initialState() : null;
   const conv = await repo.createConversation(env.DB, {
-    courseId: body.courseId,
+    courseId,
     userId: resolved.user.id,
     agentId: body.agentId,
     agentTitle: agent.title,
@@ -2659,7 +2836,13 @@ async function getConversation(
 
   return json({
     conversationId: row.id,
+    // v1.0 §7.1 — surfacing courseId here lets ConversationPage build
+    // citation URLs without importing the old DEMO_COURSE constant.
+    courseId: row.course_id,
     agent: agentInfo,
+    // v1.0 — the student-facing clarity line, resolved from the agent
+    // snapshot (instructor note, or a default from the agent's shape).
+    clarityNote: clarityNoteFor(def),
     state,
     currentTopic: currentTopicInfo,
     completedAt: row.completed_at,

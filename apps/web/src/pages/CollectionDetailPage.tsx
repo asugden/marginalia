@@ -14,7 +14,7 @@ import {
   type CollectionDetail,
   type CollectionSourceKind,
 } from "../client.js";
-import { DEMO_COURSE } from "../course.js";
+import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
 
 function humanBytes(n: number): string {
@@ -35,6 +35,7 @@ function kindLabel(k: CollectionSourceKind): string {
 type Tab = "upload" | "url" | "paste";
 
 export function CollectionDetailPage() {
+  const { courseId } = useCourse();
   const { id: collectionId } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<CollectionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +49,13 @@ export function CollectionDetailPage() {
   function reload() {
     if (!collectionId) return;
     setError(null);
-    getCollection(DEMO_COURSE, collectionId)
+    getCollection(courseId, collectionId)
       .then(setDetail)
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }
 
-  useEffect(reload, [collectionId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reload, [collectionId, courseId]);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -61,7 +63,7 @@ export function CollectionDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await uploadCollectionSource(DEMO_COURSE, collectionId, file);
+      const res = await uploadCollectionSource(courseId, collectionId, file);
       if (res.status === "failed") setError(res.error ?? "Indexing failed");
       reload();
     } catch (err) {
@@ -77,7 +79,7 @@ export function CollectionDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await addCollectionUrlSource(DEMO_COURSE, collectionId, urlInput.trim());
+      const res = await addCollectionUrlSource(courseId, collectionId, urlInput.trim());
       if (res.status === "failed") setError(res.error ?? "Indexing failed");
       setUrlInput("");
       reload();
@@ -97,7 +99,7 @@ export function CollectionDetailPage() {
       // so the server treats paste-text and uploaded .txt identically.
       const base = (pasteTitle.trim() || "pasted") + ".txt";
       const file = new File([pasteBody], base, { type: "text/plain" });
-      const res = await uploadCollectionSource(DEMO_COURSE, collectionId, file);
+      const res = await uploadCollectionSource(courseId, collectionId, file);
       if (res.status === "failed") setError(res.error ?? "Indexing failed");
       setPasteTitle("");
       setPasteBody("");
@@ -114,7 +116,7 @@ export function CollectionDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      await refreshCollectionSource(DEMO_COURSE, collectionId, sourceId);
+      await refreshCollectionSource(courseId, collectionId, sourceId);
       reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refresh failed");
@@ -140,7 +142,7 @@ export function CollectionDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      await deleteCollectionSource(DEMO_COURSE, collectionId, sourceId);
+      await deleteCollectionSource(courseId, collectionId, sourceId);
       reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Remove failed");
@@ -151,33 +153,30 @@ export function CollectionDetailPage() {
 
   if (!detail) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
-          {error ? (
-            <p className="error">{error}</p>
-          ) : (
-            <p className="muted">Loading…</p>
-          )}
-          <Link to="/author/collections" className="link-button subtle">
-            ← All collections
-          </Link>
-        </div>
-      </div>
+      <section>
+        {error ? (
+          <p className="error">{error}</p>
+        ) : (
+          <p className="muted">Loading…</p>
+        )}
+        <Link to={`/course/${courseId}/collections`} className="link-button subtle">
+          ← All libraries
+        </Link>
+      </section>
     );
   }
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>{detail.collection.name}</h1>
-          <Link to="/author/collections" className="link-button subtle">
-            ← All collections
-          </Link>
-        </header>
-        {detail.collection.description && (
-          <p className="muted">{detail.collection.description}</p>
-        )}
+    <section>
+      <header className="sub-header">
+        <h2>{detail.collection.name}</h2>
+        <Link to={`/course/${courseId}/collections`} className="link-button subtle">
+          ← All libraries
+        </Link>
+      </header>
+      {detail.collection.description && (
+        <p className="muted">{detail.collection.description}</p>
+      )}
 
         {error && <p className="error">{error}</p>}
 
@@ -329,7 +328,6 @@ export function CollectionDetailPage() {
             </ul>
           )}
         </section>
-      </div>
-    </div>
+    </section>
   );
 }

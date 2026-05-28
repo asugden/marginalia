@@ -25,9 +25,12 @@ interface Props {
   onChange: (change: EditorChange) => void;
   /** Called whenever the tracker observes one or more edits. */
   onEvents?: (events: TrackedEvent[]) => void;
+  /** Fires once the editor instance is ready; receives null on teardown.
+   *  Slice 4 uses this so the ChatPanel can call editor.commands.insertLlmText. */
+  onEditorReady?: (editor: Editor | null) => void;
 }
 
-export function ProvenanceEditor({ initialContent, onChange, onEvents }: Props) {
+export function ProvenanceEditor({ initialContent, onChange, onEvents, onEditorReady }: Props) {
   // Keep the latest onEvents in a ref so the tracker plugin (configured once
   // at editor construction) always sees the current callback.
   const onEventsRef = useRef<Props["onEvents"]>(onEvents);
@@ -62,80 +65,128 @@ export function ProvenanceEditor({ initialContent, onChange, onEvents }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialContent, editor]);
 
-  if (!editor) return <div className="provenance-editor" />;
+  // Expose / retract the editor instance to the parent for imperative actions
+  // (e.g. ChatPanel "Insert at cursor"). Fires on mount when editor becomes
+  // available, and again on unmount with null so refs are cleaned up.
+  useEffect(() => {
+    onEditorReady?.(editor ?? null);
+    return () => onEditorReady?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
+  if (!editor) return <div className="prov-editor-surface-wrap" />;
 
   const wordCount = editor.storage.characterCount.words();
   const charCount = editor.storage.characterCount.characters();
   const pageCount = Math.max(1, Math.ceil(wordCount / WORDS_PER_PAGE));
 
   return (
-    <div className="provenance-editor">
-      <BubbleMenu editor={editor} className="provenance-bubble">
-        <button
-          type="button"
+    <div className="prov-editor-surface-wrap">
+      <BubbleMenu editor={editor} className="prov-bubble-menu">
+        <ToolbarButton
+          editor={editor}
+          isActive={editor.isActive("bold")}
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={editor.isActive("bold") ? "is-active" : ""}
-          aria-label="Bold"
+          label="Bold"
         >
-          B
-        </button>
-        <button
-          type="button"
+          <strong>B</strong>
+        </ToolbarButton>
+        <ToolbarButton
+          editor={editor}
+          isActive={editor.isActive("italic")}
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={editor.isActive("italic") ? "is-active" : ""}
-          aria-label="Italic"
+          label="Italic"
         >
           <em>I</em>
-        </button>
-        <button
-          type="button"
+        </ToolbarButton>
+        <span className="prov-bubble-sep" aria-hidden />
+        <ToolbarButton
+          editor={editor}
+          isActive={editor.isActive("heading", { level: 1 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={editor.isActive("heading", { level: 1 }) ? "is-active" : ""}
-          aria-label="Heading 1"
+          label="Heading 1"
         >
-          H1
-        </button>
-        <button
-          type="button"
+          H<sub>1</sub>
+        </ToolbarButton>
+        <ToolbarButton
+          editor={editor}
+          isActive={editor.isActive("heading", { level: 2 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={editor.isActive("heading", { level: 2 }) ? "is-active" : ""}
-          aria-label="Heading 2"
+          label="Heading 2"
         >
-          H2
-        </button>
-        <button
-          type="button"
+          H<sub>2</sub>
+        </ToolbarButton>
+        <span className="prov-bubble-sep" aria-hidden />
+        <ToolbarButton
+          editor={editor}
+          isActive={editor.isActive("bulletList")}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={editor.isActive("bulletList") ? "is-active" : ""}
-          aria-label="Bullet list"
+          label="Bullet list"
         >
           •
-        </button>
-        <button
-          type="button"
+        </ToolbarButton>
+        <ToolbarButton
+          editor={editor}
+          isActive={editor.isActive("orderedList")}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={editor.isActive("orderedList") ? "is-active" : ""}
-          aria-label="Numbered list"
+          label="Numbered list"
         >
           1.
-        </button>
+        </ToolbarButton>
       </BubbleMenu>
 
-      <EditorContent editor={editor} className="provenance-editor-surface" />
+      <EditorContent editor={editor} className="prov-editor-surface" />
 
-      <footer className="provenance-counts">
-        <span>{wordCount.toLocaleString()} words</span>
-        <span>{charCount.toLocaleString()} characters</span>
-        <span>
-          ~{pageCount} page{pageCount === 1 ? "" : "s"}
+      <footer className="prov-editor-counts">
+        <span className="prov-editor-counts-stats">
+          <span><strong>{wordCount.toLocaleString()}</strong> words</span>
+          <span className="prov-counts-sep" aria-hidden />
+          <span><strong>{charCount.toLocaleString()}</strong> characters</span>
+          <span className="prov-counts-sep" aria-hidden />
+          <span>~{pageCount} page{pageCount === 1 ? "" : "s"}</span>
         </span>
-        <span className="provenance-legend">
-          <span className="legend-swatch legend-human" /> typed
-          <span className="legend-swatch legend-pasted" /> pasted
-          <span className="legend-swatch legend-llm" /> from chat
+        <span className="prov-editor-legend" aria-label="Word-origin legend">
+          <Swatch className="legend-human" label="typed" />
+          <Swatch className="legend-pasted" label="pasted" />
+          <Swatch className="legend-llm" label="from chat" />
         </span>
       </footer>
     </div>
+  );
+}
+
+function ToolbarButton({
+  editor: _editor,
+  isActive,
+  onClick,
+  label,
+  children,
+}: {
+  editor: Editor;
+  isActive: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`prov-bubble-button${isActive ? " is-active" : ""}`}
+      aria-label={label}
+      aria-pressed={isActive}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Swatch({ className, label }: { className: string; label: string }) {
+  return (
+    <span className="prov-legend-item">
+      <span className={`prov-legend-swatch ${className}`} aria-hidden />
+      {label}
+    </span>
   );
 }
 

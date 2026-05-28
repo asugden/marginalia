@@ -18,10 +18,14 @@ const apiUrl = (path: string) => `${API_BASE}${path}`;
  *  proxy. Null when the source has neither (e.g. deleted). */
 export function citationOpenUrl(
   c: MessageSource,
-  courseId: string,
+  courseId: string | null,
 ): string | null {
   if (c.sourceUrl) return c.sourceUrl;
-  if (c.sourceId) {
+  // v1.0 §7.1 — sourceId-backed citations need the course id to build the
+  // R2 proxy URL. The page that knows the conversation (and thus the
+  // course) calls this; before that's known the link is suppressed
+  // gracefully — the pill still renders, it just isn't clickable yet.
+  if (c.sourceId && courseId) {
     return apiUrl(
       `/api/sources/${c.sourceId}/file?courseId=${encodeURIComponent(courseId)}`,
     );
@@ -173,7 +177,14 @@ export interface CollectionDetail {
 
 export interface ConversationView {
   conversationId: string;
+  /** v1.0 §7.1 — the course this conversation belongs to. Used by the
+   *  chat page to build citation URLs without depending on any
+   *  hardcoded course constant. */
+  courseId: string;
   agent: { id: string; title: string } | null;
+  /** v1.0 — student-facing clarity line, resolved server-side from the
+   *  agent snapshot (instructor's note or a shape-derived default). */
+  clarityNote: string;
   state: BackboneState | null;
   currentTopic: { title: string; index: number } | null;
   /** Set when the backbone reached its exit condition. Composer is hidden when set. */
@@ -291,8 +302,12 @@ function redirectToLogin(): void {
  * from Anthropic even after the user has left the page — every cancellation
  * matters because each one is real billed work.
  */
+/** v1.0 §7.1 — `courseId` is optional. The worker infers it from the
+ *  agent id and enforces enrollment on the inferred course. Compose
+ *  mode (/new/:agentId) doesn't know the course up-front, so callers
+ *  pass agentId alone; the picker / dashboard surfaces that do know the
+ *  course are welcome to pass it for an extra round of validation. */
 export async function* startConversation(
-  courseId: string,
   agentId: string,
   content: string,
   signal?: AbortSignal,
@@ -301,7 +316,7 @@ export async function* startConversation(
     ...fetchInit,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ courseId, agentId, content }),
+    body: JSON.stringify({ agentId, content }),
     signal,
   });
   if (res.status === 401) {
@@ -328,10 +343,24 @@ export function listConversations(signal?: AbortSignal) {
 
 /** Identity endpoint — returns the logged-in user's id + email. Used by
  *  /author/roster to gate self-affecting actions in the UI. */
+/** v1.0 §1/§2 — one row of `/api/me`'s enrollments. */
+export interface MeEnrollment {
+  courseId: string;
+  courseName: string;
+  role: "student" | "instructor";
+  joinedAt: number;
+  /** v1.0 §6 — lazy-reveal flags for the dashboard tab strip. Flip true
+   *  the first time the course uses the feature; never flip back. */
+  showAttendance: boolean;
+  showCollections: boolean;
+}
 export interface MeResponse {
   email: string;
   registered: boolean;
   userId: string | null;
+  /** Every course the caller is enrolled in, joined-date desc. Empty when
+   *  unauthenticated or not yet claimed. */
+  enrollments: MeEnrollment[];
 }
 export function getMe(signal?: AbortSignal) {
   return jsonFetch<MeResponse>("/api/me", { signal });
@@ -532,10 +561,17 @@ export function listAgents(courseId: string) {
   );
 }
 
+/** v1.0 §7.1 — fetch a single agent.
+ *  - `getAgent(courseId, agentId)` when the course is known (faster, validates).
+ *  - `getAgentById(agentId)` when the course isn't known (compose path).
+ *  The worker enforces enrollment on the agent's course either way. */
 export function getAgent(courseId: string, agentId: string) {
   return jsonFetch<AgentDetail>(
     `/api/agents/${agentId}?courseId=${encodeURIComponent(courseId)}`,
   );
+}
+export function getAgentById(agentId: string) {
+  return jsonFetch<AgentDetail>(`/api/agents/${agentId}`);
 }
 
 export function createAgent(
@@ -559,6 +595,38 @@ export function updateAgent(
     method: "PUT",
     body: JSON.stringify({ courseId, title, definition }),
   });
+}
+
+/** v1.0 §4 — one row in the "Duplicate from another course" picker. */
+export interface DuplicableAgentSummary {
+  id: string;
+  title: string;
+  hasBackbone: boolean;
+  hasCollection: boolean;
+  updatedAt: number;
+}
+export interface DuplicableAgentsGroup {
+  courseId: string;
+  courseName: string;
+  agents: DuplicableAgentSummary[];
+}
+export function listDuplicableAgents() {
+  return jsonFetch<{ courses: DuplicableAgentsGroup[] }>(
+    "/api/agents/duplicable",
+  );
+}
+
+/** v1.0 §4 — copy an agent from any course the caller instructs into
+ *  the target course. Returns the new agent's id and whether the source
+ *  collection was stripped (target course didn't have it). */
+export function duplicateAgentTo(sourceAgentId: string, targetCourseId: string) {
+  return jsonFetch<{ id: string; droppedCollection: boolean }>(
+    `/api/agents/${sourceAgentId}/duplicate-to`,
+    {
+      method: "POST",
+      body: JSON.stringify({ targetCourseId }),
+    },
+  );
 }
 
 /**
@@ -768,6 +836,9 @@ export interface AdminCourse {
   id: string;
   name: string;
   createdAt: number;
+  /** v1.0 §7.5 — number of enrollments in this course (any role). Lets
+   *  the admin spot empty/stale courses. */
+  enrollmentCount: number;
 }
 export interface AdminUser {
   userId: string;

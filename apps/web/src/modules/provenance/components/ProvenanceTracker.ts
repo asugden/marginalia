@@ -1,33 +1,40 @@
 // Tiptap extension that:
 //   1. Stamps every inserted character with an `origin` mark (default human).
 //   2. Catches paste events and marks the inserted text as `pasted`.
-//   3. Captures insert / delete / paste events into a callback so the
-//      EditorPage can buffer + POST them to the worker.
+//   3. Exposes an `insertLlmText` command that inserts text from a chat
+//      message at the current selection, marked `origin: "llm"` and linked
+//      to the source message via `sourceMessageId` (slice 4).
+//   4. Captures insert / delete / paste / llm_insert events into a callback
+//      so EditorPage can buffer + POST them to the worker.
 //
 // The trick: ProseMirror gives us a clean stream of transactions and the
 // transform that produced each one. We walk the transform's ReplaceSteps
-// to derive (offset, length, text) for each individual edit.
+// to derive (offset, length, text) for each individual edit. A short-lived
+// "next-op hint" stashed on the upcoming transaction tells appendTransaction
+// what origin to stamp (paste vs llm_insert vs the default human).
 //
-// We deliberately do NOT mutate text in this extension — we only attach
-// marks via an appendTransaction hook. That keeps ProseMirror's own undo /
-// collab logic untouched.
+// We deliberately do NOT mutate text in appendTransaction — we only attach
+// marks via a follow-up transaction. That keeps ProseMirror's undo / collab
+// logic untouched. The `insertLlmText` command DOES mutate; that's a normal
+// user-initiated change.
 
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { ReplaceStep, ReplaceAroundStep } from "@tiptap/pm/transform";
 import type { Origin } from "./OriginMark.js";
 
-export type TrackedEventKind = "insert" | "delete" | "paste";
+export type TrackedEventKind = "insert" | "delete" | "paste" | "llm_insert";
 
 export interface TrackedEvent {
   kind: TrackedEventKind;
   /** ProseMirror position at the start of the change. */
   offset: number;
-  /** Chars inserted (insert/paste) or removed (delete). */
+  /** Chars inserted (insert/paste/llm_insert) or removed (delete). */
   length: number;
-  /** Inserted text for insert/paste; removed text for delete. */
+  /** Inserted text for insert/paste/llm_insert; removed text for delete. */
   text: string;
   origin?: Origin;
+  sourceMessageId?: string;
   /** Per-keystroke gap timings (insert only). ms between adjacent keystrokes. */
   timingGapsMs?: number[];
 }
@@ -35,6 +42,7 @@ export interface TrackedEvent {
 interface NextOpHint {
   origin: Origin;
   kind: TrackedEventKind;
+  sourceMessageId?: string;
 }
 
 const pluginKey = new PluginKey<NextOpHint | null>("provenance-tracker");
@@ -49,11 +57,58 @@ interface KeystrokeWindow {
   gaps: number[];
 }
 
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    provenanceTracker: {
+      /**
+       * Insert text from a chat message at the current selection. Stamps
+       * the inserted range with origin="llm" + sourceMessageId. Replaces
+       * any non-empty selection (parity with normal typing).
+       */
+      insertLlmText: (args: { text: string; sourceMessageId: string }) => ReturnType;
+    };
+  }
+}
+
 export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
   name: "provenanceTracker",
 
   addOptions() {
     return { onEvents: () => undefined };
+  },
+
+  addCommands() {
+    return {
+      insertLlmText:
+        ({ text, sourceMessageId }) =>
+        ({ chain, state }) => {
+          if (!text) return false;
+          // Smart spacing: if the cursor is right after a non-whitespace
+          // character (i.e. we'd glue onto a word), prepend a space.
+          const { from } = state.selection;
+          let toInsert = text;
+          const charBefore = from > 0 ? state.doc.textBetween(from - 1, from, "\n", "\n") : "";
+          if (charBefore && /\S/.test(charBefore) && !/^\s/.test(text)) {
+            toInsert = " " + text;
+          }
+          // Stash the hint so appendTransaction marks the inserted range as
+          // llm with the right sourceMessageId, and emits an llm_insert event.
+          return chain()
+            .focus()
+            .command(({ tr, dispatch }) => {
+              if (dispatch) {
+                tr.setMeta(pluginKey, {
+                  origin: "llm" as const,
+                  kind: "llm_insert" as const,
+                  sourceMessageId,
+                });
+              }
+              return true;
+            })
+            .insertContent(toInsert)
+            .run();
+        },
+    };
   },
 
   addProseMirrorPlugins() {
@@ -63,21 +118,15 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
     // flush an insert event so we don't keep cumulating across bursts.
     let keystroke: KeystrokeWindow | null = null;
 
-    // Tracks the inputType of the most recent beforeinput event so we can
-    // distinguish a normal type from, e.g., a paste. Slice 2 only needs
-    // the paste signal; later slices will use insertReplacementText to
-    // detect Grammarly.
-    let lastInputType: string | null = null;
-
     return [
       new Plugin<NextOpHint | null>({
         key: pluginKey,
 
         state: {
           init: () => null,
-          // The transaction may carry a "next-op hint" set by handlePaste
-          // before the paste's own transaction runs. Read it from the tr's
-          // meta and store it so appendTransaction can find it.
+          // The transaction may carry a "next-op hint" set by handlePaste or
+          // the insertLlmText command. Read it from the tr's meta and store
+          // it so appendTransaction can find it.
           apply(tr, value) {
             const meta = tr.getMeta(pluginKey) as NextOpHint | null | undefined;
             if (meta !== undefined) return meta;
@@ -89,9 +138,6 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
           handleDOMEvents: {
             beforeinput: (_view, ev) => {
               const e = ev as InputEvent;
-              lastInputType = e.inputType ?? null;
-              // Track per-keystroke timing for insertText only — paste /
-              // replacement etc. aren't keystrokes.
               if (e.inputType === "insertText") {
                 const now = performance.now();
                 if (!keystroke) {
@@ -130,8 +176,6 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
           if (userTrs.length === 0) return null;
 
           const hint = pluginKey.getState(newState);
-          // Clear the hint so the *next* transaction doesn't reuse it.
-          // We do that by setting meta to null on our own appended tr below.
 
           const events: TrackedEvent[] = [];
           let markTr = newState.tr;
@@ -162,10 +206,6 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
                 : "";
 
               if (removedLen > 0) {
-                // We can't easily recover the *exact* removed text after the
-                // fact; use the step's slice openness only matters for
-                // structure. Best we can do is report length; slice-replay
-                // tools will read the prior doc state.
                 events.push({
                   kind: "delete",
                   offset: step.from,
@@ -175,29 +215,35 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
               }
 
               if (sliceSize > 0) {
-                const isPaste = hint?.kind === "paste";
-                const origin: Origin = isPaste ? "pasted" : "human";
+                const kind: TrackedEventKind =
+                  hint?.kind === "paste"
+                    ? "paste"
+                    : hint?.kind === "llm_insert"
+                    ? "llm_insert"
+                    : "insert";
+                const origin: Origin =
+                  kind === "paste" ? "pasted" : kind === "llm_insert" ? "llm" : "human";
+                const sourceMessageId =
+                  kind === "llm_insert" ? hint?.sourceMessageId ?? null : null;
 
                 if (originMarkType) {
                   markTr = markTr.addMark(
                     insertedFrom,
                     insertedTo,
-                    originMarkType.create({
-                      origin,
-                      sourceMessageId: null,
-                    }),
+                    originMarkType.create({ origin, sourceMessageId }),
                   );
                   didMark = true;
                 }
 
                 const event: TrackedEvent = {
-                  kind: isPaste ? "paste" : "insert",
+                  kind,
                   offset: insertedFrom,
                   length: sliceSize,
                   text: insertedText,
                   origin,
                 };
-                if (!isPaste && keystroke && keystroke.gaps.length > 0) {
+                if (sourceMessageId) event.sourceMessageId = sourceMessageId;
+                if (kind === "insert" && keystroke && keystroke.gaps.length > 0) {
                   event.timingGapsMs = keystroke.gaps.slice();
                 }
                 events.push(event);
@@ -207,13 +253,12 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
 
           // Reset the keystroke window once we've consumed it.
           keystroke = null;
-          lastInputType = lastInputType; // silence unused-var if linted
 
           if (events.length > 0) onEvents(events);
 
           if (didMark) {
-            // Clear the paste hint as part of our appended transaction so
-            // it doesn't bleed into the next user transaction.
+            // Clear the hint as part of our appended transaction so it
+            // doesn't bleed into the next user transaction.
             markTr.setMeta(pluginKey, null);
             // Don't add to history — this is a derived mark application,
             // not user-visible edit history.

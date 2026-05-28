@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { AgentDefinition } from "@marginalia/backbone";
+import { clarityNoteFor, type AgentDefinition } from "@marginalia/backbone";
 import {
   createAgent,
   getAgent,
@@ -16,7 +16,7 @@ import {
   type CollectionSummary,
   type VoiceListing,
 } from "../client.js";
-import { DEMO_COURSE } from "../course.js";
+import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
 
 interface DraftTopic {
@@ -43,6 +43,7 @@ interface Draft {
   hasCollection: boolean;
   collectionId: string;      // "" when none chosen
   model: string;             // "" means default
+  clarityNote: string;       // "" → student sees a shape-derived default
 }
 
 const MODEL_OPTIONS: Array<{ id: string; label: string; note?: string }> = [
@@ -70,6 +71,7 @@ const emptyDraft = (): Draft => ({
   hasCollection: false,
   collectionId: "",
   model: "",
+  clarityNote: "",
 });
 
 function fromDefinition(title: string, def: AgentDefinition): Draft {
@@ -107,6 +109,7 @@ function fromDefinition(title: string, def: AgentDefinition): Draft {
     hasCollection: !!def.collectionId,
     collectionId: def.collectionId ?? "",
     model: def.model ?? "",
+    clarityNote: def.clarityNote ?? "",
   };
 }
 
@@ -167,10 +170,13 @@ function toDefinition(draft: Draft): { definition: AgentDefinition; error?: stri
 
   if (draft.model) def.model = draft.model;
 
+  if (draft.clarityNote.trim()) def.clarityNote = draft.clarityNote.trim();
+
   return { definition: def };
 }
 
 export function AuthorEditPage() {
+  const { courseId } = useCourse();
   const navigate = useNavigate();
   const { id: agentId } = useParams<{ id: string }>();
   const isNew = !agentId;
@@ -184,21 +190,21 @@ export function AuthorEditPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    listVoices(DEMO_COURSE)
+    listVoices(courseId)
       .then(setVoices)
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Voices failed"));
-    listCollections(DEMO_COURSE)
+    listCollections(courseId)
       .then((r) => setCollections(r.collections))
       .catch(() => setCollections([]));
-  }, []);
+  }, [courseId]);
 
   useEffect(() => {
     if (isNew || !agentId) return;
-    getAgent(DEMO_COURSE, agentId)
+    getAgent(courseId, agentId)
       .then((a) => setDraft(fromDefinition(a.title, a.definition)))
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Load failed"))
       .finally(() => setLoading(false));
-  }, [agentId, isNew]);
+  }, [agentId, isNew, courseId]);
 
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -224,6 +230,14 @@ export function AuthorEditPage() {
       [topics[idx], topics[swap]] = [topics[swap]!, topics[idx]!];
       return { ...d, topics };
     });
+
+  // Live preview of the shape-derived default, shown as the placeholder
+  // in the clarity field so the instructor sees what students get if they
+  // leave it blank.
+  const defaultClarity = clarityNoteFor({
+    backbone: draft.hasBackbone ? {} : undefined,
+    collectionId: draft.hasCollection && draft.collectionId ? draft.collectionId : undefined,
+  });
 
   const libraryOptions = useMemo(() => voices?.library ?? [], [voices]);
   const ownedOptions = useMemo(() => voices?.owned ?? [], [voices]);
@@ -256,11 +270,11 @@ export function AuthorEditPage() {
     setSaving(true);
     try {
       if (isNew) {
-        await createAgent(DEMO_COURSE, draft.title.trim(), definition);
+        await createAgent(courseId, draft.title.trim(), definition);
       } else {
-        await updateAgent(DEMO_COURSE, agentId!, draft.title.trim(), definition);
+        await updateAgent(courseId, agentId!, draft.title.trim(), definition);
       }
-      navigate("/author/agents");
+      navigate(`/course/${courseId}/agents`);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed");
       setSaving(false);
@@ -269,25 +283,22 @@ export function AuthorEditPage() {
 
   if (loading) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
-          <p className="muted">Loading…</p>
-        </div>
-      </div>
+      <section>
+        <p className="muted">Loading…</p>
+      </section>
     );
   }
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>{isNew ? "New agent" : "Edit agent"}</h1>
-          <Link to="/author/agents" className="link-button subtle">
-            ← All agents
-          </Link>
-        </header>
+    <section>
+      <header className="sub-header">
+        <h2>{isNew ? "New agent" : "Edit agent"}</h2>
+        <Link to={`/course/${courseId}/agents`} className="link-button subtle">
+          ← All agents
+        </Link>
+      </header>
 
-        {loadError && <p className="error">{loadError}</p>}
+      {loadError && <p className="error">{loadError}</p>}
 
         <label className="field">
           <span className="field-label">Title</span>
@@ -296,6 +307,22 @@ export function AuthorEditPage() {
             value={draft.title}
             onChange={(e) => update("title", e.target.value)}
           />
+        </label>
+
+        <label className="field">
+          <span className="field-label">What students see first (optional)</span>
+          <textarea
+            rows={2}
+            value={draft.clarityNote}
+            placeholder={defaultClarity}
+            onChange={(e) => update("clarityNote", e.target.value)}
+          />
+          <span className="muted small">
+            A short note shown at the top of every conversation, so students
+            know what this is and how it behaves. Leave blank to use the
+            default above. This is for clarity, not rules — students read it;
+            the agent still works the way you configured it.
+          </span>
         </label>
 
         <section className="field-group">
@@ -389,7 +416,7 @@ export function AuthorEditPage() {
         </section>
 
         <section className="field-group">
-          <h2>Topic sequence</h2>
+          <h2>Outline</h2>
           <label className="checkbox">
             <input
               type="checkbox"
@@ -397,8 +424,9 @@ export function AuthorEditPage() {
               onChange={(e) => update("hasBackbone", e.target.checked)}
             />
             <span>
-              Enforce a sequence of topics. When off, the conversation is
-              free-form Q&A with the chosen voice.
+              Lead the student through an outline — a set sequence of topics,
+              each with a turn budget, ending on a condition you define. When
+              off, the conversation is open Q&amp;A with the chosen voice.
             </span>
           </label>
 
@@ -508,7 +536,7 @@ export function AuthorEditPage() {
         </section>
 
         <section className="field-group">
-          <h2>Source documents</h2>
+          <h2>Sources</h2>
           <label className="checkbox">
             <input
               type="checkbox"
@@ -516,26 +544,26 @@ export function AuthorEditPage() {
               onChange={(e) => update("hasCollection", e.target.checked)}
             />
             <span>
-              Ground replies in a collection. Retrieved passages are added to
-              the agent's context each turn; the model is told to cite as{" "}
-              <code>[^source-id]</code>.
+              Ground replies in a library of documents. Relevant passages are
+              added to the agent's context each turn, and the agent cites them
+              in line so students can check the source.
             </span>
           </label>
 
           {draft.hasCollection && (
             <div className="corpus-picker">
               {collections === null ? (
-                <p className="muted small">Loading collections…</p>
+                <p className="muted small">Loading libraries…</p>
               ) : collections.length === 0 ? (
                 <p className="muted small">
-                  No collections yet.{" "}
-                  <Link to="/author/collections">
-                    Create one and upload sources
+                  No libraries yet.{" "}
+                  <Link to={`/course/${courseId}/collections`}>
+                    Create one and add sources
                   </Link>.
                 </p>
               ) : (
                 <>
-                  <span className="field-label">Collection</span>
+                  <span className="field-label">Library</span>
                   <div className="radio-cards">
                     {collections.map((c) => (
                       <label
@@ -559,7 +587,7 @@ export function AuthorEditPage() {
                     ))}
                   </div>
                   <p className="muted small">
-                    <Link to="/author/collections">Manage collections →</Link>
+                    <Link to={`/course/${courseId}/collections`}>Manage libraries →</Link>
                   </p>
                 </>
               )}
@@ -592,14 +620,13 @@ export function AuthorEditPage() {
         {saveError && <p className="error">{saveError}</p>}
 
         <div className="form-actions">
-          <Link to="/author/agents" className="link-button subtle">
+          <Link to={`/course/${courseId}/agents`} className="link-button subtle">
             Cancel
           </Link>
           <button onClick={save} disabled={saving}>
             {saving ? "Saving…" : isNew ? "Create agent" : "Save changes"}
           </button>
         </div>
-      </div>
-    </div>
+    </section>
   );
 }
