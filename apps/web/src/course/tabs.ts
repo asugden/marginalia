@@ -24,6 +24,11 @@ export interface TabSpec {
    *  another module); the dashboard still surfaces it as a first-class
    *  destination so instructors can find it. */
   external?: boolean;
+  /** Lazy-reveal feature key. Present on tabs that stay hidden until the
+   *  course turns them on. The dashboard's "Add a tool" affordance and
+   *  the worker's reveal-tab endpoint both key off this. Absent on
+   *  always-visible tabs (Agents, Provenance, Roster). */
+  revealFeature?: "attendance" | "collections";
 }
 
 export const TABS: TabSpec[] = [
@@ -48,6 +53,7 @@ export const TABS: TabSpec[] = [
     description:
       "QR check-in for in-person classes. Each session shows a rotating code on a projector; students scan from their phones.",
     visible: (e) => !!e?.showAttendance,
+    revealFeature: "attendance",
   },
   {
     slug: "collections",
@@ -55,6 +61,7 @@ export const TABS: TabSpec[] = [
     description:
       "Document libraries you can attach to an agent. The agent answers from the sources you choose and cites them in line.",
     visible: (e) => !!e?.showCollections,
+    revealFeature: "collections",
   },
   {
     slug: "roster",

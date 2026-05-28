@@ -5,7 +5,6 @@
 // conversation page composer + bubble pattern.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEMO_COURSE } from "../../../course.js";
 import {
   createConversation,
   deleteConversation,
@@ -20,12 +19,13 @@ import {
 
 interface Props {
   documentId: string;
+  courseId: string;
   onInsertAtCursor?: (text: string, sourceMessageId: string) => void;
 }
 
 interface PendingAssistant { text: string }
 
-export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
+export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [conversations, setConversations] = useState<ConversationDTO[] | null>(null);
   const [active, setActive] = useState<ConversationDTO | null>(null);
@@ -44,8 +44,8 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
   useEffect(() => {
     const ctrl = new AbortController();
     Promise.all([
-      listAgents(DEMO_COURSE, ctrl.signal),
-      listConversations(documentId, DEMO_COURSE, ctrl.signal),
+      listAgents(courseId, ctrl.signal),
+      listConversations(documentId, courseId, ctrl.signal),
     ])
       .then(([a, c]) => {
         if (ctrl.signal.aborted) return;
@@ -58,7 +58,7 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
         setError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
-  }, [documentId]);
+  }, [documentId, courseId]);
 
   // ── Load messages whenever the active conversation changes ────────────
   // Also abort any in-flight stream when the user switches conversations
@@ -72,7 +72,7 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
       return;
     }
     const ctrl = new AbortController();
-    listMessages(active.id, DEMO_COURSE, ctrl.signal)
+    listMessages(active.id, courseId, ctrl.signal)
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setMessages(m);
@@ -82,7 +82,7 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
         setError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
-  }, [active]);
+  }, [active, courseId]);
 
   // Auto-scroll on new content.
   useEffect(() => {
@@ -103,7 +103,7 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
       setError(null);
       setBusy(true);
       try {
-        const conv = await createConversation(documentId, DEMO_COURSE, agentId);
+        const conv = await createConversation(documentId, courseId, agentId);
         setConversations((cur) => [conv, ...(cur ?? [])]);
         setActive(conv);
         setShowAgentPicker(false);
@@ -115,13 +115,13 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
         setBusy(false);
       }
     },
-    [documentId],
+    [documentId, courseId],
   );
 
   async function onDeleteConversation(id: string) {
     if (!confirm("Delete this conversation?")) return;
     try {
-      await deleteConversation(DEMO_COURSE, id);
+      await deleteConversation(courseId, id);
       setConversations((cur) => (cur ?? []).filter((c) => c.id !== id));
       if (active?.id === id) setActive(null);
     } catch (e) {
@@ -144,7 +144,7 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
     setMessages((cur) => [...cur, optimisticUser]);
     setPendingAsst({ text: "" });
     const conversationId = active.id;
-    abortStreamRef.current = streamChatTurn(conversationId, DEMO_COURSE, content, {
+    abortStreamRef.current = streamChatTurn(conversationId, courseId, content, {
       onDelta: (t) => {
         setPendingAsst((cur) => (cur ? { text: cur.text + t } : cur));
       },
@@ -152,10 +152,10 @@ export function ChatPanel({ documentId, onInsertAtCursor }: Props) {
         abortStreamRef.current = null;
         setPendingAsst(null);
         try {
-          const fresh = await listMessages(conversationId, DEMO_COURSE);
+          const fresh = await listMessages(conversationId, courseId);
           // Defensive: only apply if the user hasn't switched away.
           setMessages((cur) => (active?.id === conversationId ? fresh : cur));
-          const convs = await listConversations(documentId, DEMO_COURSE);
+          const convs = await listConversations(documentId, courseId);
           setConversations(convs);
           setActive((cur) =>
             cur?.id === conversationId

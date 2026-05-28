@@ -1,10 +1,11 @@
-// My-agents management page. Lists course defaults (read-only) +
-// the student's own agents (editable). Shell matches AuthorListPage so
-// the writing tool sits inside the existing app's visual language.
+// My-agents management page. Lists course defaults (read-only) + the
+// student's own agents (editable). Course comes from useActiveCourse();
+// chrome from <StandalonePage>.
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { DEMO_COURSE } from "../../../course.js";
+import { useActiveCourse } from "../../../course/useActiveCourse.js";
+import { StandalonePage } from "../../../course/StandalonePage.js";
 import {
   createAgent,
   deleteAgent,
@@ -24,25 +25,31 @@ interface DraftState {
 }
 
 export function AgentsPage() {
+  const { active, enrollments, setCourseId, loading, notEnrolled } = useActiveCourse();
+  const courseId = active?.courseId ?? null;
+
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (!courseId) return;
+    refresh(courseId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
 
-  function refresh() {
-    listAgents(DEMO_COURSE)
+  function refresh(cid: string) {
+    listAgents(cid)
       .then(setAgents)
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }
 
   async function startEdit(id: string) {
+    if (!courseId) return;
     setError(null);
     try {
-      const agent = await getAgent(DEMO_COURSE, id);
+      const agent = await getAgent(courseId, id);
       setDraft({ id: agent.id, name: agent.name, systemPrompt: agent.systemPrompt });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
@@ -55,25 +62,17 @@ export function AgentsPage() {
   }
 
   async function onSave() {
-    if (!draft) return;
+    if (!draft || !courseId) return;
     setBusy(true);
     setError(null);
     try {
       if (draft.id === null) {
-        await createAgent({
-          courseId: DEMO_COURSE,
-          name: draft.name,
-          systemPrompt: draft.systemPrompt,
-        });
+        await createAgent({ courseId, name: draft.name, systemPrompt: draft.systemPrompt });
       } else {
-        await updateAgent(draft.id, {
-          courseId: DEMO_COURSE,
-          name: draft.name,
-          systemPrompt: draft.systemPrompt,
-        });
+        await updateAgent(draft.id, { courseId, name: draft.name, systemPrompt: draft.systemPrompt });
       }
       setDraft(null);
-      refresh();
+      refresh(courseId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -82,10 +81,11 @@ export function AgentsPage() {
   }
 
   async function onDelete(id: string) {
+    if (!courseId) return;
     if (!confirm("Delete this agent? Existing conversations will keep their snapshot.")) return;
     try {
-      await deleteAgent(DEMO_COURSE, id);
-      refresh();
+      await deleteAgent(courseId, id);
+      refresh(courseId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
     }
@@ -94,59 +94,64 @@ export function AgentsPage() {
   const courseDefaults = agents?.filter((a) => !a.mine) ?? [];
   const mine = agents?.filter((a) => a.mine) ?? [];
 
+  const actions = (
+    <>
+      <Link to="/write" className="link-button subtle">← Documents</Link>
+      <button type="button" className="link-button" onClick={startCreate} disabled={!courseId}>
+        New agent
+      </button>
+    </>
+  );
+
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>Agents</h1>
-          <div className="header-actions">
-            <Link to="/write" className="link-button subtle">← Documents</Link>
-            <button
-              type="button"
-              className="link-button"
-              onClick={startCreate}
-            >
-              New agent
-            </button>
-          </div>
-        </header>
-
-        <p className="scope-note">
-          Personal prompts for the chat side-panel. Course defaults are
-          shared with everyone in the class; agents you create are yours
-          alone.
+    <StandalonePage
+      title="Writing"
+      section="Agents"
+      titleTo="/write"
+      actions={actions}
+      course={{ active, enrollments, onSwitch: setCourseId }}
+      note="Personal prompts for the chat side-panel. Course defaults are shared with everyone in the class; agents you create are yours alone."
+    >
+      {error && <p className="error">{error}</p>}
+      {loading && <p className="muted">Loading…</p>}
+      {notEnrolled && (
+        <p className="muted">
+          You aren't enrolled in any course yet. Use a join code on the{" "}
+          <Link to="/">home page</Link> to get started.
         </p>
+      )}
 
-        {error && <p className="error">{error}</p>}
+      {courseId && (
+        <>
+          {agents === null && <p className="muted">Loading…</p>}
 
-        {agents === null && <p className="muted">Loading…</p>}
-
-        <AgentSection
-          heading="Course defaults"
-          empty="No course-default agents yet."
-          agents={courseDefaults}
-          onOpen={startEdit}
-        />
-
-        <AgentSection
-          heading="Mine"
-          empty="No personal agents yet. Click New agent to create one."
-          agents={mine}
-          onOpen={startEdit}
-          onDelete={onDelete}
-        />
-
-        {draft && (
-          <AgentEditor
-            draft={draft}
-            busy={busy}
-            onChange={setDraft}
-            onCancel={() => setDraft(null)}
-            onSave={onSave}
+          <AgentSection
+            heading="Course defaults"
+            empty="No course-default agents yet."
+            agents={courseDefaults}
+            onOpen={startEdit}
           />
-        )}
-      </div>
-    </div>
+
+          <AgentSection
+            heading="Mine"
+            empty="No personal agents yet. Click New agent to create one."
+            agents={mine}
+            onOpen={startEdit}
+            onDelete={onDelete}
+          />
+
+          {draft && (
+            <AgentEditor
+              draft={draft}
+              busy={busy}
+              onChange={setDraft}
+              onCancel={() => setDraft(null)}
+              onSave={onSave}
+            />
+          )}
+        </>
+      )}
+    </StandalonePage>
   );
 }
 
@@ -180,19 +185,11 @@ function AgentSection(props: {
                 </div>
               </div>
               <div className="row-actions">
-                <button
-                  type="button"
-                  className="link-button subtle"
-                  onClick={() => onOpen(a.id)}
-                >
+                <button type="button" className="link-button subtle" onClick={() => onOpen(a.id)}>
                   Edit
                 </button>
                 {onDelete && (
-                  <button
-                    type="button"
-                    className="danger-link"
-                    onClick={() => onDelete(a.id)}
-                  >
+                  <button type="button" className="danger-link" onClick={() => onDelete(a.id)}>
                     Delete
                   </button>
                 )}
@@ -241,12 +238,7 @@ function AgentEditor(props: {
         <button type="button" className="link-button subtle" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
-        <button
-          type="button"
-          className="link-button"
-          onClick={onSave}
-          disabled={busy || !canSave}
-        >
+        <button type="button" className="link-button" onClick={onSave} disabled={busy || !canSave}>
           {draft.id === null ? "Create" : "Save"}
         </button>
       </div>

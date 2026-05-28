@@ -830,6 +830,18 @@ export function claimJoinCode(code: string) {
   }>(`/api/join/${encodeURIComponent(code)}`, { method: "POST" });
 }
 
+/** v1.0 §6 — reveal a lazy-reveal feature tab (attendance / collections)
+ *  on the course dashboard without using it first. Instructor-only. */
+export function revealCourseTab(
+  courseId: string,
+  feature: "attendance" | "collections",
+) {
+  return jsonFetch<{ ok: true }>(
+    `/api/courses/${encodeURIComponent(courseId)}/reveal-tab`,
+    { method: "POST", body: JSON.stringify({ feature }) },
+  );
+}
+
 // ─── admin console (v0.6 §5) ───────────────────────────────────────────────
 
 export interface AdminCourse {

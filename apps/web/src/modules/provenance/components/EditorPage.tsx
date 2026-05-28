@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Editor, JSONContent } from "@tiptap/react";
-import { DEMO_COURSE } from "../../../course.js";
+import { useActiveCourse } from "../../../course/useActiveCourse.js";
 import {
   getDocument,
   postEvents,
@@ -54,6 +54,8 @@ function loadSplit(): number {
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
+  const { active } = useActiveCourse();
+  const courseId = active?.courseId ?? null;
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
@@ -84,10 +86,11 @@ export function EditorPage() {
   const dragRef = useRef<{ rect: DOMRect } | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !courseId) return;
     const ctrl = new AbortController();
-    getDocument(DEMO_COURSE, id, ctrl.signal)
+    getDocument(courseId, id, ctrl.signal)
       .then((d) => {
+        if (ctrl.signal.aborted) return;
         setDoc(d);
         setTitleDraft(d.title);
       })
@@ -96,18 +99,18 @@ export function EditorPage() {
         setLoadError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
-  }, [id]);
+  }, [id, courseId]);
 
   // ── Save body / title ────────────────────────────────────────────────
   const flushSave = useCallback(async () => {
-    if (!id) return;
+    if (!id || !courseId) return;
     const patch = pendingSaveRef.current;
     pendingSaveRef.current = {};
     if (Object.keys(patch).length === 0) return;
     setSaveState("saving");
     try {
       const updated = await updateDocument(id, {
-        courseId: DEMO_COURSE,
+        courseId,
         ...patch,
       });
       setDoc(updated);
@@ -116,7 +119,7 @@ export function EditorPage() {
       setSaveState("error");
       console.warn("Save failed:", e);
     }
-  }, [id]);
+  }, [id, courseId]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current !== null) {
@@ -130,7 +133,7 @@ export function EditorPage() {
 
   // ── Flush event buffer ────────────────────────────────────────────────
   const flushEvents = useCallback(async () => {
-    if (!id) return;
+    if (!id || !courseId) return;
     if (eventBufRef.current.length === 0) return;
     if (eventInFlightRef.current) {
       try { await eventInFlightRef.current; } catch { /* prior flush logs */ }
@@ -139,7 +142,7 @@ export function EditorPage() {
     eventBufRef.current = [];
     const send = (async () => {
       try {
-        await postEvents(id, DEMO_COURSE, batch);
+        await postEvents(id, courseId, batch);
       } catch (e) {
         console.warn("Event flush failed:", e);
         eventBufRef.current = batch.concat(eventBufRef.current);
@@ -149,7 +152,7 @@ export function EditorPage() {
     try { await send; } finally {
       if (eventInFlightRef.current === send) eventInFlightRef.current = null;
     }
-  }, [id]);
+  }, [id, courseId]);
 
   const scheduleEventsFlush = useCallback(() => {
     if (eventBufRef.current.length >= EVENTS_FLUSH_AT_COUNT) {
@@ -327,6 +330,7 @@ export function EditorPage() {
             <section className="prov-chat-pane">
               <ChatPanel
                 documentId={doc.id}
+                courseId={doc.courseId}
                 onInsertAtCursor={(text, sourceMessageId) => {
                   const ed = editorRef.current;
                   if (!ed) return;

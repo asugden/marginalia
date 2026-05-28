@@ -953,6 +953,18 @@ button.subtle.icon.danger { color: var(--brand-primary); }
 .page.staff h1 .course-breadcrumb-sep { color: var(--ink-soft); font-weight: 400; }
 .page.staff h1 .course-breadcrumb-tab { color: var(--ink-soft); font-weight: 600; }
 
+/* Active-course pill in the header of a standalone (non-CourseLayout) page,
+ * e.g. the provenance writing surface. Quiet — it's context, not an action. */
+.standalone-course-tag {
+  font: 500 0.82rem var(--font-sans);
+  color: var(--ink-soft);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 /* "Switch course" dropdown in the header. */
 .course-switcher { position: relative; }
 .course-switcher-menu {
@@ -999,6 +1011,19 @@ button.subtle.icon.danger { color: var(--brand-primary); }
   border-color: var(--ink-soft);
   background: rgba(255, 255, 255, 0.5);
 }
+
+/* "Add a tool" row on the dashboard — turns on a lazy-revealed tab. Set
+ * apart from the always-on tab explainers above it. */
+.course-add-tool {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.course-add-tool-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
 /* A page body's own action cluster (e.g. AuthorListPage's New agent),
  * now that the page header is gone. Right-aligned above the list. */

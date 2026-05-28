@@ -396,6 +396,18 @@ async function route(
     }
   }
 
+  // /api/courses/:courseId/reveal-tab — instructor opts a lazy-reveal
+  // feature (attendance / collections) into the dashboard tab strip
+  // without having to use it first (v1.0 §6 / dashboard "Add a tool").
+  if (
+    head === "courses" &&
+    sub === "reveal-tab" &&
+    req.method === "POST" &&
+    parts.length === 4
+  ) {
+    return revealTabRoute(req, env, identity, tail!);
+  }
+
   // /api/join/:code — self-serve enrollment, signed-in users only
   if (head === "join" && req.method === "POST" && parts.length === 3) {
     return claimJoinCodeRoute(env, identity, tail!);
@@ -1392,6 +1404,33 @@ async function listCollectionsRoute(
       sourceCount: Number(r.source_count ?? 0),
     })),
   });
+}
+
+/**
+ * v1.0 §6 — opt a lazy-reveal feature into the dashboard tab strip
+ * without using it first. Same effect as the implicit flip that happens
+ * on first use, but instructor-driven from the dashboard's "Add a tool"
+ * affordance. Instructor-only; idempotent.
+ */
+async function revealTabRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  courseId: string,
+): Promise<Response> {
+  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  if (!resolved) return error("Not enrolled in this course", 403);
+  if (!isAuthor(resolved.enrollment.role)) {
+    return error("Instructor only", 403);
+  }
+  const body = (await req.json().catch(() => null)) as {
+    feature?: "attendance" | "collections";
+  } | null;
+  if (body?.feature !== "attendance" && body?.feature !== "collections") {
+    return error("feature must be 'attendance' or 'collections'", 400);
+  }
+  await repo.markCourseFeatureShown(env.DB, courseId, body.feature);
+  return json({ ok: true });
 }
 
 async function createCollectionRoute(

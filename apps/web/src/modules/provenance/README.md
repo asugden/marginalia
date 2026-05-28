@@ -33,6 +33,22 @@ pulling in Tiptap/ProseMirror at MVP — the provenance model wants
 direct ownership of selection, paste, and input events. Revisit if
 that becomes painful.
 
+## Course resolution
+
+`/write` is a **course-agnostic** route (not under `<CourseLayout>`), so
+it can't use `useCourse()`. Instead it uses `useActiveCourse()` (in
+`apps/web/src/course/`): fetch `/api/me`, resolve to a single course
+(one enrollment → that one; many → the one in `localStorage`
+`active.courseId`, else most recent). The header exposes a "Switch
+course" menu via the shared `<StandalonePage>` shell when the caller
+has >1 enrollment. Documents/agents are filtered to the active course;
+the editor passes the *document's own* `courseId` (from the loaded DTO)
+down to the chat panel so the two never disagree.
+
+Page chrome (`.page.staff` frame + breadcrumb header + actions +
+course switcher) comes from `<StandalonePage>` — the standalone-surface
+parallel to `<CourseLayout>`. Provenance pages render only their body.
+
 ## State shape
 
 ```ts
