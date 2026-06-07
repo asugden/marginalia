@@ -102,9 +102,15 @@ is never stored server-side.
    + `sourceMessageId`, emits an `llm_insert` event into the buffer.
    Smart-spaces if the cursor was mid-word so LLM text doesn't fuse
    onto the previous word.
-5. **BYO key.** `localStorage["provenance.llmKey"]` + per-request
-   `X-Provenance-LLM-Key` header + "Use my own key" affordance.
-   Worker uses the supplied key transiently; never stored.
+5. ✅ **BYO key.** `useByoKey()` stores a personal key in
+   `localStorage["provenance.llmKey"]`; `streamChatTurn` attaches it
+   as `X-Provenance-LLM-Key`. The worker (`readByoKey`) uses it for
+   that request only — never written to D1/R2/KV/logs — and falls
+   back to the institution key when absent. UI: a key button + banner
+   + manage-modal in the chat header. CORS preflight allows the
+   header for the cross-origin deploy. **Still Anthropic-only** until
+   `OpenAICompatibleProvider` ships — a student's OpenAI key won't
+   work yet; that's the provider track, not this slice.
 6. **Submissions + public viewer.** Share token, frozen snapshot,
    read-only colored render. Optional drill-down to conversations.
 7. **Reversion + edit detection.** Whole-word vs character edit

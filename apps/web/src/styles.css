@@ -2212,3 +2212,90 @@ body.prov-dragging * {
     border-top: 1px solid var(--line);
   }
 }
+
+/* ── Provenance BYO key (slice 5) ──────────────────────────────────────── */
+.prov-chat-icon-button.is-active {
+  color: var(--brand-primary);
+  background: rgba(186, 1, 0, 0.10);
+}
+.prov-chat-byo-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  background: rgba(186, 1, 0, 0.06);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.prov-chat-byo-banner code {
+  font-size: 0.95em;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+}
+.prov-chat-byo-banner-link {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--brand-primary);
+  font: 600 0.8rem var(--font-sans);
+  cursor: pointer;
+  padding: 0.15rem 0.3rem;
+}
+.prov-chat-byo-banner-link:hover { text-decoration: underline; box-shadow: none; }
+
+/* Modal — reused pattern: dim scrim + centered card. */
+.prov-modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 50;
+  animation: prov-modal-fade 140ms ease;
+}
+@keyframes prov-modal-fade { from { opacity: 0; } to { opacity: 1; } }
+.prov-modal {
+  width: 100%;
+  max-width: 440px;
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+}
+.prov-modal-title {
+  font: 700 1.2rem var(--font-display);
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem;
+}
+.prov-modal-body {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+.prov-modal-current {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.prov-modal-current code {
+  font-size: 0.95em;
+  color: var(--ink);
+}
+.prov-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+.prov-modal-actions-spacer { flex: 1; }

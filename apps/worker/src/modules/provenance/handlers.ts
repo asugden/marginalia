@@ -626,8 +626,23 @@ export async function sendMessageRoute(
   const history = await repo.listMessages(env.DB, conversationId);
   const llmMessages = buildBoundedHistory(history, content);
 
+  // BYO key (slice 5). A student may supply their own provider key via the
+  // X-Provenance-LLM-Key header so the institution doesn't pay for their
+  // usage. The key is used for THIS request only — never written to D1, R2,
+  // KV, or any log line. If absent, fall back to the institution key.
+  // We don't echo the key in any error, and we don't `console.log` the
+  // request object anywhere in this path.
+  const byoKey = readByoKey(req);
+  const apiKey = byoKey ?? env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return error(
+      "No LLM key available. Add your own key, or ask your instructor to configure one.",
+      400,
+    );
+  }
+
   const provider: LLMProvider = new AnthropicProvider({
-    apiKey: env.ANTHROPIC_API_KEY,
+    apiKey,
     model: env.DEFAULT_MODEL,
   });
 
@@ -696,6 +711,26 @@ export async function sendMessageRoute(
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Read the optional student-supplied LLM key from the request header.
+ * Returns null when absent or obviously malformed. The key is never
+ * persisted or logged — see the security note in sendMessageRoute.
+ *
+ * A light sanity bound (length + no control chars) protects against a
+ * header that would make the upstream provider request malformed; we
+ * intentionally do NOT validate the key's provider-specific shape here
+ * (that's the provider's job, and it differs per provider).
+ */
+function readByoKey(req: Request): string | null {
+  const raw = req.headers.get("x-provenance-llm-key");
+  if (!raw) return null;
+  const key = raw.trim();
+  if (key.length === 0 || key.length > 400) return null;
+  // Reject anything with control characters / whitespace that can't be a key.
+  if (/[\s\x00-\x1f]/.test(key)) return null;
+  return key;
+}
 
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;

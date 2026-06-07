@@ -16,6 +16,7 @@ import {
   type ConversationDTO,
   type MessageDTO,
 } from "../api.js";
+import { useByoKey, maskKey } from "./useByoKey.js";
 
 interface Props {
   documentId: string;
@@ -35,6 +36,8 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const byo = useByoKey();
 
   const abortStreamRef = useRef<(() => void) | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -173,7 +176,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
         setMessages((cur) => cur.filter((m) => m.id !== optimisticUser.id));
         setError(msg);
       },
-    });
+    }, byo.key);
   }
 
   function onAbort() {
@@ -216,6 +219,18 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
         >
           New
         </button>
+        <button
+          type="button"
+          className={`prov-chat-icon-button${byo.active ? " is-active" : ""}`}
+          onClick={() => setShowKeyModal(true)}
+          aria-label={byo.active ? "Using your own LLM key" : "Use your own LLM key"}
+          title={byo.active ? "Using your own key" : "Use your own key"}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M14 7a4 4 0 1 0-3.9 5h.4l1.5 1.5 1.5-1.5 1.5 1.5L18 12l-1.6-1.6A4 4 0 0 0 14 7Zm-4.5 1.5h.01"
+              stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
         {active && (
           <button
             type="button"
@@ -231,6 +246,22 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
           </button>
         )}
       </header>
+
+      {byo.active && (
+        <div className="prov-chat-byo-banner">
+          Using your own key (<code>{maskKey(byo.key!)}</code>).
+          <button type="button" className="prov-chat-byo-banner-link" onClick={() => setShowKeyModal(true)}>
+            Manage
+          </button>
+        </div>
+      )}
+
+      {showKeyModal && (
+        <ByoKeyModal
+          byo={byo}
+          onClose={() => setShowKeyModal(false)}
+        />
+      )}
 
       {showAgentPicker && agents && (
         <div className="prov-chat-agent-picker">
@@ -342,6 +373,85 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
       )}
 
       {error && <p className="prov-chat-error">{error}</p>}
+    </div>
+  );
+}
+
+function ByoKeyModal({
+  byo,
+  onClose,
+}: {
+  byo: ReturnType<typeof useByoKey>;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState("");
+
+  function save() {
+    if (!value.trim()) return;
+    byo.setKey(value);
+    setValue("");
+    onClose();
+  }
+
+  return (
+    <div className="prov-modal-scrim" onClick={onClose}>
+      <div
+        className="prov-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Use your own LLM key"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="prov-modal-title">Use your own LLM key</h2>
+        <p className="prov-modal-body">
+          Paste your own provider API key and the chat will use it instead
+          of your institution's. Your key is stored only in this browser
+          and is sent only with each chat request — it is never saved on
+          the server.
+        </p>
+
+        {byo.active ? (
+          <div className="prov-modal-current">
+            <span className="muted small">Current key</span>
+            <code>{maskKey(byo.key!)}</code>
+          </div>
+        ) : null}
+
+        <label className="prov-field">
+          <span>{byo.active ? "Replace with a new key" : "API key"}</span>
+          <input
+            className="prov-input"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="sk-…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); save(); }
+            }}
+          />
+        </label>
+
+        <div className="prov-modal-actions">
+          {byo.active && (
+            <button
+              type="button"
+              className="danger-link"
+              onClick={() => { byo.clear(); onClose(); }}
+            >
+              Stop using my key
+            </button>
+          )}
+          <span className="prov-modal-actions-spacer" />
+          <button type="button" className="link-button subtle" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="link-button" onClick={save} disabled={!value.trim()}>
+            Save key
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

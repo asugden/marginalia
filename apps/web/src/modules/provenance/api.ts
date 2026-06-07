@@ -317,22 +317,30 @@ export interface SendMessageCallbacks {
  *
  * Wire format: SSE with `event: <name>` + `data: <json>` frames matching
  * the existing /api/conversations/:id/messages stream so reuse is possible.
+ *
+ * `byoKey` (slice 5): when the student has supplied their own provider key
+ * it rides along in the X-Provenance-LLM-Key header for this request only.
+ * It lives in the browser (localStorage) and is never sent anywhere except
+ * this proxied request; the worker uses it transiently and never stores it.
  */
 export function streamChatTurn(
   conversationId: string,
   courseId: string,
   content: string,
   cb: SendMessageCallbacks,
+  byoKey?: string | null,
 ): () => void {
   const ctrl = new AbortController();
   (async () => {
     try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (byoKey) headers["x-provenance-llm-key"] = byoKey;
       const res = await fetch(
         apiUrl(`/api/provenance/conversations/${encodeURIComponent(conversationId)}/messages`),
         {
           ...fetchInit,
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers,
           body: JSON.stringify({ courseId, content }),
           signal: ctrl.signal,
         },

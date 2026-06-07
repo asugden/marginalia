@@ -280,6 +280,24 @@ export interface ProvenanceMessageRow {
   created_at: number;
 }
 
+/**
+ * Slice 6 — a shareable, frozen, read-only view of a document. The
+ * render is computed server-side from edit_events at mint time and
+ * stored as JSON so the public viewer needs no auth and no replay.
+ */
+export interface ProvenanceSubmissionRow {
+  token: string;
+  document_id: string;
+  course_id: string;
+  user_id: string;
+  title_snapshot: string;
+  /** JSON: { text: string, runs: { origin, length }[] }. */
+  render_json: string;
+  snapshot_event_seq: number;
+  created_at: number;
+  revoked_at: number | null;
+}
+
 /** v0.5 §3 — citation a RAG-grounded assistant message leaned on. Display
  *  fields are snapshotted on insert so a citation pill survives the source
  *  later being removed from its collection. */
