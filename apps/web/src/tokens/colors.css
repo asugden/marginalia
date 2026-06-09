@@ -1,0 +1,129 @@
+/* ------------------------------------------------------------------ *
+ * Marginalia · Color
+ *
+ * A warm, paper-grounded palette. One chroma — the brand accent — used with
+ * restraint against warm neutrals. Backgrounds lean cream, not cool grey;
+ * ink leans warm charcoal, never pure black. The result reads as inviting
+ * and editorial rather than clinical SaaS.
+ *
+ * Layers:
+ *   1. Primitive scales  (--accent-*, --sand-*, --ink-* fixed values)
+ *   2. Semantic aliases  (--bg, --surface, --text-*, --border-*, --accent-*)
+ * Always consume the semantic aliases in components; reach for primitives
+ * only when authoring a new alias.
+ *
+ * BRAND SEAM: the accent is the single brand colour. The committed default
+ * is a calm editorial blue; deployers override --brand-primary /
+ * --brand-primary-dark in theme.yaml (see docs/theming.md). Everything else
+ * (the warm neutrals, the semantic status hues) is deliberately
+ * brand-neutral and rarely needs changing.
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* ---- Brand seam (override in theme.yaml) --------------------- *
+   * Primary accent + its hover shade. The default is a warm editorial
+   * blue so the public build is brand-neutral. The accent scale below
+   * derives the deeper/brighter/tint variants from these two so a
+   * deployer only has to set two values to re-tint the whole UI. */
+  --brand-primary:      #2b62a8;  /* primary brand accent */
+  --brand-primary-dark: #1c4474;  /* hover / pressed */
+
+  /* Optional watermark seam (off by default; set in theme.yaml). */
+  --brand-watermark-url:     none;
+  --brand-watermark-opacity: 0;
+
+  /* ---- Primitive · accent scale -------------------------------- *
+   * Derived from the two brand-seam values plus fixed tint washes.
+   * Use the accent like punctuation, never as a flood. */
+  --accent-base:    var(--brand-primary);
+  --accent-strong:  var(--brand-primary-dark);
+  --accent-deep:    #143257;  /* accent text on light for AA contrast */
+  --accent-bright:  #3b82d6;  /* rare: focus glints, live indicators */
+  --accent-tint:    #e9f0f8;  /* selected/hover wash on paper */
+  --accent-tint-2:  #d6e3f2;  /* slightly stronger wash, borders */
+
+  /* ---- Primitive · warm sand neutrals -------------------------- */
+  --sand-50:  #faf8f4;  /* app paper */
+  --sand-100: #f4f0e8;  /* sunken wells */
+  --sand-200: #ebe5d9;  /* hairlines on paper */
+  --sand-300: #ddd5c5;  /* strong borders, dividers */
+  --sand-400: #c4b9a4;  /* disabled strokes */
+
+  /* ---- Primitive · warm ink ------------------------------------ */
+  --ink-900: #1c1917;  /* primary text — warm near-black */
+  --ink-700: #3f3a34;  /* headings on paper, strong body */
+  --ink-600: #57514a;  /* secondary text */
+  --ink-500: #78716a;  /* muted / metadata */
+  --ink-400: #a8a097;  /* faint / placeholders */
+  --white:   #ffffff;
+
+  /* ---- Primitive · semantic hues (muted, warm-biased) ---------- */
+  --green-600: #2f7d52;  --green-tint: #e3f0e6;  --green-ink: #1d5836;
+  --amber-600: #b5790e;  --amber-tint: #fbeed1;  --amber-ink: #7a4f06;
+  --blue-600:  #2b62a8;  --blue-tint:  #e2ebf6;  --blue-ink:  #1c4474;
+
+  /* ================================================================
+   * Semantic aliases — consume these in components
+   * ============================================================== */
+
+  /* Surfaces */
+  --bg:             var(--sand-50);   /* the page / app canvas */
+  --surface:        var(--white);     /* cards, panels, composer */
+  --surface-raised: var(--white);     /* menus, dialogs (with shadow) */
+  --surface-sunken: var(--sand-100);  /* code blocks, inset wells, sidebars */
+  --surface-hover:  var(--sand-100);  /* row / item hover */
+
+  /* Text */
+  --text-strong:    var(--ink-900);   /* headings, primary content */
+  --text-body:      var(--ink-700);   /* running body copy */
+  --text-secondary: var(--ink-600);   /* supporting text */
+  --text-muted:     var(--ink-500);   /* metadata, captions, timestamps */
+  --text-faint:     var(--ink-400);   /* placeholders, disabled labels */
+  --text-on-accent: var(--white);     /* text over the accent fill */
+  --text-link:      var(--accent-base);
+  --text-link-hover:var(--accent-strong);
+
+  /* Borders */
+  --border:         var(--sand-200);  /* default hairline */
+  --border-strong:  var(--sand-300);  /* dividers, emphasized edges */
+  --border-faint:   var(--sand-100);  /* barely-there separation */
+
+  /* Brand accent (semantic) */
+  --accent:         var(--accent-base);
+  --accent-hover:   var(--accent-strong);
+  --accent-wash:    var(--accent-tint);
+  --accent-wash-2:  var(--accent-tint-2);
+  --accent-ink:     var(--accent-deep);   /* accent text that must pass AA */
+
+  /* Focus ring — accent glow, used app-wide */
+  --focus-ring:     0 0 0 3px color-mix(in srgb, var(--accent-base) 24%, transparent);
+  --focus-color:    var(--accent-base);
+
+  /* Status (semantic feedback) */
+  --status-success-fg: var(--green-ink); --status-success-bg: var(--green-tint);
+  --status-warning-fg: var(--amber-ink); --status-warning-bg: var(--amber-tint);
+  --status-info-fg:    var(--blue-ink);  --status-info-bg:    var(--blue-tint);
+  --status-danger-fg:  var(--accent-deep); --status-danger-bg: var(--accent-tint);
+
+  /* Selection */
+  --selection-bg:   var(--accent-tint-2);
+  --selection-fg:   var(--ink-900);
+
+  /* ================================================================
+   * Legacy compatibility aliases
+   * ----------------------------------------------------------------
+   * Older app CSS (pre-design-system) references these names directly.
+   * Map them onto the warm semantic palette so existing rules keep
+   * working unchanged. New code should prefer the semantic aliases
+   * above. Do not remove until the stylesheet is fully migrated.
+   * ============================================================== */
+  --ink:          var(--text-strong);
+  --ink-soft:     var(--text-secondary);
+  --muted:        var(--text-muted);
+  --line:         var(--border);
+  --panel:        var(--surface);
+  --assistant-bg: var(--surface-sunken);
+  --user-bg:      var(--accent-base);
+}
+
+::selection { background: var(--selection-bg); color: var(--selection-fg); }

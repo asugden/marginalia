@@ -1,0 +1,35 @@
+/* ------------------------------------------------------------------ *
+ * Marginalia · Radius & Elevation
+ *
+ * Soft, friendly corners — but not pill-everything. The chat composer and
+ * pills round fully; cards and inputs use a calm 10–16px. Shadows are warm
+ * (brown-biased rgba, never neutral grey) and low, so the paper feels lit
+ * rather than floating in space.
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* ---- Corner radii -------------------------------------------- */
+  --radius-xs:   4px;    /* tags, chips, code */
+  --radius-sm:   6px;    /* inputs, small buttons */
+  --radius-md:   10px;   /* buttons, cards, menus */
+  --radius-lg:   16px;   /* large cards, panels, dialogs */
+  --radius-xl:   22px;   /* hero panels */
+  --radius-pill: 999px;  /* composer, avatars, status pills */
+
+  /* ---- Elevation (warm-tinted) --------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(40, 28, 18, 0.05);
+  --shadow-sm: 0 1px 3px rgba(40, 28, 18, 0.06),
+               0 2px 8px rgba(40, 28, 18, 0.05);
+  --shadow-md: 0 4px 12px rgba(40, 28, 18, 0.08),
+               0 1px 3px rgba(40, 28, 18, 0.06);
+  --shadow-lg: 0 12px 32px rgba(40, 28, 18, 0.10),
+               0 4px 10px rgba(40, 28, 18, 0.06);
+  --shadow-xl: 0 24px 60px rgba(40, 28, 18, 0.14),
+               0 8px 20px rgba(40, 28, 18, 0.08);
+
+  /* Inset for sunken wells (code blocks, recessed fields) */
+  --shadow-inset: inset 0 1px 2px rgba(40, 28, 18, 0.06);
+
+  /* Hover lift for interactive cards */
+  --shadow-hover: 0 8px 24px rgba(40, 28, 18, 0.10);
+}

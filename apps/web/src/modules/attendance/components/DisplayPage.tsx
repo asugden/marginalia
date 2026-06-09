@@ -148,7 +148,7 @@ export function DisplayPage() {
             </div>
             {flagged > 0 && (
               <div className="attendance-flagged-count">
-                {flagged} flagged for review
+                {flagged} to review together
               </div>
             )}
             <div className="attendance-roster-list">
@@ -157,9 +157,9 @@ export function DisplayPage() {
               )}
               {checkins.map((c) => (
                 <div key={c.id} className="attendance-roster-row">
-                  <span>{c.displayName || c.email || c.userId}</span>
+                  <span className="attendance-roster-name">{c.displayName || c.email || c.userId}</span>
                   {c.flags.length > 0
-                    ? <span className="attendance-row-flag">{c.flags.join(", ")}</span>
+                    ? <span className="attendance-row-flag">to review</span>
                     : <span className="attendance-row-ok" aria-label="checked in">✓</span>}
                 </div>
               ))}

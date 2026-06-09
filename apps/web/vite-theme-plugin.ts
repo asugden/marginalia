@@ -26,6 +26,8 @@ interface BrandConfig {
   primary_dark?: string;
   font_sans?: string;
   font_display?: string;
+  /** Monospace / signature family (wordmark, eyebrows, labels, code). */
+  font_mono?: string;
   /** Optional webfont stylesheet URL (e.g. a Google Fonts @import URL).
    *  Emitted as a <link rel="stylesheet"> in <head> before the brand
    *  overrides so the named families resolve. */
@@ -55,6 +57,7 @@ function buildRootCss(brand: BrandConfig): string {
   if (brand.primary_dark)      lines.push(`  --brand-primary-dark: ${brand.primary_dark};`);
   if (brand.font_sans)         lines.push(`  --font-sans: ${brand.font_sans};`);
   if (brand.font_display)      lines.push(`  --font-display: ${brand.font_display};`);
+  if (brand.font_mono)         lines.push(`  --font-mono: ${brand.font_mono};`);
   if (brand.watermark_url) {
     lines.push(`  --brand-watermark-url: url("${brand.watermark_url}");`);
     lines.push(`  --brand-watermark-opacity: ${brand.watermark_opacity ?? 0.03};`);

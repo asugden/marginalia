@@ -104,11 +104,15 @@ npm run dev:web           # apps/web (vite on :5173, proxied to :8787)
 
 ## Branding & theming
 
-Marginalia ships with a brand-neutral default theme. To brand your
-deployment, drop a `theme.yaml` into `apps/web/src/branding/` and (optionally)
-brand assets into `apps/web/public/branding/`. The Vite theme plugin reads
-the YAML at build time and emits CSS variable overrides — no source edits
-needed. See [docs/theming.md](docs/theming.md) for the schema.
+Marginalia ships with a brand-neutral default theme — warm paper, a Space
+Mono + Hanken Grotesk type system, and a calm editorial-blue accent — that
+looks finished out of the box. To brand your deployment, copy
+`apps/web/src/branding/theme.default.yaml` to `theme.yaml` in the same
+directory and edit it; drop any brand assets into `apps/web/public/branding/`.
+Setting just `primary`/`primary_dark` re-tints the whole accent scale. The
+Vite theme plugin reads the YAML at build time and emits CSS variable
+overrides — no source edits needed. See [docs/theming.md](docs/theming.md)
+for the full schema and a worked example.
 
 If you maintain branding + seed content in a separate private repo, the
 recommended pattern is to keep the public Marginalia repo as a git

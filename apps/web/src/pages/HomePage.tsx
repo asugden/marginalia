@@ -158,11 +158,13 @@ export function HomePage() {
             {/* Staff destinations — demoted to muted text links so a
                 student's eye doesn't read them as peer actions. v0.7 §3.2. */}
             <span className="header-divider" aria-hidden />
-            {/* v1.0 §1 — Author now sends the user to the picker (which
+            {/* v1.0 §1 — Instructor now sends the user to the picker (which
                 redirects to the single-course dashboard when there's only
-                one enrollment, no extra click). */}
+                one enrollment, no extra click). This is the affordance that
+                switches a staff member from the student view into the
+                instructor view (the reverse link is "← Student view"). */}
             <Link to="/courses" className="header-nav-link">
-              Author
+              Instructor
             </Link>
             {isAdmin && (
               <Link to="/admin" className="header-nav-link">

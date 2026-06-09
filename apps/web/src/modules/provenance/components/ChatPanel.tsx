@@ -22,11 +22,17 @@ interface Props {
   documentId: string;
   courseId: string;
   onInsertAtCursor?: (text: string, sourceMessageId: string) => void;
+  /** Hands an imperative handle to the parent so the editor's "Reference"
+   *  action can push a selected passage into the composer as a quote chip. */
+  onReady?: (api: { addReference: (text: string) => void }) => void;
 }
 
 interface PendingAssistant { text: string }
 
-export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
+interface RefChip { id: string; text: string }
+
+export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: Props) {
+  const [refs, setRefs] = useState<RefChip[]>([]);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [conversations, setConversations] = useState<ConversationDTO[] | null>(null);
   const [active, setActive] = useState<ConversationDTO | null>(null);
@@ -42,6 +48,29 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
   const abortStreamRef = useRef<(() => void) | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const refSeqRef = useRef(0);
+
+  // Expose addReference to the parent (the editor's select-to-reference action).
+  useEffect(() => {
+    if (!onReady) return;
+    onReady({
+      addReference(text: string) {
+        const clean = String(text).replace(/\s+/g, " ").trim();
+        if (!clean) return;
+        setRefs((cur) =>
+          cur.some((r) => r.text === clean)
+            ? cur
+            : [...cur, { id: `ref_${++refSeqRef.current}`, text: clean }],
+        );
+        // Bring focus to the composer so the student can type around the quote.
+        setTimeout(() => composerRef.current?.focus(), 0);
+      },
+    });
+  }, [onReady]);
+
+  function removeRef(id: string) {
+    setRefs((cur) => cur.filter((r) => r.id !== id));
+  }
 
   // ── Load agents + conversations on mount / doc change ────────────────
   useEffect(() => {
@@ -133,10 +162,17 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
   }
 
   function send() {
-    const content = draft.trim();
-    if (!content || !active || pendingAsst) return;
+    const typed = draft.trim();
+    // Sendable if there's typed text OR at least one referenced passage.
+    if ((!typed && refs.length === 0) || !active || pendingAsst) return;
     setError(null);
     setDraft("");
+    const refsNow = refs.map((r) => r.text);
+    setRefs([]);
+    // Carry referenced passages into the message as a leading blockquote so
+    // the agent (and the saved transcript) sees exactly what was quoted.
+    const quoted = refsNow.map((t) => `> ${t}`).join("\n");
+    const content = quoted ? (typed ? `${quoted}\n\n${typed}` : quoted) : typed;
     const optimisticUser: MessageDTO = {
       id: `local_${Date.now()}`,
       role: "user",
@@ -326,7 +362,27 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
           </div>
 
           <div className="prov-chat-composer">
-            <div className={`prov-composer-field${draft.trim() && !pendingAsst ? " can-send" : ""}`}>
+            {refs.length > 0 && (
+              <div className="prov-composer-refs">
+                {refs.map((r) => (
+                  <span key={r.id} className="prov-ref-chip">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M7 7h4v4c0 2.2-1.3 3.7-3.5 4.3l-.5-1.3c1.3-.4 2-1.1 2-2H7V7zm6 0h4v4c0 2.2-1.3 3.7-3.5 4.3l-.5-1.3c1.3-.4 2-1.1 2-2h-2V7z" />
+                    </svg>
+                    <span className="prov-ref-chip-text">{r.text}</span>
+                    <button
+                      type="button"
+                      className="prov-ref-chip-x"
+                      onClick={() => removeRef(r.id)}
+                      aria-label="Remove reference"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className={`prov-composer-field${(draft.trim() || refs.length > 0) && !pendingAsst ? " can-send" : ""}`}>
               <textarea
                 ref={composerRef}
                 value={draft}
@@ -358,7 +414,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor }: Props) {
                   type="button"
                   className="prov-send-button"
                   onClick={send}
-                  disabled={!draft.trim()}
+                  disabled={!draft.trim() && refs.length === 0}
                   aria-label="Send"
                   title="Send"
                 >

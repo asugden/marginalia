@@ -1,48 +1,63 @@
 /*
  * Marginalia — visual styles.
  *
- * Brand-tunable values live in CSS custom properties below. The committed
- * defaults are deliberately brand-neutral; deployers override at build time
- * via apps/web/src/branding/theme.yaml (see docs/theming.md). The Vite
- * theme plugin injects a :root override block from that file into the page;
- * if it's absent, the defaults below take effect.
+ * The design-system token layer (imported below from ./tokens/*) defines a
+ * warm, paper-grounded palette, a Space Mono + Hanken Grotesk type system,
+ * and the spacing / radius / motion scales. Those token files hold all the
+ * raw values and the brand-neutral defaults.
  *
- * The body::before watermark rule lower in this file reads its
- * url + opacity from --brand-watermark-url / --brand-watermark-opacity,
- * defaulting to "none" / 0 so the public build has no watermark at all.
+ * Brand-tunable values are CSS custom properties living in the token layer:
+ *   --brand-primary / --brand-primary-dark  (the accent; default editorial blue)
+ *   --font-sans / --font-mono / --font-display  (the type families)
+ *   --brand-watermark-url / --brand-watermark-opacity  (off by default)
+ * Deployers override these at build time via apps/web/src/branding/theme.yaml
+ * (see docs/theming.md). The Vite theme plugin injects a :root override block
+ * from that file; if it's absent, the brand-neutral defaults take effect.
+ *
+ * Legacy aliases (--ink, --line, --panel, --muted, --bg, --user-bg, …) are
+ * mapped onto the semantic palette in tokens/colors.css so existing rules in
+ * this file keep working while the migration to semantic tokens proceeds.
+ *
+ * The body::before watermark rule lower in this file reads its url + opacity
+ * from --brand-watermark-url / --brand-watermark-opacity, defaulting to
+ * "none" / 0 so the public build has no watermark at all.
  */
 
-:root {
-  /* --- Brand tokens (override these in theme.yaml) --------------------- */
-  --brand-primary:           #5b6cff;
-  --brand-primary-dark:      #4a5ad8;
-  --brand-watermark-url:     none;
-  --brand-watermark-opacity: 0;
-  --font-sans:    -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-display: Georgia, "Times New Roman", serif;
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/radius.css";
+@import "./tokens/motion.css";
 
-  /* --- Non-brand UI tokens (rarely overridden) ------------------------- */
-  --ink: #1a1c20;
-  --ink-soft: #4a4f57;
-  --muted: #6b7280;
-  --line: #e3e5e9;
-  --panel: #ffffff;
-  --bg: #f6f7f9;
-  --assistant-bg: #eef0f3;
-  --user-bg: var(--brand-primary);
-}
-
-* {
+*, *::before, *::after {
   box-sizing: border-box;
 }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
   background: var(--bg);
-  color: var(--ink);
-  line-height: 1.5;
+  color: var(--text-body);
+  line-height: var(--leading-normal);
+  min-height: 100vh;
 }
+
+/* Warm, slim scrollbars (brand-neutral). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sand-300) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--sand-300);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--sand-400); background-clip: padding-box; }
 
 /*
  * Optional brand watermark — fixed bottom-left, ~30% viewport width with a
@@ -70,24 +85,27 @@ body:has(.no-watermark)::before {
   display: none;
 }
 
-h1,
-h2,
-h3 {
-  font-family: var(--font-display);
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
+/* h1–h4 base styling lives in tokens/typography.css. The app keeps two
+ * local conventions on top of it: a heavier hero h1, and an h2 that reads
+ * as an uppercase mono-ish section label (used in sidebars / card sections). */
 h1 {
-  font-weight: 900;
-  font-size: 2.25rem;
   margin: 0 0 0.5rem;
 }
 h2 {
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-soft);
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-secondary);
+}
+
+a { color: var(--text-link); text-decoration: none; }
+a:hover { color: var(--text-link-hover); }
+
+:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
 .page {
@@ -97,8 +115,8 @@ h2 {
   color: var(--muted);
 }
 .error {
-  color: var(--brand-primary);
-  font-size: 0.9rem;
+  color: var(--status-danger-fg);
+  font-size: var(--text-sm);
 }
 
 /* --- Landing (HomePage) — centered card over the watermark. --------------- */
@@ -111,54 +129,65 @@ h2 {
 }
 
 .hero .card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 2.5rem 2rem;
   max-width: 460px;
   text-align: center;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
 }
 
 .hero .card p {
-  color: var(--ink-soft);
+  color: var(--text-secondary);
   margin-bottom: 1.5rem;
 }
 
 /* --- Buttons --------------------------------------------------------------- */
-/* Flat brand red, no gradient. Polish comes from the hover darken, a soft
- * neutral lift shadow on hover, and a 1 px press translation. Composer & icon
- * buttons opt out below.
+/* The one filled accent action per region. Depth without gradient: a hairline
+ * inset top sheen + an accent-tinted, layered drop shadow read as a physical,
+ * pressable key (design-system Button --primary). Composer & icon buttons opt
+ * out below.
  */
 button {
-  background: var(--brand-primary);
-  color: #fff;
-  border: 0;
-  border-radius: 10px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   padding: 0.6rem 1.15rem;
-  font: 600 0.92rem var(--font-sans);
-  letter-spacing: 0.02em;
+  font: var(--weight-semibold) var(--text-base) var(--font-sans);
+  letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-strong) 32%, transparent),
+    0 1px 2px color-mix(in srgb, var(--accent-strong) 30%, transparent),
+    0 2px 6px color-mix(in srgb, var(--accent) 20%, transparent);
   transition:
-    background 160ms ease,
-    transform 120ms ease,
-    box-shadow 220ms ease;
+    background-color var(--dur-2) var(--ease-out),
+    transform var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-3) var(--ease-out);
 }
 button:hover:not(:disabled) {
-  background: var(--brand-primary-dark);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+  background: var(--accent-hover);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-strong) 32%, transparent),
+    0 2px 4px color-mix(in srgb, var(--accent-strong) 34%, transparent),
+    0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 button:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset 0 1px 2px color-mix(in srgb, var(--accent-strong) 45%, transparent),
+    0 1px 2px color-mix(in srgb, var(--accent-strong) 25%, transparent);
 }
 button:focus-visible {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
   box-shadow: none;
 }
@@ -428,7 +457,7 @@ button:disabled {
   margin-right: auto;
 }
 .bubble.system {
-  background: #fff7ed;
+  background: var(--status-warning-bg);
   border-left: 3px solid var(--brand-primary);
   border-radius: 8px;
   font-style: italic;
@@ -453,13 +482,13 @@ button:disabled {
   padding: 0.5rem 0.5rem 0.5rem 0.9rem;
   border: 1px solid var(--line);
   border-radius: 22px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .composer-field:focus-within {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px rgba(186, 1, 0, 0.12);
+  box-shadow: var(--focus-ring);
 }
 .composer-field textarea {
   flex: 1;
@@ -594,7 +623,7 @@ button:disabled {
   height: 32px;
   border-radius: 50%;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
 }
 .icon-button.round:hover {
   background: var(--bg);
@@ -622,63 +651,76 @@ button:disabled {
 
 /* --- Link-styled buttons -------------------------------------------------- */
 .link-button {
-  display: inline-block;
-  background: var(--brand-primary);
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--accent);
+  color: var(--text-on-accent);
   text-decoration: none;
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   padding: 0.5rem 1rem;
-  font: 600 0.88rem var(--font-sans);
-  letter-spacing: 0.02em;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  font: var(--weight-semibold) var(--text-sm) var(--font-sans);
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-strong) 32%, transparent),
+    0 1px 2px color-mix(in srgb, var(--accent-strong) 30%, transparent),
+    0 2px 6px color-mix(in srgb, var(--accent) 20%, transparent);
   transition:
-    background 160ms ease,
-    box-shadow 220ms ease,
-    transform 120ms ease;
+    background-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-3) var(--ease-out),
+    transform var(--dur-1) var(--ease-out);
 }
 .link-button:hover {
-  background: var(--brand-primary-dark);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+  background: var(--accent-hover);
+  color: var(--text-on-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent-strong) 32%, transparent),
+    0 2px 4px color-mix(in srgb, var(--accent-strong) 34%, transparent),
+    0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .link-button:active { transform: translateY(1px); }
 
+/* Subtle (student register) — white fill, accent text, line border. */
 .link-button.subtle,
 button.subtle {
-  background: transparent;
-  color: var(--brand-primary);
-  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent-ink);
+  border: 1px solid var(--border-strong);
   padding: 0.45rem 0.95rem;
   box-shadow: none;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .link-button.subtle:hover,
 button.subtle:hover:not(:disabled) {
-  background: var(--bg);
-  border-color: rgba(186, 1, 0, 0.35);
-  color: var(--brand-primary-dark);
+  background: var(--surface-hover);
+  border-color: var(--accent-wash-2);
+  color: var(--accent-hover);
   box-shadow: none;
 }
 
-/* Danger link — destructive actions (Delete, Remove, Revoke). Red text on
+/* Danger link — destructive actions (Delete, Remove, Revoke). Accent text on
  * transparent fill so destruction never looks like the primary action.
  * See docs/style.md §2.
  */
 .danger-link,
 button.danger-link {
   background: transparent;
-  color: var(--brand-primary);
+  color: var(--status-danger-fg);
   border: 0;
   padding: 0.45rem 0.6rem;
   box-shadow: none;
-  font: 600 0.88rem var(--font-sans);
-  letter-spacing: 0.02em;
+  font: var(--weight-semibold) var(--text-sm) var(--font-sans);
+  letter-spacing: 0.01em;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .danger-link:hover:not(:disabled),
 button.danger-link:hover:not(:disabled) {
-  background: rgba(186, 1, 0, 0.08);
-  color: var(--brand-primary-dark);
+  background: var(--status-danger-bg);
+  color: var(--accent-hover);
 }
 .danger-link:disabled,
 button.danger-link:disabled { opacity: 0.5; cursor: default; }
@@ -770,12 +812,13 @@ input[type="search"],
 input[type="password"],
 input[type="url"],
 textarea {
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   padding: 0.55rem 0.7rem;
-  font: 0.95rem var(--font-sans);
-  color: var(--ink);
-  background: #fff;
+  font: var(--text-base) var(--font-sans);
+  color: var(--text-strong);
+  background: var(--surface);
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 input[type="text"]:focus,
 input[type="email"]:focus,
@@ -784,10 +827,11 @@ input[type="search"]:focus,
 input[type="password"]:focus,
 input[type="url"]:focus,
 textarea:focus {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: -1px;
-  border-color: transparent;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
+::placeholder { color: var(--text-faint); }
 
 .field-group {
   border-top: 1px solid var(--line);
@@ -829,15 +873,15 @@ textarea:focus {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.8rem 0.9rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  background: #fff;
-  transition: border-color 120ms, background 120ms;
+  background: var(--surface);
+  transition: border-color var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   position: relative;
 }
-.radio-card:hover { border-color: var(--brand-primary); }
-.radio-card.selected { border-color: var(--brand-primary); background: #fff5f5; }
+.radio-card:hover { border-color: var(--accent); }
+.radio-card.selected { border-color: var(--accent); background: var(--accent-wash); box-shadow: var(--focus-ring); }
 .radio-card input { position: absolute; opacity: 0; pointer-events: none; }
 .radio-card.compact { padding: 0.6rem 0.75rem; }
 
@@ -847,7 +891,7 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.75rem;
-  background: #fafbfc;
+  background: var(--surface-sunken);
 }
 .topics-header {
   display: flex;
@@ -860,7 +904,7 @@ textarea:focus {
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.75rem;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
   margin-bottom: 0.6rem;
@@ -1111,7 +1155,7 @@ select {
   cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
-select:hover:not(:disabled) { border-color: rgba(186, 1, 0, 0.35); }
+select:hover:not(:disabled) { border-color: var(--accent-wash-2); }
 select:focus-visible {
   outline: 2px solid var(--brand-primary);
   outline-offset: 1px;
@@ -1126,25 +1170,26 @@ select:disabled { opacity: 0.5; cursor: default; }
   font-size: 0.72rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  background: var(--surface-2, #eee);
-  color: var(--ink-2, #555);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
   vertical-align: 0.05rem;
 }
-.kind-chip.kind-pdf      { background: #fde2e2; color: #8b1a1a; }
-.kind-chip.kind-markdown { background: #e2ecfd; color: #1a4a8b; }
-.kind-chip.kind-text     { background: #e8f1e1; color: #2d5a1a; }
-.kind-chip.kind-url      { background: #fff1d6; color: #8a5a0e; }
+.kind-chip.kind-pdf      { background: var(--status-danger-bg);  color: var(--status-danger-fg); }
+.kind-chip.kind-markdown { background: var(--status-info-bg);    color: var(--status-info-fg); }
+.kind-chip.kind-text     { background: var(--status-success-bg); color: var(--status-success-fg); }
+.kind-chip.kind-url      { background: var(--status-warning-bg); color: var(--status-warning-fg); }
 
 .status-badge {
   display: inline-block;
   padding: 0.1rem 0.55rem;
-  border-radius: 4px;
-  font-size: 0.78rem;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-sm);
   text-transform: capitalize;
 }
-.status-pending { background: #fff4cc; color: #715b0a; }
-.status-indexed { background: #d8efd8; color: #20532a; }
-.status-failed  { background: #fadbd8; color: #7a1f1f; }
+.status-pending { background: var(--status-warning-bg); color: var(--status-warning-fg); }
+.status-indexed { background: var(--status-success-bg); color: var(--status-success-fg); }
+.status-failed  { background: var(--status-danger-bg);  color: var(--status-danger-fg); }
 
 .row-actions {
   display: flex;
@@ -1160,19 +1205,19 @@ select:disabled { opacity: 0.5; cursor: default; }
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.4;
-  border-radius: 4px;
-  background: #f0e6e6;
-  color: var(--brand-primary-dark);
+  border-radius: var(--radius-xs);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
   text-decoration: none;
   vertical-align: 0.1rem;
 }
 .citation-pill:hover {
-  background: var(--brand-primary);
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 .citation-pill.disabled {
-  background: #eee;
-  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
   cursor: default;
 }
 .citation-pill.small { font-size: 0.7rem; }
@@ -1235,9 +1280,9 @@ select:disabled { opacity: 0.5; cursor: default; }
 .history-pill {
   font-size: 0.72rem;
   padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  background: #d8efd8;
-  color: #20532a;
+  border-radius: var(--radius-pill);
+  background: var(--status-success-bg);
+  color: var(--status-success-fg);
   letter-spacing: 0.02em;
 }
 
@@ -1356,23 +1401,46 @@ select:disabled { opacity: 0.5; cursor: default; }
 .attendance-card h1 {
   margin: 0.25rem 0 0.5rem;
 }
+/* Mono eyebrow — the session date, set in the design's small-caps voice. */
 .attendance-card .attendance-date {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 .attendance-card .attendance-fineprint {
   margin-top: 1.25rem;
+  color: var(--text-secondary);
 }
-/* The single full-width "I'm present" button. Brand-red primary; matches the
- * existing `button` style but stretches across the card so it's the obvious
- * — and only — thing to tap on a phone. */
+/* The single full-width "I'm present" button. Accent primary; the obvious —
+ * and only — thing to tap on a phone. */
 .attendance-card .attendance-primary {
   display: block;
   width: 100%;
   margin-top: 1.5rem;
   padding: 1.25rem 1rem;
-  font-size: 1.25rem;
-  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.attendance-card .attendance-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.attendance-card .attendance-primary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.attendance-card .attendance-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 /* "Sign in" link styled as a primary button, full-width inside the card. */
 .attendance-card .link-button.block {
@@ -1380,10 +1448,10 @@ select:disabled { opacity: 0.5; cursor: default; }
   width: 100%;
   text-align: center;
   padding: 1rem;
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
 }
-/* Big green checkmark. Matches the "single elegant element" brief — no
- * decoration around it on the happy path. */
+/* Big checkmark on the happy path. Stroke is set inline via
+ * --status-success-fg in the SVG; this just centres it. */
 .attendance-check {
   display: flex;
   justify-content: center;
@@ -1392,13 +1460,57 @@ select:disabled { opacity: 0.5; cursor: default; }
 .attendance-done-title {
   margin: 0;
   font-family: var(--font-display);
+  color: var(--status-success-fg);
+}
+
+/* Status badges on the done screen. Pill, mono, small uppercase, status
+ * tint background + status fg text, with a leading dot. */
+.attendance-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+.attendance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.25rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-regular);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.attendance-badge-dot {
+  width: 0.45em;
+  height: 0.45em;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+.attendance-badge--success {
+  color: var(--status-success-fg);
+  background: var(--status-success-bg);
+}
+.attendance-badge--info {
+  color: var(--status-info-fg);
+  background: var(--status-info-bg);
+}
+.attendance-badge--warning {
+  color: var(--status-warning-fg);
+  background: var(--status-warning-bg);
 }
 .attendance-flags {
   margin-top: 1.25rem;
   padding: 0.85rem 1rem;
-  background: #fff8e1;
-  border-radius: 8px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-md);
   text-align: left;
+  color: var(--text-body);
 }
 .attendance-flags p { margin: 0.25rem 0; }
 
@@ -1407,15 +1519,16 @@ select:disabled { opacity: 0.5; cursor: default; }
 .attendance-open-card {
   margin: 1.25rem 0 2rem;
   padding: 1.25rem 1.5rem;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
 }
 .attendance-open-card h2 { margin-top: 0; }
 .attendance-geofence-toggle {
   display: block;
   margin: 0.75rem 0 1rem;
-  color: var(--ink-soft);
+  color: var(--text-secondary);
 }
 .attendance-actions {
   display: flex;
@@ -1432,14 +1545,15 @@ select:disabled { opacity: 0.5; cursor: default; }
 .attendance-table td {
   text-align: left;
   padding: 0.6rem 0.5rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border-faint);
 }
 .attendance-table th {
-  font-weight: 600;
-  color: var(--ink-soft);
-  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 .attendance-row-actions {
   display: flex;
@@ -1465,26 +1579,31 @@ select:disabled { opacity: 0.5; cursor: default; }
   gap: 0.5rem;
 }
 .attendance-qr-button {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 1rem;
   width: min(100%, 520px);
   cursor: zoom-in;
-  box-shadow: none;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
 }
 .attendance-qr-button:hover {
-  background: #fff;
-  border-color: var(--brand-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
   transform: none;
+}
+.attendance-qr-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 .attendance-qr-button svg { width: 100%; height: auto; display: block; }
 .attendance-qr-closed {
   padding: 3rem 2rem;
-  border: 2px dashed var(--line);
-  border-radius: 10px;
-  color: var(--ink-soft);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
 }
 
 .attendance-roster {
@@ -1499,29 +1618,64 @@ select:disabled { opacity: 0.5; cursor: default; }
   gap: 0.6rem;
 }
 .attendance-count-num {
-  font-size: 3rem;
-  font-weight: 700;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-extra);
   font-family: var(--font-display);
+  color: var(--text-strong);
   line-height: 1;
 }
-.attendance-count-label { color: var(--ink-soft); }
-.attendance-flagged-count { color: #a86200; font-size: 0.9rem; }
+/* Mono small-caps "present" label beside the big count. */
+.attendance-count-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+/* Gentle, not alarming — amber tint pill rather than a red flag. */
+.attendance-flagged-count {
+  align-self: flex-start;
+  padding: 0.2rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--status-warning-fg);
+  background: var(--status-warning-bg);
+  border-radius: var(--radius-pill);
+}
 .attendance-roster-list {
   max-height: 60vh;
   overflow: auto;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border-faint);
   padding-top: 0.5rem;
 }
 .attendance-roster-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.35rem 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.95rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-faint);
+  font-size: var(--text-sm);
+  color: var(--text-body);
 }
-.attendance-row-flag { color: #a86200; font-size: 0.8rem; }
-.attendance-row-ok { color: #2e7d32; }
+.attendance-roster-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* "to review" — a quiet amber note, never an accusation. */
+.attendance-row-flag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--status-warning-fg);
+}
+.attendance-row-ok { color: var(--status-success-fg); }
 
 /* Click-to-zoom QR overlay — fills the screen so a student in the back row
  * can scan from a phone projected via mirroring or a laptop with no
@@ -1529,7 +1683,7 @@ select:disabled { opacity: 0.5; cursor: default; }
 .attendance-zoom-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.97);
+  background: color-mix(in srgb, var(--bg) 97%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1540,16 +1694,17 @@ select:disabled { opacity: 0.5; cursor: default; }
   cursor: zoom-out;
   z-index: 1000;
 }
-.attendance-zoom-overlay:hover { background: rgba(255, 255, 255, 0.97); }
+.attendance-zoom-overlay:hover { background: color-mix(in srgb, var(--bg) 97%, transparent); }
 .attendance-zoom-inner {
   width: min(85vh, 85vw);
   height: min(85vh, 85vw);
 }
 .attendance-zoom-inner svg { width: 100%; height: 100%; display: block; }
 .attendance-zoom-url {
-  font-family: var(--font-sans);
-  font-size: 1.1rem;
-  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 
@@ -1639,14 +1794,14 @@ select:disabled { opacity: 0.5; cursor: default; }
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .prov-input:focus {
   outline: none;
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px rgba(186, 1, 0, 0.12);
+  box-shadow: var(--focus-ring);
 }
 .prov-textarea {
   min-height: 10rem;
@@ -1691,7 +1846,7 @@ body:has(.prov-shell)::before { display: none; }
 .prov-shell-title:focus {
   outline: none;
   background: var(--bg);
-  box-shadow: 0 0 0 2px rgba(186, 1, 0, 0.18);
+  box-shadow: var(--focus-ring);
 }
 .prov-shell-title::placeholder { color: var(--muted); }
 .prov-shell-chat-toggle { white-space: nowrap; }
@@ -1748,7 +1903,7 @@ body:has(.prov-shell)::before { display: none; }
 }
 .prov-divider:hover,
 body.prov-dragging .prov-divider {
-  background: rgba(186, 1, 0, 0.10);
+  background: var(--accent-wash);
 }
 .prov-divider-grip {
   position: absolute;
@@ -1843,21 +1998,25 @@ body.prov-dragging * {
   height: 0;
 }
 
-/* Origin coloring (slice 2). Soft pastels that don't fight the prose. */
+/* Origin coloring (slice 2). A soft status-token wash with a 1px underline,
+ * matching the design-system Badge/Tag palette so "from chat" / "pasted" /
+ * "edited" read consistently with the rest of the UI. "typed" is the default
+ * ink, no wash. */
+.prov-editor-surface [data-origin] {
+  border-radius: 3px;
+  transition: background var(--dur-2) var(--ease-out);
+}
 .prov-editor-surface [data-origin="llm"] {
-  background: rgba(255, 214, 64, 0.34);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 rgba(255, 214, 64, 0.55);
+  background: var(--status-info-bg);
+  box-shadow: 0 1px 0 var(--status-info-fg);
 }
 .prov-editor-surface [data-origin="pasted"] {
-  background: rgba(238, 90, 90, 0.18);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 rgba(238, 90, 90, 0.4);
+  background: var(--status-warning-bg);
+  box-shadow: 0 1px 0 var(--status-warning-fg);
 }
 .prov-editor-surface [data-origin="edited"] {
-  background: rgba(74, 184, 116, 0.16);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 rgba(74, 184, 116, 0.4);
+  background: var(--status-success-bg);
+  box-shadow: 0 1px 0 var(--status-success-fg);
 }
 
 /* "Hide marks from students" toggle (display-only — recording continues).
@@ -1953,10 +2112,12 @@ body.prov-dragging * {
   height: 0.9em;
   border-radius: 3px;
 }
-.prov-legend-swatch.legend-human  { background: transparent; border: 1px dashed var(--muted); }
-.prov-legend-swatch.legend-pasted { background: rgba(238, 90, 90, 0.32); }
-.prov-legend-swatch.legend-llm    { background: rgba(255, 214, 64, 0.55); }
-.prov-legend-swatch.legend-edited { background: rgba(74, 184, 116, 0.45); }
+/* Swatches mirror the real marks: tint wash + colored underline. */
+.prov-legend-swatch { box-shadow: inset 0 -2px 0 var(--border-strong); }
+.prov-legend-swatch.legend-human  { background: var(--surface-sunken); }
+.prov-legend-swatch.legend-pasted { background: var(--status-warning-bg); box-shadow: inset 0 -2px 0 var(--status-warning-fg); }
+.prov-legend-swatch.legend-llm    { background: var(--status-info-bg);    box-shadow: inset 0 -2px 0 var(--status-info-fg); }
+.prov-legend-swatch.legend-edited { background: var(--status-success-bg); box-shadow: inset 0 -2px 0 var(--status-success-fg); }
 
 /* ── Chat pane ────────────────────────────────────────────────────────── */
 .prov-chat-pane {
@@ -1995,14 +2156,14 @@ body.prov-dragging * {
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
 }
 .prov-chat-select:focus {
   outline: none;
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 2px rgba(186, 1, 0, 0.14);
+  box-shadow: var(--focus-ring);
 }
 .prov-chat-new { padding: 0.32rem 0.7rem; font-size: 0.82rem; }
 
@@ -2042,7 +2203,7 @@ body.prov-dragging * {
   margin-bottom: 0.3rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -2062,7 +2223,7 @@ body.prov-dragging * {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--brand-primary);
-  background: rgba(186, 1, 0, 0.10);
+  background: var(--accent-wash);
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
 }
@@ -2124,6 +2285,70 @@ body.prov-dragging * {
   padding: 0.3rem 0.7rem;
 }
 
+/* "Reference" action inside the selection bubble menu — the accent variant of
+ * a bubble button, with the quote glyph. Only shown when the selection is
+ * within the cap (see Editor.tsx); over the cap it simply isn't rendered. */
+.prov-bubble-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--accent-bright);
+  font-weight: var(--weight-semibold);
+}
+.prov-bubble-reference:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.prov-bubble-reference svg { flex: none; }
+
+/* Reference chips shown above the composer before sending. */
+.prov-composer-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.prov-ref-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.4rem 0.4rem 0.55rem;
+}
+.prov-ref-chip > svg { color: var(--accent); flex: none; }
+.prov-ref-chip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prov-ref-chip-x {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+.prov-ref-chip-x:hover { background: var(--surface-hover); color: var(--text-strong); box-shadow: none; }
+
 /* Composer — visually identical primitives to .composer-field on the
  * conversation page but contained inside the chat pane. */
 .prov-chat-composer {
@@ -2138,13 +2363,13 @@ body.prov-dragging * {
   padding: 0.4rem 0.4rem 0.4rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .prov-composer-field:focus-within {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px rgba(186, 1, 0, 0.12);
+  box-shadow: var(--focus-ring);
 }
 .prov-composer-field textarea {
   flex: 1;
@@ -2202,9 +2427,9 @@ body.prov-dragging * {
 .prov-chat-error {
   margin: 0;
   padding: 0.55rem 0.85rem;
-  background: rgba(186, 1, 0, 0.06);
+  background: var(--accent-wash);
   color: var(--brand-primary-dark);
-  border-top: 1px solid rgba(186, 1, 0, 0.18);
+  border-top: 1px solid var(--accent-wash-2);
   font-size: 0.85rem;
 }
 
@@ -2224,14 +2449,14 @@ body.prov-dragging * {
 /* ── Provenance BYO key (slice 5) ──────────────────────────────────────── */
 .prov-chat-icon-button.is-active {
   color: var(--brand-primary);
-  background: rgba(186, 1, 0, 0.10);
+  background: var(--accent-wash);
 }
 .prov-chat-byo-banner {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.85rem;
-  background: rgba(186, 1, 0, 0.06);
+  background: var(--accent-wash);
   border-bottom: 1px solid var(--line);
   font-size: 0.8rem;
   color: var(--ink-soft);

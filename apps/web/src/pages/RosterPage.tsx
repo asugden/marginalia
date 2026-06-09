@@ -222,7 +222,7 @@ export function RosterPage() {
               onClick={() => setTab(t)}
               type="button"
             >
-              {t === "students" ? "Students" : "Authors"}
+              {t === "students" ? "Students" : "Instructors"}
             </button>
           ))}
         </div>
@@ -358,7 +358,7 @@ export function RosterPage() {
         )}
 
         <section className="field-group">
-          <h2>{tab === "students" ? "Students" : "Authors"}</h2>
+          <h2>{tab === "students" ? "Students" : "Instructors"}</h2>
           <div className="inline-form">
             <input
               type="search"

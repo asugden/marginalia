@@ -1,0 +1,22 @@
+/* ------------------------------------------------------------------ *
+ * Marginalia · Webfonts
+ *
+ * Two families do all the work by default:
+ *   · Space Mono     — the signature. Wordmark, eyebrows, labels, metadata,
+ *                      numerals, code. Carries the technical/editorial voice.
+ *   · Hanken Grotesk — warm humanist sans for body + UI. Friendly, highly
+ *                      legible, the calm counterweight to Space Mono's quirk.
+ *
+ * These are the brand-NEUTRAL defaults: neither family is institution-
+ * specific, so the public build ships with the full editorial look out of
+ * the box. They are loaded from Google Fonts below.
+ *
+ * THEMING: a deployer can override the font *families* (--font-sans /
+ * --font-mono / --font-display) in theme.yaml and supply their own
+ * `font_import_url` (a Google Fonts URL, or self-hosted @font-face). The
+ * token names in typography.css never change; only the families behind
+ * them do. To fully self-host, replace this @import with local @font-face
+ * rules pointing at the binaries. See docs/theming.md.
+ * ------------------------------------------------------------------ */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Hanken+Grotesk:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap");

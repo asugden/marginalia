@@ -26,13 +26,26 @@ type Stage =
   | { kind: "done"; flags: CheckinFlag[] }
   | { kind: "error"; message: string };
 
+// Friendly, trust-framed copy shown under the badges. Not an accusation —
+// just a note so the student knows what their instructor might see.
 const FLAG_BLURB: Record<CheckinFlag, string> = {
-  outside_radius: "We couldn't confirm your location is inside the classroom.",
+  outside_radius: "We couldn't tell you were inside the room — your instructor can sort it out with you.",
   no_geofence: "",  // not informative for the student
-  no_location: "Location wasn't shared, so we flagged this for review.",
-  duplicate_device: "This device has already checked someone else in today.",
-  duplicate_cookie: "This device has already checked someone else in today.",
+  no_location: "You didn't share your location — that's completely fine, we just noted it.",
+  duplicate_device: "This device already checked someone in today — your instructor may follow up.",
+  duplicate_cookie: "This device already checked someone in today — your instructor may follow up.",
   late: "",
+};
+
+// Each flag maps to a small pill badge. `null` means "don't surface it."
+type BadgeTone = "success" | "info" | "warning";
+const FLAG_BADGE: Record<CheckinFlag, { label: string; tone: BadgeTone } | null> = {
+  no_location: { label: "No location", tone: "info" },
+  outside_radius: { label: "Outside room", tone: "warning" },
+  duplicate_device: { label: "Shared device", tone: "warning" },
+  duplicate_cookie: { label: "Shared device", tone: "warning" },
+  late: { label: "Late", tone: "info" },
+  no_geofence: null,
 };
 
 export function CheckInPage() {
@@ -131,7 +144,7 @@ export function CheckInPage() {
               </p>
             )}
             <p className="muted small attendance-fineprint">
-              We'll briefly ask for your location.
+              We'll briefly ask for your location — checking in works either way.
             </p>
           </>
         )}
@@ -141,16 +154,19 @@ export function CheckInPage() {
 }
 
 function CheckedIn({ flags }: { flags: CheckinFlag[] }) {
-  const userFlags = flags.filter((f) => FLAG_BLURB[f]);
+  const badges = flags
+    .map((f) => FLAG_BADGE[f])
+    .filter((b): b is { label: string; tone: BadgeTone } => b !== null);
+  const blurbs = flags.filter((f) => FLAG_BLURB[f]);
   return (
     <>
       <div className="attendance-check" aria-hidden>
         <svg viewBox="0 0 64 64" width="120" height="120">
-          <circle cx="32" cy="32" r="30" fill="none" stroke="#2e7d32" strokeWidth="3" />
+          <circle cx="32" cy="32" r="30" fill="none" stroke="var(--status-success-fg)" strokeWidth="3" />
           <path
             d="M18 33 L28 43 L46 23"
             fill="none"
-            stroke="#2e7d32"
+            stroke="var(--status-success-fg)"
             strokeWidth="5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -158,11 +174,21 @@ function CheckedIn({ flags }: { flags: CheckinFlag[] }) {
         </svg>
       </div>
       <h1 className="attendance-done-title">You're checked in.</h1>
-      {userFlags.length > 0 && (
+      {badges.length > 0 && (
+        <div className="attendance-badges">
+          {badges.map((b, i) => (
+            <span key={`${b.label}-${i}`} className={`attendance-badge attendance-badge--${b.tone}`}>
+              <span className="attendance-badge-dot" aria-hidden />
+              {b.label}
+            </span>
+          ))}
+        </div>
+      )}
+      {blurbs.length > 0 && (
         <div className="attendance-flags">
-          {userFlags.map((f) => <p key={f}>{FLAG_BLURB[f]}</p>)}
+          {blurbs.map((f) => <p key={f}>{FLAG_BLURB[f]}</p>)}
           <p className="muted small">
-            Your check-in was recorded; your instructor will follow up if needed.
+            You're counted as here — these are just notes for you and your instructor to review together.
           </p>
         </div>
       )}

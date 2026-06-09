@@ -32,6 +32,25 @@ interface Props {
    *  toggle). Recording is unaffected — this is display-only. The footer
    *  legend is hidden too, since there are no colors to explain. */
   hideMarks?: boolean;
+  /** When the chat pane is open, the editor offers a "Reference" action on a
+   *  text selection that hands the selected passage to the chat as a quote.
+   *  Hidden entirely when the chat is closed. */
+  chatOpen?: boolean;
+  /** Called with the selected passage when the student clicks "Reference". */
+  onReference?: (text: string) => void;
+}
+
+// Selection length cap for "Reference". A hard floor of 1500 chars, nudged up
+// a little for long documents (so a long essay can quote a slightly longer
+// passage), but firmly bounded. When a selection exceeds the cap, the
+// Reference button simply does not appear — no message, no explanation. This
+// is a deliberate, quiet nudge away from wholesale "reference everything"
+// behaviour and toward quoting only the passage that matters.
+const REFERENCE_MIN_CAP = 1500;
+const REFERENCE_MAX_CAP = 4000;
+function referenceCap(docChars: number): number {
+  const scaled = REFERENCE_MIN_CAP + Math.floor(docChars * 0.1);
+  return Math.min(REFERENCE_MAX_CAP, Math.max(REFERENCE_MIN_CAP, scaled));
 }
 
 export function ProvenanceEditor({
@@ -40,6 +59,8 @@ export function ProvenanceEditor({
   onEvents,
   onEditorReady,
   hideMarks = false,
+  chatOpen = false,
+  onReference,
 }: Props) {
   // Keep the latest onEvents in a ref so the tracker plugin (configured once
   // at editor construction) always sees the current callback.
@@ -92,6 +113,26 @@ export function ProvenanceEditor({
   const wordCount = editor.storage.characterCount.words();
   const charCount = editor.storage.characterCount.characters();
   const pageCount = Math.max(1, Math.ceil(wordCount / WORDS_PER_PAGE));
+
+  // Selected passage + whether it's eligible to "Reference" into the chat.
+  // The button only renders when the chat is open, something is selected, and
+  // the selection is within the (doc-length-scaled) cap. Over the cap → the
+  // button silently disappears.
+  const { from, to } = editor.state.selection;
+  const selectedText =
+    from === to ? "" : editor.state.doc.textBetween(from, to, " ").trim();
+  const canReference =
+    chatOpen &&
+    !!onReference &&
+    selectedText.length > 0 &&
+    selectedText.length <= referenceCap(charCount);
+
+  function doReference() {
+    if (!canReference) return;
+    onReference!(selectedText);
+    // Collapse the selection so the bubble menu dismisses after referencing.
+    editor.chain().focus().setTextSelection(to).run();
+  }
 
   return (
     <div className={`prov-editor-surface-wrap${hideMarks ? " prov-marks-hidden" : ""}`}>
@@ -146,6 +187,23 @@ export function ProvenanceEditor({
         >
           1.
         </ToolbarButton>
+        {canReference && (
+          <>
+            <span className="prov-bubble-sep" aria-hidden />
+            <button
+              type="button"
+              className="prov-bubble-button prov-bubble-reference"
+              onClick={doReference}
+              aria-label="Reference this passage in the chat"
+              title="Reference this passage in the chat"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M7 7h4v4c0 2.2-1.3 3.7-3.5 4.3l-.5-1.3c1.3-.4 2-1.1 2-2H7V7zm6 0h4v4c0 2.2-1.3 3.7-3.5 4.3l-.5-1.3c1.3-.4 2-1.1 2-2h-2V7z" />
+              </svg>
+              Reference
+            </button>
+          </>
+        )}
       </BubbleMenu>
 
       <EditorContent editor={editor} className="prov-editor-surface" />

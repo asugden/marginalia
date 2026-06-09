@@ -1,0 +1,65 @@
+/* ------------------------------------------------------------------ *
+ * Marginalia · Motion
+ *
+ * Animation is subtle and warm — things ease in, settle, and occasionally
+ * give a gentle spring (the send button, a toast). Nothing bounces for
+ * decoration; nothing loops. Default to fast (120–240ms). Honor reduced
+ * motion everywhere.
+ *
+ * Signature transitions:
+ *   · buttons / links — color + 1px press, fast
+ *   · composer focus  — border + ring glow, calm
+ *   · send button     — spring scale-in when the field has content
+ *   · message enter   — fade + 6px rise
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* ---- Durations ----------------------------------------------- */
+  --dur-1: 100ms;   /* @kind other */ /* micro: color, opacity */
+  --dur-2: 160ms;   /* @kind other */ /* default: hover, press */
+  --dur-3: 240ms;   /* @kind other */ /* panels, focus rings, reveals */
+  --dur-4: 320ms;   /* @kind other */ /* sidebars, larger transitions */
+  --dur-5: 480ms;   /* @kind other */ /* page-level, deliberate */
+
+  /* ---- Easings ------------------------------------------------- */
+  --ease-out:   cubic-bezier(0.22, 0.68, 0.32, 1);  /* @kind other */ /* calm deceleration */
+  --ease-in-out:cubic-bezier(0.65, 0, 0.35, 1);     /* @kind other */
+  --ease-spring:cubic-bezier(0.34, 1.56, 0.64, 1);  /* @kind other */ /* gentle overshoot */
+  --ease-snap:  cubic-bezier(0.2, 0.9, 0.3, 1.2);   /* @kind other */ /* tiny pop */
+
+  /* ---- Composed transitions ------------------------------------ */
+  --transition-color: color var(--dur-2) var(--ease-out),
+                      background-color var(--dur-2) var(--ease-out),
+                      border-color var(--dur-2) var(--ease-out);
+  --transition-transform: transform var(--dur-2) var(--ease-out);
+  --transition-shadow: box-shadow var(--dur-3) var(--ease-out);
+}
+
+/* ---- Shared keyframes ------------------------------------------ */
+@keyframes m-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes m-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes m-pop {
+  0%   { transform: scale(0.9); opacity: 0; }
+  60%  { transform: scale(1.03); }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* Three-dot thinking shimmer for streaming/typing indicators. */
+@keyframes m-blink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40%           { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

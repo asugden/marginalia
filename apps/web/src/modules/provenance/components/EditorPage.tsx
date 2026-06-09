@@ -97,6 +97,12 @@ export function EditorPage() {
 
   // Slice 4: held so the ChatPanel can call insertLlmText imperatively.
   const editorRef = useRef<Editor | null>(null);
+  // Held so the editor's "Reference" action can push a quoted passage into
+  // the chat composer imperatively.
+  const chatRef = useRef<{ addReference: (text: string) => void } | null>(null);
+  const onReference = useCallback((text: string) => {
+    chatRef.current?.addReference(text);
+  }, []);
 
   // Split-bar drag state.
   const splitContainerRef = useRef<HTMLDivElement>(null);
@@ -366,6 +372,8 @@ export function EditorPage() {
               onEvents={onEditorEvents}
               onEditorReady={(ed) => { editorRef.current = ed; }}
               hideMarks={hideMarksForEditor}
+              chatOpen={chatOpen}
+              onReference={onReference}
             />
           </div>
         </section>
@@ -391,6 +399,7 @@ export function EditorPage() {
               <ChatPanel
                 documentId={doc.id}
                 courseId={doc.courseId}
+                onReady={(api) => { chatRef.current = api; }}
                 onInsertAtCursor={(text, sourceMessageId) => {
                   const ed = editorRef.current;
                   if (!ed) return;

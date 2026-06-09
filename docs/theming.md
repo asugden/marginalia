@@ -1,8 +1,18 @@
 # Theming
 
-Marginalia ships brand-neutral. To brand a deployment, you supply a
-`theme.yaml` and (optionally) brand assets. The Vite build picks them up
-automatically — no source edits.
+Marginalia ships brand-neutral but complete: a warm-paper palette, a calm
+editorial-blue accent, and a Space Mono + Hanken Grotesk type system loaded
+from Google Fonts. The public build looks finished out of the box — you only
+touch theming if you want your own colours, fonts, or assets.
+
+To brand a deployment, you supply a `theme.yaml` and (optionally) brand
+assets. The Vite build picks them up automatically — no source edits.
+
+The visual system is a token layer under `apps/web/src/tokens/`
+(`colors.css`, `fonts.css`, `typography.css`, plus spacing/radius/motion).
+A small set of those tokens are the **brand seam** — CSS custom properties
+the theme plugin overrides from your YAML. Everything else (the warm
+neutrals, the type scale, the status hues) is deliberately fixed.
 
 ## The 30-second version
 
@@ -21,44 +31,98 @@ override.
 ## The `theme.yaml` schema
 
 Every field is optional — anything you omit keeps the default in
-`theme.default.yaml`.
+`theme.default.yaml`. All fields live under a top-level `brand:` key.
+
+| Field | Type | Default | Controls |
+|---|---|---|---|
+| `page_title` | string | `"Marginalia"` | Browser tab title and (by default) the home-page H1. Also exposed to React as `import.meta.env.BRAND_PAGE_TITLE`. |
+| `primary` | hex colour | `#2b62a8` | The brand accent. Drives primary buttons, focus rings, link colour, the user-message bubble, the wordmark accent. White text must read on it. **Re-tints the whole accent scale** (see below). |
+| `primary_dark` | hex colour | `#1c4474` | Hover/active shade of the accent. Aim ~10–15% darker than `primary`. Also feeds the derived scale. |
+| `font_sans` | font-family string | `"Hanken Grotesk", …` | Body + UI + headings. Pasted verbatim as a CSS `font-family` value — quote names with spaces and include fallbacks. |
+| `font_display` | font-family string | (same as `font_sans`) | Heading face. Defaults to the heavy sans; set a serif here if you want display headings to differ from body. |
+| `font_mono` | font-family string | `"Space Mono", …` | The signature/mono voice: wordmark, eyebrows, section labels, metadata, code. |
+| `font_import_url` | URL or `null` | `null` | Optional webfont stylesheet, emitted as `<link rel="stylesheet">` in `<head>` so the named families resolve. Needed only if you switch to families not already loaded by `tokens/fonts.css`. |
+| `watermark_url` | path or `null` | `null` | Fixed bottom-left background image behind content. Path under `/branding/` (served from `apps/web/public/branding/`). `null` = no watermark. |
+| `watermark_opacity` | number | `0` | Opacity of the watermark; `~0.03–0.05` keeps text legible. |
+| `footer_text` | string | `"Marginalia · open source under Apache 2.0"` | Home-page footer. Exposed to React as `import.meta.env.BRAND_FOOTER_TEXT`. |
+| `favicon_url` | path | `/favicon.svg` | Favicon path. Point at `/branding/<file>` to use your own. |
+
+### The accent is two values that drive the whole scale
+
+You only set `primary` and `primary_dark`. The accent's deeper, brighter,
+and tint variants (used for AA-contrast accent text, focus glints, hover
+washes, selection, and the user bubble) are **derived from those two** in
+`apps/web/src/tokens/colors.css`. So recolouring the entire UI is a
+two-line change — you don't enumerate a palette. The warm sand neutrals and
+the green/amber/blue status hues are intentionally not part of the brand
+seam and stay fixed.
+
+## Worked example: branding a deployment
+
+Say a fictional "Riverside College" wants a green accent and its own
+watermark. The whole job is one `theme.yaml`:
 
 ```yaml
 brand:
-  # Browser tab title and (by default) the home page H1.
-  page_title: "My Course AI"
+  page_title: "Riverside College · Study Assistant"
 
-  # Primary accent. Used on primary buttons, focus outlines, link colour,
-  # user-message bubble background. Pick something where white text reads.
-  primary: "#ba0100"
-  primary_dark: "#8e0100"          # ~10% darker for hover/active
+  # Two values re-tint the entire accent scale.
+  primary: "#2f7d52"
+  primary_dark: "#1d5836"          # ~12% darker for hover/active
 
-  # Body and display fonts. Strings are pasted verbatim as font-family
-  # CSS values — quote names with spaces and include fallbacks.
-  font_sans: '"Open Sans", -apple-system, system-ui, sans-serif'
-  font_display: '"Source Serif Pro", Georgia, serif'
+  # A faint crest behind content. The file lives at
+  # apps/web/public/branding/riverside-crest.png and is served at
+  # /branding/riverside-crest.png.
+  watermark_url: "/branding/riverside-crest.png"
+  watermark_opacity: 0.04
 
-  # Optional webfont stylesheet. Emitted as <link rel="stylesheet"> in
-  # <head> so the named families resolve. Omit if your fonts are
-  # system-stack (the default).
-  font_import_url: "https://fonts.googleapis.com/css2?family=Open+Sans&family=Source+Serif+Pro&display=swap"
-
-  # Optional background watermark. Path is served by Vite from
-  # apps/web/public/branding/<file>, exposed at /branding/<file>.
-  # Set watermark_url to null to disable.
-  watermark_url: "/branding/my-watermark.png"
-  watermark_opacity: 0.03
-
-  # Footer text on the home page.
-  footer_text: "My Institute · classroom-ai self-hosted"
-
-  # Favicon. Default is /favicon.svg shipped in apps/web/public/.
+  footer_text: "Riverside College · self-hosted on Marginalia"
   favicon_url: "/branding/favicon.svg"
 ```
 
-If you want webfonts, set `font_import_url` above — the plugin emits a
-`<link rel="stylesheet">` so the named families resolve. The default
-fonts are system-stack and need no import.
+The fonts are left untouched, so Riverside keeps the default Space Mono +
+Hanken Grotesk pairing. To enable the watermark and favicon, drop
+`riverside-crest.png` and `favicon.svg` into `apps/web/public/branding/`
+(see "Brand assets" below). Any page that shouldn't show the watermark adds
+the `.no-watermark` class.
+
+## Fonts
+
+The defaults are Space Mono (the mono/signature voice — wordmark, eyebrows,
+labels, code) and Hanken Grotesk (body, UI, headings), loaded by an
+`@import` in `apps/web/src/tokens/fonts.css`. They are brand-neutral and
+ship ready to use.
+
+To change the font **families**:
+
+1. Set `font_sans`, `font_display`, and/or `font_mono` in `theme.yaml` to
+   the new family strings.
+2. If those families aren't already loaded by `tokens/fonts.css`, also set
+   `font_import_url` to a stylesheet that provides them (e.g. a Google Fonts
+   `css2?family=…` URL). The plugin injects it as a `<link>` in `<head>`
+   before the brand overrides, so the names resolve.
+
+```yaml
+brand:
+  font_sans: '"Inter", system-ui, sans-serif'
+  font_display: '"Fraunces", Georgia, serif'
+  font_mono: '"IBM Plex Mono", ui-monospace, monospace'
+  font_import_url: "https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=IBM+Plex+Mono&family=Inter:wght@300..800&display=swap"
+```
+
+To **self-host** fonts instead of using a CDN, replace the `@import` in
+`apps/web/src/tokens/fonts.css` with local `@font-face` rules pointing at
+your font binaries. The token names in `tokens/typography.css`
+(`--font-sans` / `--font-display` / `--font-mono`) never change — only the
+families behind them — so nothing else needs editing.
+
+## Brand assets
+
+The watermark image and favicon live in `apps/web/public/branding/`, which
+Vite serves at `/branding/*`. That directory is gitignored except for
+`.gitkeep`, so deployers drop their own assets there without them ever
+being committed to the public repo. Reference them from `theme.yaml` as
+`/branding/<file>`.
 
 ## How the build picks it up
 
@@ -74,13 +138,15 @@ fonts are system-stack and need no import.
    `import.meta.env.BRAND_FOOTER_TEXT` as compile-time constants for
    React components.
 
-That's all the magic. `apps/web/src/styles.css` keeps its brand-neutral
-defaults and references `var(--brand-*)` throughout; the plugin's emitted
-overrides win because they're more specific in source order.
+That's all the magic. The token layer keeps its brand-neutral defaults and
+references `var(--brand-*)` throughout; the plugin emits its overrides under
+a `:root:root` selector so they out-specify the default `:root` block
+regardless of DOM order.
 
-The watermark is similarly variable-driven (`var(--brand-watermark-url)`
-on `body::before`), so omitting it from your YAML means no watermark at
-all.
+The watermark is similarly variable-driven (`var(--brand-watermark-url)` /
+`var(--brand-watermark-opacity)` on `body::before`), defaulting to `none`/`0`,
+so omitting it from your YAML means no watermark at all. Add `.no-watermark`
+to any page that should suppress it.
 
 ## The private overlay pattern
 
