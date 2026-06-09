@@ -13,6 +13,7 @@ import {
   type ProvenanceRenderDTO,
   type PublicConversationDTO,
 } from "../api.js";
+import { Button, Wordmark } from "../../../components/index.js";
 
 export function PublicSubmissionPage() {
   const { token } = useParams<{ token: string }>();
@@ -56,23 +57,35 @@ export function PublicSubmissionPage() {
 
   if (error) {
     return (
-      <div className="page hero">
-        <div className="card">
-          <h1>Link unavailable</h1>
-          <p className="muted">{error}</p>
+      <div className="ds-home">
+        <header className="ds-topbar">
+          <div className="ds-topbar__inner">
+            <Wordmark />
+          </div>
+        </header>
+        <div className="ds-home__inner">
+          <div className="ds-home__panel ds-join__card">
+            <span className="eyebrow">Shared document</span>
+            <span className="ds-rule" />
+            <h2>Link unavailable</h2>
+            <p className="ds-home__note">{error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   if (!render) {
-    return <div className="page" />;
+    return <div className="ds-home" />;
   }
 
   return (
     <div className="prov-public">
       <header className="prov-public-header">
         <div className="prov-public-titles">
+          <div style={{ marginBottom: "0.6rem" }}>
+            <Wordmark size="sm" />
+          </div>
           <h1>{title || "Untitled"}</h1>
           {createdAt && (
             <p className="muted small">
@@ -96,9 +109,9 @@ export function PublicSubmissionPage() {
 
       <section className="prov-public-chat">
         {!showChat ? (
-          <button type="button" className="link-button subtle" onClick={loadConversations}>
+          <Button variant="subtle" size="sm" onClick={loadConversations}>
             Show chat history
-          </button>
+          </Button>
         ) : (
           <>
             <h2 className="prov-public-chat-heading">Chat history</h2>

@@ -28,6 +28,8 @@ import {
 import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import { TABS, tabForPathname } from "../course/tabs.js";
+import { Button, Wordmark } from "../components/index.js";
+import { ChevronIcon } from "../icons.js";
 
 export function CourseLayout() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -67,15 +69,15 @@ export function CourseLayout() {
 
   if (error) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
+      <div className="ds-staff">
+        <div className="ds-staff-page">
           <p className="error">{error}</p>
         </div>
       </div>
     );
   }
   if (!value || !courseId) {
-    return <div className="page" />;
+    return <div className="ds-staff" />;
   }
 
   const currentEnrollment = enrollments.find((e) => e.courseId === courseId);
@@ -85,80 +87,75 @@ export function CourseLayout() {
 
   return (
     <CourseContext.Provider value={value}>
-      <div className="page staff">
-        <div className="staff-frame">
-          <header className="card-header">
-            <h1>
-              <Link
-                to={`/course/${courseId}`}
-                className="course-breadcrumb-link"
-              >
-                {value.courseName}
-              </Link>
-              {currentTab && (
-                <>
-                  <span className="course-breadcrumb-sep" aria-hidden> · </span>
-                  <span className="course-breadcrumb-tab">
-                    {currentTab.label}
-                  </span>
-                </>
-              )}
-            </h1>
-            <div className="header-actions">
-              <Link to="/" className="link-button subtle">
-                ← Student view
-              </Link>
-              {others.length > 0 && (
-                <div className="course-switcher">
-                  <button
-                    type="button"
-                    className="subtle"
-                    onClick={() => setSwitcherOpen((v) => !v)}
-                    aria-expanded={switcherOpen}
-                  >
-                    Switch course ▾
-                  </button>
-                  {switcherOpen && (
-                    <ul className="course-switcher-menu">
-                      {others.map((e) => (
-                        <li key={e.courseId}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSwitcherOpen(false);
-                              navigate(`/course/${e.courseId}`);
-                            }}
-                          >
-                            <strong>{e.courseName}</strong>
-                            <span className="muted small"> · {e.role}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-          </header>
-
-          <nav className="tab-row" aria-label="Course sections">
-            {visibleTabs.map((t) => {
-              const to = t.external ? t.slug : `/course/${courseId}/${t.slug}`;
-              const active = currentTab?.slug === t.slug;
-              return (
-                <Link
-                  key={t.slug}
-                  to={to}
-                  className={`tab-button${active ? " active" : ""}`}
+      <div className="ds-staff">
+        {/* Staff register top bar: wordmark lockup · role · course name (with
+            the switcher) · back to student view. */}
+        <header className="ds-staff-top">
+          <Link to={`/course/${courseId}`} aria-label="Course home">
+            <Wordmark size="sm" />
+          </Link>
+          <span className="ds-staff-top__role">
+            {value.role === "instructor" ? "Instructor" : value.role}
+          </span>
+          <div className="ds-staff-top__course">
+            {others.length > 0 ? (
+              <div className="ds-switcher">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  iconRight={<ChevronIcon size={14} />}
+                  onClick={() => setSwitcherOpen((v) => !v)}
+                  aria-expanded={switcherOpen}
                 >
-                  {t.label}
-                </Link>
-              );
-            })}
-          </nav>
+                  {value.courseName}
+                </Button>
+                {switcherOpen && (
+                  <ul className="ds-switcher__menu">
+                    {others.map((e) => (
+                      <li key={e.courseId}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSwitcherOpen(false);
+                            navigate(`/course/${e.courseId}`);
+                          }}
+                        >
+                          <strong>{e.courseName}</strong>
+                          <span className="muted small"> · {e.role}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <span>{value.courseName}</span>
+            )}
+            <Button variant="ghost" size="sm" href="/">
+              ← Student view
+            </Button>
+          </div>
+        </header>
 
-          <Outlet />
-        </div>
+        <nav className="ds-staff-nav" aria-label="Course sections">
+          {visibleTabs.map((t) => {
+            const to = t.external ? t.slug : `/course/${courseId}/${t.slug}`;
+            const active = currentTab?.slug === t.slug;
+            return (
+              <Link
+                key={t.slug}
+                to={to}
+                className={
+                  "ds-staff-nav__item" + (active ? " ds-staff-nav__item--active" : "")
+                }
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <Outlet />
       </div>
     </CourseContext.Provider>
   );

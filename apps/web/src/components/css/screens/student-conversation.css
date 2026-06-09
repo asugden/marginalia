@@ -1,0 +1,87 @@
+/* Student conversation — collapsible sidebar (agent identity, outline rail,
+   conversation history) + the conversation column (header, message thread,
+   composer). Translated from the design-system student kit; ds- prefix,
+   generic tokens. The Message / ChatComposer / OutlineRail components carry
+   their own styling; this is the layout around them. */
+
+.ds-chat {
+  display: grid; grid-template-columns: var(--sidebar-width) 1fr; height: 100vh;
+  background: var(--surface);
+  transition: grid-template-columns var(--dur-4) var(--ease-out);
+}
+.ds-chat--collapsed { grid-template-columns: 0 1fr; }
+
+.ds-side { background: var(--surface-sunken); border-right: 1px solid var(--border); overflow: hidden; }
+.ds-side__inner { width: var(--sidebar-width); padding: 1.5rem 1.25rem; display: flex; flex-direction: column; gap: 1.5rem; }
+.ds-side__agent { display: flex; align-items: center; gap: 0.7rem; }
+.ds-side__name { font-weight: 700; color: var(--text-strong); font-size: var(--text-base); line-height: 1.2; }
+.ds-side__kind { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 2px; }
+.ds-side__block { display: flex; flex-direction: column; gap: 0.7rem; }
+.ds-side__block .mono-label { margin-bottom: 0.1rem; }
+.ds-side__free { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: 0; }
+
+.ds-side__history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.ds-side__history a { display: flex; flex-direction: column; gap: 1px; padding: 0.45rem 0.55rem; border-radius: var(--radius-sm); text-decoration: none; }
+.ds-side__history a span { color: var(--text-secondary); font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-side__history a small { color: var(--text-faint); font-size: var(--text-2xs); font-family: var(--font-mono); }
+.ds-side__history a:hover { background: var(--surface); }
+.ds-side__history li.is-active a { background: var(--surface); box-shadow: var(--shadow-xs); }
+.ds-side__history li.is-active a span { color: var(--text-strong); font-weight: 600; }
+.ds-side__seeall { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-link); padding: 0.2rem 0.55rem; }
+
+.ds-conv { display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+.ds-conv__head {
+  display: flex; align-items: center; gap: 0.4rem; padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.ds-conv__title { font-weight: 700; color: var(--text-strong); font-size: var(--text-base); margin-left: 0.2rem; margin-right: auto; }
+.ds-conv__scroll { flex: 1; overflow-y: auto; padding: 1.75rem 1.5rem 0.5rem; }
+.ds-conv__thread { max-width: var(--measure-chat); margin: 0 auto; }
+.ds-conv__composer { padding: 0.75rem 1.5rem 1.4rem; background: var(--surface); }
+
+/* Persistent clarity note — quiet inset line under the header. */
+.ds-clarity {
+  max-width: var(--measure-chat); margin: 0.9rem auto 0; padding: 0.6rem 0.9rem;
+  background: var(--surface-sunken); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); color: var(--text-secondary);
+  font-size: var(--text-sm); line-height: 1.5;
+}
+
+/* Completed banner — a calm status note where the composer would be. */
+.ds-completed {
+  max-width: var(--measure-chat); margin: 0.5rem auto 1.4rem; padding: 0.7rem 0.95rem;
+  background: var(--status-success-bg); color: var(--status-success-fg);
+  border-radius: var(--radius-md); font-size: var(--text-sm); text-align: center;
+}
+.ds-completed a { color: inherit; text-decoration: underline; }
+
+.ds-side__scrim { display: none; }
+
+@media (max-width: 920px) {
+  .ds-chat { --sidebar-width: 15rem; }
+}
+
+@media (max-width: 680px) {
+  .ds-chat { grid-template-columns: 1fr; }
+  .ds-chat--collapsed { grid-template-columns: 1fr; }
+  .ds-side {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 45;
+    width: min(86vw, 320px); border-right: 1px solid var(--border);
+    box-shadow: var(--shadow-xl);
+    transition: left var(--dur-4) var(--ease-out);
+  }
+  .ds-side__inner { width: min(86vw, 320px); }
+  .ds-chat--collapsed .ds-side { left: -360px; }
+  .ds-side__scrim {
+    display: block; position: fixed; inset: 0; z-index: 40;
+    background: color-mix(in srgb, var(--ink-900) 42%, transparent);
+    opacity: 1; pointer-events: auto;
+    transition: opacity var(--dur-3) var(--ease-out);
+  }
+  .ds-chat--collapsed .ds-side__scrim { opacity: 0; pointer-events: none; }
+
+  .ds-conv__head { padding: 0.6rem 0.75rem; }
+  .ds-conv__title { font-size: var(--text-sm); }
+  .ds-conv__scroll { padding: 1.25rem 1rem 0.5rem; }
+  .ds-conv__composer { padding: 0.6rem 1rem 1rem; }
+}

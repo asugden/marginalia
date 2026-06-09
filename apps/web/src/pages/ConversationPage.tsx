@@ -1,6 +1,12 @@
 // The chat view. Loads transcript + (optional) backbone state, sends turns,
-// renders the streamed reply token-by-token, and shows backbone progress (or
-// RAG sources) in a collapsible sidebar.
+// renders the streamed reply token-by-token, and shows backbone progress (as
+// an OutlineRail) or free-form note in a collapsible sidebar.
+//
+// Presentation follows the design-system student kit: a sunken sidebar with the
+// agent identity, the outline rail (the visible "state machine"), and recent
+// conversations; a conversation column with the Message thread and the
+// ChatComposer. All data wiring (streaming, compose-mode promotion, sources,
+// abort-on-unmount) is unchanged.
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -25,8 +31,19 @@ import {
   type MessageSource,
 } from "../client.js";
 import { clarityNoteFor } from "@marginalia/backbone";
-import { BackIcon } from "../icons.js";
+import type { Topic } from "@marginalia/backbone";
+import { BackIcon, MenuIcon, PlusIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
+import {
+  Avatar,
+  Badge,
+  ChatComposer,
+  IconButton,
+  Message,
+  OutlineRail,
+  SourcesStrip,
+  ThinkingDots,
+} from "../components/index.js";
 
 /** Cap on conversations shown in the in-conversation sidebar (§5). */
 const SIDEBAR_CONVERSATION_LIMIT = 10;
@@ -50,7 +67,16 @@ export function ConversationPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [state, setState] = useState<BackboneState | null>(null);
   const [hasBackbone, setHasBackbone] = useState<boolean>(false);
+  // Whether the agent grounds replies in a source collection — shown in the
+  // sidebar identity line ("guided · grounded"). Resolved from the agent
+  // definition (collectionId) in both the existing-conversation and compose
+  // load paths.
+  const [grounded, setGrounded] = useState<boolean>(false);
   const [agentTitle, setAgentTitle] = useState<string | null>(null);
+  // The full topic list for the OutlineRail. Available directly in compose mode
+  // (from the agent definition); for an existing conversation we fetch the
+  // agent's definition by id. Empty when the agent has no backbone.
+  const [topics, setTopics] = useState<Topic[]>([]);
   // v1.0 §7.1 — the conversation's course. Populated from getConversation
   // (existing rows) or from the agent's row (compose mode); used only to
   // build citation open-URLs. Null until we know it; citationOpenUrl
@@ -72,7 +98,6 @@ export function ConversationPage() {
     typeof window === "undefined" ? true : window.innerWidth >= 900,
   );
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Single AbortController for any in-flight stream. Aborted on unmount and
   // before any new send so navigation away or rapid resending doesn't leak
   // a billed LLM stream into the void.
@@ -116,6 +141,21 @@ export function ConversationPage() {
           setCompletedAt(c.completedAt);
           setCourseId(c.courseId);
           setClarityNote(c.clarityNote);
+          // Fetch the agent definition for the full topic list (so the
+          // OutlineRail can render the whole done/current/upcoming sequence —
+          // the conversation view only carries the current topic) and the
+          // grounded marker. Best-effort; the rail degrades to current-only.
+          if (c.agent?.id) {
+            getAgentById(c.agent.id)
+              .then((a) => {
+                if (ctrl.signal.aborted) return;
+                setTopics(a.definition.backbone?.topics ?? []);
+                setGrounded(!!a.definition.collectionId);
+              })
+              .catch(() => {
+                /* rail falls back to current-topic only */
+              });
+          }
         })
         .catch((e) => {
           if (ctrl.signal.aborted) return;
@@ -133,7 +173,9 @@ export function ConversationPage() {
           setClarityNote(clarityNoteFor(a.definition));
           const hasBb = !!a.definition.backbone;
           setHasBackbone(hasBb);
+          setGrounded(!!a.definition.collectionId);
           if (hasBb) {
+            setTopics(a.definition.backbone!.topics);
             setCurrentTopic(a.definition.backbone!.topics[0]?.title ?? null);
           }
         })
@@ -180,17 +222,9 @@ export function ConversationPage() {
     });
   }, [messages, streaming]);
 
-  // Auto-grow the textarea up to a sensible cap.
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
-  }, [input]);
-
-  async function send() {
-    const content = input.trim();
-    if (!content || streaming) return;
+  async function send(content: string) {
+    const text = content.trim();
+    if (!text || streaming) return;
     // Need either an existing conversation OR an agent to compose against.
     if (!activeConvId && !composeAgentId) return;
 
@@ -207,14 +241,14 @@ export function ConversationPage() {
     // empty assistant bubble here — that bubble is added on the first delta
     // so a stream error before any delta leaves the UI clean instead of
     // showing a permanently empty assistant turn.
-    setMessages((m) => [...m, { role: "user", content }]);
+    setMessages((m) => [...m, { role: "user", content: text }]);
     let assistantOpened = false;
 
     // Pick the stream source: existing row → sendMessage; compose → the
     // combined start-and-run endpoint, which yields `started` first.
     const stream = activeConvId
-      ? sendMessage(activeConvId, content, ctrl.signal)
-      : startConversation(composeAgentId!, content, ctrl.signal);
+      ? sendMessage(activeConvId, text, ctrl.signal)
+      : startConversation(composeAgentId!, text, ctrl.signal);
 
     try {
       for await (const ev of stream) {
@@ -314,141 +348,185 @@ export function ConversationPage() {
   }
 
   const finished = (state?.finished ?? false) || completedAt !== null;
-  const canSend = !streaming && !finished && input.trim().length > 0;
+  const currentIndex = state?.currentTopicIndex ?? 0;
+
+  // Build the OutlineRail steps from the topic list + current index. Done for
+  // earlier topics, current for the active one (or "Complete" when finished),
+  // upcoming for the rest. Falls back to a single current-topic step when the
+  // full list isn't loaded.
+  const railSteps =
+    topics.length > 0
+      ? topics.map((t, i) => ({
+          title: t.title,
+          status: finished
+            ? ("done" as const)
+            : i < currentIndex
+              ? ("done" as const)
+              : i === currentIndex
+                ? ("current" as const)
+                : ("upcoming" as const),
+        }))
+      : currentTopic
+        ? [{ title: currentTopic, status: "current" as const }]
+        : [];
+
+  const agentLabel = agentTitle ?? "Agent";
 
   return (
-    <div
-      className={`page chat-layout no-watermark${sidebarOpen ? "" : " sidebar-collapsed"}`}
-    >
-      <aside className="sidebar" aria-hidden={!sidebarOpen}>
-        <div className="sidebar-inner">
-          <h2>{agentTitle ?? "Agent"}</h2>
-          {hasBackbone && state ? (
-            <ul className="progress">
-              <li>
-                <strong>Current topic</strong>
-                <br />
-                {finished ? "Complete" : (currentTopic ?? "Topic 1")}
-              </li>
-              {debug && (
-                <>
-                  <li>
-                    <strong>Turns on topic</strong>: {state.turnsOnTopic}
-                  </li>
-                  <li>
-                    <strong>Total turns</strong>: {state.totalTurns}
-                  </li>
-                </>
+    <div className={"ds-chat no-watermark" + (sidebarOpen ? "" : " ds-chat--collapsed")}>
+      <aside className="ds-side" aria-hidden={!sidebarOpen}>
+        <div className="ds-side__inner">
+          <div className="ds-side__agent">
+            <Avatar name={agentLabel} agent={hasBackbone} />
+            <div>
+              <div className="ds-side__name">{agentLabel}</div>
+              <div className="ds-side__kind">
+                {hasBackbone ? "guided" : "free-form"}
+                {grounded ? " · grounded" : ""}
+              </div>
+            </div>
+          </div>
+
+          {hasBackbone ? (
+            <div className="ds-side__block">
+              <div className="mono-label">Outline</div>
+              {railSteps.length > 0 ? (
+                <OutlineRail steps={railSteps} />
+              ) : (
+                <p className="ds-side__free">Loading…</p>
               )}
-            </ul>
-          ) : hasBackbone ? (
-            <p className="muted">Loading…</p>
+              {debug && state && (
+                <p className="ds-side__free">
+                  Turns on topic: {state.turnsOnTopic} · total: {state.totalTurns}
+                </p>
+              )}
+            </div>
           ) : (
-            <p className="muted small">
-              Free-form chat — no topic sequence for this agent.
-            </p>
+            <div className="ds-side__block">
+              <p className="ds-side__free">
+                Free-form chat — no topic sequence for this agent.
+              </p>
+            </div>
           )}
 
           {history.length > 0 && (
-            <>
-              <hr className="sidebar-divider" />
-              <h3 className="sidebar-subhead">Conversations</h3>
-              <ul className="conversation-history">
+            <div className="ds-side__block">
+              <div className="mono-label">Conversations</div>
+              <ul className="ds-side__history">
                 {history.map((h) => (
                   <li
                     key={h.id}
-                    className={h.id === activeConvId ? "active" : undefined}
+                    className={h.id === activeConvId ? "is-active" : ""}
                   >
                     <Link to={`/c/${h.id}`}>
-                      <span className="history-title">
-                        {h.title || "Untitled"}
-                      </span>
-                      <span className="history-time">
-                        {relativeTime(h.updatedAt)}
-                      </span>
+                      <span>{h.title || "Untitled"}</span>
+                      <small>{relativeTime(h.updatedAt)}</small>
                     </Link>
                   </li>
                 ))}
               </ul>
-              <Link to="/history" className="sidebar-see-all">
+              <Link to="/history" className="ds-side__seeall">
                 See all →
               </Link>
-            </>
+            </div>
           )}
         </div>
       </aside>
 
       {/* Backdrop for mobile sidebar — tap to dismiss. */}
       <div
-        className="sidebar-scrim"
+        className="ds-side__scrim"
         onClick={() => setSidebarOpen(false)}
         aria-hidden="true"
       />
 
-      <main className="conversation">
-        <header className="chat-header">
-          <Link to="/" className="icon-button" title="Back to home" aria-label="Back to home">
+      <main className="ds-conv">
+        <header className="ds-conv__head">
+          <IconButton title="Back to home" href="/">
             <BackIcon size={20} />
-          </Link>
-          <button
-            type="button"
-            className="icon-button sidebar-toggle"
+          </IconButton>
+          <IconButton
+            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             onClick={() => setSidebarOpen((v) => !v)}
-            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             aria-expanded={sidebarOpen}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <div className="chat-header-title">{agentTitle}</div>
+            <MenuIcon size={20} />
+          </IconButton>
+          <span className="ds-conv__title">{agentTitle}</span>
+          {hasBackbone && topics.length > 0 && (
+            <Badge tone="neutral">
+              {finished
+                ? "Complete"
+                : `Topic ${Math.min(currentIndex + 1, topics.length)} of ${topics.length}`}
+            </Badge>
+          )}
         </header>
 
         {/* v1.0 — persistent, quiet clarity note. Always present (never
             dismissible) because its job is trust: the student should be
             able to glance up and see what this is and how it behaves. */}
         {clarityNote && (
-          <div className="clarity-note" role="note">
+          <div className="ds-clarity" role="note">
             {clarityNote}
           </div>
         )}
 
-        <div className="messages">
-          {messages.map((m, i) => {
-            const placeholder =
-              streaming && i === messages.length - 1 ? "…" : "";
-            const sources = m.sources;
-            return (
-              <div key={i} className={`bubble ${m.role}`}>
-                {m.role === "assistant" && m.content ? (
-                  // Plain-text fallback during the brief window where the
-                  // lazy Markdown chunk is loading. We pre-warm on mount
-                  // (see useEffect) so this rarely shows.
-                  <Suspense fallback={<span className="md-loading">{m.content}</span>}>
-                    <Markdown
-                      citations={sources}
-                      citationHref={(c) => citationOpenUrl(c, courseId)}
-                    >
-                      {m.content}
-                    </Markdown>
-                  </Suspense>
-                ) : (
-                  m.content || placeholder
-                )}
-                {m.role === "assistant" && sources && sources.length > 0 && (
-                  <SourcesStrip sources={sources} courseId={courseId} />
-                )}
-              </div>
-            );
-          })}
-          {completion && <div className="bubble system">{completion}</div>}
-          <div ref={bottomRef} />
+        <div className="ds-conv__scroll">
+          <div className="ds-conv__thread">
+            {messages.map((m, i) => {
+              const isLast = i === messages.length - 1;
+              const showDots =
+                m.role === "assistant" && streaming && isLast && !m.content;
+              const sources = m.sources;
+              return (
+                <Message
+                  key={i}
+                  role={m.role}
+                  roleLabel={m.role === "assistant" ? agentLabel : undefined}
+                >
+                  {m.role === "assistant" ? (
+                    showDots ? (
+                      <ThinkingDots />
+                    ) : (
+                      <>
+                        <Suspense
+                          fallback={
+                            <span className="md-loading">{m.content}</span>
+                          }
+                        >
+                          <Markdown
+                            citations={sources}
+                            citationHref={(c) => citationOpenUrl(c, courseId)}
+                          >
+                            {m.content}
+                          </Markdown>
+                        </Suspense>
+                        {sources && sources.length > 0 && (
+                          <SourcesStrip
+                            sources={sources.map((s) => ({
+                              ordinal: s.ordinal,
+                              filename: s.filename,
+                              href: citationOpenUrl(s, courseId) ?? undefined,
+                            }))}
+                          />
+                        )}
+                      </>
+                    )
+                  ) : (
+                    m.content
+                  )}
+                </Message>
+              );
+            })}
+            {completion && <Message role="system">{completion}</Message>}
+            <div ref={bottomRef} />
+          </div>
         </div>
 
         {error && <p className="error">{error}</p>}
 
-        {completedAt !== null && (
-          <div className="completed-banner" role="status">
+        {completedAt !== null ? (
+          <div className="ds-completed" role="status">
             Completed on{" "}
             {new Date(completedAt).toLocaleDateString(undefined, {
               month: "long",
@@ -457,78 +535,30 @@ export function ConversationPage() {
             })}
             . Start a <Link to="/">new chat</Link> to continue.
           </div>
-        )}
-
-        {completedAt === null && (
-        <div className="composer">
-          <div className={`composer-field${canSend ? " can-send" : ""}`}>
-            <textarea
-              ref={textareaRef}
+        ) : (
+          <div className="ds-conv__composer">
+            <ChatComposer
               value={input}
-              placeholder={finished ? "Conversation complete" : "Message…"}
+              onChange={setInput}
+              onSend={send}
               disabled={streaming || finished}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              rows={1}
+              placeholder={
+                finished
+                  ? "Conversation complete"
+                  : "Message " + agentLabel + "…"
+              }
+              leadIcon={<PlusIcon size={18} />}
+              footer={
+                <span>
+                  {hasBackbone
+                    ? "Following the agent’s outline"
+                    : "Free-form room"}
+                </span>
+              }
             />
-            <button
-              type="button"
-              className="send-button"
-              onClick={send}
-              disabled={!canSend}
-              aria-label="Send message"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
           </div>
-        </div>
         )}
       </main>
-    </div>
-  );
-}
-
-/** v0.5 §3 — compact strip below an assistant bubble listing the sources it
- *  cited, in citation order. Pills inline within the message use numeric
- *  labels; this strip keeps the full filenames discoverable. */
-function SourcesStrip({
-  sources,
-  courseId,
-}: {
-  sources: MessageSource[];
-  courseId: string | null;
-}) {
-  return (
-    <div className="sources-strip">
-      <span className="muted small">Sources:</span>{" "}
-      {sources.map((s, i) => {
-        const href = citationOpenUrl(s, courseId);
-        const inner = (
-          <>
-            <span className="citation-pill small">[{s.ordinal}]</span>{" "}
-            {s.filename}
-          </>
-        );
-        return (
-          <span key={s.ordinal} className="sources-strip-item">
-            {i > 0 && <span className="muted">, </span>}
-            {href ? (
-              <a href={href} target="_blank" rel="noopener noreferrer">
-                {inner}
-              </a>
-            ) : (
-              <span className="muted">{inner}</span>
-            )}
-          </span>
-        );
-      })}
     </div>
   );
 }

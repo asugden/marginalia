@@ -18,6 +18,18 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Field,
+  IconButton,
+  Input,
+  RadioCard,
+  RadioCardGroup,
+  Textarea,
+} from "../components/index.js";
+import { CheckIcon, ChevronIcon, DragIcon, PlusIcon, TrashIcon } from "../icons.js";
 
 interface DraftTopic {
   id: string;
@@ -188,6 +200,8 @@ export function AuthorEditPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(!isNew);
   const [saving, setSaving] = useState(false);
+  // Which topic is expanded in the outline editor (kit shows one open at a time).
+  const [openTopic, setOpenTopic] = useState(0);
 
   useEffect(() => {
     listVoices(courseId)
@@ -283,350 +297,374 @@ export function AuthorEditPage() {
 
   if (loading) {
     return (
-      <section>
+      <div className="ds-staff-page">
         <p className="muted">Loading…</p>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section>
-      <header className="sub-header">
-        <h2>{isNew ? "New agent" : "Edit agent"}</h2>
-        <Link to={`/course/${courseId}/agents`} className="link-button subtle">
-          ← All agents
-        </Link>
-      </header>
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Author · Guided agent</span>
+          <h1>{isNew ? "New agent" : draft.title || "Edit agent"}</h1>
+          <div className="ds-staff-head__scope">
+            Students see this agent on their home page. It leads them through
+            the outline below.
+          </div>
+        </div>
+        <div className="ds-staff-actions">
+          <Button variant="subtle" href={`/course/${courseId}/agents`}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            icon={<CheckIcon size={16} />}
+            onClick={save}
+            loading={saving}
+            disabled={saving}
+          >
+            {isNew ? "Create agent" : "Save changes"}
+          </Button>
+        </div>
+      </div>
 
       {loadError && <p className="error">{loadError}</p>}
 
-        <label className="field">
-          <span className="field-label">Title</span>
-          <input
+      <div className="ds-staff-section ds-staff-row">
+        <Field label="Agent title">
+          <Input
             type="text"
             value={draft.title}
             onChange={(e) => update("title", e.target.value)}
           />
-        </label>
+        </Field>
+      </div>
 
-        <label className="field">
-          <span className="field-label">What students see first (optional)</span>
-          <textarea
+      <div className="ds-staff-section">
+        <Field
+          label="What students see first (optional)"
+          hint="A short note shown at the top of every conversation, so students know what this is and how it behaves. Leave blank to use the default. This is for clarity, not rules — the agent still works the way you configure it."
+        >
+          <Textarea
             rows={2}
             value={draft.clarityNote}
             placeholder={defaultClarity}
             onChange={(e) => update("clarityNote", e.target.value)}
           />
-          <span className="muted small">
-            A short note shown at the top of every conversation, so students
-            know what this is and how it behaves. Leave blank to use the
-            default above. This is for clarity, not rules — students read it;
-            the agent still works the way you configured it.
-          </span>
-        </label>
+        </Field>
+      </div>
 
-        <section className="field-group">
-          <h2>Voice</h2>
-          <p className="muted small">
-            How the agent talks.{" "}
-            <Link to="/author/voices">Manage your voices →</Link>
-          </p>
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Voice</span>
+        <p className="muted small" style={{ marginTop: "-0.3rem", marginBottom: "0.7rem" }}>
+          How the agent talks. <Link to="/author/voices">Manage your voices →</Link>
+        </p>
+        <h3 className="mono-label" style={{ margin: "0.3rem 0 0.4rem" }}>Library</h3>
+        <RadioCardGroup>
+          {libraryOptions.map((v) => (
+            <RadioCard
+              key={v.id}
+              name="voice"
+              value={`lib:${v.id}`}
+              title={v.name}
+              description={v.description}
+              selected={isPicked({ kind: "library", id: v.id })}
+              onChange={() => pickLibrary(v.id)}
+            />
+          ))}
+        </RadioCardGroup>
 
-          <h3 style={{ font: "600 0.85rem var(--font-sans)", letterSpacing: "0.02em", color: "var(--ink-soft)", margin: "0.5rem 0 0.4rem", textTransform: "uppercase" }}>
-            Library
-          </h3>
-          <div className="radio-cards">
-            {libraryOptions.map((v) => (
-              <label
-                key={v.id}
-                className={`radio-card ${isPicked({ kind: "library", id: v.id }) ? "selected" : ""}`}
-              >
-                <input
-                  type="radio"
+        {ownedOptions.length > 0 && (
+          <>
+            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>My voices</h3>
+            <RadioCardGroup>
+              {ownedOptions.map((v) => (
+                <RadioCard
+                  key={v.id}
                   name="voice"
-                  value={`lib:${v.id}`}
-                  checked={isPicked({ kind: "library", id: v.id })}
-                  onChange={() => pickLibrary(v.id)}
+                  value={`own:${v.id}`}
+                  title={v.name}
+                  description={v.description}
+                  selected={isPicked({ kind: "custom-ref", voiceId: v.id })}
+                  onChange={() => pickCustom(v.id)}
                 />
-                <strong>{v.name}</strong>
-                <span className="muted small">{v.description}</span>
-                <Link
-                  to={`/author/voices/${v.id}`}
-                  className="muted small"
-                  style={{ marginTop: "0.25rem" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Customize →
-                </Link>
-              </label>
-            ))}
-          </div>
+              ))}
+            </RadioCardGroup>
+          </>
+        )}
 
-          {ownedOptions.length > 0 && (
-            <>
-              <h3 style={{ font: "600 0.85rem var(--font-sans)", letterSpacing: "0.02em", color: "var(--ink-soft)", margin: "1.25rem 0 0.4rem", textTransform: "uppercase" }}>
-                My voices
-              </h3>
-              <div className="radio-cards">
-                {ownedOptions.map((v) => (
-                  <label
-                    key={v.id}
-                    className={`radio-card ${isPicked({ kind: "custom-ref", voiceId: v.id }) ? "selected" : ""}`}
-                  >
-                    <input
-                      type="radio"
-                      name="voice"
-                      value={`own:${v.id}`}
-                      checked={isPicked({ kind: "custom-ref", voiceId: v.id })}
-                      onChange={() => pickCustom(v.id)}
-                    />
-                    <strong>{v.name}</strong>
-                    <span className="muted small">{v.description}</span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
+        {sharedOptions.length > 0 && (
+          <>
+            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>Shared with me</h3>
+            <RadioCardGroup>
+              {sharedOptions.map((v) => (
+                <RadioCard
+                  key={v.id}
+                  name="voice"
+                  value={`shr:${v.id}`}
+                  title={v.name}
+                  description={v.description}
+                  selected={isPicked({ kind: "custom-ref", voiceId: v.id })}
+                  onChange={() => pickCustom(v.id)}
+                />
+              ))}
+            </RadioCardGroup>
+          </>
+        )}
+      </div>
 
-          {sharedOptions.length > 0 && (
-            <>
-              <h3 style={{ font: "600 0.85rem var(--font-sans)", letterSpacing: "0.02em", color: "var(--ink-soft)", margin: "1.25rem 0 0.4rem", textTransform: "uppercase" }}>
-                Shared with me
-              </h3>
-              <div className="radio-cards">
-                {sharedOptions.map((v) => (
-                  <label
-                    key={v.id}
-                    className={`radio-card ${isPicked({ kind: "custom-ref", voiceId: v.id }) ? "selected" : ""}`}
-                  >
-                    <input
-                      type="radio"
-                      name="voice"
-                      value={`shr:${v.id}`}
-                      checked={isPicked({ kind: "custom-ref", voiceId: v.id })}
-                      onChange={() => pickCustom(v.id)}
-                    />
-                    <strong>{v.name}</strong>
-                    <span className="muted small">{v.description}</span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="field-group">
-          <h2>Outline</h2>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={draft.hasBackbone}
-              onChange={(e) => update("hasBackbone", e.target.checked)}
-            />
-            <span>
-              Lead the student through an outline — a set sequence of topics,
-              each with a turn budget, ending on a condition you define. When
-              off, the conversation is open Q&amp;A with the chosen voice.
-            </span>
-          </label>
-
+      <div className="ds-staff-section">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "0.7rem",
+          }}
+        >
+          <span className="mono-label">Outline</span>
           {draft.hasBackbone && (
-            <div className="backbone-editor">
-              <div className="inline-fields">
-                <label className="field small">
-                  <span className="field-label">Default turn budget</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={draft.defaultTurnBudget}
-                    onChange={(e) => update("defaultTurnBudget", e.target.value)}
-                  />
-                </label>
-              </div>
-
-              <label className="field">
-                <span className="field-label">Exit condition</span>
-                <textarea
-                  rows={2}
-                  value={draft.exitCondition}
-                  placeholder="What does mastery look like at the end of the conversation?"
-                  onChange={(e) => update("exitCondition", e.target.value)}
-                />
-              </label>
-
-              <label className="field">
-                <span className="field-label">Completion message (optional)</span>
-                <textarea
-                  rows={2}
-                  value={draft.completionMessage}
-                  placeholder="Shown to the student when the conversation finishes."
-                  onChange={(e) => update("completionMessage", e.target.value)}
-                />
-              </label>
-
-              <div className="topics">
-                <div className="topics-header">
-                  <strong>Topics</strong>
-                  <button
-                    type="button"
-                    className="subtle"
-                    onClick={addTopic}
-                  >
-                    + Add topic
-                  </button>
-                </div>
-                {draft.topics.map((t, i) => (
-                  <div key={t.id} className="topic-row">
-                    <div className="topic-row-head">
-                      <span className="muted small">Topic {i + 1}</span>
-                      <div className="topic-row-actions">
-                        <button
-                          type="button"
-                          className="subtle icon"
-                          onClick={() => moveTopic(i, -1)}
-                          disabled={i === 0}
-                          aria-label="Move up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          className="subtle icon"
-                          onClick={() => moveTopic(i, 1)}
-                          disabled={i === draft.topics.length - 1}
-                          aria-label="Move down"
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          className="subtle icon danger"
-                          onClick={() => removeTopic(i)}
-                          disabled={draft.topics.length === 1}
-                          aria-label="Remove"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={t.title}
-                      placeholder="Frame the author's central claim"
-                      onChange={(e) => updateTopic(i, { title: e.target.value })}
-                    />
-                    <input
-                      type="text"
-                      value={t.guidance}
-                      placeholder="Optional guidance to the agent for this topic"
-                      onChange={(e) => updateTopic(i, { guidance: e.target.value })}
-                    />
-                    <input
-                      type="number"
-                      min={1}
-                      value={t.turnBudget}
-                      placeholder={`Budget (default ${draft.defaultTurnBudget || "—"})`}
-                      onChange={(e) => updateTopic(i, { turnBudget: e.target.value })}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Badge tone="neutral">State machine · enforced in code</Badge>
           )}
-        </section>
-
-        <section className="field-group">
-          <h2>Sources</h2>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={draft.hasCollection}
-              onChange={(e) => update("hasCollection", e.target.checked)}
-            />
-            <span>
-              Ground replies in a library of documents. Relevant passages are
-              added to the agent's context each turn, and the agent cites them
-              in line so students can check the source.
-            </span>
-          </label>
-
-          {draft.hasCollection && (
-            <div className="corpus-picker">
-              {collections === null ? (
-                <p className="muted small">Loading libraries…</p>
-              ) : collections.length === 0 ? (
-                <p className="muted small">
-                  No libraries yet.{" "}
-                  <Link to={`/course/${courseId}/collections`}>
-                    Create one and add sources
-                  </Link>.
-                </p>
-              ) : (
-                <>
-                  <span className="field-label">Library</span>
-                  <div className="radio-cards">
-                    {collections.map((c) => (
-                      <label
-                        key={c.id}
-                        className={`radio-card compact ${draft.collectionId === c.id ? "selected" : ""}`}
-                      >
-                        <input
-                          type="radio"
-                          name="collection"
-                          value={c.id}
-                          checked={draft.collectionId === c.id}
-                          onChange={() => update("collectionId", c.id)}
-                        />
-                        <strong>{c.name}</strong>
-                        <span className="muted small">
-                          {c.sourceCount}{" "}
-                          {c.sourceCount === 1 ? "source" : "sources"}
-                          {" · "}updated {relativeTime(c.updatedAt)}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="muted small">
-                    <Link to={`/course/${courseId}/collections`}>Manage libraries →</Link>
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="field-group">
-          <h2>Model</h2>
-          <div className="radio-cards inline">
-            {MODEL_OPTIONS.map((m) => (
-              <label
-                key={m.id || "default"}
-                className={`radio-card compact ${draft.model === m.id ? "selected" : ""}`}
-              >
-                <input
-                  type="radio"
-                  name="model"
-                  value={m.id}
-                  checked={draft.model === m.id}
-                  onChange={() => update("model", m.id)}
-                />
-                <strong>{m.label}</strong>
-                {m.note && <span className="muted small">{m.note}</span>}
-              </label>
-            ))}
-          </div>
-        </section>
-
-        {saveError && <p className="error">{saveError}</p>}
-
-        <div className="form-actions">
-          <Link to={`/course/${courseId}/agents`} className="link-button subtle">
-            Cancel
-          </Link>
-          <button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : isNew ? "Create agent" : "Save changes"}
-          </button>
         </div>
-    </section>
+        <Checkbox
+          checked={draft.hasBackbone}
+          onChange={(e) => update("hasBackbone", e.target.checked)}
+          label="Lead the student through an outline"
+          description="A set sequence of topics, each with a turn budget, ending on a condition you define. When off, the conversation is open Q&A with the chosen voice."
+        />
+
+        {draft.hasBackbone && (
+          <div style={{ marginTop: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div className="ds-staff-row">
+              <Field label="Default turn budget" hint="Max student turns before nudging on.">
+                <Input
+                  type="number"
+                  min={1}
+                  mono
+                  value={draft.defaultTurnBudget}
+                  onChange={(e) => update("defaultTurnBudget", e.target.value)}
+                  style={{ maxWidth: 120 }}
+                />
+              </Field>
+            </div>
+
+            <Field label="Exit condition" hint="What does mastery look like at the end? Enforced in code, not a hope.">
+              <Textarea
+                rows={2}
+                value={draft.exitCondition}
+                placeholder="What does mastery look like at the end of the conversation?"
+                onChange={(e) => update("exitCondition", e.target.value)}
+              />
+            </Field>
+
+            <Field label="Completion message (optional)">
+              <Textarea
+                rows={2}
+                value={draft.completionMessage}
+                placeholder="Shown to the student when the conversation finishes."
+                onChange={(e) => update("completionMessage", e.target.value)}
+              />
+            </Field>
+
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.7rem",
+                }}
+              >
+                <span className="mono-label">
+                  {draft.topics.length} topic{draft.topics.length === 1 ? "" : "s"}
+                </span>
+              </div>
+
+              {draft.topics.map((t, i) => {
+                const open = openTopic === i;
+                return (
+                  <div key={t.id} className={"ds-topic" + (open ? " ds-topic--open" : "")}>
+                    <div
+                      className="ds-topic__head"
+                      onClick={() => setOpenTopic(open ? -1 : i)}
+                    >
+                      <span className="ds-topic__drag" title="Reorder (use the arrows when expanded)" aria-hidden>
+                        <DragIcon size={18} />
+                      </span>
+                      <span className="ds-topic__num">{i + 1}</span>
+                      <span className="ds-topic__title">
+                        {t.title || <span className="muted">Untitled topic</span>}
+                      </span>
+                      {t.turnBudget.trim() && (
+                        <span className="ds-topic__budget">{t.turnBudget} turns</span>
+                      )}
+                      <span className="ds-topic__chev">
+                        <ChevronIcon size={18} />
+                      </span>
+                    </div>
+                    {open && (
+                      <div className="ds-topic__body">
+                        <Field label="Topic prompt" hint="What the agent opens this topic with.">
+                          <Input
+                            type="text"
+                            value={t.title}
+                            placeholder="Frame the author's central claim"
+                            onChange={(e) => updateTopic(i, { title: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="Guidance (optional)">
+                          <Input
+                            type="text"
+                            value={t.guidance}
+                            placeholder="Optional guidance to the agent for this topic"
+                            onChange={(e) => updateTopic(i, { guidance: e.target.value })}
+                          />
+                        </Field>
+                        <div className="ds-staff-row">
+                          <Field
+                            label="Turn budget"
+                            hint={`Default ${draft.defaultTurnBudget || "—"}.`}
+                          >
+                            <Input
+                              type="number"
+                              min={1}
+                              mono
+                              value={t.turnBudget}
+                              placeholder={draft.defaultTurnBudget || ""}
+                              onChange={(e) => updateTopic(i, { turnBudget: e.target.value })}
+                              style={{ maxWidth: 120 }}
+                            />
+                          </Field>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", justifyContent: "flex-end" }}>
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            title="Move up"
+                            disabled={i === 0}
+                            onClick={() => moveTopic(i, -1)}
+                          >
+                            <ChevronIcon size={16} style={{ transform: "rotate(180deg)" }} />
+                          </IconButton>
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            title="Move down"
+                            disabled={i === draft.topics.length - 1}
+                            onClick={() => moveTopic(i, 1)}
+                          >
+                            <ChevronIcon size={16} />
+                          </IconButton>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            icon={<TrashIcon size={16} />}
+                            disabled={draft.topics.length === 1}
+                            onClick={() => removeTopic(i)}
+                          >
+                            Remove topic
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div className="ds-staff-addtopic">
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  icon={<PlusIcon size={16} />}
+                  onClick={() => {
+                    addTopic();
+                    setOpenTopic(draft.topics.length);
+                  }}
+                >
+                  Add topic
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Sources</span>
+        <Checkbox
+          checked={draft.hasCollection}
+          onChange={(e) => update("hasCollection", e.target.checked)}
+          label="Ground replies in a library of documents"
+          description="Relevant passages are added to the agent's context each turn, and the agent cites them in line so students can check the source."
+        />
+
+        {draft.hasCollection && (
+          <div style={{ marginTop: "1rem" }}>
+            {collections === null ? (
+              <p className="muted small">Loading libraries…</p>
+            ) : collections.length === 0 ? (
+              <p className="muted small">
+                No libraries yet.{" "}
+                <Link to={`/course/${courseId}/collections`}>
+                  Create one and add sources
+                </Link>
+                .
+              </p>
+            ) : (
+              <>
+                <span className="mono-label ds-staff-section__label">Library</span>
+                <RadioCardGroup>
+                  {collections.map((c) => (
+                    <RadioCard
+                      key={c.id}
+                      name="collection"
+                      value={c.id}
+                      title={c.name}
+                      description={`${c.sourceCount} ${c.sourceCount === 1 ? "source" : "sources"} · updated ${relativeTime(c.updatedAt)}`}
+                      selected={draft.collectionId === c.id}
+                      onChange={() => update("collectionId", c.id)}
+                    />
+                  ))}
+                </RadioCardGroup>
+                <p className="muted small" style={{ marginTop: "0.6rem" }}>
+                  <Link to={`/course/${courseId}/collections`}>Manage libraries →</Link>
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Model</span>
+        <RadioCardGroup inline>
+          {MODEL_OPTIONS.map((m) => (
+            <RadioCard
+              key={m.id || "default"}
+              name="model"
+              value={m.id}
+              title={m.label}
+              description={m.note}
+              selected={draft.model === m.id}
+              onChange={() => update("model", m.id)}
+            />
+          ))}
+        </RadioCardGroup>
+      </div>
+
+      {saveError && <p className="error">{saveError}</p>}
+
+      <div className="ds-staff-actions" style={{ justifyContent: "flex-end" }}>
+        <Button variant="subtle" href={`/course/${courseId}/agents`}>
+          Cancel
+        </Button>
+        <Button variant="primary" onClick={save} loading={saving} disabled={saving}>
+          {isNew ? "Create agent" : "Save changes"}
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -22,6 +22,12 @@ import type { Plugin } from "vite";
 
 interface BrandConfig {
   page_title?: string;
+  /** Header-lockup wordmark text (defaults to page_title). */
+  wordmark?: string;
+  /** How many leading wordmark characters are painted in the accent colour. */
+  wordmark_accent_len?: number;
+  /** Optional brand mark image (header lockup + agent avatar); null = none. */
+  mark_url?: string | null;
   primary?: string;
   primary_dark?: string;
   font_sans?: string;
@@ -86,12 +92,16 @@ export function themePlugin(): Plugin {
       // (configResolved fires after config, so we duplicate the read here.)
       const rootSrc = path.join(process.cwd(), "src");
       const b = loadTheme(rootSrc);
+      const title = b.page_title ?? "Marginalia";
       return {
         define: {
-          "import.meta.env.BRAND_PAGE_TITLE": JSON.stringify(b.page_title ?? "Marginalia"),
+          "import.meta.env.BRAND_PAGE_TITLE": JSON.stringify(title),
           "import.meta.env.BRAND_FOOTER_TEXT": JSON.stringify(
             b.footer_text ?? "Marginalia · open source under Apache 2.0"
           ),
+          "import.meta.env.BRAND_WORDMARK": JSON.stringify(b.wordmark ?? title),
+          "import.meta.env.BRAND_WORDMARK_ACCENT_LEN": JSON.stringify(b.wordmark_accent_len ?? 0),
+          "import.meta.env.BRAND_MARK_URL": JSON.stringify(b.mark_url ?? ""),
         },
       };
     },

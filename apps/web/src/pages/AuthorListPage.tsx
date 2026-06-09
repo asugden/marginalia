@@ -16,6 +16,8 @@ import {
   type DuplicableAgentsGroup,
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
+import { Avatar, Badge, Button, IconButton } from "../components/index.js";
+import { PlusIcon, TrashIcon } from "../icons.js";
 
 export function AuthorListPage() {
   const { courseId } = useCourse();
@@ -92,24 +94,31 @@ export function AuthorListPage() {
   );
 
   return (
-    <section>
-      <div className="section-actions">
-        <Link to="/author/voices" className="link-button subtle">
-          Voices
-        </Link>
-        <button
-          type="button"
-          className="subtle"
-          onClick={openPicker}
-        >
-          + From another course
-        </button>
-        <Link
-          to={`/course/${courseId}/agents/new`}
-          className="link-button"
-        >
-          New agent
-        </Link>
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Author · Agents</span>
+          <h1>Agents</h1>
+          <div className="ds-staff-head__scope">
+            AI tutors your students can chat with — each carries a voice and,
+            optionally, an outline of topics or a library of sources.
+          </div>
+        </div>
+        <div className="ds-staff-actions">
+          <Button variant="ghost" href="/author/voices">
+            Voices
+          </Button>
+          <Button variant="subtle" icon={<PlusIcon size={16} />} onClick={openPicker}>
+            From another course
+          </Button>
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={16} />}
+            href={`/course/${courseId}/agents/new`}
+          >
+            New agent
+          </Button>
+        </div>
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -118,45 +127,54 @@ export function AuthorListPage() {
         <p className="muted">Loading…</p>
       ) : agents.length === 0 ? (
         <p className="muted">
-          You haven't built any agents yet.{" "}
+          You haven&rsquo;t built any agents yet.{" "}
           <Link to={`/course/${courseId}/agents/new`}>Make the first one</Link>.
           An agent is a tutor your students can chat with — a voice, optionally
           an outline of topics, and optionally a library of sources to ground
           its answers.
         </p>
       ) : (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {agents.map((a) => (
-            <li key={a.id}>
-              <div>
-                <strong>{a.title}</strong>
-                <span className="muted small">
-                  {" "}
-                  · {a.hasBackbone ? "outline" : "open"}
-                  {a.hasCollection ? " · grounded" : ""}
-                </span>
+            <div className="ds-staff-list__row" key={a.id}>
+              <Avatar name={a.title} agent={a.hasBackbone} />
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">{a.title}</div>
+                <div
+                  className="ds-staff-list__sub"
+                  style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
+                >
+                  <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
+                    {a.hasBackbone ? "outline" : "open"}
+                  </Badge>
+                  {a.hasCollection && (
+                    <Badge tone="info" dot>
+                      grounded
+                    </Badge>
+                  )}
+                </div>
               </div>
-              <div className="row-actions">
-                <Link
-                  to={`/course/${courseId}/agents/${a.id}`}
-                  className="link-button subtle"
+              <div className="ds-staff-list__actions">
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  href={`/course/${courseId}/agents/${a.id}`}
                 >
                   Edit
-                </Link>
-                <button
-                  type="button"
-                  className="danger-link"
+                </Button>
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  title="Delete agent"
                   disabled={deletingId === a.id}
                   onClick={() => onDelete(a)}
-                  aria-label={`Delete ${a.title}`}
-                  title="Delete agent"
                 >
-                  {deletingId === a.id ? "Deleting…" : "Delete"}
-                </button>
+                  <TrashIcon size={16} />
+                </IconButton>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       {pickerOpen && (
@@ -165,23 +183,25 @@ export function AuthorListPage() {
           aria-modal="true"
           aria-label="Copy agent from another course"
           onClick={() => setPickerOpen(false)}
-          className="modal-backdrop"
+          className="ds-modal-backdrop"
         >
-          <div onClick={(e) => e.stopPropagation()} className="modal-card">
-            <header className="card-header">
-              <h2 style={{ margin: 0 }}>Copy from another course</h2>
-              <button
-                type="button"
-                className="subtle"
-                onClick={() => setPickerOpen(false)}
-                aria-label="Close"
-              >
+          <div onClick={(e) => e.stopPropagation()} className="ds-modal-card">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <span className="mono-label">Copy from another course</span>
+              <Button variant="ghost" size="sm" onClick={() => setPickerOpen(false)}>
                 Close
-              </button>
-            </header>
+              </Button>
+            </div>
             <p className="muted small">
-              Pick any agent you instruct in another course; we'll create an
-              independent copy here. The voice comes along. A course-local
+              Pick any agent you instruct in another course; we&rsquo;ll create
+              an independent copy here. The voice comes along. A course-local
               library is dropped — you can pick a new one in the next step.
             </p>
             {pickerError && <p className="error">{pickerError}</p>}
@@ -189,46 +209,57 @@ export function AuthorListPage() {
               <p className="muted">Loading…</p>
             ) : otherCourseGroups.length === 0 ? (
               <p className="muted">
-                You don't instruct any other courses with agents to copy.
+                You don&rsquo;t instruct any other courses with agents to copy.
               </p>
             ) : (
               otherCourseGroups.map((g) => (
-                <section key={g.courseId} className="field-group">
-                  <h3 style={{ marginBottom: "0.5rem" }}>{g.courseName}</h3>
+                <div key={g.courseId} style={{ marginTop: "1.25rem" }}>
+                  <h3 className="mono-label" style={{ marginBottom: "0.5rem" }}>
+                    {g.courseName}
+                  </h3>
                   {g.agents.length === 0 ? (
                     <p className="muted small">No agents in this course.</p>
                   ) : (
-                    <ul className="assignment-list">
+                    <div className="ds-staff-list">
                       {g.agents.map((a) => (
-                        <li key={a.id}>
-                          <div>
-                            <strong>{a.title}</strong>
-                            <span className="muted small">
-                              {" "}
-                              · {a.hasBackbone ? "outline" : "open"}
-                              {a.hasCollection ? " · grounded" : ""}
-                            </span>
+                        <div className="ds-staff-list__row" key={a.id}>
+                          <div className="ds-staff-list__main">
+                            <div className="ds-staff-list__title">{a.title}</div>
+                            <div
+                              className="ds-staff-list__sub"
+                              style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
+                            >
+                              <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
+                                {a.hasBackbone ? "outline" : "open"}
+                              </Badge>
+                              {a.hasCollection && (
+                                <Badge tone="info" dot>
+                                  grounded
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <div className="row-actions">
-                            <button
-                              type="button"
-                              className="subtle"
+                          <div className="ds-staff-list__actions">
+                            <Button
+                              variant="subtle"
+                              size="sm"
                               disabled={duplicatingId === a.id}
+                              loading={duplicatingId === a.id}
                               onClick={() => onDuplicate(a.id, a.title)}
                             >
-                              {duplicatingId === a.id ? "Copying…" : "Copy here"}
-                            </button>
+                              Copy here
+                            </Button>
                           </div>
-                        </li>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
-                </section>
+                </div>
               ))
             )}
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

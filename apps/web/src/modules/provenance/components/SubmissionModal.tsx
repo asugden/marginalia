@@ -10,6 +10,8 @@ import {
   revokeSubmission,
   type SubmissionSummary,
 } from "../api.js";
+import { Button, Input } from "../../../components/index.js";
+import { ShareIcon } from "../../../icons.js";
 
 interface Props {
   documentId: string;
@@ -91,9 +93,15 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
 
         {error && <p className="error">{error}</p>}
 
-        <button type="button" className="link-button" onClick={onMint} disabled={busy}>
-          {busy ? "Creating…" : "Create share link"}
-        </button>
+        <Button
+          variant="primary"
+          icon={<ShareIcon size={16} />}
+          onClick={onMint}
+          loading={busy}
+          disabled={busy}
+        >
+          Create share link
+        </Button>
 
         {subs === null ? (
           <p className="muted small prov-share-list-note">Loading existing links…</p>
@@ -103,18 +111,19 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
           <ul className="prov-share-list">
             {active.map((s) => (
               <li key={s.token}>
-                <input
-                  className="prov-input prov-share-url"
+                <Input
+                  className="prov-share-url"
+                  mono
                   readOnly
                   value={shareUrl(s.token)}
                   onFocus={(e) => e.currentTarget.select()}
                 />
-                <button type="button" className="link-button subtle" onClick={() => copy(s.token)}>
+                <Button variant="subtle" size="sm" onClick={() => copy(s.token)}>
                   {copied === s.token ? "Copied" : "Copy"}
-                </button>
-                <button type="button" className="danger-link" onClick={() => onRevoke(s.token)}>
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => onRevoke(s.token)}>
                   Revoke
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -122,9 +131,9 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
 
         <div className="prov-modal-actions">
           <span className="prov-modal-actions-spacer" />
-          <button type="button" className="link-button subtle" onClick={onClose}>
+          <Button variant="subtle" size="sm" onClick={onClose}>
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>

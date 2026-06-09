@@ -1,0 +1,67 @@
+/* ==== Badge ======================================================== *
+ * Small status pill in the mono face: record state, counts, completion
+ * markers. Generic tokens only; the `brand` tone uses the accent seam so
+ * a branded deploy re-tints it automatically.
+ * ------------------------------------------------------------------- */
+
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 0.32em 0.7em;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.ds-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.ds-badge--neutral {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.ds-badge--success {
+  background: var(--status-success-bg);
+  color: var(--status-success-fg);
+}
+
+.ds-badge--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.ds-badge--info {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+}
+
+.ds-badge--danger {
+  background: var(--status-danger-bg);
+  color: var(--status-danger-fg);
+}
+
+.ds-badge--brand {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+/* Soft outline-only variant for low emphasis */
+.ds-badge--ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-strong);
+}

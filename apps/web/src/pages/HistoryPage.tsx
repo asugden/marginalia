@@ -4,9 +4,11 @@
 // every past session lives, flat and recency-ordered.
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { listConversations, type ConversationSummary } from "../client.js";
 import { relativeTime } from "../time.js";
+import { Avatar, Badge, Button, Wordmark } from "../components/index.js";
+import { BackIcon } from "../icons.js";
 
 function rowTitle(c: ConversationSummary): string {
   // Backbone rows already arrive titled by the server ("Agent — topic 2/4" /
@@ -26,50 +28,75 @@ export function HistoryPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }, []);
 
+  const navigate = useNavigate();
+
   return (
-    <div className="page hero">
-      <div className="card wide">
-        <header className="card-header">
+    <div className="ds-home">
+      <header className="ds-topbar">
+        <div className="ds-topbar__inner">
+          <Wordmark />
+          <div className="ds-topbar__actions">
+            <Button variant="ghost" size="sm" icon={<BackIcon size={16} />} href="/">
+              <span className="ds-hide-sm">Home</span>
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="ds-home__inner">
+        <div className="ds-home__head">
+          <span className="eyebrow">Your conversations</span>
+          <span className="ds-rule" />
           <h1>History</h1>
-          <Link to="/" className="link-button subtle">
-            ← Home
-          </Link>
-        </header>
+        </div>
 
         {error && <p className="error">{error}</p>}
 
         {conversations === null ? (
-          <p className="muted">Loading…</p>
+          <p className="ds-home__muted">Loading…</p>
         ) : conversations.length === 0 ? (
-          <p className="muted">
-            No conversations yet. <Link to="/">Pick an agent</Link> to get started.
+          <p className="ds-home__muted">
+            No conversations yet. <Link to="/">Pick an agent</Link> to get
+            started.
           </p>
         ) : (
-          <ul className="history-list">
+          <div className="ds-agents">
             {conversations.map((c) => (
-              <li key={c.id} className={c.completedAt !== null ? "done" : undefined}>
-                <Link to={`/c/${c.id}`}>
-                  <div className="history-line-top">
-                    <span className="history-title">{rowTitle(c)}</span>
-                    {c.completedAt !== null && (
-                      <span className="history-pill">✓ Completed</span>
+              <div
+                key={c.id}
+                className="ds-agent"
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/c/${c.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") navigate(`/c/${c.id}`);
+                }}
+              >
+                <Avatar name={c.agentName || rowTitle(c)} agent />
+                <div className="ds-agent__main">
+                  <div className="ds-agent__title">{rowTitle(c)}</div>
+                  <div className="ds-agent__meta">
+                    {c.agentName && (
+                      <span className="ds-agent__topics" style={{ paddingLeft: 0 }}>
+                        {c.agentName}
+                      </span>
                     )}
                   </div>
-                  <div className="history-line-bottom">
-                    <span className="history-agent muted small">
-                      {c.agentName}
-                    </span>
-                    <span
-                      className="history-time muted small"
-                      title={new Date(c.updatedAt).toLocaleString()}
-                    >
+                </div>
+                <div className="ds-agent__action" style={{ width: "auto" }}>
+                  {c.completedAt !== null ? (
+                    <Badge tone="success" dot>
+                      Completed
+                    </Badge>
+                  ) : (
+                    <span className="ds-agent__topics" style={{ paddingLeft: 0 }}>
                       {relativeTime(c.updatedAt)}
                     </span>
-                  </div>
-                </Link>
-              </li>
+                  )}
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>

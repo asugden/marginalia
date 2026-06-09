@@ -17,6 +17,7 @@ import {
   type MessageDTO,
 } from "../api.js";
 import { useByoKey, maskKey } from "./useByoKey.js";
+import { Button, Field, Input } from "../../../components/index.js";
 
 interface Props {
   documentId: string;
@@ -246,15 +247,16 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
         ) : (
           <span className="prov-chat-header-blank">Chat</span>
         )}
-        <button
-          type="button"
-          className="link-button subtle prov-chat-new"
+        <Button
+          variant="subtle"
+          size="sm"
+          className="prov-chat-new"
           onClick={() => setShowAgentPicker((v) => !v)}
           disabled={busy || agents === null}
           title="Start a new conversation"
         >
           New
-        </button>
+        </Button>
         <button
           type="button"
           className={`prov-chat-icon-button${byo.active ? " is-active" : ""}`}
@@ -330,14 +332,13 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
             with the document — the instructor can read it if you share
             this document later.
           </p>
-          <button
-            type="button"
-            className="link-button"
+          <Button
+            variant="primary"
             onClick={() => setShowAgentPicker(true)}
             disabled={agents === null}
           >
             Start a conversation
-          </button>
+          </Button>
         </div>
       )}
 
@@ -473,10 +474,9 @@ function ByoKeyModal({
           </div>
         ) : null}
 
-        <label className="prov-field">
-          <span>{byo.active ? "Replace with a new key" : "API key"}</span>
-          <input
-            className="prov-input"
+        <Field label={byo.active ? "Replace with a new key" : "API key"}>
+          <Input
+            mono
             type="password"
             autoComplete="off"
             spellCheck={false}
@@ -487,25 +487,25 @@ function ByoKeyModal({
               if (e.key === "Enter") { e.preventDefault(); save(); }
             }}
           />
-        </label>
+        </Field>
 
         <div className="prov-modal-actions">
           {byo.active && (
-            <button
-              type="button"
-              className="danger-link"
+            <Button
+              variant="danger"
+              size="sm"
               onClick={() => { byo.clear(); onClose(); }}
             >
               Stop using my key
-            </button>
+            </Button>
           )}
           <span className="prov-modal-actions-spacer" />
-          <button type="button" className="link-button subtle" onClick={onClose}>
+          <Button variant="subtle" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className="link-button" onClick={save} disabled={!value.trim()}>
+          </Button>
+          <Button variant="primary" size="sm" onClick={save} disabled={!value.trim()}>
             Save key
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -528,13 +528,14 @@ function ChatBubble({
       <div className="prov-bubble-body">{content || (pending ? "…" : "")}</div>
       {onInsert && (
         <div className="prov-bubble-actions">
-          <button
-            type="button"
-            className="link-button subtle prov-bubble-insert"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="prov-bubble-insert"
             onClick={onInsert}
           >
             Insert at cursor
-          </button>
+          </Button>
         </div>
       )}
     </div>

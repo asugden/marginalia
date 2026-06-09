@@ -23,6 +23,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { revealCourseTab } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { TABS } from "../course/tabs.js";
+import { Button } from "../components/index.js";
+import { PlusIcon } from "../icons.js";
 
 export function CourseDashboardPage() {
   const ctx = useCourse();
@@ -63,50 +65,57 @@ export function CourseDashboardPage() {
   }
 
   return (
-    <section className="course-dashboard-body">
-      <p className="scope-note">
-        {ctx.role === "instructor"
-          ? "Pick where you want to work. Students never see this page."
-          : "Pick where you want to go. You're shown the surfaces for this course."}
-      </p>
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">{ctx.courseName}</span>
+          <h1>Dashboard</h1>
+          <div className="ds-staff-head__scope">
+            {ctx.role === "instructor"
+              ? "Pick where you want to work. Students never see this page."
+              : "Pick where you want to go — the surfaces for this course."}
+          </div>
+        </div>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
-      <ul className="course-tab-explainer">
+      <div className="ds-staff-section ds-staff-list">
         {visibleTabs.map((t) => {
           const to = t.external ? t.slug : `/course/${ctx.courseId}/${t.slug}`;
           return (
-            <li key={t.slug}>
-              <Link to={to} className="course-tab-explainer-link">
-                <strong>{t.label}</strong>
-                <span className="muted"> — {t.description}</span>
-              </Link>
-            </li>
+            <Link key={t.slug} to={to} className="ds-staff-list__row">
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">{t.label}</div>
+                <div className="ds-staff-list__sub">{t.description}</div>
+              </div>
+            </Link>
           );
         })}
-      </ul>
+      </div>
 
       {hiddenRevealable.length > 0 && (
-        <div className="course-add-tool">
-          <span className="muted small">Add a tool to this course:</span>
-          <div className="course-add-tool-actions">
+        <div className="ds-staff-section">
+          <span className="mono-label ds-staff-section__label">
+            Add a tool to this course
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {hiddenRevealable.map((t) => (
-              <button
+              <Button
                 key={t.slug}
-                type="button"
-                className="subtle"
+                variant="subtle"
+                icon={<PlusIcon size={16} />}
                 disabled={revealing !== null}
+                loading={revealing === t.revealFeature}
                 title={t.description}
                 onClick={() => onReveal(t.revealFeature!, t.slug)}
               >
-                {revealing === t.revealFeature
-                  ? "Adding…"
-                  : `+ ${t.label}`}
-              </button>
+                {t.label}
+              </Button>
             ))}
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

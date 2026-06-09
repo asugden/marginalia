@@ -14,6 +14,8 @@ import {
   updateAgent,
   type AgentSummary,
 } from "../api.js";
+import { Badge, Button, Field, IconButton, Input, Textarea } from "../../../components/index.js";
+import { PlusIcon, TrashIcon } from "../../../icons.js";
 
 const DEFAULT_PROMPT =
   "You are a thoughtful tutor. Ask clarifying questions, suggest ideas, and help the student think — don't write their work for them.";
@@ -96,10 +98,17 @@ export function AgentsPage() {
 
   const actions = (
     <>
-      <Link to="/write" className="link-button subtle">← Documents</Link>
-      <button type="button" className="link-button" onClick={startCreate} disabled={!courseId}>
+      <Button variant="ghost" href="/write">
+        ← Documents
+      </Button>
+      <Button
+        variant="primary"
+        icon={<PlusIcon size={16} />}
+        onClick={startCreate}
+        disabled={!courseId}
+      >
         New agent
-      </button>
+      </Button>
     </>
   );
 
@@ -164,41 +173,42 @@ function AgentSection(props: {
 }) {
   const { heading, empty, agents, onOpen, onDelete } = props;
   return (
-    <section className="prov-agent-section">
-      <h2 className="prov-agent-section-heading">{heading}</h2>
+    <div className="ds-staff-section">
+      <span className="mono-label ds-staff-section__label">{heading}</span>
       {agents.length === 0 ? (
         <p className="muted small">{empty}</p>
       ) : (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {agents.map((a) => (
-            <li key={a.id}>
-              <div>
-                <button
-                  type="button"
-                  className="prov-agent-row-link"
-                  onClick={() => onOpen(a.id)}
-                >
-                  <strong>{a.name}</strong>
-                </button>
-                <div className="muted small">
-                  {onDelete ? "Personal" : "Set by an instructor"}
+            <div className="ds-staff-list__row" key={a.id}>
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">{a.name}</div>
+                <div className="ds-staff-list__sub" style={{ marginTop: "0.3rem" }}>
+                  <Badge tone={onDelete ? "ghost" : "neutral"}>
+                    {onDelete ? "Personal" : "Set by an instructor"}
+                  </Badge>
                 </div>
               </div>
-              <div className="row-actions">
-                <button type="button" className="link-button subtle" onClick={() => onOpen(a.id)}>
+              <div className="ds-staff-list__actions">
+                <Button variant="subtle" size="sm" onClick={() => onOpen(a.id)}>
                   Edit
-                </button>
+                </Button>
                 {onDelete && (
-                  <button type="button" className="danger-link" onClick={() => onDelete(a.id)}>
-                    Delete
-                  </button>
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    title="Delete agent"
+                    onClick={() => onDelete(a.id)}
+                  >
+                    <TrashIcon size={16} />
+                  </IconButton>
                 )}
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -212,35 +222,43 @@ function AgentEditor(props: {
   const { draft, busy, onChange, onCancel, onSave } = props;
   const canSave = draft.name.trim().length > 0 && draft.systemPrompt.trim().length > 0;
   return (
-    <div className="prov-agent-editor">
-      <header className="prov-agent-editor-header">
-        <h2>{draft.id === null ? "New agent" : "Edit agent"}</h2>
-      </header>
-      <label className="prov-field">
-        <span>Name</span>
-        <input
-          className="prov-input"
-          value={draft.name}
-          onChange={(e) => onChange({ ...draft, name: e.target.value })}
-          placeholder="e.g. Socratic tutor"
-        />
-      </label>
-      <label className="prov-field">
-        <span>System prompt</span>
-        <textarea
-          className="prov-input prov-textarea"
-          rows={10}
-          value={draft.systemPrompt}
-          onChange={(e) => onChange({ ...draft, systemPrompt: e.target.value })}
-        />
-      </label>
-      <div className="prov-agent-editor-actions">
-        <button type="button" className="link-button subtle" onClick={onCancel} disabled={busy}>
-          Cancel
-        </button>
-        <button type="button" className="link-button" onClick={onSave} disabled={busy || !canSave}>
-          {draft.id === null ? "Create" : "Save"}
-        </button>
+    <div
+      className="ds-staff-section"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-xs)",
+        padding: "1.5rem",
+      }}
+    >
+      <span className="mono-label ds-staff-section__label">
+        {draft.id === null ? "New agent" : "Edit agent"}
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "0.5rem" }}>
+        <Field label="Name">
+          <Input
+            value={draft.name}
+            onChange={(e) => onChange({ ...draft, name: e.target.value })}
+            placeholder="e.g. Socratic tutor"
+          />
+        </Field>
+        <Field label="System prompt">
+          <Textarea
+            rows={10}
+            className="ds-input--mono"
+            value={draft.systemPrompt}
+            onChange={(e) => onChange({ ...draft, systemPrompt: e.target.value })}
+          />
+        </Field>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+          <Button variant="subtle" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={onSave} disabled={busy || !canSave}>
+            {draft.id === null ? "Create" : "Save"}
+          </Button>
+        </div>
       </div>
     </div>
   );

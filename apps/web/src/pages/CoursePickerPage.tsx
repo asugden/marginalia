@@ -21,6 +21,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMe, type MeEnrollment } from "../client.js";
 import { readBootstrap } from "../bootstrap.js";
+import { Badge, Wordmark } from "../components/index.js";
+import { ArrowIcon } from "../icons.js";
 
 export function CoursePickerPage() {
   const [enrollments, setEnrollments] = useState<MeEnrollment[] | null>(() => {
@@ -52,49 +54,69 @@ export function CoursePickerPage() {
   }, [navigate]);
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>Pick a course</h1>
-        </header>
-        <p className="scope-note">
-          You're enrolled in more than one course on this instance. Pick the
-          one you want to open.
-        </p>
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Wordmark size="sm" />
+        <span className="ds-staff-top__role">Courses</span>
+      </header>
+
+      <div className="ds-staff-page">
+        <div className="ds-staff-head">
+          <div>
+            <span className="eyebrow">Your courses</span>
+            <h1>Pick a course</h1>
+            <div className="ds-staff-head__scope">
+              You&rsquo;re enrolled in more than one course on this instance.
+              Pick the one you want to open.
+            </div>
+          </div>
+        </div>
+
         {error && <p className="error">{error}</p>}
+
         {enrollments === null ? (
           <p className="muted">Loading…</p>
         ) : enrollments.length === 0 ? (
           <p className="muted">
-            You aren't enrolled in any courses yet. Use a join code on the home
-            page to enroll.
+            You aren&rsquo;t enrolled in any courses yet. Use a join code on the
+            home page to enroll.
           </p>
         ) : (
-          <ul className="assignment-list">
+          <div className="ds-staff-list">
             {enrollments.map((e) => (
-              <li key={e.courseId}>
-                <div>
-                  <strong>{e.courseName}</strong>
-                  <span className="muted small"> · {e.role}</span>
-                </div>
-                <div className="row-actions">
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() =>
-                      navigate(
-                        e.role === "instructor"
-                          ? `/course/${e.courseId}`
-                          : "/",
-                      )
-                    }
+              <button
+                key={e.courseId}
+                type="button"
+                className="ds-staff-list__row"
+                style={{ cursor: "pointer", textAlign: "left" }}
+                onClick={() =>
+                  navigate(
+                    e.role === "instructor" ? `/course/${e.courseId}` : "/",
+                  )
+                }
+              >
+                <div className="ds-staff-list__main">
+                  <div className="ds-staff-list__title">{e.courseName}</div>
+                  <div
+                    className="ds-staff-list__sub"
+                    style={{ marginTop: "0.3rem" }}
                   >
-                    Open
-                  </button>
+                    <Badge tone={e.role === "instructor" ? "brand" : "ghost"}>
+                      {e.role}
+                    </Badge>
+                  </div>
                 </div>
-              </li>
+                <div className="ds-staff-list__actions">
+                  <span className="ds-btn ds-btn--primary ds-btn--sm" aria-hidden>
+                    Open
+                    <span className="ds-btn__icon">
+                      <ArrowIcon size={16} />
+                    </span>
+                  </span>
+                </div>
+              </button>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>

@@ -31,6 +31,18 @@ import {
   type VoiceShareEntry,
 } from "../client.js";
 import { relativeTime } from "../time.js";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Field,
+  Input,
+  Message,
+  Select,
+  Textarea,
+  Wordmark,
+} from "../components/index.js";
+import { SparkleIcon } from "../icons.js";
 
 const PREVIEW_OPTIONS: Array<{ key: string; label: string }> = [
   { key: "derivative", label: "Explain a derivative" },
@@ -192,85 +204,137 @@ export function AuthorVoiceEditPage() {
     }
   }
 
+  const Shell = ({ children }: { children: React.ReactNode }) => (
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Link to="/" aria-label="Home">
+          <Wordmark size="sm" />
+        </Link>
+        <span className="ds-staff-top__role">Author</span>
+        <div className="ds-staff-top__course">
+          <Button variant="ghost" size="sm" href="/author/voices">
+            ← All voices
+          </Button>
+        </div>
+      </header>
+      <div className="ds-staff-page">{children}</div>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
-          <p className="muted">Loading…</p>
-        </div>
-      </div>
+      <Shell>
+        <p className="muted">Loading…</p>
+      </Shell>
     );
   }
 
+  const actions = isLibrary ? (
+    <Button variant="primary" onClick={onCustomize}>
+      Customize
+    </Button>
+  ) : isReadOnly ? (
+    <Button variant="primary" onClick={onCustomize}>
+      Duplicate to my voices
+    </Button>
+  ) : (
+    <>
+      {!isNew && (
+        <Button
+          variant="danger"
+          disabled={saving || deleting}
+          loading={deleting}
+          onClick={onDelete}
+        >
+          Delete
+        </Button>
+      )}
+      <Button
+        variant="primary"
+        onClick={save}
+        disabled={saving || deleting}
+        loading={saving}
+      >
+        {isNew ? "Create voice" : "Save changes"}
+      </Button>
+    </>
+  );
+
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>{isNew ? "New voice" : isLibrary ? "Library voice" : "Edit voice"}</h1>
-          <div className="header-actions">
-            <Link to="/author/voices" className="link-button subtle">
-              ← All voices
-            </Link>
-          </div>
-        </header>
-        {isLibrary && (
-          <p className="scope-note">
-            Library voices are read-only. Use Customize to fork this into a
-            new voice you own — you can then edit, share, and use it the
-            same way as any of your own voices.
-          </p>
-        )}
-        {isReadOnly && !isLibrary && (
-          <p className="scope-note">
-            This voice is shared with you by another author. You can use
-            it in your agents, but you can't edit or delete it. Use
-            Duplicate to fork it into a new voice you own.
-          </p>
-        )}
+    <Shell>
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Author · Voice</span>
+          <h1>
+            {isNew ? "New voice" : isLibrary ? "Library voice" : draft.name || "Edit voice"}
+          </h1>
+          {isLibrary && (
+            <div className="ds-staff-head__scope">
+              Library voices are read-only. Use Customize to fork this into a new
+              voice you own — you can then edit, share, and use it the same way
+              as any of your own voices.
+            </div>
+          )}
+          {isReadOnly && !isLibrary && (
+            <div className="ds-staff-head__scope">
+              This voice is shared with you by another author. You can use it in
+              your agents, but you can&rsquo;t edit or delete it. Use Duplicate
+              to fork it into a new voice you own.
+            </div>
+          )}
+        </div>
+        <div className="ds-staff-actions">{actions}</div>
+      </div>
 
-        {loadError && <p className="error">{loadError}</p>}
+      {loadError && <p className="error">{loadError}</p>}
 
-        <label className="field">
-          <span className="field-label">Name</span>
-          <input
+      <div className="ds-staff-section ds-staff-row">
+        <Field label="Name">
+          <Input
             type="text"
             value={draft.name}
             disabled={isReadOnly}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           />
-        </label>
-        <label className="field">
-          <span className="field-label">Description</span>
-          <input
+        </Field>
+        <Field label="Description" hint="One line shown in the agent picker.">
+          <Input
             type="text"
             value={draft.description}
             disabled={isReadOnly}
             placeholder="One line shown in the agent picker."
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           />
-        </label>
-        <label className="field">
-          <span className="field-label">System prompt fragment</span>
-          <textarea
+        </Field>
+      </div>
+
+      <div className="ds-staff-section">
+        <Field
+          label="System prompt fragment"
+          hint="Describe persona, tone, and method. Keep topic content out — that lives in agent backbones."
+        >
+          <Textarea
             rows={10}
             value={draft.systemPromptFragment}
             disabled={isReadOnly}
-            placeholder="Describe persona, tone, and method. Keep topic content out — that lives in agent backbones."
-            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+            className="ds-input--mono"
+            placeholder="Describe persona, tone, and method."
             onChange={(e) =>
               setDraft({ ...draft, systemPromptFragment: e.target.value })
             }
           />
-        </label>
+        </Field>
+      </div>
 
-        <section className="field-group">
-          <h2>Preview</h2>
-          <p className="muted small">
-            One-turn preview against a fixed question. Lets you feel the
-            voice before saving an agent against it.
-          </p>
-          <div className="inline-form">
-            <select
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Preview</span>
+        <p className="muted small">
+          One-turn preview against a fixed question. Lets you feel the voice
+          before saving an agent against it.
+        </p>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", marginTop: "0.5rem" }}>
+          <div style={{ maxWidth: "18rem", flex: 1 }}>
+            <Select
               value={previewKey}
               disabled={previewBusy}
               onChange={(e) => setPreviewKey(e.target.value)}
@@ -280,123 +344,108 @@ export function AuthorVoiceEditPage() {
                   {p.label}
                 </option>
               ))}
-            </select>
-            <button
-              type="button"
-              onClick={onPreview}
-              disabled={previewBusy || !draft.systemPromptFragment.trim()}
-            >
-              {previewBusy ? "Running…" : "Try this voice"}
-            </button>
+            </Select>
           </div>
-          {previewError && <p className="error">{previewError}</p>}
-          {previewReply !== null && (
-            <div
-              style={{
-                marginTop: "0.75rem",
-                padding: "0.75rem 1rem",
-                background: "#fff",
-                border: "1px solid var(--line)",
-                borderRadius: 8,
-                whiteSpace: "pre-wrap",
-                lineHeight: 1.55,
-              }}
-            >
+          <Button
+            variant="subtle"
+            icon={<SparkleIcon size={16} />}
+            onClick={onPreview}
+            loading={previewBusy}
+            disabled={previewBusy || !draft.systemPromptFragment.trim()}
+          >
+            Try this voice
+          </Button>
+        </div>
+        {previewError && <p className="error">{previewError}</p>}
+        {previewReply !== null && (
+          <div style={{ marginTop: "1rem" }}>
+            <Message role="assistant" roleLabel={draft.name || "Voice"}>
               {previewReply}
+            </Message>
+          </div>
+        )}
+      </div>
+
+      {!isNew && isOwner && (
+        <div className="ds-staff-section">
+          <span className="mono-label ds-staff-section__label">Sharing</span>
+          <p className="muted small">
+            Share this voice with another author by email. They can use it in
+            their own agents but can&rsquo;t edit or delete it. You can revoke at
+            any time; revoking doesn&rsquo;t affect agents they&rsquo;ve already
+            saved against this voice (those keep working until the voice itself
+            is deleted).
+          </p>
+          {shareError && <p className="error">{shareError}</p>}
+          <form
+            onSubmit={onAddShare}
+            style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", margin: "1rem 0" }}
+          >
+            <div style={{ flex: 1, maxWidth: "24rem" }}>
+              <Field label="Share with email">
+                <Input
+                  type="email"
+                  placeholder="someone@example.edu"
+                  value={shareDraft}
+                  disabled={shareBusy}
+                  onChange={(e) => setShareDraft(e.target.value)}
+                />
+              </Field>
+            </div>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={shareBusy}
+              disabled={shareBusy || !shareDraft.trim()}
+            >
+              Share
+            </Button>
+          </form>
+          {shares === null ? (
+            <p className="muted">Loading…</p>
+          ) : shares.length === 0 ? (
+            <p className="muted">Not shared with anyone yet.</p>
+          ) : (
+            <div className="ds-roster">
+              {shares.map((s) => (
+                <div className="ds-roster__row" key={s.userId}>
+                  <div className="ds-roster__person">
+                    <Avatar name={s.displayName || s.email} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ds-roster__name">
+                        {s.displayName || s.email}
+                      </div>
+                      <div className="ds-roster__email">{s.email}</div>
+                    </div>
+                  </div>
+                  <span className="ds-roster__meta">
+                    Shared {relativeTime(s.createdAt)}
+                  </span>
+                  <div className="ds-roster__actions">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={shareBusy}
+                      onClick={() => onRevokeShare(s.userId, s.email)}
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-        </section>
-
-        {!isNew && isOwner && (
-          <section className="field-group">
-            <h2>Sharing</h2>
-            <p className="muted small">
-              Share this voice with another author by email. They can use
-              it in their own agents but can't edit or delete it. You can
-              revoke at any time; revoking doesn't affect agents they've
-              already saved against this voice (those keep working until
-              the voice itself is deleted).
-            </p>
-            {shareError && <p className="error">{shareError}</p>}
-            <form className="inline-form" onSubmit={onAddShare}>
-              <input
-                type="email"
-                placeholder="someone@example.edu"
-                value={shareDraft}
-                disabled={shareBusy}
-                onChange={(e) => setShareDraft(e.target.value)}
-              />
-              <button type="submit" disabled={shareBusy || !shareDraft.trim()}>
-                {shareBusy ? "Sharing…" : "Share"}
-              </button>
-            </form>
-            {shares === null ? (
-              <p className="muted">Loading…</p>
-            ) : shares.length === 0 ? (
-              <p className="muted">Not shared with anyone yet.</p>
-            ) : (
-              <ul className="assignment-list">
-                {shares.map((s) => (
-                  <li key={s.userId}>
-                    <div>
-                      <strong>{s.email}</strong>
-                      {s.displayName && (
-                        <span className="muted small"> · {s.displayName}</span>
-                      )}
-                      <div className="muted small">
-                        Shared {relativeTime(s.createdAt)}
-                      </div>
-                    </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="danger-link"
-                        disabled={shareBusy}
-                        onClick={() => onRevokeShare(s.userId, s.email)}
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {saveError && <p className="error">{saveError}</p>}
-
-        <div className="form-actions">
-          <Link to="/author/voices" className="link-button subtle">
-            Cancel
-          </Link>
-          {isLibrary ? (
-            <button type="button" onClick={onCustomize}>
-              Customize
-            </button>
-          ) : isReadOnly ? (
-            <button type="button" onClick={onCustomize}>
-              Duplicate to my voices
-            </button>
-          ) : (
-            <>
-              {!isNew && (
-                <button
-                  type="button"
-                  className="danger-link"
-                  disabled={saving || deleting}
-                  onClick={onDelete}
-                >
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
-              )}
-              <button onClick={save} disabled={saving || deleting}>
-                {saving ? "Saving…" : isNew ? "Create voice" : "Save changes"}
-              </button>
-            </>
-          )}
         </div>
+      )}
+
+      {saveError && <p className="error">{saveError}</p>}
+
+      <div className="ds-staff-actions" style={{ justifyContent: "flex-end" }}>
+        <Button variant="subtle" href="/author/voices">
+          Cancel
+        </Button>
+        {actions}
       </div>
-    </div>
+    </Shell>
   );
 }

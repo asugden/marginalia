@@ -1,0 +1,92 @@
+/* ==== Input · Textarea · Field ==================================== *
+ * Text controls and their label wrapper. Line border, accent focus
+ * ring (re-tints with --accent). Generic tokens only, `ds-` prefix.
+ * ------------------------------------------------------------------ */
+
+.ds-input,
+.ds-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--text-strong);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  line-height: 1.5;
+  transition:
+    border-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    background-color var(--dur-2) var(--ease-out);
+}
+
+.ds-input::placeholder,
+.ds-textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.ds-input:hover:not(:disabled),
+.ds-textarea:hover:not(:disabled) {
+  border-color: var(--ink-400);
+}
+
+.ds-input:focus,
+.ds-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.ds-input:disabled,
+.ds-textarea:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.ds-input--invalid,
+.ds-textarea--invalid {
+  border-color: var(--accent);
+}
+
+.ds-textarea {
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.ds-input--mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Field wrapper */
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ds-field__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ds-field__label .req {
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+.ds-field__hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.ds-field__error {
+  font-size: var(--text-xs);
+  color: var(--accent-ink);
+}

@@ -10,6 +10,8 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { MeEnrollment } from "../client.js";
+import { Button, Wordmark } from "../components/index.js";
+import { ChevronIcon } from "../icons.js";
 
 interface Props {
   /** Page title shown in the breadcrumb position. */
@@ -46,63 +48,66 @@ export function StandalonePage({
     course?.enrollments.filter((e) => e.courseId !== course.active?.courseId) ?? [];
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>
-            {titleTo ? (
-              <Link to={titleTo} className="course-breadcrumb-link">{title}</Link>
-            ) : (
-              title
-            )}
-            {section && (
-              <>
-                <span className="course-breadcrumb-sep" aria-hidden> · </span>
-                <span className="course-breadcrumb-tab">{section}</span>
-              </>
-            )}
-          </h1>
-          <div className="header-actions">
-            {actions}
-            {course && course.active && (
-              <span className="standalone-course-tag" title="Active course">
-                {course.active.courseName}
-              </span>
-            )}
-            {course && others.length > 0 && (
-              <div className="course-switcher">
-                <button
-                  type="button"
-                  className="subtle"
-                  onClick={() => setSwitcherOpen((v) => !v)}
-                  aria-expanded={switcherOpen}
-                >
-                  Switch course ▾
-                </button>
-                {switcherOpen && (
-                  <ul className="course-switcher-menu">
-                    {others.map((e) => (
-                      <li key={e.courseId}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSwitcherOpen(false);
-                            course.onSwitch(e.courseId);
-                          }}
-                        >
-                          <strong>{e.courseName}</strong>
-                          <span className="muted small"> · {e.role}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        </header>
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Link to="/" aria-label="Home">
+          <Wordmark size="sm" />
+        </Link>
+        {section && <span className="ds-staff-top__role">{section}</span>}
+        <div className="ds-staff-top__course">
+          {course && others.length > 0 ? (
+            <div className="ds-switcher">
+              <Button
+                variant="ghost"
+                size="sm"
+                iconRight={<ChevronIcon size={14} />}
+                onClick={() => setSwitcherOpen((v) => !v)}
+                aria-expanded={switcherOpen}
+              >
+                {course.active?.courseName ?? "Switch course"}
+              </Button>
+              {switcherOpen && (
+                <ul className="ds-switcher__menu">
+                  {others.map((e) => (
+                    <li key={e.courseId}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSwitcherOpen(false);
+                          course.onSwitch(e.courseId);
+                        }}
+                      >
+                        <strong>{e.courseName}</strong>
+                        <span className="muted small"> · {e.role}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            course?.active && <span>{course.active.courseName}</span>
+          )}
+        </div>
+      </header>
 
-        {note && <p className="scope-note">{note}</p>}
+      <div className="ds-staff-page">
+        <div className="ds-staff-head">
+          <div>
+            <span className="eyebrow">{section ?? title}</span>
+            <h1>
+              {titleTo ? (
+                <Link to={titleTo} className="course-breadcrumb-link">
+                  {title}
+                </Link>
+              ) : (
+                title
+              )}
+            </h1>
+            {note && <div className="ds-staff-head__scope">{note}</div>}
+          </div>
+          {actions && <div className="ds-staff-actions">{actions}</div>}
+        </div>
 
         {children}
       </div>

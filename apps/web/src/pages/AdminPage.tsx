@@ -25,6 +25,16 @@ import {
   type AuditEntry,
 } from "../client.js";
 import { relativeTime } from "../time.js";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Field,
+  Input,
+  SegmentedControl,
+  Wordmark,
+} from "../components/index.js";
+import { PlusIcon } from "../icons.js";
 
 type Tab = "courses" | "admins" | "users" | "audit";
 
@@ -50,52 +60,72 @@ export function AdminPage() {
 
   if (isAdmin === null) {
     return (
-      <div className="page">
-        <div className="card">
-          <p>Loading…</p>
+      <div className="ds-staff">
+        <div className="ds-staff-page">
+          <p className="muted">Loading…</p>
         </div>
       </div>
     );
   }
   if (!isAdmin) {
     return (
-      <div className="page">
-        <div className="card">
-          <h1>Admin</h1>
-          <p className="error">You don't have access to this page.</p>
-          <p><Link to="/">← Home</Link></p>
+      <div className="ds-staff">
+        <header className="ds-staff-top">
+          <Wordmark size="sm" />
+          <span className="ds-staff-top__role">Admin</span>
+        </header>
+        <div className="ds-staff-page">
+          <div className="ds-staff-head">
+            <div>
+              <span className="eyebrow">Admin</span>
+              <h1>No access</h1>
+            </div>
+          </div>
+          <p className="error">You don&rsquo;t have access to this page.</p>
+          <Button variant="subtle" href="/">
+            ← Home
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>Admin</h1>
-          <div className="header-actions">
-            <Link to="/" className="link-button subtle">← Home</Link>
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Link to="/" aria-label="Home">
+          <Wordmark size="sm" />
+        </Link>
+        <span className="ds-staff-top__role">Admin</span>
+        <div className="ds-staff-top__course">
+          <Button variant="ghost" size="sm" href="/">
+            ← Home
+          </Button>
+        </div>
+      </header>
+      <div className="ds-staff-page">
+        <div className="ds-staff-head">
+          <div>
+            <span className="eyebrow">Instance</span>
+            <h1>Admin</h1>
+            <div className="ds-staff-head__scope">
+              Everyone who has signed in to this instance, plus instance-wide
+              controls. Each row links into a per-user page where role and admin
+              status are managed.
+            </div>
           </div>
-        </header>
-        <p className="scope-note">
-          Everyone who has signed in to this instance, plus instance-wide
-          controls. Each row links into a per-user page where role and admin
-          status are managed.
-        </p>
-        <div className="tab-row" role="tablist">
-          {(["courses", "admins", "users", "audit"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              className={`tab-button${tab === t ? " active" : ""}`}
-              onClick={() => setTab(t)}
-              type="button"
-            >
-              {t === "audit" ? "Audit log" : t[0]!.toUpperCase() + t.slice(1)}
-            </button>
-          ))}
+        </div>
+        <div className="ds-staff-section">
+          <SegmentedControl
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+            options={[
+              { value: "courses", label: "Courses" },
+              { value: "admins", label: "Admins" },
+              { value: "users", label: "Users" },
+              { value: "audit", label: "Audit log" },
+            ]}
+          />
         </div>
         {tab === "courses" && <CoursesTab />}
         {tab === "admins" && <AdminsTab meUserId={meUserId} />}
@@ -159,52 +189,65 @@ function CoursesTab() {
   }
 
   return (
-    <section className="field-group">
-      <h2>Courses</h2>
+    <div className="ds-staff-section">
+      <span className="mono-label ds-staff-section__label">Courses</span>
       {error && <p className="error">{error}</p>}
-      <form className="inline-form" onSubmit={onCreate}>
-        <input
-          type="text"
-          placeholder="New course name"
-          value={draft}
-          disabled={busy}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        <button type="submit" disabled={busy || !draft.trim()}>
-          {busy ? "Working…" : "Create course"}
-        </button>
+      <form
+        onSubmit={onCreate}
+        style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", marginBottom: "1rem" }}
+      >
+        <div style={{ flex: 1, maxWidth: "24rem" }}>
+          <Field label="New course name">
+            <Input
+              type="text"
+              placeholder="e.g. Stats 101"
+              value={draft}
+              disabled={busy}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Button
+          type="submit"
+          variant="primary"
+          icon={<PlusIcon size={16} />}
+          loading={busy}
+          disabled={busy || !draft.trim()}
+        >
+          Create course
+        </Button>
       </form>
       {courses === null ? (
         <p className="muted">Loading…</p>
       ) : courses.length === 0 ? (
         <p className="muted">No courses yet.</p>
       ) : (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {courses.map((c) => (
-            <li key={c.id}>
-              <div>
-                <strong>{c.name}</strong>
-                <div className="muted small">
+            <div className="ds-staff-list__row" key={c.id}>
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">{c.name}</div>
+                <div className="ds-staff-list__sub">
                   {c.enrollmentCount}{" "}
-                  {c.enrollmentCount === 1 ? "enrollment" : "enrollments"}
-                  {" · created "}{relativeTime(c.createdAt)} · {c.id}
+                  {c.enrollmentCount === 1 ? "enrollment" : "enrollments"} ·
+                  created {relativeTime(c.createdAt)} · {c.id}
                 </div>
               </div>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="danger-link"
+              <div className="ds-staff-list__actions">
+                <Button
+                  variant="danger"
+                  size="sm"
                   disabled={busy}
                   onClick={() => onDelete(c)}
                 >
                   Delete
-                </button>
+                </Button>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -239,25 +282,37 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
   }
 
   return (
-    <section className="field-group">
-      <h2>Admins</h2>
+    <div className="ds-staff-section">
+      <span className="mono-label ds-staff-section__label">Admins</span>
       <p className="muted small">
-        Admins can create / delete courses, promote other admins, and view
-        every user. Promote-by-email only works for users who have signed in
-        at least once. To revoke admin, open the user.
+        Admins can create / delete courses, promote other admins, and view every
+        user. Promote-by-email only works for users who have signed in at least
+        once. To revoke admin, open the user.
       </p>
       {error && <p className="error">{error}</p>}
-      <form className="inline-form" onSubmit={onPromote}>
-        <input
-          type="email"
-          placeholder="someone@example.edu"
-          value={draft}
-          disabled={busy}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        <button type="submit" disabled={busy || !draft.trim()}>
-          {busy ? "Working…" : "Promote"}
-        </button>
+      <form
+        onSubmit={onPromote}
+        style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", margin: "1rem 0" }}
+      >
+        <div style={{ flex: 1, maxWidth: "24rem" }}>
+          <Field label="Promote by email">
+            <Input
+              type="email"
+              placeholder="someone@example.edu"
+              value={draft}
+              disabled={busy}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={busy}
+          disabled={busy || !draft.trim()}
+        >
+          Promote
+        </Button>
       </form>
       {admins === null ? (
         <p className="muted">Loading…</p>
@@ -266,37 +321,36 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
           No admins. Bootstrap one via the INSTANCE_ADMIN_EMAILS env var.
         </p>
       ) : (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {admins.map((a) => {
             const isSelf = meUserId === a.userId;
             return (
-              <li key={a.userId}>
-                <div>
-                  <strong>{a.email}</strong>
-                  {isSelf && <span className="muted small"> · you</span>}
-                  {a.displayName && (
-                    <span className="muted small"> · {a.displayName}</span>
-                  )}
-                  <div className="muted small">
+              <Link
+                key={a.userId}
+                to={`/users/${a.userId}`}
+                className="ds-staff-list__row"
+              >
+                <Avatar name={a.displayName || a.email} />
+                <div className="ds-staff-list__main">
+                  <div className="ds-staff-list__title">
+                    {a.email}
+                    {isSelf && <span className="muted small"> · you</span>}
+                  </div>
+                  <div className="ds-staff-list__sub">
                     {a.lastSeenAt
-                      ? <>Last seen {relativeTime(a.lastSeenAt)}</>
-                      : <>Never signed in</>}
+                      ? `Last seen ${relativeTime(a.lastSeenAt)}`
+                      : "Never signed in"}
                   </div>
                 </div>
-                <div className="row-actions">
-                  <Link
-                    to={`/users/${a.userId}`}
-                    className="link-button subtle"
-                  >
-                    Open
-                  </Link>
+                <div className="ds-staff-list__actions">
+                  <Badge tone="brand">admin</Badge>
                 </div>
-              </li>
+              </Link>
             );
           })}
-        </ul>
+        </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -311,46 +365,46 @@ function UsersTab() {
   }, []);
 
   return (
-    <section className="field-group">
-      <h2>Users</h2>
+    <div className="ds-staff-section">
+      <span className="mono-label ds-staff-section__label">Users</span>
       {error && <p className="error">{error}</p>}
       {users === null ? (
         <p className="muted">Loading…</p>
       ) : users.length === 0 ? (
         <p className="muted">No users yet.</p>
       ) : (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {users.map((u) => (
-            <li key={u.userId}>
-              <div>
-                <strong>{u.email}</strong>
-                {u.isAdmin && <span className="history-pill"> admin</span>}
-                {u.displayName && (
-                  <span className="muted small"> · {u.displayName}</span>
-                )}
-                <div className="muted small">
+            <Link
+              key={u.userId}
+              to={`/users/${u.userId}`}
+              className="ds-staff-list__row"
+            >
+              <Avatar name={u.displayName || u.email} />
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">
+                  {u.email}
+                  {u.isAdmin && (
+                    <>
+                      {" "}
+                      <Badge tone="brand">admin</Badge>
+                    </>
+                  )}
+                </div>
+                <div className="ds-staff-list__sub">
                   {u.enrollmentCount} enrollment
-                  {u.enrollmentCount === 1 ? "" : "s"}
-                  {" · "}
+                  {u.enrollmentCount === 1 ? "" : "s"} ·{" "}
                   {u.lastSeenAt
-                    ? <>Last seen {relativeTime(u.lastSeenAt)}</>
-                    : <>Never signed in</>}
-                  {u.externalProvider && <> · via {u.externalProvider}</>}
+                    ? `Last seen ${relativeTime(u.lastSeenAt)}`
+                    : "Never signed in"}
+                  {u.externalProvider ? ` · via ${u.externalProvider}` : ""}
                 </div>
               </div>
-              <div className="row-actions">
-                <Link
-                  to={`/users/${u.userId}`}
-                  className="link-button subtle"
-                >
-                  Open
-                </Link>
-              </div>
-            </li>
+            </Link>
           ))}
-        </ul>
+        </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -365,33 +419,31 @@ function AuditTab() {
   }, []);
 
   return (
-    <section className="field-group">
-      <h2>Audit log</h2>
+    <div className="ds-staff-section">
+      <span className="mono-label ds-staff-section__label">Audit log</span>
       {error && <p className="error">{error}</p>}
       {entries === null ? (
         <p className="muted">Loading…</p>
       ) : entries.length === 0 ? (
         <p className="muted">No entries yet.</p>
       ) : (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {entries.map((e) => (
-            <li key={e.id}>
-              <div>
-                <strong>{e.action}</strong>
-                <div className="muted small">
+            <div className="ds-staff-list__row" key={e.id}>
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">{e.action}</div>
+                <div className="ds-staff-list__sub">
                   {relativeTime(e.createdAt)}
-                  {e.targetKind && e.targetId && (
-                    <> · {e.targetKind}={e.targetId}</>
-                  )}
-                  {e.payload !== null && (
-                    <> · {JSON.stringify(e.payload)}</>
-                  )}
+                  {e.targetKind && e.targetId
+                    ? ` · ${e.targetKind}=${e.targetId}`
+                    : ""}
+                  {e.payload !== null ? ` · ${JSON.stringify(e.payload)}` : ""}
                 </div>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </section>
+    </div>
   );
 }

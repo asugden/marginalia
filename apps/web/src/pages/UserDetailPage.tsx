@@ -21,6 +21,7 @@ import {
   type UserDetail,
 } from "../client.js";
 import { relativeTime } from "../time.js";
+import { Avatar, Badge, Button, Select, Wordmark } from "../components/index.js";
 
 export function UserDetailPage() {
   const { id: userId } = useParams<{ id: string }>();
@@ -111,23 +112,35 @@ export function UserDetailPage() {
     }
   }
 
+  const Shell = ({ children }: { children: React.ReactNode }) => (
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Link to="/" aria-label="Home">
+          <Wordmark size="sm" />
+        </Link>
+        <span className="ds-staff-top__role">Admin</span>
+        <div className="ds-staff-top__course">
+          <Button variant="ghost" size="sm" href="/admin">
+            ← Admin
+          </Button>
+        </div>
+      </header>
+      <div className="ds-staff-page">{children}</div>
+    </div>
+  );
+
   if (error && !detail) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
-          <p className="error">{error}</p>
-          <p><Link to="/admin">← Admin</Link></p>
-        </div>
-      </div>
+      <Shell>
+        <p className="error">{error}</p>
+      </Shell>
     );
   }
   if (!detail) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
-          <p className="muted">Loading…</p>
-        </div>
-      </div>
+      <Shell>
+        <p className="muted">Loading…</p>
+      </Shell>
     );
   }
 
@@ -135,130 +148,143 @@ export function UserDetailPage() {
   const isSelf = meUserId === u.userId;
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>
-            {u.displayName || u.email}
-            {u.isAdmin && <span className="history-pill"> admin</span>}
-          </h1>
-          <div className="header-actions">
-            <Link to="/admin" className="link-button subtle">← Admin</Link>
+    <Shell>
+      <div className="ds-staff-head">
+        <div style={{ display: "flex", gap: "0.9rem", alignItems: "center" }}>
+          <Avatar name={u.displayName || u.email} size="lg" />
+          <div>
+            <span className="eyebrow">User</span>
+            <h1 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {u.displayName || u.email}
+              {u.isAdmin && <Badge tone="brand">admin</Badge>}
+            </h1>
+            <div className="ds-staff-head__scope">
+              {u.email}
+              {" · "}
+              {u.lastSeenAt
+                ? `last seen ${relativeTime(u.lastSeenAt)}`
+                : "never signed in"}
+              {u.externalProvider ? ` · via ${u.externalProvider}` : ""}
+            </div>
           </div>
-        </header>
-        <p className="scope-note">
-          {u.email}
-          {u.displayName && <> · {u.displayName}</>}
-          {" · "}
-          {u.lastSeenAt
-            ? <>last seen {relativeTime(u.lastSeenAt)}</>
-            : <>never signed in</>}
-          {u.externalProvider && <> · via {u.externalProvider}</>}
-        </p>
+        </div>
+      </div>
 
-        {error && <p className="error">{error}</p>}
+      {error && <p className="error">{error}</p>}
 
-        <section className="field-group">
-          <h2>Instance admin</h2>
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Instance admin</span>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
+        >
           {u.isAdmin ? (
-            <div className="row-actions">
-              <span className="muted small">
+            <>
+              <span className="muted small" style={{ flex: 1, minWidth: "12rem" }}>
                 Can create / delete courses, manage admins, and view every user.
               </span>
-              <button
-                type="button"
-                className="danger-link"
+              <Button
+                variant="danger"
+                size="sm"
                 disabled={busy || isSelf}
                 title={isSelf ? "You can't revoke your own admin." : undefined}
                 onClick={onDemote}
               >
                 Revoke admin
-              </button>
-            </div>
+              </Button>
+            </>
           ) : (
-            <div className="row-actions">
-              <span className="muted small">Not an instance admin.</span>
-              <button type="button" disabled={busy} onClick={onPromote}>
-                {busy ? "Working…" : "Promote to admin"}
-              </button>
-            </div>
+            <>
+              <span className="muted small" style={{ flex: 1, minWidth: "12rem" }}>
+                Not an instance admin.
+              </span>
+              <Button variant="primary" size="sm" disabled={busy} loading={busy} onClick={onPromote}>
+                Promote to admin
+              </Button>
+            </>
           )}
-        </section>
+        </div>
+      </div>
 
-        <section className="field-group">
-          <h2>Courses</h2>
-          {detail.enrollments.length === 0 ? (
-            <p className="muted">Not enrolled in any course.</p>
-          ) : (
-            <ul className="assignment-list">
-              {detail.enrollments.map((e) => (
-                <li key={e.courseId}>
-                  <div>
-                    <strong>{e.courseName}</strong>
-                    <div className="muted small">
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Courses</span>
+        {detail.enrollments.length === 0 ? (
+          <p className="muted">Not enrolled in any course.</p>
+        ) : (
+          <div className="ds-roster">
+            {detail.enrollments.map((e) => (
+              <div className="ds-roster__row" key={e.courseId}>
+                <div className="ds-roster__person">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="ds-roster__name">{e.courseName}</div>
+                    <div className="ds-roster__email">
                       Joined {relativeTime(e.joinedAt)} · {e.courseId}
                     </div>
                   </div>
-                  <div className="row-actions">
-                    <select
-                      value={e.role}
-                      disabled={busy || isSelf}
-                      title={isSelf ? "You can't change your own role." : undefined}
-                      onChange={(ev) =>
-                        onChangeRole(e.courseId, e.role, ev.target.value as EnrollmentRole)
-                      }
-                    >
-                      <option value="student">Student</option>
-                      <option value="instructor">Instructor</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="danger-link"
-                      disabled={busy || isSelf}
-                      title={isSelf ? "Ask another instructor to remove you." : undefined}
-                      onClick={() => onRemove(e.courseId, e.courseName)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="field-group">
-          <h2>Recent activity</h2>
-          {detail.audit.length === 0 ? (
-            <p className="muted">No audit entries.</p>
-          ) : (
-            <ul className="assignment-list">
-              {detail.audit.map((a) => {
-                const isActor = a.actorId === u.userId;
-                return (
-                  <li key={a.id}>
-                    <div>
-                      <strong>{a.action}</strong>
-                      <span className="muted small">
-                        {" "}· {isActor ? "as actor" : "as target"}
-                      </span>
-                      <div className="muted small">
-                        {relativeTime(a.createdAt)}
-                        {a.targetKind && a.targetId && (
-                          <> · {a.targetKind}={a.targetId}</>
-                        )}
-                        {a.payload !== null && (
-                          <> · {JSON.stringify(a.payload)}</>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+                </div>
+                <span className="ds-roster__meta" />
+                <div className="ds-roster__actions">
+                  <Select
+                    value={e.role}
+                    disabled={busy || isSelf}
+                    title={isSelf ? "You can't change your own role." : undefined}
+                    onChange={(ev) =>
+                      onChangeRole(
+                        e.courseId,
+                        e.role,
+                        ev.target.value as EnrollmentRole,
+                      )
+                    }
+                  >
+                    <option value="student">Student</option>
+                    <option value="instructor">Instructor</option>
+                  </Select>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy || isSelf}
+                    title={
+                      isSelf ? "Ask another instructor to remove you." : undefined
+                    }
+                    onClick={() => onRemove(e.courseId, e.courseName)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Recent activity</span>
+        {detail.audit.length === 0 ? (
+          <p className="muted">No audit entries.</p>
+        ) : (
+          <div className="ds-staff-list">
+            {detail.audit.map((a) => {
+              const isActor = a.actorId === u.userId;
+              return (
+                <div className="ds-staff-list__row" key={a.id}>
+                  <div className="ds-staff-list__main">
+                    <div className="ds-staff-list__title">
+                      {a.action}{" "}
+                      <Badge tone="ghost">{isActor ? "actor" : "target"}</Badge>
+                    </div>
+                    <div className="ds-staff-list__sub">
+                      {relativeTime(a.createdAt)}
+                      {a.targetKind && a.targetId
+                        ? ` · ${a.targetKind}=${a.targetId}`
+                        : ""}
+                      {a.payload !== null ? ` · ${JSON.stringify(a.payload)}` : ""}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Shell>
   );
 }

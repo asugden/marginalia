@@ -23,6 +23,17 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Field,
+  IconButton,
+  Input,
+  SegmentedControl,
+  Select,
+} from "../components/index.js";
+import { PlusIcon, TrashIcon } from "../icons.js";
 
 type Tab = "students" | "authors";
 
@@ -203,228 +214,278 @@ export function RosterPage() {
     }
   }
 
+  const studentCount = roster?.filter((r) => r.role === "student").length ?? 0;
+  const authorCount = roster?.filter((r) => r.role === "instructor").length ?? 0;
+
   return (
-    <section>
-      <p className="scope-note">
-        Everyone enrolled in this course. Each row links into a per-user
-        page covering every course they're in.
-      </p>
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Roster</span>
+          <h1>People</h1>
+          <div className="ds-staff-head__scope">
+            Everyone enrolled in this course. Each row links into a per-user page
+            covering every course they&rsquo;re in.
+          </div>
+        </div>
+        <div className="ds-staff-actions">
+          <Button
+            variant={addOpen ? "ghost" : "subtle"}
+            icon={<PlusIcon size={16} />}
+            onClick={() => {
+              setAddOpen((v) => !v);
+              if (addOpen) setDraftEmail("");
+            }}
+          >
+            Add person
+          </Button>
+        </div>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
-      <div className="sub-tab-row" role="tablist">
-          {(["students", "authors"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              className={`tab-button${tab === t ? " active" : ""}`}
-              onClick={() => setTab(t)}
-              type="button"
-            >
-              {t === "students" ? "Students" : "Instructors"}
-            </button>
-          ))}
-        </div>
+      <div className="ds-staff-section">
+        <SegmentedControl
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          options={[
+            { value: "students", label: "Students", count: studentCount },
+            { value: "authors", label: "Instructors", count: authorCount },
+          ]}
+        />
+      </div>
 
-        <section className="field-group">
-          <h2>Join codes</h2>
-          <p className="muted small">
-            Share a code (or the join link) with students so they can self-enroll
-            after signing in. Codes only ever add students; instructors are added
-            on the roster below. Allowed email domains are set instance-wide in
-            ALLOWED_EMAIL_DOMAINS — see docs/operations.md.
-          </p>
-          {codesError && <p className="error">{codesError}</p>}
-          <div className="inline-form">
-            <input
-              type="number"
-              min="1"
-              placeholder="Max uses (optional)"
-              value={codeDraftMaxUses}
-              disabled={codeBusy}
-              onChange={(e) => setCodeDraftMaxUses(e.target.value)}
-              style={{ maxWidth: "10rem" }}
+      {addOpen && (
+        <div className="ds-staff-section ds-staff-row">
+          <Field label="Email">
+            <Input
+              type="email"
+              placeholder="someone@example.edu"
+              value={draftEmail}
+              disabled={busy}
+              autoFocus
+              onChange={(e) => setDraftEmail(e.target.value)}
             />
-            <button onClick={onGenerateCode} disabled={codeBusy} type="button">
-              {codeBusy ? "Generating…" : "Generate code"}
-            </button>
-          </div>
-          {codes === null ? (
-            <p className="muted">Loading…</p>
-          ) : codes.length === 0 ? (
-            <p className="muted">No codes yet.</p>
-          ) : (
-            <ul className="assignment-list">
-              {codes.map((c) => {
-                const active = !c.revokedAt &&
-                  (c.expiresAt === null || c.expiresAt > Date.now()) &&
-                  (c.maxUses === null || c.uses < c.maxUses);
-                return (
-                  <li key={c.code}>
-                    <div>
-                      <strong style={{ fontFamily: "monospace" }}>{c.code}</strong>
-                      {!active && <span className="muted small"> · inactive</span>}
-                      <div className="muted small">
-                        Used {c.uses}
-                        {c.maxUses !== null ? <> / {c.maxUses}</> : <> times</>}
-                        {c.emailDomain && <> · legacy @{c.emailDomain}</>}
-                        {c.revokedAt && <> · revoked</>}
-                      </div>
-                    </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="subtle"
-                        onClick={() => copyToClipboard(c.code, `code-${c.code}`)}
-                      >
-                        {copied === `code-${c.code}` ? "Copied!" : "Copy code"}
-                      </button>
-                      <button
-                        type="button"
-                        className="subtle"
-                        onClick={() => copyToClipboard(joinUrl(c.code), `url-${c.code}`)}
-                      >
-                        {copied === `url-${c.code}` ? "Copied!" : "Copy link"}
-                      </button>
-                      {active && (
-                        <button
-                          type="button"
-                          className="danger-link"
-                          disabled={codeBusy}
-                          onClick={() => onRevokeCode(c.code)}
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {addOpen ? (
-          <section className="field-group">
-            <h2>Add by email</h2>
-            <div className="inline-form">
-              <input
-                type="email"
-                placeholder="someone@example.edu"
-                value={draftEmail}
-                disabled={busy}
-                autoFocus
-                onChange={(e) => setDraftEmail(e.target.value)}
-              />
-              <select
-                value={draftRole}
-                disabled={busy}
-                onChange={(e) => setDraftRole(e.target.value as EnrollmentRole)}
-              >
-                <option value="student">Student</option>
-                <option value="instructor">Instructor</option>
-              </select>
-              <button onClick={onAdd} disabled={busy || !draftEmail.trim()}>
-                {busy ? "Adding…" : "Add"}
-              </button>
-              <button
-                type="button"
-                className="subtle"
-                disabled={busy}
-                onClick={() => {
-                  setAddOpen(false);
-                  setDraftEmail("");
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-            <p className="muted small">
-              If the email hasn't signed in yet, an empty user row is created
-              and "claimed" the first time they sign in.
-            </p>
-          </section>
-        ) : (
-          <div className="form-actions">
-            <button
-              type="button"
-              className="subtle"
-              onClick={() => setAddOpen(true)}
+          </Field>
+          <Field label="Role">
+            <Select
+              value={draftRole}
+              disabled={busy}
+              onChange={(e) => setDraftRole(e.target.value as EnrollmentRole)}
             >
-              + Add person
-            </button>
+              <option value="student">Student</option>
+              <option value="instructor">Instructor</option>
+            </Select>
+          </Field>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+            <Button
+              onClick={onAdd}
+              loading={busy}
+              disabled={busy || !draftEmail.trim()}
+            >
+              Add
+            </Button>
+            <Button
+              variant="subtle"
+              disabled={busy}
+              onClick={() => {
+                setAddOpen(false);
+                setDraftEmail("");
+              }}
+            >
+              Cancel
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        <section className="field-group">
-          <h2>{tab === "students" ? "Students" : "Instructors"}</h2>
-          <div className="inline-form">
-            <input
+      <div className="ds-staff-section">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.7rem",
+            gap: "1rem",
+          }}
+        >
+          <span className="mono-label">
+            {tab === "students" ? "Students" : "Instructors"}
+          </span>
+          <div style={{ maxWidth: "16rem", flex: 1 }}>
+            <Input
               type="search"
               placeholder="Filter by email…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+        </div>
 
-          {roster === null ? (
-            <p className="muted">Loading…</p>
-          ) : filtered.length === 0 ? (
-            <p className="muted">No one here yet.</p>
-          ) : (
-            <ul className="assignment-list">
-              {filtered.map((r) => {
-                const isSelf = meUserId !== null && r.userId === meUserId;
-                return (
-                  <li key={r.userId}>
-                    <div>
-                      <Link to={`/users/${r.userId}`}>
-                        <strong>{r.email}</strong>
-                      </Link>
-                      {isSelf && <span className="muted small"> · you</span>}
-                      {r.displayName && (
-                        <span className="muted small"> · {r.displayName}</span>
-                      )}
-                      <div className="muted small">
-                        Joined {relativeTime(r.joinedAt)}
-                        {" · "}
-                        {r.lastSeenAt
-                          ? <>Last seen {relativeTime(r.lastSeenAt)}</>
-                          : <>Never signed in</>}
+        {roster === null ? (
+          <p className="muted">Loading…</p>
+        ) : filtered.length === 0 ? (
+          <p className="muted">No one here yet.</p>
+        ) : (
+          <div className="ds-roster">
+            {filtered.map((r) => {
+              const isSelf = meUserId !== null && r.userId === meUserId;
+              return (
+                <div className="ds-roster__row" key={r.userId}>
+                  <div className="ds-roster__person">
+                    <Avatar name={r.displayName || r.email} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ds-roster__name">
+                        <Link to={`/users/${r.userId}`}>
+                          {r.displayName || r.email}
+                        </Link>
+                        {isSelf && <span className="muted small"> · you</span>}
                       </div>
+                      <div className="ds-roster__email">{r.email}</div>
                     </div>
-                    <div className="row-actions">
-                      {/* The instructor can't downgrade themselves or remove
-                          their own enrollment in the UI; the server enforces
-                          the same rules. */}
-                      <select
-                        value={r.role}
-                        disabled={busy || isSelf}
-                        onChange={(e) =>
-                          onRoleChange(r, e.target.value as EnrollmentRole)
-                        }
-                        title={isSelf ? "You can't change your own role." : undefined}
-                      >
-                        <option value="student">{roleLabel("student")}</option>
-                        <option value="instructor">{roleLabel("instructor")}</option>
-                      </select>
-                      <button
-                        type="button"
-                        className="danger-link"
-                        disabled={busy || isSelf}
-                        onClick={() => onRemove(r)}
-                        title={isSelf ? "Ask another instructor to remove you." : undefined}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-    </section>
+                  </div>
+                  <span className="ds-roster__meta">
+                    Joined {relativeTime(r.joinedAt)}
+                    {" · "}
+                    {r.lastSeenAt
+                      ? `Last seen ${relativeTime(r.lastSeenAt)}`
+                      : "Never signed in"}
+                  </span>
+                  <div className="ds-roster__actions">
+                    {/* The instructor can't downgrade or remove themselves in
+                        the UI; the server enforces the same rules. */}
+                    <Select
+                      value={r.role}
+                      disabled={busy || isSelf}
+                      onChange={(e) =>
+                        onRoleChange(r, e.target.value as EnrollmentRole)
+                      }
+                      title={
+                        isSelf ? "You can't change your own role." : undefined
+                      }
+                    >
+                      <option value="student">{roleLabel("student")}</option>
+                      <option value="instructor">
+                        {roleLabel("instructor")}
+                      </option>
+                    </Select>
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      title={
+                        isSelf
+                          ? "Ask another instructor to remove you."
+                          : "Remove from course"
+                      }
+                      disabled={busy || isSelf}
+                      onClick={() => onRemove(r)}
+                    >
+                      <TrashIcon size={16} />
+                    </IconButton>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Join codes — the kit's join-code panel, expanded to the real
+          multi-code management this page already supported. */}
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">
+          Invite students
+        </span>
+        <p className="muted small">
+          Share a code (or the join link) with students so they can self-enroll
+          after signing in. Codes only ever add students; instructors are added
+          on the roster above. Allowed email domains are set instance-wide in
+          ALLOWED_EMAIL_DOMAINS — see the operations docs.
+        </p>
+        {codesError && <p className="error">{codesError}</p>}
+        <div className="ds-joincode">
+          <div style={{ flex: 1, minWidth: "10rem" }}>
+            <Field label="Max uses (optional)">
+              <Input
+                type="number"
+                min="1"
+                mono
+                placeholder="unlimited"
+                value={codeDraftMaxUses}
+                disabled={codeBusy}
+                onChange={(e) => setCodeDraftMaxUses(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={16} />}
+            onClick={onGenerateCode}
+            loading={codeBusy}
+            disabled={codeBusy}
+          >
+            Generate code
+          </Button>
+        </div>
+
+        {codes === null ? (
+          <p className="muted" style={{ marginTop: "1rem" }}>
+            Loading…
+          </p>
+        ) : codes.length === 0 ? (
+          <p className="muted" style={{ marginTop: "1rem" }}>
+            No codes yet.
+          </p>
+        ) : (
+          <div className="ds-src-list" style={{ marginTop: "1rem" }}>
+            {codes.map((c) => {
+              const active =
+                !c.revokedAt &&
+                (c.expiresAt === null || c.expiresAt > Date.now()) &&
+                (c.maxUses === null || c.uses < c.maxUses);
+              return (
+                <div className="ds-src-row" key={c.code}>
+                  <span className="ds-joincode__code" style={{ fontSize: "1rem" }}>
+                    {c.code}
+                  </span>
+                  <span className="ds-src-row__name" style={{ fontWeight: 400 }}>
+                    Used {c.uses}
+                    {c.maxUses !== null ? ` / ${c.maxUses}` : " times"}
+                    {c.emailDomain ? ` · legacy @${c.emailDomain}` : ""}
+                  </span>
+                  <Badge tone={active ? "success" : "neutral"} dot={active}>
+                    {c.revokedAt ? "revoked" : active ? "active" : "inactive"}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(c.code, `code-${c.code}`)}
+                  >
+                    {copied === `code-${c.code}` ? "Copied" : "Copy code"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(joinUrl(c.code), `url-${c.code}`)}
+                  >
+                    {copied === `url-${c.code}` ? "Copied" : "Copy link"}
+                  </Button>
+                  {active && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={codeBusy}
+                      onClick={() => onRevokeCode(c.code)}
+                    >
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

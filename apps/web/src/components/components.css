@@ -1,0 +1,57 @@
+/* ------------------------------------------------------------------ *
+ * Design-system component styles.
+ *
+ * One block per component, authored against the generic token layer
+ * (tokens/*). The accent is the single brand colour (--accent and its
+ * derived washes); a branded deploy re-tints everything by overriding
+ * --brand-primary in theme.yaml. NO brand name, NO brand-specific colour
+ * literal appears here — only generic tokens and accent-derived color-mix.
+ *
+ * Class prefix: `ds-`. (The design-tool source used an institute-specific
+ * prefix; it is deliberately renamed here so nothing institution-specific
+ * leaks into the public stylesheet.)
+ * ------------------------------------------------------------------ */
+
+/* Per-component partials (one file per component, avoids merge conflicts). */
+@import "./css/Button.css";
+@import "./css/IconButton.css";
+@import "./css/Badge.css";
+@import "./css/Tag.css";
+@import "./css/Avatar.css";
+@import "./css/Card.css";
+@import "./css/ChatComposer.css";
+@import "./css/Message.css";
+@import "./css/CitationPill.css";
+@import "./css/Input.css";
+@import "./css/Select.css";
+@import "./css/Checkbox.css";
+@import "./css/RadioCard.css";
+@import "./css/OutlineRail.css";
+@import "./css/SegmentedControl.css";
+
+/* ==== Wordmark / header lockup ===================================== */
+.ds-lockup { display: inline-flex; align-items: center; gap: 0.6rem; }
+.ds-lockup__mark { width: 26px; height: auto; display: block; }
+.ds-lockup__word {
+  font-family: var(--font-mono); font-weight: var(--weight-bold);
+  font-size: 1.35rem; letter-spacing: -0.05em; color: var(--text-strong);
+  line-height: 1;
+}
+.ds-lockup__word em { font-style: normal; color: var(--accent); }
+.ds-lockup--sm .ds-lockup__word { font-size: 1.15rem; }
+.ds-lockup--sm .ds-lockup__mark { width: 22px; }
+.ds-lockup--lg .ds-lockup__word { font-size: 2.75rem; }
+.ds-lockup--lg .ds-lockup__mark { width: 46px; }
+
+/* ==== Modal — dimmed backdrop + centered raised card ============== */
+.ds-modal-backdrop {
+  position: fixed; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center; padding: var(--space-4);
+  background: color-mix(in srgb, var(--ink-900) 42%, transparent);
+}
+.ds-modal-card {
+  background: var(--surface-raised); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
+  padding: var(--space-6); width: 100%; max-width: 34rem;
+  max-height: 85vh; overflow-y: auto;
+}

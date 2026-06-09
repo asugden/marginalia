@@ -1,0 +1,133 @@
+/* ==== Button ======================================================= *
+ * The primary interactive control. "One primary per region": exactly one
+ * filled accent `primary` per card/section; `subtle`/`ghost` for secondary;
+ * `danger` (accent text, no fill) for destructive.
+ *
+ * Generic tokens only. The accent is the single brand seam, so a branded
+ * deploy re-tints every variant via the accent override. The primary's
+ * depth (a hairline inset top sheen + an accent-tinted layered drop shadow)
+ * is built from color-mix off --accent / --accent-ink so it re-tints too —
+ * no brand-specific colour literal appears here.
+ * ------------------------------------------------------------------- */
+
+.ds-btn {
+  --_pad-y: 0.6rem;
+  --_pad-x: 1.15rem;
+  --_fs: var(--text-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+  font-weight: var(--weight-semibold);
+  font-size: var(--_fs);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding: var(--_pad-y) var(--_pad-x);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-3) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+}
+
+.ds-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ds-btn:active:not(:disabled) { transform: translateY(1px); }
+.ds-btn[disabled],
+.ds-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+  transform: none;
+}
+
+.ds-btn--sm {
+  --_pad-y: 0.4rem;
+  --_pad-x: 0.8rem;
+  --_fs: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+.ds-btn--lg {
+  --_pad-y: 0.8rem;
+  --_pad-x: 1.5rem;
+  --_fs: var(--text-md);
+}
+.ds-btn--block { display: flex; width: 100%; }
+
+/* Primary — the one filled accent action per region. Depth without gradient:
+   a hairline inset top sheen + an accent-tinted, layered drop shadow read as a
+   physical, pressable key. */
+.ds-btn--primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18),
+              inset 0 -1px 0 color-mix(in srgb, var(--accent-ink) 32%, transparent),
+              0 1px 2px color-mix(in srgb, var(--accent-ink) 30%, transparent),
+              0 2px 6px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.ds-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18),
+              inset 0 -1px 0 color-mix(in srgb, var(--accent-ink) 32%, transparent),
+              0 2px 4px color-mix(in srgb, var(--accent-ink) 34%, transparent),
+              0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.ds-btn--primary:active:not(:disabled) {
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--accent-ink) 45%, transparent),
+              0 1px 2px color-mix(in srgb, var(--accent-ink) 25%, transparent);
+}
+
+/* Subtle — neutral secondary. White fill, line border, ink text. */
+.ds-btn--subtle {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+.ds-btn--subtle:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--ink-400);
+  color: var(--text-strong);
+}
+
+/* Ghost — chrome-free, for toolbars and inline actions. */
+.ds-btn--ghost { background: transparent; color: var(--text-secondary); }
+.ds-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+/* Danger — destructive. Accent text, no fill, so it never reads as primary. */
+.ds-btn--danger { background: transparent; color: var(--accent); }
+.ds-btn--danger:hover:not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--accent-hover);
+}
+
+.ds-btn__spinner {
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: ds-btn-spin 0.6s linear infinite;
+  opacity: 0.9;
+}
+@keyframes ds-btn-spin { to { transform: rotate(360deg); } }
+
+.ds-btn__icon { display: inline-flex; flex: none; }
+.ds-btn__icon svg {
+  display: block;
+  width: 1.05em;
+  height: 1.05em;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+/* Trailing icon (the arrow on a CTA) nudges out on hover. */
+.ds-btn:hover:not(:disabled) .ds-btn__icon:last-child svg {
+  transform: translateX(2px);
+}

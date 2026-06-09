@@ -1,0 +1,62 @@
+/* ==== SegmentedControl ============================================= *
+ * Compact one-of-N switch for tabs/filters (Sources · Outline · Settings,
+ * Students · Authors). The group sits in a sunken track; the active pill
+ * lifts onto the surface in the accent so the set reads as one unit rather
+ * than competing buttons. Generic tokens only; the accent seam re-tints the
+ * active option automatically on a branded deploy.
+ * ------------------------------------------------------------------- */
+
+.ds-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.ds-seg__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-sm);
+  transition:
+    background-color var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ds-seg__btn:hover:not(.ds-seg__btn--active) {
+  color: var(--text-strong);
+}
+
+.ds-seg__btn--active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-xs);
+}
+
+.ds-seg__btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ds-seg__count {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.ds-seg__btn--active .ds-seg__count {
+  color: var(--accent);
+}

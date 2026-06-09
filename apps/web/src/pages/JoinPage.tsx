@@ -10,8 +10,10 @@
 // flow with a return_to of the current URL — we wire that in below.
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { claimJoinCode } from "../client.js";
+import { Button, Wordmark } from "../components/index.js";
+import { ArrowIcon } from "../icons.js";
 
 type State =
   | { kind: "loading" }
@@ -50,52 +52,65 @@ export function JoinPage() {
     return () => ctrl.abort();
   }, [code]);
 
-  if (state.kind === "loading") {
-    return (
-      <div className="page">
-        <div className="card">
-          <p>Joining…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.kind === "error") {
-    return (
-      <div className="page">
-        <div className="card">
-          <h1>Couldn't join</h1>
-          <p className="error">{state.message}</p>
-          {state.needsSignIn && (
-            <p>
-              <a
-                href={`/auth/login?return_to=${encodeURIComponent(`/join/${code}`)}`}
-                className="link-button"
-              >
-                Sign in and try again
-              </a>
-            </p>
-          )}
-          <p>
-            <Link to="/">← Back home</Link>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="page">
-      <div className="card">
-        <h1>{state.alreadyEnrolled ? "Already enrolled" : "Welcome!"}</h1>
-        <p>
-          {state.alreadyEnrolled
-            ? "You were already in this course."
-            : "You've been enrolled."}
-        </p>
-        <p>
-          <button type="button" onClick={() => navigate("/")}>Continue</button>
-        </p>
+    <div className="ds-join">
+      <header className="ds-topbar">
+        <div className="ds-topbar__inner">
+          <Wordmark />
+        </div>
+      </header>
+      <div className="ds-join__inner">
+        <div className="ds-home__panel ds-join__card">
+          {state.kind === "loading" ? (
+            <>
+              <span className="eyebrow">Joining</span>
+              <span className="ds-rule" />
+              <p className="ds-home__note">Joining…</p>
+            </>
+          ) : state.kind === "error" ? (
+            <>
+              <span className="eyebrow">Join a course</span>
+              <span className="ds-rule" />
+              <h2>Couldn&rsquo;t join</h2>
+              <p className="error">{state.message}</p>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                {state.needsSignIn && (
+                  <Button
+                    variant="primary"
+                    href={`/auth/login?return_to=${encodeURIComponent(`/join/${code}`)}`}
+                  >
+                    Sign in and try again
+                  </Button>
+                )}
+                <Button variant="subtle" href="/">
+                  ← Back home
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="eyebrow">
+                {state.alreadyEnrolled ? "Already enrolled" : "Welcome"}
+              </span>
+              <span className="ds-rule" />
+              <h2>{state.alreadyEnrolled ? "You're already in." : "You're in!"}</h2>
+              <p className="ds-home__note">
+                {state.alreadyEnrolled
+                  ? "You were already enrolled in this course."
+                  : "You've been enrolled. Head in to pick something to begin."}
+              </p>
+              <div>
+                <Button
+                  variant="primary"
+                  iconRight={<ArrowIcon size={16} />}
+                  onClick={() => navigate("/")}
+                >
+                  Continue
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

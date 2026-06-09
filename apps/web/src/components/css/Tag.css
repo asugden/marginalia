@@ -1,0 +1,53 @@
+/* ==== Tag ========================================================== *
+ * Mono "kind chip" for content/source types (PDF, Markdown, Text, URL)
+ * and generic labels; optionally removable via a × button.
+ *
+ * The bundle's `pdf` variant baked in literal warm-red fill and ink
+ * values. Those are re-expressed as
+ * color-mix off the accent so the tone re-tints with --accent and
+ * passes through any branded override — no colour literal here. The
+ * markdown/text/url/default variants already ride generic tokens.
+ * ------------------------------------------------------------------ */
+
+.ds-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 0.28em 0.55em;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+}
+
+.ds-tag--pdf {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent-ink);
+}
+.ds-tag--markdown { background: var(--blue-tint);  color: var(--blue-ink); }
+.ds-tag--text     { background: var(--green-tint); color: var(--green-ink); }
+.ds-tag--url      { background: var(--amber-tint); color: var(--amber-ink); }
+.ds-tag--default  { background: var(--surface-sunken); color: var(--text-muted); }
+
+.ds-tag--removable { padding-right: 0.3em; }
+
+.ds-tag__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05em;
+  height: 1.05em;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 1.1em;
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+.ds-tag__x:hover { opacity: 1; background: rgba(0, 0, 0, 0.08); }

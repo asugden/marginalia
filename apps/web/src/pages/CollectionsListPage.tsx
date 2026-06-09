@@ -12,6 +12,8 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
+import { Badge, Button, Field, Input } from "../components/index.js";
+import { BookIcon, PlusIcon } from "../icons.js";
 
 export function CollectionsListPage() {
   const { courseId } = useCourse();
@@ -55,74 +57,89 @@ export function CollectionsListPage() {
   }
 
   return (
-    <section>
-      <p className="scope-note">
-        A library is a set of documents you attach to an agent. The agent
-        answers from these sources and cites them in line.
-      </p>
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Author · Sources</span>
+          <h1>Libraries</h1>
+          <div className="ds-staff-head__scope">
+            A library is a set of documents you attach to an agent. The agent
+            answers from these sources and cites them in line.
+          </div>
+        </div>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
-      <section className="field-group">
-        <h2>New library</h2>
-        <label className="field">
-          <span className="field-label">Name</span>
-          <input
-            type="text"
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Description (optional)</span>
-          <input
-            type="text"
-            value={draftDescription}
-            placeholder="What's in this library?"
-            onChange={(e) => setDraftDescription(e.target.value)}
-          />
-        </label>
-        <div className="form-actions">
-          <button onClick={create} disabled={creating || !draftName.trim()}>
-            {creating ? "Creating…" : "Create library"}
-          </button>
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">New library</span>
+        <div className="ds-staff-row">
+          <Field label="Name">
+            <Input
+              type="text"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+            />
+          </Field>
+          <Field label="Description (optional)">
+            <Input
+              type="text"
+              value={draftDescription}
+              placeholder="What's in this library?"
+              onChange={(e) => setDraftDescription(e.target.value)}
+            />
+          </Field>
+          <div style={{ display: "flex", alignItems: "flex-end" }}>
+            <Button
+              variant="primary"
+              icon={<PlusIcon size={16} />}
+              onClick={create}
+              loading={creating}
+              disabled={creating || !draftName.trim()}
+            >
+              Create library
+            </Button>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <section className="field-group">
-        <h2>Your libraries</h2>
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Your libraries</span>
         {collections === null ? (
           <p className="muted">Loading…</p>
         ) : collections.length === 0 ? (
           <p className="muted">No libraries yet.</p>
         ) : (
-          <ul className="assignment-list">
+          <div className="ds-staff-list">
             {collections.map((c) => (
-              <li key={c.id}>
-                <div>
-                  <strong>{c.name}</strong>
-                  {c.description && (
-                    <span className="muted small"> · {c.description}</span>
-                  )}
-                  <div
-                    className="muted small"
-                    title={new Date(c.updatedAt).toLocaleString()}
-                  >
-                    {c.sourceCount} {c.sourceCount === 1 ? "source" : "sources"}
-                    {" · "}updated {relativeTime(c.updatedAt)}
+              <Link
+                key={c.id}
+                to={`/course/${courseId}/collections/${c.id}`}
+                className="ds-staff-list__row"
+              >
+                <span
+                  className="ds-id__icon"
+                  style={{ width: 36, height: 36, color: "var(--text-muted)" }}
+                  aria-hidden
+                >
+                  <BookIcon size={18} />
+                </span>
+                <div className="ds-staff-list__main">
+                  <div className="ds-staff-list__title">{c.name}</div>
+                  <div className="ds-staff-list__sub">
+                    {c.description ? `${c.description} · ` : ""}
+                    {c.sourceCount} {c.sourceCount === 1 ? "source" : "sources"} ·
+                    updated {relativeTime(c.updatedAt)}
                   </div>
                 </div>
-                <Link
-                  to={`/course/${courseId}/collections/${c.id}`}
-                  className="link-button subtle"
-                >
-                  Manage sources
-                </Link>
-              </li>
+                <div className="ds-staff-list__actions">
+                  <Badge tone="neutral">{c.sourceCount}</Badge>
+                </div>
+              </Link>
             ))}
-          </ul>
+          </div>
         )}
-      </section>
-    </section>
+      </div>
+    </div>
   );
 }

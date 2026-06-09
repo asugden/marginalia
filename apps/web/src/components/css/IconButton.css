@@ -1,0 +1,59 @@
+/* ==== IconButton — square icon-only control ======================= *
+ * Ghost (default), bordered "round", and filled "primary" variants in
+ * sm/md/lg sizes. Authored against generic tokens; the accent is the
+ * single brand colour and re-tints every variant. No brand name, no
+ * brand-specific colour literal. */
+
+.ds-iconbtn {
+  --_size: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--_size);
+  height: var(--_size);
+  flex: none;
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    transform var(--dur-1) var(--ease-out);
+}
+.ds-iconbtn svg { width: 20px; height: 20px; display: block; }
+.ds-iconbtn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-strong); }
+.ds-iconbtn:active:not(:disabled) { transform: translateY(1px); }
+.ds-iconbtn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ds-iconbtn[disabled] { opacity: 0.4; cursor: default; pointer-events: none; }
+
+.ds-iconbtn--sm { --_size: 30px; }
+.ds-iconbtn--sm svg { width: 17px; height: 17px; }
+.ds-iconbtn--lg { --_size: 44px; }
+.ds-iconbtn--lg svg { width: 22px; height: 22px; }
+
+/* Bordered "round" variant — the inline new-chat affordance. */
+.ds-iconbtn--round {
+  border-radius: var(--radius-pill);
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+.ds-iconbtn--round:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+}
+
+/* Primary — filled accent icon button (rare; e.g. compose FAB). */
+.ds-iconbtn--primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-xs);
+}
+.ds-iconbtn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--text-on-accent);
+}

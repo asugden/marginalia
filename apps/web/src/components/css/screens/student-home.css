@@ -1,0 +1,132 @@
+/* Student home — the agent picker. Warm-paper register: translucent sticky
+   header with the wordmark lockup, eyebrow→heading lockup, and a list of agent
+   rows with zero-padded ordinals and an accent rail that wipes in on hover.
+   Translated from the design-system student kit; ds- prefix, generic tokens. */
+
+.ds-home { position: relative; min-height: 100vh; background: var(--bg); padding-bottom: 4rem; }
+
+/* Persistent translucent top bar — content held to the reading measure. */
+.ds-topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(8px);
+  position: sticky; top: 0; z-index: 5;
+}
+.ds-topbar__inner {
+  max-width: 800px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.8rem 2rem;
+}
+.ds-topbar__actions { display: flex; align-items: center; gap: 0.45rem; }
+.ds-topbar__divider { width: 1px; height: 1.3rem; background: var(--border-strong); margin: 0 0.35rem; }
+.ds-navlink {
+  font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 0.4rem 0.5rem; border-radius: var(--radius-sm);
+}
+.ds-navlink:hover { color: var(--text-strong); background: var(--surface-hover); }
+.ds-id { display: inline-flex; align-items: center; gap: 0.45rem; }
+.ds-id__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--radius-pill);
+  background: var(--surface-sunken); border: 1px solid var(--border-strong);
+  color: var(--text-muted); flex: none;
+}
+.ds-id__icon svg { width: 17px; height: 17px; }
+.ds-id__name { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+
+.ds-home__inner { max-width: 800px; margin: 0 auto; padding: 3rem 2rem 0; position: relative; z-index: 1; }
+
+/* Eyebrow → heading lockup with the short accent rule. */
+.ds-home__head { margin-bottom: 2.25rem; }
+.ds-rule { display: block; width: 34px; height: 2px; background: var(--accent); border-radius: 2px; margin: 0.85rem 0; }
+.ds-home__head h1 { margin: 0 0 0.7rem; font-size: 2.4rem; }
+.ds-home__sub { color: var(--text-secondary); font-size: var(--text-lg); line-height: 1.5; max-width: 48ch; margin: 0; }
+
+/* Section bar above the agent list. */
+.ds-agents__bar {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 0.2rem 0.85rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem;
+}
+.ds-agents__stat {
+  font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.ds-agents__stat i { color: var(--border-strong); font-style: normal; margin: 0 0.3rem; }
+
+.ds-agents { display: flex; flex-direction: column; gap: 0.7rem; }
+.ds-agent {
+  position: relative; display: flex; align-items: center; gap: 1.05rem; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 1.05rem 1.25rem 1.05rem 1.1rem;
+  box-shadow: var(--shadow-xs); overflow: hidden; text-decoration: none;
+  transition: box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+/* Hover: an accent rail wipes in from the left. */
+.ds-agent::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--accent); transform: scaleY(0); transform-origin: center;
+  transition: transform var(--dur-3) var(--ease-out);
+}
+.ds-agent:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
+.ds-agent:hover::before { transform: scaleY(1); }
+.ds-agent__index {
+  font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;
+  color: var(--text-faint); width: 1.6rem; flex: none; text-align: center; letter-spacing: -0.02em;
+}
+.ds-agent:hover .ds-agent__index { color: var(--accent); }
+.ds-agent__main { flex: 1; min-width: 0; }
+.ds-agent__title { font-weight: 700; font-size: var(--text-lg); color: var(--text-strong); letter-spacing: -0.01em; }
+.ds-agent__blurb { color: var(--text-muted); font-size: var(--text-sm); margin: 0.12rem 0 0.5rem; }
+.ds-agent__meta { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
+.ds-agent__topics {
+  font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-faint); white-space: nowrap;
+}
+.ds-agent__topics::before { content: "·"; margin-right: 0.45rem; color: var(--border-strong); }
+/* Action column — fixed width so every primary action's right edge aligns. */
+.ds-agent__action { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; width: 168px; }
+.ds-agent__cta { min-width: 118px; justify-content: center; }
+
+/* Join / not-enrolled + empty / loading states keep the warm-card register. */
+.ds-home__panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs); padding: 1.75rem; display: flex; flex-direction: column; gap: 1rem;
+}
+.ds-home__panel h2 { font-family: var(--font-sans); text-transform: none; letter-spacing: -0.01em; font-size: var(--text-xl); font-weight: 700; color: var(--text-strong); }
+.ds-home__note { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; margin: 0; }
+.ds-home__joinform { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; }
+.ds-home__joinform .ds-field { flex: 1; min-width: 200px; }
+.ds-home__muted { color: var(--text-muted); font-size: var(--text-sm); }
+
+/* Join landing — warm-card register, centered, reusing the home panel. */
+.ds-join { min-height: 100vh; background: var(--bg); }
+.ds-join__inner { max-width: 800px; margin: 0 auto; padding: 3rem 2rem; }
+.ds-join__card { max-width: 32rem; }
+.ds-join__card .ds-rule { margin-top: 0.4rem; }
+
+@media (max-width: 920px) {
+  .ds-home__inner, .ds-topbar__inner { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+@media (max-width: 680px) {
+  .ds-topbar__inner { padding: 0.6rem 1rem; }
+  .ds-topbar__actions { gap: 0.15rem; }
+  .ds-hide-sm { display: none; }
+  .ds-id__name { display: none; }
+  .ds-topbar__divider { display: none; }
+  .ds-navlink { padding: 0.4rem 0.4rem; }
+
+  .ds-home { padding-bottom: 3rem; }
+  .ds-home__inner { padding: 1.75rem 1rem 0; }
+  .ds-home__head { margin-bottom: 1.5rem; }
+  .ds-home__head h1 { font-size: 1.95rem; }
+  .ds-home__sub { font-size: var(--text-md); }
+
+  .ds-agent { flex-wrap: wrap; gap: 0.5rem 0.9rem; padding: 1rem 1rem 1.1rem; }
+  .ds-agent__index { display: none; }
+  .ds-agent__main { flex: 1 1 60%; }
+  .ds-agent__action { order: 3; flex-basis: 100%; width: auto; justify-content: stretch; gap: 0.6rem; margin-top: 0.2rem; }
+  .ds-agent__cta { flex: 1; min-width: 0; }
+  .ds-agent__action > .ds-badge { margin: 0 auto 0 0; }
+}

@@ -1,0 +1,25 @@
+/* ==== CitationPill / SourcesStrip ================================= *
+ * Inline numbered source reference ([1]) and the compact list of
+ * cited sources under a grounded assistant turn.
+ * ------------------------------------------------------------------ */
+
+.ds-cite {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.15em; height: 1.15em; padding: 0 0.3em; margin: 0 0.12em;
+  font-family: var(--font-mono); font-size: 0.72em; font-weight: 700; line-height: 1;
+  border-radius: var(--radius-xs); vertical-align: 0.12em; text-decoration: none;
+  background: var(--accent-wash-2); color: var(--accent-ink);
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+a.ds-cite:hover { background: var(--accent); color: var(--text-on-accent); }
+.ds-cite--disabled { background: var(--surface-sunken); color: var(--text-muted); cursor: default; }
+
+/* Sources strip below an assistant turn */
+.ds-sources {
+  margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px solid var(--border);
+  font-size: var(--text-xs); line-height: 1.6; color: var(--text-muted);
+  display: flex; flex-wrap: wrap; gap: 0.15rem 0.5rem; align-items: baseline;
+}
+.ds-sources__label { font-family: var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; font-size: var(--text-2xs); }
+.ds-sources__item { color: var(--text-secondary); text-decoration: none; }
+.ds-sources__item:hover { color: var(--accent); }

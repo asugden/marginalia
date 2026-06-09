@@ -17,6 +17,8 @@ import {
   type VoiceSummary,
 } from "../client.js";
 import { relativeTime } from "../time.js";
+import { Avatar, Badge, Button, Wordmark } from "../components/index.js";
+import { PlusIcon } from "../icons.js";
 
 export function AuthorVoicesPage() {
   const [owned, setOwned] = useState<VoiceSummary[] | null>(null);
@@ -49,30 +51,46 @@ export function AuthorVoicesPage() {
   }
 
   return (
-    <div className="page staff">
-      <div className="staff-frame">
-        <header className="card-header">
-          <h1>Voices</h1>
-          <div className="header-actions">
-            <Link to="/author/agents" className="link-button subtle">
-              ← Agents
-            </Link>
-            <Link to="/author/voices/new" className="link-button">
-              New voice
-            </Link>
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Link to="/" aria-label="Home">
+          <Wordmark size="sm" />
+        </Link>
+        <span className="ds-staff-top__role">Author</span>
+        <div className="ds-staff-top__course">
+          <Button variant="ghost" size="sm" href="/courses">
+            ← Courses
+          </Button>
+        </div>
+      </header>
+
+      <div className="ds-staff-page">
+        <div className="ds-staff-head">
+          <div>
+            <span className="eyebrow">Author · Voices</span>
+            <h1>Voices</h1>
+            <div className="ds-staff-head__scope">
+              A voice is a persona — tone, style, pedagogy — that an agent
+              speaks in. Voices are yours: editing one updates every new
+              conversation against agents that use it. In-progress
+              conversations keep the original.
+            </div>
           </div>
-        </header>
-        <p className="scope-note">
-          A voice is a persona — tone, style, pedagogy — that an agent
-          speaks in. Voices are yours: editing one updates every new
-          conversation against agents that use it. In-progress
-          conversations keep the original.
-        </p>
+          <div className="ds-staff-actions">
+            <Button
+              variant="primary"
+              icon={<PlusIcon size={16} />}
+              href="/author/voices/new"
+            >
+              New voice
+            </Button>
+          </div>
+        </div>
 
         {error && <p className="error">{error}</p>}
 
-        <section className="field-group">
-          <h2>My voices</h2>
+        <div className="ds-staff-section">
+          <span className="mono-label ds-staff-section__label">My voices</span>
           {owned === null ? (
             <p className="muted">Loading…</p>
           ) : owned.length === 0 ? (
@@ -82,82 +100,84 @@ export function AuthorVoicesPage() {
               agent editor and use Customize on a library voice.
             </p>
           ) : (
-            <ul className="assignment-list">
+            <div className="ds-staff-list">
               {owned.map((v) => (
-                <li key={v.id}>
-                  <div>
-                    <Link to={`/author/voices/${v.id}`}>
-                      <strong>{v.name}</strong>
-                    </Link>
-                    <div className="muted small">
+                <div key={v.id} className="ds-staff-list__row">
+                  <Avatar name={v.name} />
+                  <div className="ds-staff-list__main">
+                    <div className="ds-staff-list__title">
+                      <Link to={`/author/voices/${v.id}`}>{v.name}</Link>
+                    </div>
+                    <div className="ds-staff-list__sub">
                       {v.description}
-                      {v.updatedAt && <> · updated {relativeTime(v.updatedAt)}</>}
+                      {v.updatedAt ? ` · updated ${relativeTime(v.updatedAt)}` : ""}
                     </div>
                   </div>
-                  <div className="row-actions">
-                    <Link to={`/author/voices/${v.id}`} className="link-button subtle">
+                  <div className="ds-staff-list__actions">
+                    <Button variant="subtle" size="sm" href={`/author/voices/${v.id}`}>
                       Edit
-                    </Link>
-                    <button
-                      type="button"
-                      className="subtle"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       disabled={busy}
                       onClick={() => onDuplicate(v.id)}
                     >
                       Duplicate
-                    </button>
+                    </Button>
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
 
-        <section className="field-group">
-          <h2>Shared with me</h2>
+        <div className="ds-staff-section">
+          <span className="mono-label ds-staff-section__label">
+            Shared with me
+          </span>
           {shared === null ? (
             <p className="muted">Loading…</p>
           ) : shared.length === 0 ? (
             <p className="muted">
-              No one has shared a voice with you. When an owner shares a
-              voice with your email, it shows up here and becomes pickable
-              in the agent editor.
+              No one has shared a voice with you. When an owner shares a voice
+              with your email, it shows up here and becomes pickable in the
+              agent editor.
             </p>
           ) : (
-            <ul className="assignment-list">
+            <div className="ds-staff-list">
               {shared.map((v) => (
-                <li key={v.id}>
-                  <div>
-                    <Link to={`/author/voices/${v.id}`}>
-                      <strong>{v.name}</strong>
-                    </Link>
-                    <span className="muted small">
-                      {" "}· shared
-                    </span>
-                    <div className="muted small">
+                <div key={v.id} className="ds-staff-list__row">
+                  <Avatar name={v.name} />
+                  <div className="ds-staff-list__main">
+                    <div className="ds-staff-list__title">
+                      <Link to={`/author/voices/${v.id}`}>{v.name}</Link>{" "}
+                      <Badge tone="ghost">shared</Badge>
+                    </div>
+                    <div className="ds-staff-list__sub">
                       {v.description}
-                      {v.updatedAt && <> · updated {relativeTime(v.updatedAt)}</>}
+                      {v.updatedAt ? ` · updated ${relativeTime(v.updatedAt)}` : ""}
                     </div>
                   </div>
-                  <div className="row-actions">
-                    <Link to={`/author/voices/${v.id}`} className="link-button subtle">
+                  <div className="ds-staff-list__actions">
+                    <Button variant="subtle" size="sm" href={`/author/voices/${v.id}`}>
                       View
-                    </Link>
-                    <button
-                      type="button"
-                      className="subtle"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       disabled={busy}
                       onClick={() => onDuplicate(v.id)}
                       title="Copy this voice into a new one you own (and can edit)."
                     >
                       Duplicate
-                    </button>
+                    </Button>
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,25 @@
+/* ==== Select ======================================================= *
+ * Styled native <select> dropdown with a mono-system chevron.
+ * Ported from the design-tool source; class prefix renamed to ds-
+ * and the brand red token mapped to the generic --accent seam.
+ * ------------------------------------------------------------------- */
+
+.ds-select-wrap { position: relative; display: inline-flex; width: 100%; }
+
+.ds-select {
+  appearance: none; -webkit-appearance: none; width: 100%; box-sizing: border-box;
+  font-family: var(--font-sans); font-size: var(--text-base); color: var(--text-strong);
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); padding: 0.5rem 2.2rem 0.5rem 0.7rem;
+  cursor: pointer; line-height: 1.4;
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+
+.ds-select:hover:not(:disabled) { border-color: var(--ink-400); }
+.ds-select:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.ds-select:disabled { background: var(--surface-sunken); color: var(--text-muted); cursor: not-allowed; }
+
+.ds-select-wrap__chev {
+  position: absolute; right: 0.7rem; top: 50%; transform: translateY(-50%);
+  pointer-events: none; color: var(--text-muted); display: flex;
+}

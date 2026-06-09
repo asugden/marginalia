@@ -16,6 +16,17 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
+import {
+  Badge,
+  Button,
+  Field,
+  IconButton,
+  Input,
+  SegmentedControl,
+  Tag,
+  Textarea,
+} from "../components/index.js";
+import { TrashIcon, UploadIcon } from "../icons.js";
 
 function humanBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -151,54 +162,62 @@ export function CollectionDetailPage() {
     }
   }
 
+  const statusTone = (st: string) =>
+    st === "indexed" ? "success" : st === "failed" ? "danger" : "warning";
+  const statusLabel = (st: string) =>
+    st === "indexed" ? "Indexed" : st === "failed" ? "Failed" : "Pending";
+
   if (!detail) {
     return (
-      <section>
-        {error ? (
-          <p className="error">{error}</p>
-        ) : (
-          <p className="muted">Loading…</p>
-        )}
-        <Link to={`/course/${courseId}/collections`} className="link-button subtle">
+      <div className="ds-staff-page">
+        {error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}
+        <Button variant="ghost" href={`/course/${courseId}/collections`}>
           ← All libraries
-        </Link>
-      </section>
+        </Button>
+      </div>
     );
   }
 
+  const totalChunks = detail.sources.reduce(
+    (a, s) => a + (s.status === "indexed" ? s.chunks : 0),
+    0,
+  );
+
   return (
-    <section>
-      <header className="sub-header">
-        <h2>{detail.collection.name}</h2>
-        <Link to={`/course/${courseId}/collections`} className="link-button subtle">
-          ← All libraries
-        </Link>
-      </header>
-      {detail.collection.description && (
-        <p className="muted">{detail.collection.description}</p>
-      )}
-
-        {error && <p className="error">{error}</p>}
-
-        <section className="field-group">
-          <h2>Add a source</h2>
-          <div className="tab-row" role="tablist">
-            {(["upload", "url", "paste"] as Tab[]).map((t) => (
-              <button
-                key={t}
-                role="tab"
-                aria-selected={tab === t}
-                className={`tab-button${tab === t ? " active" : ""}`}
-                onClick={() => setTab(t)}
-                type="button"
-              >
-                {t === "upload" ? "Upload" : t === "url" ? "From URL" : "Paste text"}
-              </button>
-            ))}
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Author · Sources</span>
+          <h1>{detail.collection.name}</h1>
+          <div className="ds-staff-head__scope">
+            {detail.collection.description ||
+              "The agent only argues from these documents, and cites them in line so students can check the source."}
           </div>
+        </div>
+        <div className="ds-staff-actions">
+          <Button variant="ghost" href={`/course/${courseId}/collections`}>
+            ← All libraries
+          </Button>
+        </div>
+      </div>
 
+      {error && <p className="error">{error}</p>}
+
+      <div className="ds-staff-section">
+        <span className="mono-label ds-staff-section__label">Add a source</span>
+        <SegmentedControl
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          options={[
+            { value: "upload", label: "Upload" },
+            { value: "url", label: "From URL" },
+            { value: "paste", label: "Paste text" },
+          ]}
+        />
+
+        <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {tab === "upload" && (
-            <div className="tab-panel">
+            <>
               <p className="muted small">
                 .pdf, .md, or .txt. Each file is chunked (~500 tokens, 50
                 overlap), embedded, and indexed.
@@ -210,124 +229,156 @@ export function CollectionDetailPage() {
                 disabled={busy}
                 onChange={onPick}
               />
-            </div>
+            </>
           )}
 
           {tab === "url" && (
-            <div className="tab-panel">
+            <>
               <p className="muted small">
                 Paste any http(s) URL. The page is fetched, the main content
                 extracted (HTML pages run through Readability), and indexed.
-                PDFs aren't fetched from URLs — upload them directly.
+                PDFs aren&rsquo;t fetched from URLs — upload them directly.
               </p>
-              <div className="inline-form">
-                <input
-                  type="url"
-                  placeholder="https://…"
-                  value={urlInput}
-                  disabled={busy}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                />
-                <button onClick={onAddUrl} disabled={busy || !urlInput.trim()}>
-                  {busy ? "Fetching…" : "Add"}
-                </button>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="URL">
+                    <Input
+                      type="url"
+                      placeholder="https://…"
+                      value={urlInput}
+                      disabled={busy}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={onAddUrl}
+                  loading={busy}
+                  disabled={busy || !urlInput.trim()}
+                >
+                  Add
+                </Button>
               </div>
-            </div>
+            </>
           )}
 
           {tab === "paste" && (
-            <div className="tab-panel">
+            <>
               <p className="muted small">
                 Paste markdown or plain text. Stored alongside other sources.
               </p>
-              <label className="field">
-                <span className="field-label">Title (optional)</span>
-                <input
+              <Field label="Title (optional)">
+                <Input
                   type="text"
                   value={pasteTitle}
                   disabled={busy}
                   onChange={(e) => setPasteTitle(e.target.value)}
                 />
-              </label>
-              <label className="field">
-                <span className="field-label">Content</span>
-                <textarea
+              </Field>
+              <Field label="Content">
+                <Textarea
                   rows={8}
                   value={pasteBody}
                   disabled={busy}
                   onChange={(e) => setPasteBody(e.target.value)}
                 />
-              </label>
-              <div className="form-actions">
-                <button onClick={onPaste} disabled={busy || !pasteBody.trim()}>
-                  {busy ? "Indexing…" : "Add"}
-                </button>
+              </Field>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <Button
+                  variant="primary"
+                  icon={<UploadIcon size={16} />}
+                  onClick={onPaste}
+                  loading={busy}
+                  disabled={busy || !pasteBody.trim()}
+                >
+                  Add
+                </Button>
               </div>
-            </div>
+            </>
           )}
 
           {busy && <p className="muted small">Indexing… this can take a moment.</p>}
-        </section>
+        </div>
+      </div>
 
-        <section className="field-group">
-          <h2>Sources</h2>
-          {detail.sources.length === 0 ? (
-            <p className="muted">No sources yet.</p>
-          ) : (
-            <ul className="assignment-list">
-              {detail.sources.map((s) => (
-                <li key={s.id}>
-                  <div>
-                    <span className={`kind-chip kind-${s.kind}`}>{kindLabel(s.kind)}</span>{" "}
-                    <strong>{s.filename}</strong>
-                    <span className="muted small">
-                      {" "}· {humanBytes(s.byteSize)}
-                      {s.status === "indexed" && ` · ${s.chunks} chunks`}
-                    </span>
-                    {s.sourceUrl && (
-                      <div className="muted small">
-                        <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer">
-                          {s.sourceUrl}
-                        </a>
-                        {s.fetchedAt !== null && (
-                          <> · fetched {relativeTime(s.fetchedAt)}</>
-                        )}
-                      </div>
-                    )}
-                    {s.status === "failed" && s.error && (
-                      <div className="error small">{s.error}</div>
-                    )}
-                  </div>
-                  <div className="row-actions">
-                    {s.kind === "url" && (
-                      <button
-                        type="button"
-                        className="link-button subtle"
-                        disabled={busy}
-                        onClick={() => onRefresh(s.id)}
-                        title="Re-fetch this URL and re-index"
-                      >
-                        Refresh
-                      </button>
-                    )}
-                    <span className={`status-badge status-${s.status}`}>
-                      {s.status}
-                    </span>
-                    <button
-                      type="button"
-                      className="danger-link"
-                      disabled={busy}
-                      onClick={() => onRemoveSource(s.id, s.filename)}
-                      title="Remove source from this collection"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+      <div className="ds-staff-section">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "0.7rem",
+          }}
+        >
+          <span className="mono-label">
+            Library · {detail.sources.length} document
+            {detail.sources.length === 1 ? "" : "s"}
+          </span>
+          {totalChunks > 0 && (
+            <span className="mono-label">{totalChunks} chunks indexed</span>
           )}
-        </section>
-    </section>
+        </div>
+
+        {detail.sources.length === 0 ? (
+          <p className="muted">No sources yet.</p>
+        ) : (
+          <div className="ds-src-list">
+            {detail.sources.map((s) => (
+              <div className="ds-src-row" key={s.id}>
+                <Tag kind={s.kind}>{kindLabel(s.kind)}</Tag>
+                <span className="ds-src-row__name">
+                  {s.filename}
+                  {s.sourceUrl && (
+                    <a
+                      href={s.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="muted small"
+                      style={{ marginLeft: "0.5rem" }}
+                    >
+                      ↗
+                    </a>
+                  )}
+                  {s.status === "failed" && s.error && (
+                    <span className="error small"> · {s.error}</span>
+                  )}
+                </span>
+                <span className="ds-src-row__chunks">
+                  {humanBytes(s.byteSize)}
+                  {s.status === "indexed" ? ` · ${s.chunks} chunks` : ""}
+                  {s.kind === "url" && s.fetchedAt !== null
+                    ? ` · fetched ${relativeTime(s.fetchedAt)}`
+                    : ""}
+                </span>
+                <Badge tone={statusTone(s.status)} dot>
+                  {statusLabel(s.status)}
+                </Badge>
+                {s.kind === "url" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => onRefresh(s.id)}
+                    title="Re-fetch this URL and re-index"
+                  >
+                    Refresh
+                  </Button>
+                )}
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  title="Remove source from this collection"
+                  disabled={busy}
+                  onClick={() => onRemoveSource(s.id, s.filename)}
+                >
+                  <TrashIcon size={16} />
+                </IconButton>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

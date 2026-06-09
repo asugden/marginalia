@@ -1,0 +1,44 @@
+/* ==== Card ========================================================= *
+ * The workspace container of the student register. White paper, soft
+ * warm shadow, 16px radius. `interactive` adds a hover-lift for clickable
+ * rows; `accent` adds a left accent rail for the active/selected state.
+ * ------------------------------------------------------------------ */
+
+.ds-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-body);
+  display: block;
+}
+
+.ds-card--pad    { padding: var(--space-6); }
+.ds-card--pad-sm { padding: var(--space-4); }
+.ds-card--pad-lg { padding: var(--space-8); }
+
+.ds-card--flat   { box-shadow: none; }
+.ds-card--sunken { background: var(--surface-sunken); box-shadow: none; }
+
+.ds-card--interactive {
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    box-shadow var(--dur-3) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+
+.ds-card--interactive:hover {
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+.ds-card--interactive:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Accent rail — a left tick of the accent colour for an active/selected card. */
+.ds-card--accent { border-left: 3px solid var(--accent); }

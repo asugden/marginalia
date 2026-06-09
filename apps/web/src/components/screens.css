@@ -1,0 +1,20 @@
+/* ------------------------------------------------------------------ *
+ * Screen / kit layout styles (ds- prefix, generic tokens).
+ *
+ * Layout CSS for the rebuilt product screens — student home + conversation,
+ * author (outline / sources / people), attendance, document/provenance — that
+ * matches the design-system UI kits. Component-level styles live in
+ * components.css; this file is the per-screen scaffolding around them.
+ *
+ * Same rules as components.css: generic tokens only, accent-derived color-mix,
+ * no institution-specific name or colour literal.
+ *
+ * One partial per screen/register (avoids merge conflicts; each created by its
+ * screen rebuild). A missing partial is created empty so the import resolves.
+ * ------------------------------------------------------------------ */
+
+@import "./css/screens/student-home.css";
+@import "./css/screens/student-conversation.css";
+@import "./css/screens/staff.css";
+@import "./css/screens/attendance.css";
+@import "./css/screens/provenance.css";

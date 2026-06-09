@@ -1,0 +1,87 @@
+/* ==== RadioCard / RadioCardGroup =================================== *
+ * Selectable cards for agent / model / mode pickers. The group lays
+ * cards out in a responsive grid (tighter with --inline); each card
+ * shows a title, optional description, and an accent tick + wash when
+ * selected. Accent-driven fills re-tint via the generic --accent seam.
+ * ------------------------------------------------------------------ */
+
+.ds-radiocards {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.ds-radiocards--inline {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.ds-radiocard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.8rem 0.9rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-2) var(--ease-out),
+    background-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
+}
+.ds-radiocard input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.ds-radiocard:hover {
+  border-color: var(--ink-400);
+}
+.ds-radiocard__title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--text-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.ds-radiocard__desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.ds-radiocard__tick {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--dur-2) var(--ease-out);
+}
+.ds-radiocard__tick::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+.ds-radiocard--selected {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.ds-radiocard--selected .ds-radiocard__tick {
+  border-color: var(--accent);
+}
+.ds-radiocard--selected .ds-radiocard__tick::after {
+  transform: scale(1);
+}
+.ds-radiocard input:focus-visible ~ .ds-radiocard__title .ds-radiocard__tick {
+  box-shadow: var(--focus-ring);
+}

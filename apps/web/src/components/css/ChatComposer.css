@@ -1,0 +1,64 @@
+/* ==== ChatComposer ================================================ *
+ * The signature message bar: auto-growing textarea, spring-in send
+ * button, accent focus glow. Enter sends, Shift+Enter newlines.
+ * Class prefix `ds-`; generic tokens + accent-derived color only.
+ * ------------------------------------------------------------------ */
+
+.ds-composer { width: 100%; max-width: var(--measure-chat); margin: 0 auto; }
+
+.ds-composer__field {
+  display: flex; align-items: flex-end; gap: 0.5rem;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl); padding: 0.5rem 0.5rem 0.5rem 0.9rem;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur-3) var(--ease-out),
+              box-shadow var(--dur-3) var(--ease-out);
+}
+.ds-composer__field:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring), var(--shadow-md);
+}
+
+.ds-composer__lead {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex: none; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text-muted); cursor: pointer; align-self: flex-end;
+  transition: var(--transition-color);
+}
+.ds-composer__lead:hover { color: var(--text-strong); border-color: var(--ink-400); background: var(--surface-hover); }
+.ds-composer__lead svg { width: 18px; height: 18px; }
+
+.ds-composer__textarea {
+  flex: 1; resize: none; border: 0; outline: none; background: transparent;
+  font-family: var(--font-sans); font-size: var(--text-md); color: var(--text-strong);
+  line-height: 1.5; padding: 0.5rem 0.15rem; max-height: 200px; overflow-y: auto;
+  align-self: center;
+}
+.ds-composer__textarea::placeholder { color: var(--text-faint); }
+
+.ds-composer__send {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 36px; height: 36px; border-radius: var(--radius-pill); border: 0; padding: 0;
+  background: var(--ink-700); color: var(--text-on-accent); cursor: pointer; align-self: flex-end;
+  transform: scale(0.86); opacity: 0.5;
+  transition: transform var(--dur-3) var(--ease-spring),
+              opacity var(--dur-2) var(--ease-out),
+              background-color var(--dur-2) var(--ease-out);
+}
+.ds-composer__send svg { width: 18px; height: 18px; transition: transform var(--dur-2) var(--ease-out); }
+.ds-composer--ready .ds-composer__send { background: var(--accent); opacity: 1; transform: scale(1); }
+.ds-composer--ready .ds-composer__send:hover { background: var(--accent-hover); transform: scale(1.06); }
+.ds-composer--ready .ds-composer__send:hover svg { transform: translateY(-1px); }
+.ds-composer__send:disabled { cursor: default; }
+
+.ds-composer__footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  margin-top: 0.5rem; padding: 0 0.5rem;
+  font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.03em;
+  color: var(--text-muted); text-transform: uppercase;
+}
+.ds-composer__footer kbd {
+  font-family: var(--font-mono); font-size: 0.95em; background: var(--surface-sunken);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--text-secondary);
+}

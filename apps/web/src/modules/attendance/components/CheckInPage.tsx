@@ -17,6 +17,8 @@ import {
   type CheckInfo,
   type CheckinFlag,
 } from "../api.js";
+import { Badge, Button, Wordmark } from "../../../components/index.js";
+import { CheckIcon, PinIcon } from "../../../icons.js";
 
 type Stage =
   | { kind: "loading" }
@@ -103,52 +105,75 @@ export function CheckInPage() {
   }, [id, token]);
 
   return (
-    <div className="page hero">
-      <div className="card attendance-card">
+    <div className="ds-att-ci-wrap">
+      <div className="ds-att-ci">
+        <div className="ds-att-ci__lockup">
+          <Wordmark />
+        </div>
+
         {stage.kind === "loading" && <p className="muted">Loading…</p>}
 
         {stage.kind === "needs-signin" && (
           <>
-            <h1>Check in</h1>
-            <p className="muted">
-              Sign in with your school account to confirm you're in class.
+            <h1 className="ds-att-ci__course">Check in</h1>
+            <p className="ds-att-ci__label">
+              Sign in with your school account to confirm you&rsquo;re in class.
             </p>
-            <a className="link-button block" href={signInUrl}>Sign in</a>
+            <div style={{ marginTop: "2rem" }}>
+              <Button variant="primary" block href={signInUrl}>
+                Sign in
+              </Button>
+            </div>
           </>
         )}
 
         {stage.kind === "error" && <p className="error">{stage.message}</p>}
 
         {stage.kind === "submitting" && (
-          <p className="muted">Checking you in…</p>
+          <>
+            <div className="ds-att-ci__date">Checking you in…</div>
+            <button type="button" className="ds-att-ci__primary" disabled>
+              Checking you in…
+            </button>
+          </>
         )}
 
         {stage.kind === "done" && <CheckedIn flags={stage.flags} />}
 
         {stage.kind === "ready" && (
           <>
-            <div className="attendance-date muted small">{stage.info.sessionDate}</div>
-            <h1>{stage.info.courseTitle || "Attendance"}</h1>
-            {stage.info.label && <p className="muted">{stage.info.label}</p>}
+            <div className="ds-att-ci__date">{stage.info.sessionDate}</div>
+            <h1 className="ds-att-ci__course">
+              {stage.info.courseTitle || "Attendance"}
+            </h1>
+            {stage.info.label && (
+              <p className="ds-att-ci__label">{stage.info.label}</p>
+            )}
             <button
               type="button"
-              className="attendance-primary"
+              className="ds-att-ci__primary"
               onClick={submit}
               disabled={!token}
             >
-              I'm present
+              I&rsquo;m present
             </button>
             {!token && (
               <p className="error small">
                 This page is missing a check-in code. Re-scan the QR.
               </p>
             )}
-            <p className="muted small attendance-fineprint">
-              We'll briefly ask for your location — checking in works either way.
+            <p className="ds-att-ci__fine">
+              <PinIcon />
+              We&rsquo;ll briefly check your location to confirm you&rsquo;re in
+              the room. Nothing is tracked after that.
             </p>
           </>
         )}
       </div>
+      <p className="ds-att-ci-caption">
+        Built for the phone in a student&rsquo;s hand — one tap, no app to
+        install.
+      </p>
     </div>
   );
 }
@@ -160,35 +185,37 @@ function CheckedIn({ flags }: { flags: CheckinFlag[] }) {
   const blurbs = flags.filter((f) => FLAG_BLURB[f]);
   return (
     <>
-      <div className="attendance-check" aria-hidden>
-        <svg viewBox="0 0 64 64" width="120" height="120">
-          <circle cx="32" cy="32" r="30" fill="none" stroke="var(--status-success-fg)" strokeWidth="3" />
-          <path
-            d="M18 33 L28 43 L46 23"
-            fill="none"
-            stroke="var(--status-success-fg)"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+      <div className="ds-att-ci__check" aria-hidden>
+        <CheckIcon size={46} />
       </div>
-      <h1 className="attendance-done-title">You're checked in.</h1>
+      <h1 className="ds-att-ci__course">You&rsquo;re checked in.</h1>
       {badges.length > 0 && (
-        <div className="attendance-badges">
+        <div
+          style={{
+            display: "flex",
+            gap: "0.4rem",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            marginTop: "0.75rem",
+          }}
+        >
           {badges.map((b, i) => (
-            <span key={`${b.label}-${i}`} className={`attendance-badge attendance-badge--${b.tone}`}>
-              <span className="attendance-badge-dot" aria-hidden />
+            <Badge key={`${b.label}-${i}`} tone={b.tone} dot>
               {b.label}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
       {blurbs.length > 0 && (
-        <div className="attendance-flags">
-          {blurbs.map((f) => <p key={f}>{FLAG_BLURB[f]}</p>)}
+        <div style={{ marginTop: "1rem", textAlign: "left" }}>
+          {blurbs.map((f) => (
+            <p key={f} className="ds-att-ci__label" style={{ marginBottom: "0.5rem" }}>
+              {FLAG_BLURB[f]}
+            </p>
+          ))}
           <p className="muted small">
-            You're counted as here — these are just notes for you and your instructor to review together.
+            You&rsquo;re counted as here — these are just notes for you and your
+            instructor to review together.
           </p>
         </div>
       )}

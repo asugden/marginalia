@@ -1,6 +1,12 @@
 // Landing page. Lists the course's agents; each row launches a new
 // conversation, OR resumes an in-progress one, OR shows a completed pill —
 // see v0.4 §13 (per-agent Start/Continue/hidden state).
+//
+// Presentation follows the design-system student kit: a translucent sticky
+// header with the wordmark lockup, an eyebrow→heading lockup, and agent rows
+// with zero-padded ordinals, an avatar, kind/grounded badges, and a hover
+// accent rail. The data wiring (bootstrap, /me, listAgents, join-code claim)
+// is unchanged.
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -10,8 +16,9 @@ import {
   type AgentSummary,
 } from "../client.js";
 import { logPerf, readBootstrap } from "../bootstrap.js";
-import { PlusIcon, SignOutIcon } from "../icons.js";
+import { ArrowIcon, HistoryIcon, PlusIcon, SignOutIcon, UserIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
+import { Avatar, Badge, Button, Field, IconButton, Input, Wordmark } from "../components/index.js";
 
 export function HomePage() {
   // v0.7 §2 / v1.0 §7.1 — consume the worker-injected bootstrap *synchronously*
@@ -38,6 +45,10 @@ export function HomePage() {
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  // The identity chip and eyebrow read from /me — email local-part + course
+  // name. Both are real fields; we never fabricate a display name.
+  const [identity, setIdentity] = useState<string | null>(null);
+  const [courseName, setCourseName] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,6 +57,7 @@ export function HomePage() {
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setIsAdmin(Boolean((m as { isAdmin?: boolean }).isAdmin));
+        if (m.email) setIdentity(m.email.split("@")[0] ?? null);
         // v1.0 §2 — when the user has more than one enrollment, send them
         // to the picker. Single-enrollment users (the ~99% case) stay
         // here and see exactly today's UX.
@@ -59,6 +71,7 @@ export function HomePage() {
           // listAgents call below). The bootstrap may already have set
           // this; /me confirms or fills in when the bootstrap is absent.
           setCourseId((current) => current ?? m.enrollments[0]!.courseId);
+          setCourseName(m.enrollments[0]!.courseName ?? null);
         } else {
           setNotEnrolled(true);
         }
@@ -122,174 +135,249 @@ export function HomePage() {
     }
   }
 
+  async function onSignOut() {
+    // Clear the session cookie + delete the row, then send the user back
+    // through Google. Landing on /auth/login (rather than /) means the next
+    // view is Google's account chooser. Best-effort: a failed logout still
+    // ends in /auth/login, which overwrites any stale session.
+    await fetch("/auth/logout", { method: "POST", credentials: "include" }).catch(
+      () => {},
+    );
+    window.location.href = "/auth/login";
+  }
+
+  const inProgressCount =
+    agents?.filter((a) => a.lastConversationId !== null && a.lastCompletedAt === null)
+      .length ?? 0;
+  const doneCount =
+    agents?.filter((a) => a.hasBackbone && a.lastCompletedAt !== null).length ?? 0;
+
   return (
-    <div className="page hero">
-      <div className="card wide">
-        <header className="card-header">
-          <h1>{import.meta.env.BRAND_PAGE_TITLE}</h1>
-          <div className="header-actions">
+    <div className="ds-home">
+      <header className="ds-topbar">
+        <div className="ds-topbar__inner">
+          <Wordmark />
+          <div className="ds-topbar__actions">
             {/* Student verbs — the actions a student takes here. */}
-            <Link to="/history" className="link-button subtle">
-              History
-            </Link>
-            <button
-              type="button"
-              className="icon-button"
-              title="Sign out"
-              aria-label="Sign out"
-              onClick={async () => {
-                // Clear the session cookie + delete the row, then send
-                // the user back through Google. Landing on /auth/login
-                // (rather than /) means the next view is Google's
-                // account chooser — explicit "you are signed out and
-                // here is how to sign back in" instead of a blank app
-                // page with a hidden re-auth redirect under it.
-                // Best-effort: a failed logout still ends in
-                // /auth/login, which will overwrite any stale session.
-                await fetch("/auth/logout", {
-                  method: "POST",
-                  credentials: "include",
-                }).catch(() => {});
-                window.location.href = "/auth/login";
-              }}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<HistoryIcon size={16} />}
+              href="/history"
             >
-              <SignOutIcon />
-            </button>
-            {/* Staff destinations — demoted to muted text links so a
-                student's eye doesn't read them as peer actions. v0.7 §3.2. */}
-            <span className="header-divider" aria-hidden />
-            {/* v1.0 §1 — Instructor now sends the user to the picker (which
-                redirects to the single-course dashboard when there's only
-                one enrollment, no extra click). This is the affordance that
-                switches a staff member from the student view into the
-                instructor view (the reverse link is "← Student view"). */}
-            <Link to="/courses" className="header-nav-link">
+              <span className="ds-hide-sm">History</span>
+            </Button>
+            <span className="ds-topbar__divider" aria-hidden />
+            {/* Staff destinations — muted mono links so a student's eye doesn't
+                read them as peer actions. v1.0 §1 — Instructor sends to the
+                picker (redirects to the single-course dashboard when there's
+                only one enrollment). */}
+            <Link to="/courses" className="ds-navlink">
               Instructor
             </Link>
             {isAdmin && (
-              <Link to="/admin" className="header-nav-link">
+              <Link to="/admin" className="ds-navlink">
                 Admin
               </Link>
             )}
+            <span className="ds-topbar__divider" aria-hidden />
+            {identity && (
+              <span className="ds-id">
+                <span className="ds-id__icon">
+                  <UserIcon />
+                </span>
+                <span className="ds-id__name">{identity}</span>
+              </span>
+            )}
+            <IconButton title="Sign out" onClick={onSignOut}>
+              <SignOutIcon />
+            </IconButton>
           </div>
-        </header>
-        {!notEnrolled && (
-          <p className="muted">
-            Pick something below to begin. Each one is set up by your
-            instructor — it'll tell you up front how it works and what it's
-            for.
-          </p>
-        )}
+        </div>
+      </header>
+
+      <div className="ds-home__inner">
+        <div className="ds-home__head">
+          {courseName && <span className="eyebrow">{courseName}</span>}
+          <span className="ds-rule" />
+          <h1>{notEnrolled ? "Welcome." : "Pick something to begin."}</h1>
+          {!notEnrolled && (
+            <p className="ds-home__sub">
+              Each one is set up by your instructor — it&rsquo;ll tell you up
+              front how it works and what it&rsquo;s for, then lead you through
+              it.
+            </p>
+          )}
+        </div>
 
         {error && <p className="error">{error}</p>}
 
         {notEnrolled ? (
-          <section className="field-group">
-            <h2>Welcome — let's get you into your course.</h2>
-            <p className="muted">
-              This is where your course's AI tools live. Everything here was
-              set up by your instructor for a specific purpose, and each tool
-              explains itself before you start — no guessing, no surprises.
+          <section className="ds-home__panel">
+            <h2>Let&rsquo;s get you into your course.</h2>
+            <p className="ds-home__note">
+              This is where your course&rsquo;s AI tools live. Everything here
+              was set up by your instructor for a specific purpose, and each
+              tool explains itself before you start — no guessing, no surprises.
             </p>
-            <p className="muted">
-              To join, paste the code your instructor gave you. It usually
-              looks something like <code>stats-A4B7C9</code>.
+            <p className="ds-home__note">
+              To join, paste the code your instructor gave you. It usually looks
+              something like <code>stats-A4B7C9</code>.
             </p>
-            <form className="inline-form" onSubmit={onSubmitJoinCode}>
-              <input
-                type="text"
-                placeholder="Enter your join code"
-                value={joinCode}
-                disabled={joinBusy}
-                autoFocus
-                onChange={(e) => setJoinCode(e.target.value)}
-              />
-              <button type="submit" disabled={joinBusy || !joinCode.trim()}>
+            <form className="ds-home__joinform" onSubmit={onSubmitJoinCode}>
+              <Field label="Join code">
+                <Input
+                  type="text"
+                  placeholder="Enter your join code"
+                  value={joinCode}
+                  disabled={joinBusy}
+                  autoFocus
+                  onChange={(e) => setJoinCode(e.target.value)}
+                />
+              </Field>
+              <Button
+                type="submit"
+                loading={joinBusy}
+                disabled={joinBusy || !joinCode.trim()}
+              >
                 {joinBusy ? "Joining…" : "Join"}
-              </button>
+              </Button>
             </form>
-            <p className="muted small">
-              Don't have a code yet? Ask your instructor — they can share one
-              or add you directly.
+            <p className="ds-home__muted">
+              Don&rsquo;t have a code yet? Ask your instructor — they can share
+              one or add you directly.
             </p>
             {joinError && <p className="error">{joinError}</p>}
           </section>
         ) : agents === null ? (
-          <p className="muted">Loading…</p>
+          <p className="ds-home__muted">Loading…</p>
         ) : agents.length === 0 ? (
-          <p className="muted">
-            Your instructor hasn't set anything up in this course yet. Check
-            back soon.
+          <p className="ds-home__muted">
+            Your instructor hasn&rsquo;t set anything up in this course yet.
+            Check back soon.
           </p>
         ) : (
-          <ul className="assignment-list">
-            {agents.map((a) => {
-              // §13 state machine. Backbone completion is "play once": no
-              // button, just the pill. Free-chat completion is meaningless
-              // (no exit condition), so always show Start.
-              const inProgress =
-                a.lastConversationId !== null && a.lastCompletedAt === null;
-              const completedBackbone =
-                a.hasBackbone && a.lastCompletedAt !== null;
-              return (
-                <li key={a.id}>
-                  <div>
-                    <strong>{a.title}</strong>
-                    <span className="muted small">
-                      {" "}
-                      · {a.hasBackbone ? "guided" : "free-form"}
-                      {a.hasCollection ? " · grounded" : ""}
-                    </span>
-                  </div>
-                  {completedBackbone ? (
-                    <span
-                      className="history-pill"
-                      title={
-                        a.lastCompletedAt
-                          ? new Date(a.lastCompletedAt).toLocaleString()
-                          : undefined
-                      }
-                    >
-                      ✓ Completed{" "}
-                      {a.lastCompletedAt
-                        ? relativeTime(a.lastCompletedAt)
-                        : ""}
-                    </span>
-                  ) : inProgress ? (
-                    <div className="row-actions">
-                      {!a.hasBackbone && (
-                        // v0.5 §10 + v0.7 §3.1: free-form agents can have
-                        // parallel threads. Small circular +icon to the left
-                        // of Continue, so the primary affordance (Continue)
-                        // keeps the same shape every other row uses.
-                        <Link
-                          to={`/new/${a.id}`}
-                          className="icon-button round"
-                          title="Start a new chat with this agent"
-                          aria-label="New chat"
-                        >
-                          <PlusIcon size={16} />
-                        </Link>
-                      )}
-                      <Link
-                        to={`/c/${a.lastConversationId}`}
-                        className="link-button"
-                      >
-                        Continue
-                      </Link>
-                    </div>
-                  ) : (
-                    // §14: no conversation row is created here — the chat
-                    // page enters compose mode and only persists on first send.
-                    <Link to={`/new/${a.id}`} className="link-button">
-                      Start
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <div className="ds-agents__bar">
+              <span className="mono-label">Your agents</span>
+              <span className="ds-agents__stat">
+                {agents.length} total
+                <i>·</i> {inProgressCount} in progress
+                <i>·</i> {doneCount} done
+              </span>
+            </div>
+            <div className="ds-agents">
+              {agents.map((a, i) => (
+                <AgentRow key={a.id} agent={a} n={i + 1} navigate={navigate} />
+              ))}
+            </div>
+          </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AgentRow({
+  agent: a,
+  n,
+  navigate,
+}: {
+  agent: AgentSummary;
+  n: number;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  // §13 state machine. Backbone completion is "play once": no button, just the
+  // pill. Free-chat completion is meaningless (no exit condition), so always
+  // show Start.
+  const inProgress = a.lastConversationId !== null && a.lastCompletedAt === null;
+  const completedBackbone = a.hasBackbone && a.lastCompletedAt !== null;
+  const continueHref = `/c/${a.lastConversationId}`;
+  const startHref = `/new/${a.id}`;
+  const target = inProgress ? continueHref : startHref;
+
+  const action = completedBackbone ? (
+    <Badge
+      tone="success"
+      dot
+      title={
+        a.lastCompletedAt
+          ? new Date(a.lastCompletedAt).toLocaleString()
+          : undefined
+      }
+    >
+      Completed {a.lastCompletedAt ? relativeTime(a.lastCompletedAt) : ""}
+    </Badge>
+  ) : inProgress ? (
+    <>
+      {!a.hasBackbone && (
+        // v0.5 §10 + v0.7 §3.1: free-form agents can have parallel threads.
+        // A round +icon to the left of Continue keeps the primary affordance
+        // (Continue) the same shape every other row uses.
+        <IconButton
+          variant="round"
+          href={startHref}
+          title="Start a new chat with this agent"
+        >
+          <PlusIcon size={16} />
+        </IconButton>
+      )}
+      <Button
+        variant="primary"
+        href={continueHref}
+        className="ds-agent__cta"
+        iconRight={<ArrowIcon size={16} />}
+      >
+        Continue
+      </Button>
+    </>
+  ) : (
+    // §14: no conversation row is created here — the chat page enters compose
+    // mode and only persists on first send.
+    <Button
+      variant="primary"
+      href={startHref}
+      className="ds-agent__cta"
+      iconRight={<ArrowIcon size={16} />}
+    >
+      Start
+    </Button>
+  );
+
+  // The whole row is clickable (→ the row's default action), but the action
+  // column holds its own real links, so a click there must not also fire the
+  // row navigation. The row is a div (not an <a>) so the inner links aren't
+  // nested anchors; keyboard users get a focusable role="link".
+  return (
+    <div
+      className="ds-agent"
+      role="link"
+      tabIndex={0}
+      onClick={() => navigate(target)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") navigate(target);
+      }}
+    >
+      <span className="ds-agent__index">{String(n).padStart(2, "0")}</span>
+      <Avatar name={a.title} agent={a.hasBackbone} size="lg" />
+      <div className="ds-agent__main">
+        <div className="ds-agent__title">{a.title}</div>
+        <div className="ds-agent__meta">
+          <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
+            {a.hasBackbone ? "guided" : "free-form"}
+          </Badge>
+          {a.hasCollection && (
+            <Badge tone="info" dot>
+              grounded
+            </Badge>
+          )}
+        </div>
+      </div>
+      <div
+        className="ds-agent__action"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {action}
       </div>
     </div>
   );

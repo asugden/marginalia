@@ -30,6 +30,10 @@
 @import "./tokens/radius.css";
 @import "./tokens/motion.css";
 
+/* Design-system component + screen styles (ds- prefix, generic tokens). */
+@import "./components/components.css";
+@import "./components/screens.css";
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -1910,16 +1914,15 @@ body.prov-dragging .prov-divider {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 2px;
-  height: 36px;
-  border-radius: 2px;
-  background: var(--line);
-  transition: background 140ms ease, height 200ms ease;
+  width: 4px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--sand-400);
+  transition: background var(--dur-2) var(--ease-out);
 }
 .prov-divider:hover .prov-divider-grip,
 body.prov-dragging .prov-divider-grip {
-  background: var(--brand-primary);
-  height: 56px;
+  background: var(--accent);
 }
 body.prov-dragging {
   cursor: col-resize;
@@ -2261,9 +2264,10 @@ body.prov-dragging * {
 .prov-bubble-user {
   align-self: flex-end;
   background: var(--user-bg);
-  color: #fff;
+  color: var(--text-on-accent);
   padding: 0.55rem 0.85rem;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-xs);
   max-width: 85%;
 }
 .prov-bubble-assistant {

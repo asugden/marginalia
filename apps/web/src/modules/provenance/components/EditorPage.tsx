@@ -30,6 +30,8 @@ import { ProvenanceEditor, type EditorChange } from "./Editor.js";
 import type { TrackedEvent } from "./ProvenanceTracker.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { SubmissionModal } from "./SubmissionModal.js";
+import { Button, IconButton, Wordmark } from "../../../components/index.js";
+import { BackIcon, ShareIcon } from "../../../icons.js";
 
 const SAVE_DEBOUNCE_MS = 1_000;
 const EVENTS_FLUSH_MS = 3_000;
@@ -284,10 +286,16 @@ export function EditorPage() {
 
   if (loadError) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
+      <div className="ds-staff">
+        <header className="ds-staff-top">
+          <Wordmark size="sm" />
+          <span className="ds-staff-top__role">Provenance</span>
+        </header>
+        <div className="ds-staff-page">
           <p className="error">{loadError}</p>
-          <p><Link to="/write" className="link-button subtle">← Back to documents</Link></p>
+          <Button variant="subtle" href="/write">
+            ← Back to documents
+          </Button>
         </div>
       </div>
     );
@@ -295,8 +303,12 @@ export function EditorPage() {
 
   if (!doc) {
     return (
-      <div className="page staff">
-        <div className="staff-frame">
+      <div className="ds-staff">
+        <header className="ds-staff-top">
+          <Wordmark size="sm" />
+          <span className="ds-staff-top__role">Provenance</span>
+        </header>
+        <div className="ds-staff-page">
           <p className="muted">Loading…</p>
         </div>
       </div>
@@ -310,11 +322,13 @@ export function EditorPage() {
   return (
     <div className="prov-shell no-watermark">
       <header className="prov-shell-header">
-        <Link to="/write" className="icon-button" title="Back to documents" aria-label="Back to documents">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+        <Link to="/write" aria-label="Home">
+          <Wordmark size="sm" />
         </Link>
+        <span className="prov-shell-role">Provenance</span>
+        <IconButton title="Back to documents" href="/write">
+          <BackIcon size={20} />
+        </IconButton>
         <input
           className="prov-shell-title"
           value={titleDraft}
@@ -326,28 +340,28 @@ export function EditorPage() {
         {isInstructor && (
           <button
             type="button"
-            className="link-button subtle prov-shell-chat-toggle"
+            className={"prov-toggle" + (hideMarksSetting ? "" : " is-on")}
             onClick={onToggleHideMarks}
             disabled={savingHideMarks}
-            aria-pressed={hideMarksSetting}
+            aria-pressed={!hideMarksSetting}
             title="Controls whether students see origin coloring while they write. Recording is unaffected."
           >
-            {hideMarksSetting ? "Marks hidden for students" : "Marks shown to students"}
+            <span className="prov-toggle__sw" />
+            {hideMarksSetting ? "Marks hidden" : "Marks shown"}
           </button>
         )}
-        <button
-          type="button"
-          className="link-button subtle prov-shell-chat-toggle"
-          onClick={() => setShareOpen(true)}
-        >
+        <Button variant="subtle" size="sm" icon={<ShareIcon size={16} />} onClick={() => setShareOpen(true)}>
           Share
-        </button>
+        </Button>
         <button
           type="button"
-          className="link-button subtle prov-shell-chat-toggle"
+          className={"prov-toggle" + (chatOpen ? " is-on" : "")}
           onClick={() => setChatOpen((v) => !v)}
+          aria-pressed={chatOpen}
+          title="Show or hide the LLM chat pane"
         >
-          {chatOpen ? "Hide chat" : "Open chat"}
+          <span className="prov-toggle__sw" />
+          {chatOpen ? "Chat on" : "Chat off"}
         </button>
       </header>
 

@@ -1,0 +1,93 @@
+/* ==== Message / ThinkingDots ====================================== *
+ * One chat turn plus the streaming indicator.
+ *   · user      — warm accent bubble, right-flush
+ *   · assistant — no bubble, full measure, reads as prose
+ *   · system    — quiet inset note with an accent rule
+ * The entrance fade is opt-in via .ds-msg--enter so static contexts
+ * (DS cards, PDF, hidden iframes) never catch a turn mid-fade at
+ * opacity 0. Reuses the shared m-rise / m-blink keyframes (tokens/motion).
+ * ------------------------------------------------------------------ */
+
+.ds-msg {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.25rem;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ds-msg--enter {
+    animation: m-rise var(--dur-3) var(--ease-out);
+  }
+}
+
+.ds-msg__role {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* User — warm accent bubble, right-flush. */
+.ds-msg--user {
+  align-items: flex-end;
+}
+.ds-msg--user .ds-msg__body {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-xs);
+  padding: 0.65rem 1rem;
+  max-width: 80%;
+  line-height: 1.55;
+  font-size: var(--text-md);
+  white-space: pre-wrap;
+}
+
+/* Assistant — no bubble, full measure, reads as prose. */
+.ds-msg--assistant {
+  align-items: stretch;
+}
+.ds-msg--assistant .ds-msg__body {
+  color: var(--text-body);
+  font-size: var(--text-md);
+  line-height: 1.65;
+}
+.ds-msg--assistant .ds-msg__role {
+  color: var(--accent);
+}
+
+/* System — a quiet inset note. */
+.ds-msg--system .ds-msg__body {
+  background: var(--surface-sunken);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.95rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+/* ThinkingDots — three blinking accent dots for a streaming turn. */
+.ds-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.2em;
+}
+.ds-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: m-blink 1.2s var(--ease-in-out) infinite;
+}
+.ds-dots span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ds-dots span:nth-child(3) {
+  animation-delay: 0.36s;
+}

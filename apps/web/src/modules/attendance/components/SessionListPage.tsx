@@ -5,8 +5,10 @@
 // always mounted with :courseId present.
 
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { exportCsvUrl, listSessions, openSession, type SessionDTO } from "../api.js";
+import { Badge, Button, Checkbox, Field, Input } from "../../../components/index.js";
+import { DownloadIcon, PlusIcon } from "../../../icons.js";
 
 const DEFAULT_RADIUS = 75;
 
@@ -59,74 +61,99 @@ export function SessionListPage() {
   }, [courseId, label, useGeofence, navigate]);
 
   return (
-    <section>
-      <p className="scope-note">
-        Open a session and project the QR code; students scan it from their
-        phones to check in. The code rotates every few seconds, so a
-        screenshot won't travel.
-      </p>
-
-        <section className="attendance-open-card">
-          <h2>Open a new session</h2>
-          <div className="field">
-            <label htmlFor="att-label">Label (optional)</label>
-            <input
-              id="att-label"
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Lecture 14"
-            />
+    <div className="ds-staff-page">
+      <div className="ds-staff-head">
+        <div>
+          <span className="eyebrow">Attendance</span>
+          <h1>Sessions</h1>
+          <div className="ds-staff-head__scope">
+            Open a session and project the QR code; students scan it from their
+            phones to check in. The code rotates every few seconds, so a
+            screenshot won&rsquo;t travel.
           </div>
-          <label className="attendance-geofence-toggle">
-            <input
-              type="checkbox"
-              checked={useGeofence}
-              onChange={(e) => setUseGeofence(e.target.checked)}
-            />{" "}
-            Use my current location as the classroom center ({DEFAULT_RADIUS} m radius)
-          </label>
-          <div className="attendance-actions">
-            <button type="button" onClick={open} disabled={creating}>
-              {creating ? "Opening…" : "Open session"}
-            </button>
-          </div>
-          {err && <p className="error">{err}</p>}
-        </section>
+        </div>
+      </div>
 
-        <h2 className="attendance-history-h2">Past sessions</h2>
-        {sessions === null ? (
-          <p className="muted">Loading…</p>
-        ) : sessions.length === 0 ? (
-          <p className="muted">No sessions yet.</p>
-        ) : (
-          <table className="attendance-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Label</th>
-                <th>Status</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.sessionDate}</td>
-                  <td>{s.label || <span className="muted">—</span>}</td>
-                  <td>{s.closedAt ? "closed" : <strong>open</strong>}</td>
-                  <td className="attendance-row-actions">
-                    <Link to={`/course/${courseId}/attendance/sessions/${s.id}`} className="link-button subtle">
-                      Open
-                    </Link>
-                    <a href={exportCsvUrl(s.id)} className="link-button subtle">CSV</a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-    </section>
+      <section className="ds-att-open">
+        <h2>Open a new session</h2>
+        <Field label="Label (optional)" htmlFor="att-label">
+          <Input
+            id="att-label"
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="e.g. Lecture 14 — Prototyping"
+          />
+        </Field>
+        <Checkbox
+          checked={useGeofence}
+          onChange={(e) => setUseGeofence(e.target.checked)}
+          label={`Use my current location as the classroom center (${DEFAULT_RADIUS} m radius)`}
+        />
+        <div>
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={16} />}
+            onClick={open}
+            loading={creating}
+            disabled={creating}
+          >
+            Open session
+          </Button>
+        </div>
+        {err && <p className="error">{err}</p>}
+      </section>
+
+      <h2 className="ds-att-history-h mono-label">Past sessions</h2>
+      {sessions === null ? (
+        <p className="muted">Loading…</p>
+      ) : sessions.length === 0 ? (
+        <p className="muted">No sessions yet.</p>
+      ) : (
+        <div className="ds-att-table">
+          <div className="ds-att-table__head">
+            <span>Date</span>
+            <span>Label</span>
+            <span>Status</span>
+            <span />
+          </div>
+          {sessions.map((s) => (
+            <div className="ds-att-table__row" key={s.id}>
+              <span className="ds-att-table__date">{s.sessionDate}</span>
+              <span className="ds-att-table__label">
+                {s.label || <span className="muted">—</span>}
+              </span>
+              <span>
+                {s.closedAt ? (
+                  <Badge tone="neutral">closed</Badge>
+                ) : (
+                  <Badge tone="success" dot>
+                    open
+                  </Badge>
+                )}
+              </span>
+              <span className="ds-att-table__actions">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  href={`/course/${courseId}/attendance/sessions/${s.id}`}
+                >
+                  {s.closedAt ? "View" : "Open"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  href={exportCsvUrl(s.id)}
+                  icon={<DownloadIcon size={16} />}
+                >
+                  CSV
+                </Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

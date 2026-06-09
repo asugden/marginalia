@@ -13,6 +13,8 @@ import {
   listDocuments,
   type DocumentSummary,
 } from "../api.js";
+import { Button, IconButton } from "../../../components/index.js";
+import { DocIcon, PlusIcon, TrashIcon } from "../../../icons.js";
 
 export function DocumentListPage() {
   const navigate = useNavigate();
@@ -66,16 +68,20 @@ export function DocumentListPage() {
 
   const actions = (
     <>
-      <Link to="/write/agents" className="link-button subtle">My agents</Link>
-      <Link to="/" className="link-button subtle">Home</Link>
-      <button
-        type="button"
-        className="link-button"
+      <Button variant="ghost" href="/write/agents">
+        My agents
+      </Button>
+      <Button variant="ghost" href="/">
+        Home
+      </Button>
+      <Button
+        variant="primary"
+        icon={<PlusIcon size={16} />}
         onClick={onCreate}
         disabled={busy || !courseId}
       >
         New document
-      </button>
+      </Button>
     </>
   );
 
@@ -102,32 +108,41 @@ export function DocumentListPage() {
         <p className="muted">No documents yet. Start one to begin writing.</p>
       )}
       {courseId && docs !== null && docs.length > 0 && (
-        <ul className="assignment-list">
+        <div className="ds-staff-list">
           {docs.map((d) => (
-            <li key={d.id}>
-              <div>
-                <Link to={`/write/${d.id}`} className="prov-doc-row-link">
-                  <strong>{d.title}</strong>
-                </Link>
-                <div className="muted small">
-                  {d.wordCount.toLocaleString()} word{d.wordCount === 1 ? "" : "s"}
-                  {" · "}
-                  {relativeTime(d.updatedAt)}
+            <div className="ds-staff-list__row" key={d.id}>
+              <span
+                className="ds-id__icon"
+                style={{ width: 36, height: 36, color: "var(--text-muted)" }}
+                aria-hidden
+              >
+                <DocIcon size={18} />
+              </span>
+              <div className="ds-staff-list__main">
+                <div className="ds-staff-list__title">
+                  <Link to={`/write/${d.id}`}>{d.title}</Link>
+                </div>
+                <div className="ds-staff-list__sub">
+                  {d.wordCount.toLocaleString()} word
+                  {d.wordCount === 1 ? "" : "s"} · {relativeTime(d.updatedAt)}
                 </div>
               </div>
-              <div className="row-actions">
-                <Link to={`/write/${d.id}`} className="link-button subtle">Open</Link>
-                <button
-                  type="button"
-                  className="danger-link"
+              <div className="ds-staff-list__actions">
+                <Button variant="subtle" size="sm" href={`/write/${d.id}`}>
+                  Open
+                </Button>
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  title="Delete document"
                   onClick={() => onDelete(d.id)}
                 >
-                  Delete
-                </button>
+                  <TrashIcon size={16} />
+                </IconButton>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </StandalonePage>
   );

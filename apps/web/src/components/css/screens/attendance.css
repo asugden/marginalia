@@ -1,0 +1,100 @@
+/* Attendance — instructor session list, projector display (rotating QR + live
+   roster), and the student one-tap check-in. Translated from the design-system
+   attendance kit; ds- prefix, generic tokens, accent-derived color-mix.
+   (The kit's iOS device frame is a mock-only affordance and is intentionally
+   not ported; the check-in renders as a normal responsive page.) */
+
+/* ---- Open-a-session card ---------------------------------------- */
+.ds-att-open {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
+  padding: 1.5rem; margin-bottom: 2.5rem; display: flex; flex-direction: column; gap: 1rem;
+}
+.ds-att-open h2 {
+  font-family: var(--font-sans); text-transform: none; letter-spacing: -0.01em;
+  font-size: var(--text-lg); font-weight: 700; color: var(--text-strong);
+}
+.ds-att-scope-note { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.55; max-width: 60ch; margin: 0 0 1.75rem; }
+.ds-att-history-h { font-size: var(--text-lg); margin-bottom: 0.9rem; }
+
+/* ---- Sessions table --------------------------------------------- */
+.ds-att-table { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
+.ds-att-table__head, .ds-att-table__row { display: grid; grid-template-columns: 7rem 1fr 5rem auto; gap: 1rem; align-items: center; padding: 0.7rem 1rem; }
+.ds-att-table__head { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); background: var(--surface-sunken); border-bottom: 1px solid var(--border); }
+.ds-att-table__row { border-bottom: 1px solid var(--border-faint); }
+.ds-att-table__row:last-child { border-bottom: 0; }
+.ds-att-table__row:hover { background: var(--surface-hover); }
+.ds-att-table__date { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-secondary); }
+.ds-att-table__label { font-size: var(--text-sm); font-weight: 500; color: var(--text-strong); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-att-table__actions { display: flex; gap: 0.25rem; justify-content: flex-end; }
+
+/* ---- Live display (projector) ----------------------------------- */
+.ds-att-display__lead { color: var(--text-secondary); font-size: var(--text-sm); margin: 0 0 1.5rem; }
+.ds-att-display__lead code { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--surface-sunken); border: 1px solid var(--border); padding: 0.1rem 0.4rem; border-radius: var(--radius-xs); color: var(--accent-ink); }
+
+.ds-att-display { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 2rem; align-items: start; }
+
+.ds-att-qr { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; padding: 1.5rem; }
+.ds-att-qr__frame { appearance: none; cursor: pointer; padding: 1.25rem; background: var(--white); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); line-height: 0; transition: box-shadow var(--dur-3) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+.ds-att-qr__frame:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.ds-att-qr__url { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-lg); letter-spacing: 0.01em; color: var(--text-strong); }
+.ds-att-qr__hint { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+
+.ds-att-roster { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); padding: 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
+.ds-att-count { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.ds-att-count__num { font-family: var(--font-mono); font-weight: 700; font-size: 3.4rem; line-height: 1; letter-spacing: -0.04em; color: var(--accent); }
+.ds-att-count__of { font-family: var(--font-mono); font-size: var(--text-lg); color: var(--text-faint); }
+.ds-att-count__label { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); flex-basis: 100%; }
+.ds-att-review { display: flex; align-items: center; gap: 0.5rem; font-size: var(--text-sm); color: var(--status-warning-fg); background: var(--status-warning-bg); border-radius: var(--radius-md); padding: 0.55rem 0.75rem; }
+.ds-att-review svg { width: 16px; height: 16px; flex: none; }
+
+.ds-att-roster__list { display: flex; flex-direction: column; max-height: 22rem; overflow-y: auto; margin: 0 -0.4rem; }
+.ds-att-roster__row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border-faint); }
+.ds-att-roster__row:last-child { border-bottom: 0; }
+.ds-att-roster__name { font-size: var(--text-sm); color: var(--text-body); font-weight: 500; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-att-roster__ok { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--status-success-bg); color: var(--status-success-fg); flex: none; }
+.ds-att-roster__ok svg { width: 14px; height: 14px; }
+
+/* Zoomed QR overlay */
+.ds-att-zoom { position: fixed; inset: 0; z-index: 60; appearance: none; border: 0; cursor: zoom-out; background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; }
+.ds-att-zoom__inner { padding: 1.5rem; background: var(--white); border: 1px solid var(--border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); line-height: 0; }
+.ds-att-zoom__url { font-family: var(--font-mono); font-weight: 700; font-size: 1.6rem; color: var(--text-strong); }
+
+/* ---- Student check-in (phone-shaped, no device frame) ----------- */
+.ds-att-ci-wrap { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 2.5rem 1.5rem 3.5rem; min-height: 100vh; background: var(--bg); }
+.ds-att-ci {
+  width: 100%; max-width: 380px; border-radius: var(--radius-xl);
+  border: 1px solid var(--border); box-shadow: var(--shadow-md);
+  background: linear-gradient(180deg, var(--accent-wash) 0%, var(--surface) 38%);
+  padding: 3rem 1.6rem 2.5rem; box-sizing: border-box; text-align: center;
+}
+.ds-att-ci__lockup { display: inline-flex; align-items: center; justify-content: center; margin-bottom: 2.5rem; }
+.ds-att-ci__date { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem; }
+.ds-att-ci__course { font-size: 1.55rem; line-height: 1.15; color: var(--text-strong); margin-bottom: 0.5rem; text-wrap: balance; }
+.ds-att-ci__label { font-size: var(--text-sm); color: var(--text-secondary); margin: 0; }
+.ds-att-ci__primary {
+  appearance: none; cursor: pointer; width: 100%; min-height: 60px; margin: 2.75rem 0 1.25rem;
+  border: 0; border-radius: var(--radius-lg); background: var(--accent); color: var(--text-on-accent);
+  font-family: var(--font-sans); font-weight: 700; font-size: 1.2rem;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: background var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+.ds-att-ci__primary:hover:not(:disabled) { background: var(--accent-hover); }
+.ds-att-ci__primary:active:not(:disabled) { transform: translateY(1px); }
+.ds-att-ci__primary:disabled { opacity: 0.85; cursor: default; }
+.ds-att-ci__fine { display: flex; align-items: flex-start; gap: 0.5rem; font-size: var(--text-xs); color: var(--text-muted); line-height: 1.5; text-align: left; margin: 0; }
+.ds-att-ci__fine svg { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--text-faint); }
+.ds-att-ci__check { width: 92px; height: 92px; border-radius: 50%; background: var(--status-success-bg); color: var(--status-success-fg); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; }
+.ds-att-ci__check svg { width: 46px; height: 46px; }
+.ds-att-ci__again { appearance: none; cursor: pointer; margin-top: 2rem; background: transparent; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); padding: 0.5rem 1.5rem; font-family: var(--font-mono); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+.ds-att-ci__again:hover { background: var(--surface-hover); }
+.ds-att-ci-caption { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); text-align: center; margin: 0; }
+
+@media (max-width: 920px) {
+  .ds-att-display { grid-template-columns: 1fr; }
+  .ds-att-roster { order: -1; }
+}
+@media (max-width: 560px) {
+  .ds-att-table__head, .ds-att-table__row { grid-template-columns: 5rem 1fr auto; }
+  .ds-att-table__head span:nth-child(3), .ds-att-table__row > :nth-child(3) { display: none; }
+}
