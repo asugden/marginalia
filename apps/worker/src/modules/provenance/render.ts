@@ -7,8 +7,13 @@
 // Replay model: maintain an array of per-character origins. Walk events
 // in client_seq order:
 //   insert / paste / llm_insert  → splice `length` chars of the event's
-//                                  origin in at `offset`.
+//   / replace                      origin in at `offset`.
 //   delete                       → remove `length` chars at `offset`.
+//
+// A spellcheck/autocorrect/Grammarly word swap (slice 7) is logged as a
+// `delete` (the old word) followed by a `replace` (the new word, origin
+// "edited"); replay treats `replace` as an insert of the event's origin, so
+// the two events compose into a clean in-place swap.
 //
 // We track ORIGIN per position, not the characters themselves — the
 // actual text comes from the document's current plain-text projection
@@ -39,7 +44,7 @@ function replayOrigins(events: ProvenanceEventRow[]): Origin[] {
       origins.splice(off, len);
       continue;
     }
-    // insert | paste | llm_insert
+    // insert | paste | llm_insert | replace
     const origin: Origin = (ev.origin as Origin) ?? "human";
     const len = Math.max(0, ev.length);
     if (len === 0) continue;

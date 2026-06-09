@@ -46,7 +46,7 @@ import {
   type Retrieved,
 } from "./rag.js";
 import type { CollectionSourceKind, VoiceRow } from "@marginalia/schema";
-import { routeProvenance } from "./modules/provenance/routes.js";
+import { routeProvenance, routeProvenancePublic } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
 
 // v0.1 single-tenant default. Phase 2 derives org from the authenticated email.
@@ -176,6 +176,17 @@ export default {
     }
 
     if (!url.pathname.startsWith("/api/")) {
+      return applyCors(error("Not found", 404), origin);
+    }
+
+    // Provenance public submission view — the ONE unauthenticated API in
+    // the provenance module. A shared link must work without sign-in, so
+    // this carve-out runs before the authenticate() gate below. It reads
+    // only frozen, owner-minted snapshots by unguessable token.
+    if (url.pathname.startsWith("/api/provenance/public/")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const res = await routeProvenancePublic(req, env, parts);
+      if (res) return applyCors(res, origin);
       return applyCors(error("Not found", 404), origin);
     }
 

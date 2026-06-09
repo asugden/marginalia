@@ -311,6 +311,7 @@ export async function getMe(): Promise<{
     joinedAt: number;
     showAttendance: boolean;
     showCollections: boolean;
+    hideProvenanceMarks: boolean;
   }>;
 }> {
   return {
@@ -325,6 +326,7 @@ export async function getMe(): Promise<{
         joinedAt: Date.now(),
         showAttendance: true,
         showCollections: true,
+        hideProvenanceMarks: false,
       },
     ],
   };

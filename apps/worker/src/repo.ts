@@ -179,6 +179,10 @@ export interface UserEnrollmentRow {
    *  tabs render. */
   showAttendance: boolean;
   showCollections: boolean;
+  /** Provenance writing tool — when true, students see the document without
+   *  origin coloring (recording is unaffected). Instructors always see it.
+   *  Default false. */
+  hideProvenanceMarks: boolean;
 }
 export async function listEnrollmentsForUserEnriched(
   db: D1Database,
@@ -193,7 +197,8 @@ export async function listEnrollmentsForUserEnriched(
       `SELECT e.course_id, c.name AS course_name, e.role,
               e.created_at AS joined_at,
               COALESCE(s.show_attendance, 0)  AS show_attendance,
-              COALESCE(s.show_collections, 0) AS show_collections
+              COALESCE(s.show_collections, 0) AS show_collections,
+              COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        LEFT JOIN course_settings s ON s.course_id = e.course_id
@@ -208,6 +213,7 @@ export async function listEnrollmentsForUserEnriched(
       joined_at: number;
       show_attendance: number;
       show_collections: number;
+      hide_provenance_marks: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
@@ -216,6 +222,7 @@ export async function listEnrollmentsForUserEnriched(
     joinedAt: r.joined_at,
     showAttendance: r.show_attendance === 1,
     showCollections: r.show_collections === 1,
+    hideProvenanceMarks: r.hide_provenance_marks === 1,
   }));
 }
 

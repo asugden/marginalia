@@ -100,8 +100,13 @@ export async function updateDocument(
   return body.document;
 }
 
-export type ProvenanceEventKind = "insert" | "delete" | "paste" | "llm_insert";
-export type ProvenanceOrigin = "human" | "llm" | "pasted";
+export type ProvenanceEventKind =
+  | "insert"
+  | "delete"
+  | "paste"
+  | "llm_insert"
+  | "replace";
+export type ProvenanceOrigin = "human" | "llm" | "pasted" | "edited";
 
 export interface OutboundEvent {
   clientSeq: number;
@@ -407,4 +412,127 @@ function dispatch(frame: string, cb: SendMessageCallbacks) {
       cb.onError?.((data as { message: string }).message);
       break;
   }
+}
+
+// ─── Submissions (slice 6) ──────────────────────────────────────────────
+
+export type RenderOrigin = "human" | "llm" | "pasted" | "edited";
+export interface RenderRun { origin: RenderOrigin; length: number }
+export interface ProvenanceRenderDTO { text: string; runs: RenderRun[] }
+
+export interface SubmissionSummary {
+  token: string;
+  createdAt: number;
+  revokedAt: number | null;
+}
+
+export async function mintSubmission(
+  documentId: string,
+  courseId: string,
+): Promise<{ token: string; createdAt: number }> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/documents/${encodeURIComponent(documentId)}/submissions`),
+    {
+      ...fetchInit,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ courseId }),
+    },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as { token: string; createdAt: number };
+}
+
+export async function listSubmissions(
+  documentId: string,
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<SubmissionSummary[]> {
+  const res = await fetch(
+    apiUrl(
+      `/api/provenance/documents/${encodeURIComponent(documentId)}/submissions?courseId=${encodeURIComponent(courseId)}`,
+    ),
+    { ...fetchInit, signal },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const body = (await res.json()) as { submissions: SubmissionSummary[] };
+  return body.submissions;
+}
+
+export async function revokeSubmission(token: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/submissions/${encodeURIComponent(token)}`),
+    { ...fetchInit, method: "DELETE" },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+}
+
+// Public reads — no credentials, no auth redirect. A plain fetch so a
+// signed-out instructor opening a shared link just works.
+export interface PublicSubmissionDTO {
+  title: string;
+  createdAt: number;
+  render: ProvenanceRenderDTO;
+}
+
+export async function getPublicSubmission(
+  token: string,
+  signal?: AbortSignal,
+): Promise<PublicSubmissionDTO> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/public/submissions/${encodeURIComponent(token)}`),
+    { signal },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as PublicSubmissionDTO;
+}
+
+export interface PublicConversationDTO {
+  id: string;
+  agentName: string;
+  title: string | null;
+  messages: { role: "user" | "assistant"; content: string }[];
+}
+
+export async function getPublicSubmissionConversations(
+  token: string,
+  signal?: AbortSignal,
+): Promise<PublicConversationDTO[]> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/public/submissions/${encodeURIComponent(token)}/conversations`),
+    { signal },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const body = (await res.json()) as { conversations: PublicConversationDTO[] };
+  return body.conversations;
+}
+
+// ── Course settings (hide-marks toggle) ─────────────────────────────────
+
+/** Read the course's provenance display settings. Any enrolled user. */
+export async function getProvenanceSettings(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<{ hideProvenanceMarks: boolean }> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/settings?courseId=${encodeURIComponent(courseId)}`),
+    { ...fetchInit, signal },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as { hideProvenanceMarks: boolean };
+}
+
+/** Set the "hide marks from students" flag. Instructor only (403 otherwise). */
+export async function setProvenanceHideMarks(
+  courseId: string,
+  hide: boolean,
+): Promise<{ hideProvenanceMarks: boolean }> {
+  const res = await fetch(apiUrl(`/api/provenance/settings`), {
+    ...fetchInit,
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ courseId, hideProvenanceMarks: hide }),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as { hideProvenanceMarks: boolean };
 }

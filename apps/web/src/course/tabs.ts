@@ -8,7 +8,14 @@
 // every endpoint independently). Agents / Provenance / Roster always
 // show; Attendance / Sources lazy-reveal once the course has used them.
 
-import type { MeEnrollment } from "../client.js";
+// Tab visibility only depends on the lazy-reveal flags + (implicitly) role,
+// not the whole MeEnrollment DTO. Keep the predicate's input to just those
+// fields so adding unrelated enrollment fields (e.g. hideProvenanceMarks)
+// doesn't force every visible()-caller to supply them.
+export interface TabVisibilityFlags {
+  showAttendance?: boolean;
+  showCollections?: boolean;
+}
 
 export interface TabSpec {
   /** URL slug after /course/:courseId/. Empty string = dashboard index.
@@ -18,7 +25,7 @@ export interface TabSpec {
   label: string;
   /** One-line description shown on the dashboard index under the tab strip. */
   description: string;
-  visible: (e: MeEnrollment | undefined) => boolean;
+  visible: (e: TabVisibilityFlags | undefined) => boolean;
   /** When true, the tab navigates *out* of the course-scoped routes.
    *  Provenance lives at /write today (course-agnostic surface owned by
    *  another module); the dashboard still surfaces it as a first-class

@@ -1,13 +1,14 @@
-// Tiptap mark that records the origin of each character: human, llm, or pasted.
-// Slice 2 uses three origins; slice 7 will add "edited" for whole-word
-// replacements (Grammarly-style) and the LLM-reversion flow.
+// Tiptap mark that records the origin of each character: human, llm, pasted,
+// or edited. Slice 2 used three origins; slice 7 adds "edited" for
+// spellcheck/autocorrect/Grammarly word replacements (the browser's
+// insertReplacementText path) and re-stamps "llm" on exact reversion.
 //
 // The mark renders as <span data-origin="..."> so coloring is pure CSS
 // (see styles.css `.provenance-editor-surface [data-origin=...]`).
 
 import { Mark, mergeAttributes } from "@tiptap/core";
 
-export type Origin = "human" | "llm" | "pasted";
+export type Origin = "human" | "llm" | "pasted" | "edited";
 
 export interface OriginAttrs {
   origin: Origin;

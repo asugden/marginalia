@@ -207,8 +207,13 @@ export interface AuditLogRow {
  * Documents (slice 1) + append-only edit-event log (slice 2). Chat
  * tables land later. See modules/provenance/README.md.
  */
-export type ProvenanceEventKind = "insert" | "delete" | "paste" | "llm_insert";
-export type ProvenanceOrigin = "human" | "llm" | "pasted";
+export type ProvenanceEventKind =
+  | "insert"
+  | "delete"
+  | "paste"
+  | "llm_insert"
+  | "replace"; // slice 7: spellcheck/autocorrect/Grammarly word replacement
+export type ProvenanceOrigin = "human" | "llm" | "pasted" | "edited";
 
 export interface ProvenanceEventRow {
   id: string;

@@ -353,6 +353,10 @@ export interface MeEnrollment {
    *  the first time the course uses the feature; never flip back. */
   showAttendance: boolean;
   showCollections: boolean;
+  /** Provenance writing tool — when true, students see the document without
+   *  origin coloring while they write (recording is unaffected). Instructors
+   *  always see coloring. Default false. */
+  hideProvenanceMarks: boolean;
 }
 export interface MeResponse {
   email: string;

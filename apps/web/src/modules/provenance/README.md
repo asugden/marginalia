@@ -111,13 +111,59 @@ is never stored server-side.
    header for the cross-origin deploy. **Still Anthropic-only** until
    `OpenAICompatibleProvider` ships — a student's OpenAI key won't
    work yet; that's the provider track, not this slice.
-6. **Submissions + public viewer.** Share token, frozen snapshot,
-   read-only colored render. Optional drill-down to conversations.
-7. **Reversion + edit detection.** Whole-word vs character edit
-   classification; `edited` (green) mark; `llm` reversion on exact
-   re-match past `MIN_REVERSION_LENGTH`.
+6. ✅ **Submissions + public viewer.** "Share" mints an unguessable
+   token (`/s/:token`). The frozen snapshot is a **provenance render**
+   computed server-side from the authoritative `edit_events` log at
+   mint time (`render.ts buildRender`), stored as `{text, runs}` JSON
+   on `provenance_submissions` — *display-independent*, so it works
+   even if we later hide coloring from students mid-write. Public
+   viewer + light chat drill-down are the only unauthenticated routes
+   (`/api/provenance/public/*`, carved out before the auth gate in
+   index.ts). Owner can revoke. **Diverges from the original
+   "event-id cutoff" sketch**: replay-for-text would be lossy today
+   (delete events don't store removed text), and a frozen render is
+   faster to view. `snapshot_event_seq` retains the cutoff for future
+   scrub features.
+
+7. ✅ **Reversion + edit detection.** Browser spellcheck / autocorrect /
+   Grammarly word swaps (`inputType === "insertReplacementText"`) are
+   logged as a `replace` event and stamped `origin="edited"` (green) —
+   kept distinct from `paste` so autocorrect isn't lumped in with
+   clipboard content. We deliberately do **not** classify generic
+   select-and-retype as "edited" (too many false positives); only the
+   browser's own replacement signal counts. `llm` **reversion**: the
+   tracker keeps an in-memory index of LLM contributions (seeded by
+   `insertLlmText`, rehydrated on load from existing `origin="llm"`
+   runs via `rehydrateLlmContributions`); when typed text exactly
+   re-types a remembered contribution ≥ `MIN_REVERSION_LENGTH` (12,
+   whitespace-normalized) it's re-stamped `origin="llm"`, so suggested
+   wording can't be laundered into "human" by retyping. `render.ts`
+   replays `replace` as an insert of the event origin (a swap is a
+   `delete` + `replace` pair); the public viewer legend gains "edited".
+   No schema migration — the `kind`/`origin` columns are untyped TEXT.
+
+## Hide marks from students (cross-cutting, not a numbered slice)
+
+A per-course **"hide provenance marks from students"** toggle. When on,
+students see the document with origin coloring suppressed while they write
+(the legend is hidden too); instructors *always* see coloring and own the
+toggle (header button in the editor). This is **display-only** — recording
+continues unchanged, and because the submission render (slice 6) is computed
+server-side from the event log, frozen renders and the public viewer are
+unaffected. Stored on the shared `course_settings` row
+(`hide_provenance_marks`, migration `0014`); read via `/api/me`
+(`MeEnrollment.hideProvenanceMarks`) and through
+`GET /api/provenance/settings`; flipped via `PATCH /api/provenance/settings`
+(instructor only). Addresses the surveillance concern — this was cheap to add
+precisely because slice 6 decoupled recording from student-facing display.
 
 Later (not MVP): keystroke timing classification, server-side audit.
+
+Known gap from slice 7 (deferred): `llm` reversion matches at event
+granularity, so retyping suggested text **slowly, character-by-character**
+isn't caught (each 1-char insert is under `MIN_REVERSION_LENGTH`). This is a
+plausibly common laundering path — revisit with a rolling window over recent
+human inserts. See `TODO(reversion-slow-typing)` in `ProvenanceTracker.ts`.
 
 ## Known gap unblocked by this module
 

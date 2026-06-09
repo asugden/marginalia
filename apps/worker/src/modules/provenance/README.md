@@ -56,25 +56,30 @@ Every word in a document has a current **origin**:
 | `human`  | Typed by the student.                                    | blank  |
 | `llm`    | Inserted from an LLM conversation, unedited.             | yellow |
 | `pasted` | Pasted from outside the editor; source unknown.          | red    |
-| `edited` | Originated as `llm`/`pasted`, then character-edited.    | green  |
+| `edited` | Inserted by browser spellcheck/autocorrect/Grammarly.   | green  |
 
 Transition rules (these are normative — implementation must match):
 
 - **Human types in empty space** → `human`.
 - **Student clicks "insert" on an LLM message** → inserted words
-  marked `llm`, linked to the source `agent_messages.id`.
+  marked `llm`, linked to the source message id.
 - **Paste event** → pasted words marked `pasted`.
-- **Whole-word replacement** of `llm`/`pasted` text (e.g. a grammar
-  tool replacing "alot" with "a lot") → `edited`.
-- **Character-level edit** of an `llm`/`pasted`/`edited` word by the
-  human → becomes `human`.
-- **Reversion**: if a word that was edited away from `llm` later
-  matches a known LLM contribution again (exact string match against
-  any `agent_messages` content for this document's conversations), it
-  flips back to `llm`. This protects against the "type LLM output
-  verbatim to launder it" loophole while not penalising natural
-  re-typing of common phrases (short matches get a length floor —
-  see `MIN_REVERSION_LENGTH` in handlers).
+- **Browser word replacement** — spellcheck, autocorrect, or a
+  grammar tool (the browser's `inputType === "insertReplacementText"`)
+  → logged as a `replace` event, marked `edited`. Kept distinct from
+  `paste` so autocorrect isn't lumped in with clipboard content. We
+  deliberately do **not** classify generic select-and-retype as
+  `edited` (it produces too many false positives); only the browser's
+  own replacement signal counts. A replacement appears in the log as a
+  `delete` (old word) + `replace` (new word) pair.
+- **Reversion**: if typed text exactly re-types a known LLM
+  contribution (≥ `MIN_REVERSION_LENGTH`, whitespace-normalized) it
+  flips to `llm`. This protects against the "type LLM output verbatim
+  to launder it" loophole while not penalising natural re-typing of
+  common phrases (the length floor). Implemented client-side: the
+  tracker keeps an in-memory index of LLM contributions seeded by
+  `insertLlmText` and rehydrated on load from existing `origin="llm"`
+  runs (`MIN_REVERSION_LENGTH` lives in the client tracker, not here).
 
 The current origin is computed from the append-only
 `edit_events` log; the document table caches the latest rendered
@@ -100,8 +105,16 @@ See `schema.sql` for the authoritative shape. In brief:
   `provenance_agents.id` and prompt hash captured at send time so
   later edits to the agent don't rewrite history.
 - `provenance_submissions` — generated share tokens. Row contains
-  document id, frozen snapshot id (a specific `edit_events.id`
-  cutoff), and optional `revoked_at`.
+  document id, a **frozen provenance render** (`render_json`: `{text,
+  runs:[{origin,length}]}`) computed from `edit_events` at mint time,
+  the `snapshot_event_seq` cutoff (for future scrub), a title
+  snapshot, and optional `revoked_at`. The render is computed from
+  the authoritative event log — NOT from the editor's display marks —
+  so it stays correct even if provenance coloring is later hidden
+  from students while writing. (Slice 6 chose this over the original
+  "event-id cutoff + replay on read" sketch: replay-for-text is lossy
+  today since delete events don't store removed text, and a frozen
+  render is faster to view.)
 
 All tables filter by `course_id` per the project-wide rule.
 

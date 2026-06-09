@@ -40,6 +40,8 @@ const ProvenanceEditorPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.EditorPage })));
 const ProvenanceAgentsPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.AgentsPage })));
+const ProvenancePublicPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.PublicSubmissionPage })));
 // Attendance module — see apps/web/src/modules/attendance/README.md.
 const AttendanceSessionListPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.SessionListPage })));
@@ -97,6 +99,8 @@ const router = createBrowserRouter([
   { path: "/write", element: lz(<ProvenanceDocumentListPage />) },
   { path: "/write/agents", element: lz(<ProvenanceAgentsPage />) },
   { path: "/write/:id", element: lz(<ProvenanceEditorPage />) },
+  // Public, unauthenticated shared-submission viewer (slice 6).
+  { path: "/s/:token", element: lz(<ProvenancePublicPage />) },
   // Attendance: QR check-in for in-person sessions. Legacy /attendance
   // and /attendance/sessions/:id redirect into the course-scoped path
   // (v1.0 §7.2). /a/:id stays as-is — it's the public QR target and is

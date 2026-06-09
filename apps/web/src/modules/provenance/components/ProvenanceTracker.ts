@@ -4,8 +4,15 @@
 //   3. Exposes an `insertLlmText` command that inserts text from a chat
 //      message at the current selection, marked `origin: "llm"` and linked
 //      to the source message via `sourceMessageId` (slice 4).
-//   4. Captures insert / delete / paste / llm_insert events into a callback
-//      so EditorPage can buffer + POST them to the worker.
+//   4. Captures insert / delete / paste / llm_insert / replace events into a
+//      callback so EditorPage can buffer + POST them to the worker.
+//   5. (slice 7) Flags browser spellcheck / autocorrect / Grammarly word
+//      replacements (inputType "insertReplacementText") as origin="edited"
+//      via a `replace` event — kept distinct from paste so autocorrect isn't
+//      lumped in with clipboard content.
+//   6. (slice 7) Re-stamps re-typed text as origin="llm" when it exactly
+//      matches a remembered LLM contribution >= MIN_REVERSION_LENGTH chars,
+//      so suggested wording isn't laundered into "human" by retyping it.
 //
 // The trick: ProseMirror gives us a clean stream of transactions and the
 // transform that produced each one. We walk the transform's ReplaceSteps
@@ -23,7 +30,17 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { ReplaceStep, ReplaceAroundStep } from "@tiptap/pm/transform";
 import type { Origin } from "./OriginMark.js";
 
-export type TrackedEventKind = "insert" | "delete" | "paste" | "llm_insert";
+export type TrackedEventKind =
+  | "insert"
+  | "delete"
+  | "paste"
+  | "llm_insert"
+  | "replace";
+
+// Reversion: when a student re-types text that exactly matches a chunk of a
+// past LLM contribution this long (or longer), we flip the typed run's origin
+// back to "llm" so suggested wording can't be laundered into "human" by hand.
+const MIN_REVERSION_LENGTH = 12;
 
 export interface TrackedEvent {
   kind: TrackedEventKind;
@@ -66,23 +83,107 @@ declare module "@tiptap/core" {
        * any non-empty selection (parity with normal typing).
        */
       insertLlmText: (args: { text: string; sourceMessageId: string }) => ReturnType;
+      /**
+       * Remember a chunk of LLM-contributed text for the reversion index so
+       * that later re-typing of it gets re-stamped origin="llm". Called by
+       * `insertLlmText` itself, and on load to rehydrate from existing
+       * origin="llm" marks. Does not change the document.
+       */
+      noteLlmContribution: (text: string) => ReturnType;
+      /**
+       * Scan the current document for runs marked origin="llm" and seed the
+       * reversion index from them, so re-typing previously-suggested text is
+       * caught even after a reload (the in-memory index is otherwise empty on
+       * a fresh load). Idempotent.
+       */
+      rehydrateLlmContributions: () => ReturnType;
     };
   }
 }
 
-export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
+/** Normalize for reversion matching: collapse runs of whitespace to a single
+ *  space so re-typed text that differs only in spacing still matches. */
+function normalizeForMatch(s: string): string {
+  return s.replace(/\s+/g, " ");
+}
+
+/** Add a contribution to the reversion index (normalized, deduped,
+ *  longest-first), if it clears the minimum length. */
+function rememberContribution(list: string[], text: string): void {
+  const norm = normalizeForMatch(text).trim();
+  if (norm.length < MIN_REVERSION_LENGTH) return;
+  if (list.includes(norm)) return;
+  list.push(norm);
+  list.sort((a, b) => b.length - a.length);
+}
+
+interface ProvenanceTrackerStorage {
+  /** Normalized LLM contributions, longest-first, for reversion matching. */
+  llmContributions: string[];
+}
+
+export const ProvenanceTracker = Extension.create<
+  ProvenanceTrackerOptions,
+  ProvenanceTrackerStorage
+>({
   name: "provenanceTracker",
 
   addOptions() {
     return { onEvents: () => undefined };
   },
 
+  addStorage() {
+    return { llmContributions: [] };
+  },
+
+  onCreate() {
+    // Seed the reversion index from any LLM-marked text already in the loaded
+    // document so retyping suggested wording is caught after a reload too.
+    this.editor.commands.rehydrateLlmContributions();
+  },
+
   addCommands() {
     return {
+      noteLlmContribution:
+        (text) =>
+        () => {
+          rememberContribution(this.storage.llmContributions, text);
+          return true;
+        },
+      rehydrateLlmContributions:
+        () =>
+        ({ state }) => {
+          const originType = state.schema.marks.origin;
+          if (!originType) return true;
+          const list = this.storage.llmContributions;
+          // Walk text nodes; accumulate contiguous origin="llm" runs and
+          // remember each as one contribution (a run = one insert/paste of
+          // suggested text). A boundary or non-llm text flushes the run.
+          let run = "";
+          const flush = () => {
+            if (run) rememberContribution(list, run);
+            run = "";
+          };
+          state.doc.descendants((node) => {
+            if (!node.isText) {
+              flush();
+              return true;
+            }
+            const isLlm = node.marks.some(
+              (m) => m.type === originType && m.attrs.origin === "llm",
+            );
+            if (isLlm) run += node.text ?? "";
+            else flush();
+            return true;
+          });
+          flush();
+          return true;
+        },
       insertLlmText:
         ({ text, sourceMessageId }) =>
-        ({ chain, state }) => {
+        ({ chain, state, commands }) => {
           if (!text) return false;
+          commands.noteLlmContribution(text);
           // Smart spacing: if the cursor is right after a non-whitespace
           // character (i.e. we'd glue onto a word), prepend a space.
           const { from } = state.selection;
@@ -113,10 +214,31 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
 
   addProseMirrorPlugins() {
     const { onEvents } = this.options;
+    // Same array instance the command mutates — read live during replay so a
+    // contribution noted earlier this session is matchable on later retyping.
+    const llmContributions = this.storage.llmContributions;
 
     // Tracks the timing of the current keystroke run. Reset whenever we
     // flush an insert event so we don't keep cumulating across bursts.
     let keystroke: KeystrokeWindow | null = null;
+
+    // Is this typed text an exact retype of a remembered LLM contribution?
+    // Match on normalized whitespace; require MIN_REVERSION_LENGTH so short
+    // common words ("the model") don't get swept up.
+    //
+    // TODO(reversion-slow-typing): this matches at event granularity, so it
+    // catches bulk re-insertion (paste→edit, IME, autocomplete) but NOT a
+    // student retyping LLM text slowly character-by-character — each 1-char
+    // insert falls under MIN_REVERSION_LENGTH and never matches. Slow manual
+    // retyping is a plausibly common laundering path; revisit with a rolling
+    // window over recent human inserts (accumulate adjacent single-char
+    // inserts, match the trailing buffer against the index, restamp the run
+    // retroactively). Skipped for v1.
+    const isLlmReversion = (text: string): boolean => {
+      const norm = normalizeForMatch(text);
+      if (norm.trim().length < MIN_REVERSION_LENGTH) return false;
+      return llmContributions.some((c) => c.includes(norm.trim()));
+    };
 
     return [
       new Plugin<NextOpHint | null>({
@@ -136,7 +258,7 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
 
         props: {
           handleDOMEvents: {
-            beforeinput: (_view, ev) => {
+            beforeinput: (view, ev) => {
               const e = ev as InputEvent;
               if (e.inputType === "insertText") {
                 const now = performance.now();
@@ -149,6 +271,18 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
               } else {
                 // Any non-typing input flushes the keystroke window.
                 keystroke = null;
+                if (e.inputType === "insertReplacementText") {
+                  // Spellcheck / autocorrect / Grammarly word swap. Stash a
+                  // hint so the resulting transaction is tagged origin="edited"
+                  // (a `replace` event) rather than a plain human insert.
+                  // Deliberately kept distinct from paste.
+                  view.dispatch(
+                    view.state.tr.setMeta(pluginKey, {
+                      origin: "edited" as const,
+                      kind: "replace" as const,
+                    }),
+                  );
+                }
               }
               return false;
             },
@@ -215,16 +349,33 @@ export const ProvenanceTracker = Extension.create<ProvenanceTrackerOptions>({
               }
 
               if (sliceSize > 0) {
-                const kind: TrackedEventKind =
+                let kind: TrackedEventKind =
                   hint?.kind === "paste"
                     ? "paste"
                     : hint?.kind === "llm_insert"
                     ? "llm_insert"
+                    : hint?.kind === "replace"
+                    ? "replace"
                     : "insert";
-                const origin: Origin =
-                  kind === "paste" ? "pasted" : kind === "llm_insert" ? "llm" : "human";
-                const sourceMessageId =
+                let origin: Origin =
+                  kind === "paste"
+                    ? "pasted"
+                    : kind === "llm_insert"
+                    ? "llm"
+                    : kind === "replace"
+                    ? "edited"
+                    : "human";
+                let sourceMessageId =
                   kind === "llm_insert" ? hint?.sourceMessageId ?? null : null;
+
+                // Reversion: a plain human insert that exactly re-types a
+                // remembered LLM contribution is re-stamped origin="llm" (and
+                // logged as llm_insert) so suggested wording stays attributed.
+                if (kind === "insert" && isLlmReversion(insertedText)) {
+                  kind = "llm_insert";
+                  origin = "llm";
+                  sourceMessageId = null;
+                }
 
                 if (originMarkType) {
                   markTr = markTr.addMark(

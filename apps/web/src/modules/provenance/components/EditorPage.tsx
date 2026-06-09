@@ -21,6 +21,7 @@ import { useActiveCourse } from "../../../course/useActiveCourse.js";
 import {
   getDocument,
   postEvents,
+  setProvenanceHideMarks,
   updateDocument,
   type DocumentDTO,
   type OutboundEvent,
@@ -28,6 +29,7 @@ import {
 import { ProvenanceEditor, type EditorChange } from "./Editor.js";
 import type { TrackedEvent } from "./ProvenanceTracker.js";
 import { ChatPanel } from "./ChatPanel.js";
+import { SubmissionModal } from "./SubmissionModal.js";
 
 const SAVE_DEBOUNCE_MS = 1_000;
 const EVENTS_FLUSH_MS = 3_000;
@@ -56,11 +58,26 @@ export function EditorPage() {
   const { id } = useParams<{ id: string }>();
   const { active } = useActiveCourse();
   const courseId = active?.courseId ?? null;
+  const isInstructor = active?.role === "instructor";
+
+  // "Hide marks from students" (display-only; recording is unaffected).
+  // Seeded from /api/me; instructors can flip it live. Students never see
+  // coloring while it's on; instructors always see coloring so they can
+  // review, and get a toggle to control the student view.
+  const [hideMarksSetting, setHideMarksSetting] = useState<boolean>(
+    active?.hideProvenanceMarks ?? false,
+  );
+  useEffect(() => {
+    setHideMarksSetting(active?.hideProvenanceMarks ?? false);
+  }, [active?.hideProvenanceMarks]);
+  const [savingHideMarks, setSavingHideMarks] = useState(false);
+  const hideMarksForEditor = hideMarksSetting && !isInstructor;
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [chatOpen, setChatOpen] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
   const [split, setSplit] = useState<number>(() => loadSplit());
 
   // ── Doc-body autosave (slice 1) ───────────────────────────────────────
@@ -238,6 +255,21 @@ export function EditorPage() {
     scheduleEventsFlush();
   }
 
+  async function onToggleHideMarks() {
+    if (!courseId || savingHideMarks) return;
+    const next = !hideMarksSetting;
+    setSavingHideMarks(true);
+    // Optimistic; revert on failure.
+    setHideMarksSetting(next);
+    try {
+      await setProvenanceHideMarks(courseId, next);
+    } catch {
+      setHideMarksSetting(!next);
+    } finally {
+      setSavingHideMarks(false);
+    }
+  }
+
   function onTitleChange(value: string) {
     setTitleDraft(value);
     pendingSaveRef.current.title = value;
@@ -285,6 +317,25 @@ export function EditorPage() {
           placeholder="Untitled"
         />
         <SaveStatus state={saveState} />
+        {isInstructor && (
+          <button
+            type="button"
+            className="link-button subtle prov-shell-chat-toggle"
+            onClick={onToggleHideMarks}
+            disabled={savingHideMarks}
+            aria-pressed={hideMarksSetting}
+            title="Controls whether students see origin coloring while they write. Recording is unaffected."
+          >
+            {hideMarksSetting ? "Marks hidden for students" : "Marks shown to students"}
+          </button>
+        )}
+        <button
+          type="button"
+          className="link-button subtle prov-shell-chat-toggle"
+          onClick={() => setShareOpen(true)}
+        >
+          Share
+        </button>
         <button
           type="button"
           className="link-button subtle prov-shell-chat-toggle"
@@ -293,6 +344,14 @@ export function EditorPage() {
           {chatOpen ? "Hide chat" : "Open chat"}
         </button>
       </header>
+
+      {shareOpen && courseId && (
+        <SubmissionModal
+          documentId={doc.id}
+          courseId={courseId}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
 
       <div
         ref={splitContainerRef}
@@ -306,6 +365,7 @@ export function EditorPage() {
               onChange={onEditorChange}
               onEvents={onEditorEvents}
               onEditorReady={(ed) => { editorRef.current = ed; }}
+              hideMarks={hideMarksForEditor}
             />
           </div>
         </section>

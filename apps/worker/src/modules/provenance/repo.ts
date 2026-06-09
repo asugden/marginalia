@@ -8,6 +8,7 @@ import type {
   ProvenanceDocumentRow,
   ProvenanceEventRow,
   ProvenanceMessageRow,
+  ProvenanceSubmissionRow,
 } from "@marginalia/schema";
 import type { InboundEvent } from "./types.js";
 
@@ -537,4 +538,161 @@ export async function commitChatTurn(
 function seedTitle(text: string): string {
   const single = text.replace(/\s+/g, " ").trim();
   return single.length <= 60 ? single : single.slice(0, 60) + "…";
+}
+
+// ── Submissions (slice 6) ──────────────────────────────────────────────
+
+/** All events for a document in client_seq order — used by render replay
+ *  at mint time. No paging: a mint is rare and we need the full history. */
+export async function allEventsForDocument(
+  db: D1Database,
+  documentId: string,
+): Promise<ProvenanceEventRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM provenance_events
+        WHERE document_id = ?
+        ORDER BY client_seq ASC`,
+    )
+    .bind(documentId)
+    .all<ProvenanceEventRow>();
+  return results ?? [];
+}
+
+/** Unguessable URL-safe token. 192 bits of randomness, base64url. */
+function newSubmissionToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export async function createSubmission(
+  db: D1Database,
+  params: {
+    documentId: string;
+    courseId: string;
+    userId: string;
+    titleSnapshot: string;
+    renderJson: string;
+    snapshotEventSeq: number;
+  },
+): Promise<ProvenanceSubmissionRow> {
+  const token = newSubmissionToken();
+  const now = Date.now();
+  await db
+    .prepare(
+      `INSERT INTO provenance_submissions
+         (token, document_id, course_id, user_id, title_snapshot,
+          render_json, snapshot_event_seq, created_at, revoked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    )
+    .bind(
+      token,
+      params.documentId,
+      params.courseId,
+      params.userId,
+      params.titleSnapshot,
+      params.renderJson,
+      params.snapshotEventSeq,
+      now,
+    )
+    .run();
+  const row = await db
+    .prepare(`SELECT * FROM provenance_submissions WHERE token = ?`)
+    .bind(token)
+    .first<ProvenanceSubmissionRow>();
+  if (!row) throw new Error("createSubmission: row not found after insert");
+  return row;
+}
+
+/** Public read by token. Returns null if missing OR revoked. */
+export async function getActiveSubmission(
+  db: D1Database,
+  token: string,
+): Promise<ProvenanceSubmissionRow | null> {
+  const row = await db
+    .prepare(`SELECT * FROM provenance_submissions WHERE token = ?`)
+    .bind(token)
+    .first<ProvenanceSubmissionRow>();
+  if (!row || row.revoked_at !== null) return null;
+  return row;
+}
+
+export async function listSubmissionsForDocument(
+  db: D1Database,
+  documentId: string,
+  userId: string,
+): Promise<ProvenanceSubmissionRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM provenance_submissions
+        WHERE document_id = ? AND user_id = ?
+        ORDER BY created_at DESC`,
+    )
+    .bind(documentId, userId)
+    .all<ProvenanceSubmissionRow>();
+  return results ?? [];
+}
+
+/** Revoke a token. Owner-scoped. Returns true if a row was revoked. */
+export async function revokeSubmission(
+  db: D1Database,
+  token: string,
+  userId: string,
+): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `UPDATE provenance_submissions
+          SET revoked_at = ?
+        WHERE token = ? AND user_id = ? AND revoked_at IS NULL`,
+    )
+    .bind(Date.now(), token, userId)
+    .run();
+  return (res.meta?.changes ?? 0) > 0;
+}
+
+/** Conversations for a document, regardless of caller — used by the public
+ *  drill-down. The document's owner_user_id gates who could mint a share
+ *  in the first place, so a holder of the token is authorized to read. */
+export async function listConversationsForDocumentPublic(
+  db: D1Database,
+  documentId: string,
+): Promise<ProvenanceConversationRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM provenance_conversations
+        WHERE document_id = ?
+        ORDER BY created_at ASC`,
+    )
+    .bind(documentId)
+    .all<ProvenanceConversationRow>();
+  return results ?? [];
+}
+
+// ── Course settings (hide-marks toggle) ─────────────────────────────────
+
+/**
+ * Set the per-course "hide provenance marks from students" flag. A genuine
+ * two-way toggle (instructors can turn coloring back on), so it writes the
+ * explicit value. Upsert via INSERT … ON CONFLICT so a course with no
+ * settings row yet is handled in one round trip. The shared course_settings
+ * row is read elsewhere (listEnrollmentsForUserEnriched) for /api/me.
+ */
+export async function setHideProvenanceMarks(
+  db: D1Database,
+  courseId: string,
+  hide: boolean,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO course_settings (course_id, hide_provenance_marks, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(course_id) DO UPDATE
+         SET hide_provenance_marks = excluded.hide_provenance_marks,
+             updated_at = excluded.updated_at`,
+    )
+    .bind(courseId, hide ? 1 : 0, Date.now())
+    .run();
 }

@@ -13,6 +13,7 @@ import {
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import * as repo from "./repo.js";
+import { buildRender, plainTextFromDoc } from "./render.js";
 import {
   toAgentDTO,
   toAgentSummary,
@@ -42,11 +43,13 @@ const VALID_KINDS: ReadonlySet<ProvenanceEventKind> = new Set([
   "delete",
   "paste",
   "llm_insert",
+  "replace",
 ]);
 const VALID_ORIGINS: ReadonlySet<ProvenanceOrigin> = new Set([
   "human",
   "llm",
   "pasted",
+  "edited",
 ]);
 
 const json = (body: unknown, status = 200) =>
@@ -350,6 +353,57 @@ export async function deleteDocumentRoute(
   const ok = await repo.deleteDocument(env.DB, courseId, userId, id);
   if (!ok) return error("Document not found", 404);
   return json({ ok: true });
+}
+
+// ─── Course settings ────────────────────────────────────────────────────
+
+/** GET /settings?courseId= — read provenance display settings for a course.
+ *  Any enrolled user (the editor needs hideProvenanceMarks to decide
+ *  whether to color the surface for a student). */
+export async function getSettingsRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const enrollmentError = await requireEnrollment(env, userId, courseId);
+  if (enrollmentError) return enrollmentError;
+  const row = await env.DB
+    .prepare(
+      `SELECT COALESCE(hide_provenance_marks, 0) AS hide_provenance_marks
+       FROM course_settings WHERE course_id = ?`,
+    )
+    .bind(courseId)
+    .first<{ hide_provenance_marks: number }>();
+  return json({ hideProvenanceMarks: (row?.hide_provenance_marks ?? 0) === 1 });
+}
+
+/** PATCH /settings — instructor-only toggle of provenance display settings. */
+export async function updateSettingsRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const body = (await req.json().catch(() => null)) as {
+    courseId?: string;
+    hideProvenanceMarks?: boolean;
+  } | null;
+  if (!body?.courseId) return error("courseId required", 400);
+  if (typeof body.hideProvenanceMarks !== "boolean") {
+    return error("hideProvenanceMarks (boolean) required", 400);
+  }
+  const enrollment = await loadEnrollment(env, userId, body.courseId);
+  if (enrollment instanceof Response) return enrollment;
+  if (enrollment.role !== "instructor") {
+    return error("Only instructors can change this setting", 403);
+  }
+  await repo.setHideProvenanceMarks(env.DB, body.courseId, body.hideProvenanceMarks);
+  return json({ hideProvenanceMarks: body.hideProvenanceMarks });
 }
 
 // ─── Agents ─────────────────────────────────────────────────────────────
@@ -761,4 +815,129 @@ function buildBoundedHistory(
 function excerpt(s: string): string {
   const single = s.replace(/\s+/g, " ").trim();
   return single.length <= 60 ? single : single.slice(0, 60) + "…";
+}
+
+// ─── Submissions (slice 6) ──────────────────────────────────────────────
+
+/** POST /documents/:id/submissions — mint a share token. Owner-only.
+ *  Replays the doc's edit_events into a frozen provenance render and
+ *  stores it; the public viewer reads that render with no auth. */
+export async function createSubmissionRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  documentId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const body = (await req.json().catch(() => null)) as { courseId?: string } | null;
+  if (!body?.courseId) return error("courseId required", 400);
+  const enrollmentError = await requireEnrollment(env, userId, body.courseId);
+  if (enrollmentError) return enrollmentError;
+  const doc = await repo.getDocument(env.DB, body.courseId, userId, documentId);
+  if (!doc) return error("Document not found", 404);
+
+  // Build the frozen render from the authoritative event log + the doc's
+  // current text. Independent of any student-facing coloring.
+  const events = await repo.allEventsForDocument(env.DB, documentId);
+  let text = "";
+  try {
+    text = plainTextFromDoc(JSON.parse(doc.body_json));
+  } catch {
+    text = "";
+  }
+  const render = buildRender(text, events);
+  const snapshotEventSeq = events.length > 0 ? events[events.length - 1]!.client_seq : 0;
+
+  const row = await repo.createSubmission(env.DB, {
+    documentId,
+    courseId: body.courseId,
+    userId,
+    titleSnapshot: doc.title,
+    renderJson: JSON.stringify(render),
+    snapshotEventSeq,
+  });
+  return json({ token: row.token, createdAt: row.created_at }, 201);
+}
+
+/** GET /documents/:id/submissions — list this document's share tokens. */
+export async function listSubmissionsRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+  documentId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const enrollmentError = await requireEnrollment(env, userId, courseId);
+  if (enrollmentError) return enrollmentError;
+  const doc = await repo.getDocument(env.DB, courseId, userId, documentId);
+  if (!doc) return error("Document not found", 404);
+  const rows = await repo.listSubmissionsForDocument(env.DB, documentId, userId);
+  return json({
+    submissions: rows.map((r) => ({
+      token: r.token,
+      createdAt: r.created_at,
+      revokedAt: r.revoked_at,
+    })),
+  });
+}
+
+/** DELETE /submissions/:token — revoke. Owner-only. */
+export async function revokeSubmissionRoute(
+  env: Env,
+  identity: Identity,
+  token: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const ok = await repo.revokeSubmission(env.DB, token, userId);
+  if (!ok) return error("Submission not found", 404);
+  return json({ ok: true });
+}
+
+// ── Public (unauthenticated) ────────────────────────────────────────────
+
+/** GET /public/submissions/:token — the frozen colored render. No auth. */
+export async function publicSubmissionRoute(
+  env: Env,
+  token: string,
+): Promise<Response> {
+  const row = await repo.getActiveSubmission(env.DB, token);
+  if (!row) return error("This link is no longer available", 404);
+  let render: unknown = { text: "", runs: [] };
+  try {
+    render = JSON.parse(row.render_json);
+  } catch {
+    /* keep the empty render */
+  }
+  return json({
+    title: row.title_snapshot,
+    createdAt: row.created_at,
+    render,
+  });
+}
+
+/** GET /public/submissions/:token/conversations — light drill-down into
+ *  the chat history behind a shared document. No auth. */
+export async function publicSubmissionConversationsRoute(
+  env: Env,
+  token: string,
+): Promise<Response> {
+  const row = await repo.getActiveSubmission(env.DB, token);
+  if (!row) return error("This link is no longer available", 404);
+  const convs = await repo.listConversationsForDocumentPublic(env.DB, row.document_id);
+  const out = [];
+  for (const c of convs) {
+    const messages = await repo.listMessages(env.DB, c.id);
+    out.push({
+      id: c.id,
+      agentName: c.agent_name_snapshot,
+      title: c.title,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    });
+  }
+  return json({ conversations: out });
 }

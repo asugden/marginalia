@@ -28,9 +28,19 @@ interface Props {
   /** Fires once the editor instance is ready; receives null on teardown.
    *  Slice 4 uses this so the ChatPanel can call editor.commands.insertLlmText. */
   onEditorReady?: (editor: Editor | null) => void;
+  /** When true, suppress origin coloring (the "hide marks from students"
+   *  toggle). Recording is unaffected — this is display-only. The footer
+   *  legend is hidden too, since there are no colors to explain. */
+  hideMarks?: boolean;
 }
 
-export function ProvenanceEditor({ initialContent, onChange, onEvents, onEditorReady }: Props) {
+export function ProvenanceEditor({
+  initialContent,
+  onChange,
+  onEvents,
+  onEditorReady,
+  hideMarks = false,
+}: Props) {
   // Keep the latest onEvents in a ref so the tracker plugin (configured once
   // at editor construction) always sees the current callback.
   const onEventsRef = useRef<Props["onEvents"]>(onEvents);
@@ -61,6 +71,9 @@ export function ProvenanceEditor({ initialContent, onChange, onEvents, onEditorR
     const current = editor.getJSON();
     if (JSON.stringify(current) !== JSON.stringify(initialContent)) {
       editor.commands.setContent(initialContent, { emitUpdate: false });
+      // Re-seed the reversion index from the newly-loaded document's LLM runs
+      // (onCreate only fires for the first document on this editor instance).
+      editor.commands.rehydrateLlmContributions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialContent, editor]);
@@ -81,7 +94,7 @@ export function ProvenanceEditor({ initialContent, onChange, onEvents, onEditorR
   const pageCount = Math.max(1, Math.ceil(wordCount / WORDS_PER_PAGE));
 
   return (
-    <div className="prov-editor-surface-wrap">
+    <div className={`prov-editor-surface-wrap${hideMarks ? " prov-marks-hidden" : ""}`}>
       <BubbleMenu editor={editor} className="prov-bubble-menu">
         <ToolbarButton
           editor={editor}
@@ -145,11 +158,14 @@ export function ProvenanceEditor({ initialContent, onChange, onEvents, onEditorR
           <span className="prov-counts-sep" aria-hidden />
           <span>~{pageCount} page{pageCount === 1 ? "" : "s"}</span>
         </span>
-        <span className="prov-editor-legend" aria-label="Word-origin legend">
-          <Swatch className="legend-human" label="typed" />
-          <Swatch className="legend-pasted" label="pasted" />
-          <Swatch className="legend-llm" label="from chat" />
-        </span>
+        {!hideMarks && (
+          <span className="prov-editor-legend" aria-label="Word-origin legend">
+            <Swatch className="legend-human" label="typed" />
+            <Swatch className="legend-pasted" label="pasted" />
+            <Swatch className="legend-llm" label="from chat" />
+            <Swatch className="legend-edited" label="edited" />
+          </span>
+        )}
       </footer>
     </div>
   );
