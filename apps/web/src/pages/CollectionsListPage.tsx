@@ -60,7 +60,7 @@ export function CollectionsListPage() {
     <div className="ds-staff-page">
       <div className="ds-staff-head">
         <div>
-          <span className="eyebrow">Author · Sources</span>
+          <span className="eyebrow">Instructor · Sources</span>
           <h1>Libraries</h1>
           <div className="ds-staff-head__scope">
             A library is a set of documents you attach to an agent. The agent

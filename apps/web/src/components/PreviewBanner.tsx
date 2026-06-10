@@ -1,6 +1,7 @@
 // Shown to an instructor who has switched into the student view of their own
 // course. "Preview mode" is not a stored flag — it's simply an instructor on a
-// /course/:id/learn route. StudentLayout decides when to mount this; the banner
+// /course/:id route (not under /instructor). StudentLayout decides when to
+// mount this; the banner
 // itself is pure presentation, reading the course from context.
 //
 // It does two jobs: (1) reassures the instructor that what they're seeing is

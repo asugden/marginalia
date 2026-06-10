@@ -187,7 +187,7 @@ export function CollectionDetailPage() {
     <div className="ds-staff-page">
       <div className="ds-staff-head">
         <div>
-          <span className="eyebrow">Author · Sources</span>
+          <span className="eyebrow">Instructor · Sources</span>
           <h1>{detail.collection.name}</h1>
           <div className="ds-staff-head__scope">
             {detail.collection.description ||

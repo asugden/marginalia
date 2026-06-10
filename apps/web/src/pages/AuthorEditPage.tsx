@@ -307,7 +307,7 @@ export function AuthorEditPage() {
     <div className="ds-staff-page">
       <div className="ds-staff-head">
         <div>
-          <span className="eyebrow">Author · Guided agent</span>
+          <span className="eyebrow">Instructor · Guided agent</span>
           <h1>{isNew ? "New agent" : draft.title || "Edit agent"}</h1>
           <div className="ds-staff-head__scope">
             Students see this agent on their home page. It leads them through

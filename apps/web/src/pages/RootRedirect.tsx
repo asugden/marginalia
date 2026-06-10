@@ -1,8 +1,8 @@
 // The `/` resolver. Under the course-rooted model nothing lives at `/`
-// directly — student surfaces are at /course/:id/learn/*. This page decides
-// where a cold load lands:
+// directly — the student surface IS the clean course root (/course/:id). This
+// page decides where a cold load lands:
 //
-//   * 1 enrollment  → /course/:id/learn (the student home).
+//   * 1 enrollment  → /course/:id (the student home).
 //   * 2+ enrollments → /courses (the picker).
 //   * 0 enrollments → the join-code prompt (rendered here; a student with no
 //     course has nowhere to be sent).
@@ -31,7 +31,7 @@ export function RootRedirect() {
   const initial = (() => {
     const boot = readBootstrap();
     if (boot?.kind === "agents") {
-      return { kind: "to", path: `/course/${boot.courseId}/learn` } as const;
+      return { kind: "to", path: `/course/${boot.courseId}` } as const;
     }
     if (boot?.kind === "picker") {
       return { kind: "to", path: "/courses" } as const;
@@ -49,7 +49,7 @@ export function RootRedirect() {
         if (m.enrollments.length > 1) {
           setRes({ kind: "to", path: "/courses" });
         } else if (m.enrollments.length === 1) {
-          setRes({ kind: "to", path: `/course/${m.enrollments[0]!.courseId}/learn` });
+          setRes({ kind: "to", path: `/course/${m.enrollments[0]!.courseId}` });
         } else {
           setRes({ kind: "join" });
         }

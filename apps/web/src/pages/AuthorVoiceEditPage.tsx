@@ -210,7 +210,7 @@ export function AuthorVoiceEditPage() {
         <Link to="/" aria-label="Home">
           <Wordmark size="sm" />
         </Link>
-        <span className="ds-staff-top__role">Author</span>
+        <span className="ds-staff-top__role">Instructor</span>
         <div className="ds-staff-top__course">
           <Button variant="ghost" size="sm" href="/author/voices">
             ← All voices
@@ -264,7 +264,7 @@ export function AuthorVoiceEditPage() {
     <Shell>
       <div className="ds-staff-head">
         <div>
-          <span className="eyebrow">Author · Voice</span>
+          <span className="eyebrow">Instructor · Voice</span>
           <h1>
             {isNew ? "New voice" : isLibrary ? "Library voice" : draft.name || "Edit voice"}
           </h1>

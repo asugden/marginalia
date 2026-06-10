@@ -97,7 +97,7 @@ export function AuthorListPage() {
     <div className="ds-staff-page">
       <div className="ds-staff-head">
         <div>
-          <span className="eyebrow">Author · Agents</span>
+          <span className="eyebrow">Instructor · Agents</span>
           <h1>Agents</h1>
           <div className="ds-staff-head__scope">
             AI tutors your students can chat with — each carries a voice and,

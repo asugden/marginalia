@@ -46,7 +46,7 @@ export function RoleSwitch({ courseId, role, isAdmin, current }: RoleSwitchProps
   const segments: Array<{ key: RoleSurface; label: string; to: string }> = [
     { key: "student", label: "Student", to: studentTo },
   ];
-  if (isInstructor) segments.push({ key: "author", label: "Author", to: authorTo });
+  if (isInstructor) segments.push({ key: "author", label: "Instructor", to: authorTo });
   if (isAdmin) segments.push({ key: "admin", label: "Admin", to: "/admin" });
 
   return (

@@ -56,7 +56,7 @@ export function AuthorVoicesPage() {
         <Link to="/" aria-label="Home">
           <Wordmark size="sm" />
         </Link>
-        <span className="ds-staff-top__role">Author</span>
+        <span className="ds-staff-top__role">Instructor</span>
         <div className="ds-staff-top__course">
           <Button variant="ghost" size="sm" href="/courses">
             ← Courses
@@ -67,7 +67,7 @@ export function AuthorVoicesPage() {
       <div className="ds-staff-page">
         <div className="ds-staff-head">
           <div>
-            <span className="eyebrow">Author · Voices</span>
+            <span className="eyebrow">Instructor · Voices</span>
             <h1>Voices</h1>
             <div className="ds-staff-head__scope">
               A voice is a persona — tone, style, pedagogy — that an agent
