@@ -3,12 +3,41 @@
    student" banner. ds- prefix, generic tokens only. */
 
 /* ---- Role switch ----
-   Reuses the segmented-control track (.ds-seg) but its options are <Link>s, so
-   reset the anchor defaults the seg button styles assume on a <button>. */
-.ds-roleswitch .ds-seg__btn {
-  text-decoration: none;
-  line-height: 1;
+   A small dropdown: a pill trigger naming the surface you're on, opening a menu
+   of where you can go. The student option reads as a course-scoped *preview*. */
+.ds-roleswitch { position: relative; flex: none; }
+.ds-roleswitch__btn {
+  appearance: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: 0.34rem 0.5rem 0.34rem 0.7rem; color: var(--text-secondary);
+  font-family: var(--font-mono); font-size: var(--text-2xs);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
+.ds-roleswitch__btn:hover { border-color: var(--text-faint); color: var(--text-strong); }
+.ds-roleswitch__btn svg { opacity: 0.7; flex: none; }
+.ds-roleswitch__menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 230px; width: max-content; max-width: 340px; z-index: 60;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  padding: 0.35rem; display: flex; flex-direction: column; gap: 1px;
+}
+.ds-roleswitch__opt {
+  appearance: none; cursor: pointer; text-align: left; background: none; border: 0;
+  border-radius: var(--radius-sm); padding: 0.5rem 0.6rem;
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.ds-roleswitch__opt:hover { background: var(--surface-hover); }
+.ds-roleswitch__opt-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ds-roleswitch__opt b {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text-strong);
+}
+.ds-roleswitch__opt span { font-size: var(--text-2xs); color: var(--text-muted); }
+.ds-roleswitch__opt--active { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.ds-roleswitch__opt--active b { color: var(--accent-deep); }
+.ds-roleswitch__tick { margin-left: auto; color: var(--accent); display: inline-flex; flex: none; }
 
 /* ---- Preview banner ----
    A thin strip under the student topbar, shown only when an instructor is
@@ -19,14 +48,14 @@
   padding: 0.5rem 1.5rem;
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  font-size: var(--text-sm);
+  color: var(--accent-deep); font-size: var(--text-sm);
 }
-.ds-preview-banner__label {
-  font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--text-secondary);
-}
-.ds-preview-banner__label i { color: var(--text-muted); font-style: normal; margin: 0 0.1rem; }
+.ds-preview-banner__label { color: var(--accent-deep); }
+.ds-preview-banner__label b { font-weight: 700; }
 .ds-preview-banner__back {
-  margin-left: auto; font-weight: 600; color: var(--accent); text-decoration: none;
+  margin-left: auto; flex: none;
+  font-family: var(--font-mono); font-size: var(--text-2xs);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent-deep); text-decoration: underline; text-underline-offset: 3px;
 }
-.ds-preview-banner__back:hover { text-decoration: underline; }
+.ds-preview-banner__back:hover { color: var(--accent); }

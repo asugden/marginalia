@@ -393,6 +393,14 @@ async function route(
     return adminRoute(req, env, ctx, url, identity, parts);
   }
 
+  // POST /api/courses — any signed-in user creates a course and becomes its
+  // instructor. Course creation is deliberately NOT admin-gated: an instructor
+  // is simply someone who teaches a course, and the instance's sign-in domain
+  // allowlist already decides who can be here at all.
+  if (head === "courses" && req.method === "POST" && parts.length === 2) {
+    return createCourseRoute(req, env, identity);
+  }
+
   // /api/courses/:courseId/join-codes[/:code]
   if (head === "courses" && sub === "join-codes") {
     const courseIdSeg = tail!;
@@ -1442,6 +1450,81 @@ async function revealTabRoute(
   }
   await repo.markCourseFeatureShown(env.DB, courseId, body.feature);
   return json({ ok: true });
+}
+
+/**
+ * POST /api/courses — create a course owned by the caller.
+ *
+ * Unlike the admin console's createCourseAdmin (which only mints the course
+ * row), this enrolls the caller as the course's instructor and seeds a join
+ * code so students can self-enroll immediately. It is open to any signed-in,
+ * registered user — instructorship is per-course, and gating creation behind
+ * the admin role would mean an admin has to hand-make every instructor's first
+ * course. The sign-in allowlist (ALLOWED_EMAIL_DOMAINS) is the real gate on who
+ * reaches this code at all.
+ */
+async function createCourseRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+): Promise<Response> {
+  // Resolve to a registered user row. In production identity.userId is always
+  // populated (the OIDC callback creates the row before issuing the session);
+  // the dev bypass for a brand-new email is the only path that needs the
+  // email lookup fallback.
+  let userId = identity.userId;
+  if (!userId) {
+    const user = await repo.findUserByEmail(env.DB, DEFAULT_ORG, identity.email);
+    if (!user) return error("Sign in required", 401);
+    userId = user.id;
+  }
+
+  const body = (await req.json().catch(() => null)) as { name?: string } | null;
+  const name = body?.name?.trim();
+  if (!name) return error("name is required", 400);
+
+  const course = await repo.createCourse(env.DB, { orgId: DEFAULT_ORG, name });
+  await repo.createEnrollment(env.DB, {
+    courseId: course.id,
+    userId,
+    role: "instructor",
+  });
+
+  // Seed a join code so the new course can take students right away. Retry on
+  // the rare random-suffix collision, mirroring createJoinCodeRoute.
+  let joinCode: string | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateJoinCode(course.name);
+    if (await repo.findJoinCode(env.DB, code)) continue;
+    const row = await repo.createJoinCode(env.DB, {
+      code,
+      courseId: course.id,
+      emailDomain: null,
+      expiresAt: null,
+      maxUses: null,
+      createdBy: userId,
+    });
+    joinCode = row.code;
+    break;
+  }
+
+  await repo.appendAuditLog(env.DB, {
+    actorId: userId,
+    action: "course.create",
+    targetKind: "course",
+    targetId: course.id,
+    payload: { name, via: "instructor" },
+  });
+
+  return json(
+    {
+      id: course.id,
+      name: course.name,
+      createdAt: course.created_at,
+      joinCode,
+    },
+    201,
+  );
 }
 
 async function createCollectionRoute(

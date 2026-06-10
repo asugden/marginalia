@@ -4,14 +4,26 @@
    generic tokens. The Message / ChatComposer / OutlineRail components carry
    their own styling; this is the layout around them. */
 
+/* Height containment (DS ground truth: the chat is a height-locked grid; only
+   the message thread scrolls). The chat mounts as StudentLayout's <Outlet>
+   *under* the sticky topbar inside .ds-home. If the chat is 100vh, the page
+   becomes topbar + 100vh and the whole .ds-home scrolls — dragging the sticky
+   topbar with it (the "runaway outer scroll" bug). So when .ds-home holds a
+   chat, lock it to one viewport as a flex column: the topbar takes its natural
+   height and the chat fills the rest. Other student pages (home, history) keep
+   .ds-home's default min-height:100vh and scroll normally. */
+.ds-home:has(.ds-chat) { height: 100vh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.ds-home:has(.ds-chat) > .ds-topbar { flex: none; }
+
 .ds-chat {
-  display: grid; grid-template-columns: var(--sidebar-width) 1fr; height: 100vh;
+  display: grid; grid-template-columns: var(--sidebar-width) 1fr;
+  flex: 1; min-height: 0; height: 100%;
   background: var(--surface);
   transition: grid-template-columns var(--dur-4) var(--ease-out);
 }
 .ds-chat--collapsed { grid-template-columns: 0 1fr; }
 
-.ds-side { background: var(--surface-sunken); border-right: 1px solid var(--border); overflow: hidden; }
+.ds-side { background: var(--surface-sunken); border-right: 1px solid var(--border); min-height: 0; overflow: hidden; }
 .ds-side__inner { width: var(--sidebar-width); padding: 1.5rem 1.25rem; display: flex; flex-direction: column; gap: 1.5rem; }
 .ds-side__agent { display: flex; align-items: center; gap: 0.7rem; }
 .ds-side__name { font-weight: 700; color: var(--text-strong); font-size: var(--text-base); line-height: 1.2; }
@@ -29,13 +41,13 @@
 .ds-side__history li.is-active a span { color: var(--text-strong); font-weight: 600; }
 .ds-side__seeall { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-link); padding: 0.2rem 0.55rem; }
 
-.ds-conv { display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+.ds-conv { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
 .ds-conv__head {
   display: flex; align-items: center; gap: 0.4rem; padding: 0.7rem 1rem;
   border-bottom: 1px solid var(--border); background: var(--surface);
 }
 .ds-conv__title { font-weight: 700; color: var(--text-strong); font-size: var(--text-base); margin-left: 0.2rem; margin-right: auto; }
-.ds-conv__scroll { flex: 1; overflow-y: auto; padding: 1.75rem 1.5rem 0.5rem; }
+.ds-conv__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 1.75rem 1.5rem 0.5rem; }
 .ds-conv__thread { max-width: var(--measure-chat); margin: 0 auto; }
 .ds-conv__composer { padding: 0.75rem 1.5rem 1.4rem; background: var(--surface); }
 

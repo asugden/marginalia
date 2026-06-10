@@ -75,7 +75,7 @@ export const TABS: TabSpec[] = [
   },
   {
     slug: "roster",
-    label: "Roster",
+    label: "People",
     description:
       "Who's enrolled in this course. Add by email, share a join code, or remove people who shouldn't be here.",
     visible: () => true,

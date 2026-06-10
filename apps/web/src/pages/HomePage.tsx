@@ -120,19 +120,23 @@ export function HomePage() {
 
       {/* Writing tool entry point (#19). The provenance surface lands on the
           student's own list of past writings, so a single link covers both
-          "start writing" and "my past papers". Always available. */}
-      <section className="ds-home__panel">
-        <span className="mono-label">Writing</span>
-        <h2>Provenance writing space</h2>
-        <p className="ds-home__note">
-          A place to write where every word is tagged by where it came from —
-          typed, pasted, or pulled from a chat agent. Open it to start something
-          new or pick up a past piece.
-        </p>
-        <div>
-          <Button href={`${base}/write`} icon={<PencilIcon size={16} />}>
-            Open writing &amp; past papers
-          </Button>
+          "start writing" and "my past papers". Always available. Set off from
+          the agent list by its own rule + breathing room, so it never crowds
+          the rows above it. */}
+      <section className="ds-home__writing">
+        <div className="ds-home__panel">
+          <div className="ds-home__panel-text">
+            <span className="mono-label">Writing</span>
+            <h2>Provenance writing space</h2>
+            <p className="ds-home__note">
+              Write here to share the history and provenance of your work.
+            </p>
+          </div>
+          <div className="ds-home__panel-action">
+            <Button href={`${base}/write`} icon={<PencilIcon size={16} />}>
+              Open writing &amp; past papers
+            </Button>
+          </div>
         </div>
       </section>
     </div>

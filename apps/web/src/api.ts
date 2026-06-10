@@ -885,6 +885,22 @@ export interface AuditEntry {
   createdAt: number;
 }
 
+// Instructor-facing course creation (any signed-in user; the caller becomes
+// the new course's instructor). Distinct from createAdminCourse, which is the
+// admin console's bare course-row create. Returns the new course id so the SPA
+// can navigate straight into it.
+export function createCourse(name: string) {
+  return jsonFetch<{
+    id: string;
+    name: string;
+    createdAt: number;
+    joinCode: string | null;
+  }>(`/api/courses`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export function listAdminCourses() {
   return jsonFetch<{ courses: AdminCourse[] }>(`/api/admin/courses`);
 }

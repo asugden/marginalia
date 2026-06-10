@@ -19,10 +19,11 @@ export function PreviewBanner({ courseId, courseName }: PreviewBannerProps) {
   return (
     <div className="ds-preview-banner" role="status">
       <span className="ds-preview-banner__label">
-        Previewing as student <i>·</i> {courseName}
+        <b>Previewing {courseName} as a student.</b> The student&rsquo;s view of
+        this course.
       </span>
       <Link to={`/course/${courseId}/instructor`} className="ds-preview-banner__back">
-        ← Back to authoring
+        Back to instructor
       </Link>
     </div>
   );

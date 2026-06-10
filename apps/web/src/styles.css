@@ -76,8 +76,8 @@ body::before {
   position: fixed;
   bottom: 0;
   left: 0;
-  width: 30%;
-  min-width: 750px;
+  width: 34vw;
+  min-width: 460px;
   aspect-ratio: 1 / 1;
   /* Longhands, not the `background` shorthand: substituting a custom property
    * holding a url("…") into the shorthand makes the whole declaration invalid

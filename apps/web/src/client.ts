@@ -100,6 +100,9 @@ export const revokeJoinCode = (impl as typeof real).revokeJoinCode;
 export const claimJoinCode = (impl as typeof real).claimJoinCode;
 // v1.0 §6 — opt a lazy-reveal tab into the dashboard.
 export const revealCourseTab = (impl as typeof real).revealCourseTab;
+// Instructor-facing course creation. Mock mode doesn't simulate it (the mock
+// has no mutable course set); calling it in mock mode throws.
+export const createCourse = (impl as typeof real).createCourse;
 // v0.6 §5 — admin console. Mock mode doesn't simulate these (the mock has no
 // per-org admin set or audit log).
 export const listAdminCourses = (impl as typeof real).listAdminCourses;

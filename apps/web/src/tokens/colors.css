@@ -33,14 +33,29 @@
   --brand-watermark-opacity: 0;
 
   /* ---- Primitive · accent scale -------------------------------- *
-   * Derived from the two brand-seam values plus fixed tint washes.
+   * Derived from the single brand-seam value with color-mix, so a deployer
+   * only sets --brand-primary / --brand-primary-dark (in theme.yaml) and the
+   * whole accent scale re-tints to match. Previously these four were
+   * hardcoded literals matching the default blue, which left the
+   * deeper/brighter/tint variants blue under any other --brand-primary
+   * override (the theme plugin injects only --brand-primary/-dark, not the
+   * derived scale) — a real visual bug for non-default brands.
+   *
+   * Deriving them with color-mix fixes that: the deeper/brighter/tint
+   * variants track whatever --brand-primary is set to. The ratios are tuned
+   * against a warm crimson reference brand (#ba0100), reproducing its
+   * intended scale closely (deep #6c0100 exact; tint/tint-2 within ~1 per
+   * channel). `bright` is a lighter, more-saturated variant a single
+   * white-mix can't hit exactly — the 85% mix is the nearest single-mix and
+   * it's used only for rare glints / live dots. The default blue falls out of
+   * the same ratios as a coherent blue scale.
    * Use the accent like punctuation, never as a flood. */
   --accent-base:    var(--brand-primary);
   --accent-strong:  var(--brand-primary-dark);
-  --accent-deep:    #143257;  /* accent text on light for AA contrast */
-  --accent-bright:  #3b82d6;  /* rare: focus glints, live indicators */
-  --accent-tint:    #e9f0f8;  /* selected/hover wash on paper */
-  --accent-tint-2:  #d6e3f2;  /* slightly stronger wash, borders */
+  --accent-deep:    color-mix(in srgb, var(--brand-primary) 58%, #000);  /* AA text on light */
+  --accent-bright:  color-mix(in srgb, var(--brand-primary) 85%, #fff);  /* rare: glints, live dots */
+  --accent-tint:    color-mix(in srgb, var(--brand-primary) 7%,  #fff);  /* selected/hover wash */
+  --accent-tint-2:  color-mix(in srgb, var(--brand-primary) 15%, #fff);  /* stronger wash, borders */
 
   /* ---- Primitive · warm sand neutrals -------------------------- */
   --sand-50:  #faf8f4;  /* app paper */
@@ -96,7 +111,7 @@
   --accent-ink:     var(--accent-deep);   /* accent text that must pass AA */
 
   /* Focus ring — accent glow, used app-wide */
-  --focus-ring:     0 0 0 3px color-mix(in srgb, var(--accent-base) 24%, transparent);
+  --focus-ring:     0 0 0 3px color-mix(in srgb, var(--accent-base) 22%, transparent);
   --focus-color:    var(--accent-base);
 
   /* Status (semantic feedback) */

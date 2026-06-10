@@ -14,11 +14,11 @@
 // a meta-surface, not the inside of a course.
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { getMe, type MeEnrollment } from "../client.js";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { createCourse, getMe, type MeEnrollment } from "../client.js";
 import { readBootstrap } from "../bootstrap.js";
-import { Badge, Wordmark } from "../components/index.js";
-import { ArrowIcon } from "../icons.js";
+import { Badge, Button, Field, Input, Wordmark } from "../components/index.js";
+import { ArrowIcon, PlusIcon } from "../icons.js";
 
 export function CoursePickerPage() {
   const [enrollments, setEnrollments] = useState<MeEnrollment[] | null>(() => {
@@ -27,6 +27,29 @@ export function CoursePickerPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Course creation. Open inline when arriving with ?new=1 (the switcher's
+  // "New course…" shortcut), otherwise toggled by the header button.
+  const [creating, setCreating] = useState(() => searchParams.get("new") === "1");
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const name = draft.trim();
+    if (!name || busy) return;
+    setBusy(true);
+    setCreateError(null);
+    try {
+      const course = await createCourse(name);
+      navigate(`/course/${course.id}/instructor`);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Couldn't create the course");
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -34,8 +57,11 @@ export function CoursePickerPage() {
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setEnrollments(m.enrollments);
-        // Lone enrollment? Send them where they'd have landed anyway.
-        if (m.enrollments.length === 1) {
+        // Lone enrollment? Send them where they'd have landed anyway — unless
+        // they came here explicitly to create a course (?new=1), in which case
+        // bouncing them straight back into their one course would hide the
+        // create form they asked for.
+        if (m.enrollments.length === 1 && searchParams.get("new") !== "1") {
           const only = m.enrollments[0]!;
           navigate(
             only.role === "instructor"
@@ -50,7 +76,7 @@ export function CoursePickerPage() {
         setError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   return (
     <div className="ds-staff">
@@ -67,11 +93,54 @@ export function CoursePickerPage() {
             <span className="eyebrow">Your courses</span>
             <h1>Pick a course</h1>
             <div className="ds-staff-head__scope">
-              You&rsquo;re enrolled in more than one course on this instance.
-              Pick the one you want to open.
+              Pick the one you want to open, or start a new course you&rsquo;ll
+              teach.
             </div>
           </div>
+          <div className="ds-staff-actions">
+            <Button
+              variant={creating ? "subtle" : "primary"}
+              icon={<PlusIcon size={16} />}
+              onClick={() => setCreating((v) => !v)}
+            >
+              New course
+            </Button>
+          </div>
         </div>
+
+        {creating && (
+          <form className="ds-staff-section ds-picker__create" onSubmit={onCreate}>
+            <span className="mono-label ds-staff-section__label">
+              New course
+            </span>
+            <p className="muted small">
+              You&rsquo;ll be its instructor. A join code is created
+              automatically so students can enroll — share it from the People
+              tab.
+            </p>
+            {createError && <p className="error">{createError}</p>}
+            <div className="ds-picker__create-row">
+              <Field label="Course name">
+                <Input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. Integrated Product Design — Fall 2026"
+                  value={draft}
+                  disabled={busy}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              </Field>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={busy}
+                disabled={busy || !draft.trim()}
+              >
+                Create course
+              </Button>
+            </div>
+          </form>
+        )}
 
         {error && <p className="error">{error}</p>}
 

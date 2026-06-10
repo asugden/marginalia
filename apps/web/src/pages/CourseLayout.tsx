@@ -29,7 +29,7 @@ import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import { TABS, tabForPathname, tabHref } from "../course/tabs.js";
 import { Button, IconButton, RoleSwitch, Wordmark } from "../components/index.js";
-import { ChevronIcon, SignOutIcon } from "../icons.js";
+import { CheckIcon, ChevronIcon, SignOutIcon } from "../icons.js";
 import { signOut } from "../session.js";
 
 export function CourseLayout() {
@@ -104,39 +104,79 @@ export function CourseLayout() {
             current="author"
           />
           <div className="ds-staff-top__course">
-            {others.length > 0 ? (
-              <div className="ds-switcher">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  iconRight={<ChevronIcon size={14} />}
-                  onClick={() => setSwitcherOpen((v) => !v)}
-                  aria-expanded={switcherOpen}
-                >
-                  {value.courseName}
-                </Button>
-                {switcherOpen && (
-                  <ul className="ds-switcher__menu">
-                    {others.map((e) => (
-                      <li key={e.courseId}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSwitcherOpen(false);
-                            navigate(`/course/${e.courseId}/instructor`);
-                          }}
-                        >
-                          <strong>{e.courseName}</strong>
-                          <span className="muted small"> · {e.role}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : (
-              <span>{value.courseName}</span>
-            )}
+            <div className="ds-switcher">
+              <Button
+                variant="ghost"
+                size="sm"
+                iconRight={<ChevronIcon size={14} />}
+                onClick={() => setSwitcherOpen((v) => !v)}
+                aria-expanded={switcherOpen}
+              >
+                {value.courseName}
+              </Button>
+              {switcherOpen && (
+                <ul className="ds-switcher__menu">
+                  {/* Step back out to the multi-course picker. */}
+                  <li>
+                    <button
+                      type="button"
+                      className="ds-switcher__all"
+                      onClick={() => {
+                        setSwitcherOpen(false);
+                        navigate("/courses");
+                      }}
+                    >
+                      <strong>All courses</strong>
+                      <span className="muted small">Your courses</span>
+                    </button>
+                  </li>
+                  <li className="ds-switcher__sep" aria-hidden />
+                  {/* The course you're in, checked. */}
+                  <li>
+                    <button
+                      type="button"
+                      className="ds-switcher__current"
+                      onClick={() => setSwitcherOpen(false)}
+                    >
+                      <strong>{value.courseName}</strong>
+                      <span className="ds-switcher__tick" aria-hidden>
+                        <CheckIcon size={15} />
+                      </span>
+                    </button>
+                  </li>
+                  {others.map((e) => (
+                    <li key={e.courseId}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSwitcherOpen(false);
+                          navigate(`/course/${e.courseId}/instructor`);
+                        }}
+                      >
+                        <strong>{e.courseName}</strong>
+                        <span className="muted small"> · {e.role}</span>
+                      </button>
+                    </li>
+                  ))}
+                  <li className="ds-switcher__sep" aria-hidden />
+                  <li>
+                    {/* Course creation lives on the picker; the switcher links
+                        there so "New course…" is one hop from anywhere. */}
+                    <button
+                      type="button"
+                      className="ds-switcher__new"
+                      onClick={() => {
+                        setSwitcherOpen(false);
+                        navigate("/courses?new=1");
+                      }}
+                    >
+                      <strong>New course…</strong>
+                      <span className="muted small">Create a course</span>
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </div>
             <IconButton title="Sign out" onClick={signOut}>
               <SignOutIcon />
             </IconButton>
