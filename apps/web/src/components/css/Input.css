@@ -56,6 +56,14 @@
   min-height: 5rem;
 }
 
+/* Tall prompt editor (DS .app-textarea): the voice system-prompt field is a
+   generous full-height writing surface, not a one-liner. */
+.ds-textarea--prompt {
+  min-height: 16rem;
+  line-height: 1.6;
+  padding: 0.7rem 0.8rem;
+}
+
 .ds-input--mono {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;

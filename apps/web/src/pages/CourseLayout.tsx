@@ -28,8 +28,8 @@ import {
 import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import { TABS, tabForPathname, tabHref } from "../course/tabs.js";
-import { Button, IconButton, RoleSwitch, Wordmark } from "../components/index.js";
-import { CheckIcon, ChevronIcon, SignOutIcon } from "../icons.js";
+import { IconButton, RoleSwitch, Wordmark } from "../components/index.js";
+import { BackIcon, CheckIcon, ChevronIcon, PlusIcon, SignOutIcon } from "../icons.js";
 import { signOut } from "../session.js";
 
 export function CourseLayout() {
@@ -90,118 +90,136 @@ export function CourseLayout() {
 
   return (
     <CourseContext.Provider value={value}>
-      <div className="ds-staff">
-        {/* Staff register top bar: wordmark lockup · role · course name (with
-            the switcher) · back to student view. */}
-        <header className="ds-staff-top">
-          <Link to={`/course/${courseId}/instructor`} aria-label="Course home">
-            <Wordmark size="sm" />
-          </Link>
-          <RoleSwitch
-            courseId={courseId}
-            role={value.role}
-            isAdmin={value.isAdmin}
-            current="author"
-          />
-          <div className="ds-staff-top__course">
-            <div className="ds-switcher">
-              <Button
-                variant="ghost"
-                size="sm"
-                iconRight={<ChevronIcon size={14} />}
+      {/* DS app shell: locked viewport, one fixed instructor bar, scrolling
+          body. The instructor bar carries the lockup, the course switcher, the
+          nav pills (inline, not a separate strip), and the role switch — the
+          DS .app-topbar--instructor layout. */}
+      <div className="app">
+        <header className="app-topbar app-topbar--wide app-topbar--instructor">
+          <div className="app-topbar__inner">
+            <Link
+              to={`/course/${courseId}/instructor`}
+              aria-label="Course home"
+              className="app-lockup-link"
+            >
+              <Wordmark size="sm" />
+            </Link>
+
+            {/* Course switcher — current course + jump / new / all courses. */}
+            <div className="app-course">
+              <button
+                type="button"
+                className="app-course__btn"
                 onClick={() => setSwitcherOpen((v) => !v)}
+                aria-haspopup="menu"
                 aria-expanded={switcherOpen}
               >
-                {value.courseName}
-              </Button>
+                <span className="app-course__name">{value.courseName}</span>
+                <ChevronIcon size={14} />
+              </button>
               {switcherOpen && (
-                <ul className="ds-switcher__menu">
-                  {/* Step back out to the multi-course picker. */}
-                  <li>
+                <div className="app-course__menu" role="menu">
+                  <button
+                    type="button"
+                    className="app-course__opt app-course__all"
+                    onClick={() => {
+                      setSwitcherOpen(false);
+                      navigate("/courses");
+                    }}
+                  >
+                    <BackIcon size={15} />
+                    <span className="app-course__main">
+                      <b>All courses</b>
+                      <span>Your courses</span>
+                    </span>
+                  </button>
+                  <div className="app-course__sep" />
+                  <button
+                    type="button"
+                    className="app-course__opt"
+                    onClick={() => setSwitcherOpen(false)}
+                  >
+                    <span className="app-course__main">
+                      <b>{value.courseName}</b>
+                      <span>This course</span>
+                    </span>
+                    <span className="app-course__tick">
+                      <CheckIcon size={16} />
+                    </span>
+                  </button>
+                  {others.map((e) => (
                     <button
+                      key={e.courseId}
                       type="button"
-                      className="ds-switcher__all"
+                      className="app-course__opt"
                       onClick={() => {
                         setSwitcherOpen(false);
-                        navigate("/courses");
+                        navigate(`/course/${e.courseId}/instructor`);
                       }}
                     >
-                      <strong>All courses</strong>
-                      <span className="muted small">Your courses</span>
-                    </button>
-                  </li>
-                  <li className="ds-switcher__sep" aria-hidden />
-                  {/* The course you're in, checked. */}
-                  <li>
-                    <button
-                      type="button"
-                      className="ds-switcher__current"
-                      onClick={() => setSwitcherOpen(false)}
-                    >
-                      <strong>{value.courseName}</strong>
-                      <span className="ds-switcher__tick" aria-hidden>
-                        <CheckIcon size={15} />
+                      <span className="app-course__main">
+                        <b>{e.courseName}</b>
+                        <span>{e.role}</span>
                       </span>
                     </button>
-                  </li>
-                  {others.map((e) => (
-                    <li key={e.courseId}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSwitcherOpen(false);
-                          navigate(`/course/${e.courseId}/instructor`);
-                        }}
-                      >
-                        <strong>{e.courseName}</strong>
-                        <span className="muted small"> · {e.role}</span>
-                      </button>
-                    </li>
                   ))}
-                  <li className="ds-switcher__sep" aria-hidden />
-                  <li>
-                    {/* Course creation lives on the picker; the switcher links
-                        there so "New course…" is one hop from anywhere. */}
-                    <button
-                      type="button"
-                      className="ds-switcher__new"
-                      onClick={() => {
-                        setSwitcherOpen(false);
-                        navigate("/courses?new=1");
-                      }}
-                    >
-                      <strong>New course…</strong>
-                      <span className="muted small">Create a course</span>
-                    </button>
-                  </li>
-                </ul>
+                  <div className="app-course__sep" />
+                  <button
+                    type="button"
+                    className="app-course__opt app-course__new"
+                    onClick={() => {
+                      setSwitcherOpen(false);
+                      navigate("/courses?new=1");
+                    }}
+                  >
+                    <PlusIcon size={16} />
+                    <span className="app-course__main">
+                      <b>New course…</b>
+                      <span>Blank or copy an existing one</span>
+                    </span>
+                  </button>
+                </div>
               )}
             </div>
-            <IconButton title="Sign out" onClick={signOut}>
-              <SignOutIcon />
-            </IconButton>
+
+            {/* Nav pills, inline in the bar (DS .app-nav). */}
+            <nav className="app-nav" aria-label="Course sections">
+              {visibleTabs.map((t) => {
+                const to = tabHref(t, courseId);
+                const active = currentTab?.slug === t.slug;
+                return (
+                  <Link
+                    key={t.slug}
+                    to={to}
+                    className={
+                      "app-nav__item" + (active ? " app-nav__item--active" : "")
+                    }
+                  >
+                    {t.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="app-topbar__spacer" />
+            <div className="app-topbar__actions">
+              <RoleSwitch
+                courseId={courseId}
+                role={value.role}
+                isAdmin={value.isAdmin}
+                current="author"
+              />
+              <span className="app-topbar__divider" aria-hidden />
+              <IconButton title="Sign out" onClick={signOut}>
+                <SignOutIcon />
+              </IconButton>
+            </div>
           </div>
         </header>
 
-        <nav className="ds-staff-nav" aria-label="Course sections">
-          {visibleTabs.map((t) => {
-            const to = tabHref(t, courseId);
-            const active = currentTab?.slug === t.slug;
-            return (
-              <Link
-                key={t.slug}
-                to={to}
-                className={
-                  "ds-staff-nav__item" + (active ? " ds-staff-nav__item--active" : "")
-                }
-              >
-                {t.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <Outlet />
+        <div className="app__body">
+          <Outlet />
+        </div>
       </div>
     </CourseContext.Provider>
   );

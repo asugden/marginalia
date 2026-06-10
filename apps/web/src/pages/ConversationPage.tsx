@@ -369,14 +369,14 @@ export function ConversationPage() {
   const agentLabel = agentTitle ?? "Agent";
 
   return (
-    <div className={"ds-chat no-watermark" + (sidebarOpen ? "" : " ds-chat--collapsed")}>
-      <aside className="ds-side" aria-hidden={!sidebarOpen}>
-        <div className="ds-side__inner">
-          <div className="ds-side__agent">
+    <div className={"app-chat no-watermark" + (sidebarOpen ? "" : " app-chat--collapsed")}>
+      <aside className="app-side" aria-hidden={!sidebarOpen}>
+        <div className="app-side__inner">
+          <div className="app-side__agent">
             <Avatar name={agentLabel} agent={hasBackbone} />
             <div>
-              <div className="ds-side__name">{agentLabel}</div>
-              <div className="ds-side__kind">
+              <div className="app-side__name">{agentLabel}</div>
+              <div className="app-side__kind">
                 {hasBackbone ? "guided" : "free-form"}
                 {grounded ? " · grounded" : ""}
               </div>
@@ -384,31 +384,31 @@ export function ConversationPage() {
           </div>
 
           {hasBackbone ? (
-            <div className="ds-side__block">
+            <div className="app-side__block">
               <div className="mono-label">Outline</div>
               {railSteps.length > 0 ? (
                 <OutlineRail steps={railSteps} />
               ) : (
-                <p className="ds-side__free">Loading…</p>
+                <p className="app-side__free">Loading…</p>
               )}
               {debug && state && (
-                <p className="ds-side__free">
+                <p className="app-side__free">
                   Turns on topic: {state.turnsOnTopic} · total: {state.totalTurns}
                 </p>
               )}
             </div>
           ) : (
-            <div className="ds-side__block">
-              <p className="ds-side__free">
+            <div className="app-side__block">
+              <p className="app-side__free">
                 Free-form chat — no topic sequence for this agent.
               </p>
             </div>
           )}
 
           {history.length > 0 && (
-            <div className="ds-side__block">
+            <div className="app-side__block">
               <div className="mono-label">Conversations</div>
-              <ul className="ds-side__history">
+              <ul className="app-side__history">
                 {history.map((h) => (
                   <li
                     key={h.id}
@@ -431,13 +431,13 @@ export function ConversationPage() {
 
       {/* Backdrop for mobile sidebar — tap to dismiss. */}
       <div
-        className="ds-side__scrim"
+        className="app-side__scrim"
         onClick={() => setSidebarOpen(false)}
         aria-hidden="true"
       />
 
-      <main className="ds-conv">
-        <header className="ds-conv__head">
+      <main className="app-conv">
+        <header className="app-conv__head">
           <IconButton title="Back to home" href={base}>
             <BackIcon size={20} />
           </IconButton>
@@ -448,7 +448,7 @@ export function ConversationPage() {
           >
             <MenuIcon size={20} />
           </IconButton>
-          <span className="ds-conv__title">{agentTitle}</span>
+          <span className="app-conv__title">{agentTitle}</span>
           {hasBackbone && topics.length > 0 && (
             <Badge tone="neutral">
               {finished
@@ -467,8 +467,8 @@ export function ConversationPage() {
           </div>
         )}
 
-        <div className="ds-conv__scroll">
-          <div className="ds-conv__thread">
+        <div className="app-conv__scroll">
+          <div className="app-conv__thread">
             {messages.map((m, i) => {
               const isLast = i === messages.length - 1;
               const showDots =
@@ -532,7 +532,7 @@ export function ConversationPage() {
             . Start a <Link to={base}>new chat</Link> to continue.
           </div>
         ) : (
-          <div className="ds-conv__composer">
+          <div className="app-conv__composer">
             <ChatComposer
               value={input}
               onChange={setInput}

@@ -125,7 +125,7 @@ export function UserDetailPage() {
           </Button>
         </div>
       </header>
-      <div className="ds-staff-page">{children}</div>
+      <div className="app-page">{children}</div>
     </div>
   );
 
@@ -149,7 +149,7 @@ export function UserDetailPage() {
 
   return (
     <Shell>
-      <div className="ds-staff-head">
+      <div className="app-page__head">
         <div style={{ display: "flex", gap: "0.9rem", alignItems: "center" }}>
           <Avatar name={u.displayName || u.email} size="lg" />
           <div>
@@ -158,7 +158,7 @@ export function UserDetailPage() {
               {u.displayName || u.email}
               {u.isAdmin && <Badge tone="brand">admin</Badge>}
             </h1>
-            <div className="ds-staff-head__scope">
+            <div className="app-page__scope">
               {u.email}
               {" · "}
               {u.lastSeenAt
@@ -172,8 +172,8 @@ export function UserDetailPage() {
 
       {error && <p className="error">{error}</p>}
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Instance admin</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Instance admin</span>
         <div
           style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
         >
@@ -205,24 +205,24 @@ export function UserDetailPage() {
         </div>
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Courses</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Courses</span>
         {detail.enrollments.length === 0 ? (
           <p className="muted">Not enrolled in any course.</p>
         ) : (
-          <div className="ds-roster">
+          <div className="roster">
             {detail.enrollments.map((e) => (
-              <div className="ds-roster__row" key={e.courseId}>
-                <div className="ds-roster__person">
+              <div className="roster__row" key={e.courseId}>
+                <div className="roster__person">
                   <div style={{ minWidth: 0 }}>
-                    <div className="ds-roster__name">{e.courseName}</div>
-                    <div className="ds-roster__email">
+                    <div className="roster__name">{e.courseName}</div>
+                    <div className="roster__email">
                       Joined {relativeTime(e.joinedAt)} · {e.courseId}
                     </div>
                   </div>
                 </div>
-                <span className="ds-roster__meta" />
-                <div className="ds-roster__actions">
+                <span className="roster__meta" />
+                <div className="roster__actions">
                   <Select
                     value={e.role}
                     disabled={busy || isSelf}
@@ -256,22 +256,22 @@ export function UserDetailPage() {
         )}
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Recent activity</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Recent activity</span>
         {detail.audit.length === 0 ? (
           <p className="muted">No audit entries.</p>
         ) : (
-          <div className="ds-staff-list">
+          <div className="app-list">
             {detail.audit.map((a) => {
               const isActor = a.actorId === u.userId;
               return (
-                <div className="ds-staff-list__row" key={a.id}>
-                  <div className="ds-staff-list__main">
-                    <div className="ds-staff-list__title">
+                <div className="app-list__row" key={a.id}>
+                  <div className="app-list__main">
+                    <div className="app-list__title">
                       {a.action}{" "}
                       <Badge tone="ghost">{isActor ? "actor" : "target"}</Badge>
                     </div>
-                    <div className="ds-staff-list__sub">
+                    <div className="app-list__sub">
                       {relativeTime(a.createdAt)}
                       {a.targetKind && a.targetId
                         ? ` · ${a.targetKind}=${a.targetId}`

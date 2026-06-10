@@ -64,19 +64,19 @@ export function AuthorVoicesPage() {
         </div>
       </header>
 
-      <div className="ds-staff-page">
-        <div className="ds-staff-head">
+      <div className="app-page">
+        <div className="app-page__head">
           <div>
             <span className="eyebrow">Instructor · Voices</span>
             <h1>Voices</h1>
-            <div className="ds-staff-head__scope">
+            <div className="app-page__scope">
               A voice is a persona — tone, style, pedagogy — that an agent
               speaks in. Voices are yours: editing one updates every new
               conversation against agents that use it. In-progress
               conversations keep the original.
             </div>
           </div>
-          <div className="ds-staff-actions">
+          <div className="app-page__actions">
             <Button
               variant="primary"
               icon={<PlusIcon size={16} />}
@@ -89,8 +89,8 @@ export function AuthorVoicesPage() {
 
         {error && <p className="error">{error}</p>}
 
-        <div className="ds-staff-section">
-          <span className="mono-label ds-staff-section__label">My voices</span>
+        <div className="app-section">
+          <span className="mono-label app-section__label">My voices</span>
           {owned === null ? (
             <p className="muted">Loading…</p>
           ) : owned.length === 0 ? (
@@ -100,20 +100,20 @@ export function AuthorVoicesPage() {
               agent editor and use Customize on a library voice.
             </p>
           ) : (
-            <div className="ds-staff-list">
+            <div className="app-list">
               {owned.map((v) => (
-                <div key={v.id} className="ds-staff-list__row">
+                <div key={v.id} className="app-list__row">
                   <Avatar name={v.name} />
-                  <div className="ds-staff-list__main">
-                    <div className="ds-staff-list__title">
+                  <div className="app-list__main">
+                    <div className="app-list__title">
                       <Link to={`/author/voices/${v.id}`}>{v.name}</Link>
                     </div>
-                    <div className="ds-staff-list__sub">
+                    <div className="app-list__sub">
                       {v.description}
                       {v.updatedAt ? ` · updated ${relativeTime(v.updatedAt)}` : ""}
                     </div>
                   </div>
-                  <div className="ds-staff-list__actions">
+                  <div className="app-list__meta">
                     <Button variant="subtle" size="sm" href={`/author/voices/${v.id}`}>
                       Edit
                     </Button>
@@ -132,8 +132,8 @@ export function AuthorVoicesPage() {
           )}
         </div>
 
-        <div className="ds-staff-section">
-          <span className="mono-label ds-staff-section__label">
+        <div className="app-section">
+          <span className="mono-label app-section__label">
             Shared with me
           </span>
           {shared === null ? (
@@ -145,21 +145,21 @@ export function AuthorVoicesPage() {
               agent editor.
             </p>
           ) : (
-            <div className="ds-staff-list">
+            <div className="app-list">
               {shared.map((v) => (
-                <div key={v.id} className="ds-staff-list__row">
+                <div key={v.id} className="app-list__row">
                   <Avatar name={v.name} />
-                  <div className="ds-staff-list__main">
-                    <div className="ds-staff-list__title">
+                  <div className="app-list__main">
+                    <div className="app-list__title">
                       <Link to={`/author/voices/${v.id}`}>{v.name}</Link>{" "}
                       <Badge tone="ghost">shared</Badge>
                     </div>
-                    <div className="ds-staff-list__sub">
+                    <div className="app-list__sub">
                       {v.description}
                       {v.updatedAt ? ` · updated ${relativeTime(v.updatedAt)}` : ""}
                     </div>
                   </div>
-                  <div className="ds-staff-list__actions">
+                  <div className="app-list__meta">
                     <Button variant="subtle" size="sm" href={`/author/voices/${v.id}`}>
                       View
                     </Button>

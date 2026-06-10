@@ -218,17 +218,17 @@ export function RosterPage() {
   const authorCount = roster?.filter((r) => r.role === "instructor").length ?? 0;
 
   return (
-    <div className="ds-staff-page">
-      <div className="ds-staff-head">
+    <div className="app-page">
+      <div className="app-page__head">
         <div>
           <span className="eyebrow">Roster</span>
           <h1>People</h1>
-          <div className="ds-staff-head__scope">
+          <div className="app-page__scope">
             Everyone enrolled in this course. Each row links into a per-user page
             covering every course they&rsquo;re in.
           </div>
         </div>
-        <div className="ds-staff-actions">
+        <div className="app-page__actions">
           <Button
             variant={addOpen ? "ghost" : "subtle"}
             icon={<PlusIcon size={16} />}
@@ -244,7 +244,7 @@ export function RosterPage() {
 
       {error && <p className="error">{error}</p>}
 
-      <div className="ds-staff-section">
+      <div className="app-section">
         <SegmentedControl
           value={tab}
           onChange={(v) => setTab(v as Tab)}
@@ -256,7 +256,7 @@ export function RosterPage() {
       </div>
 
       {addOpen && (
-        <div className="ds-staff-section ds-staff-row">
+        <div className="app-section app-row">
           <Field label="Email">
             <Input
               type="email"
@@ -299,7 +299,7 @@ export function RosterPage() {
         </div>
       )}
 
-      <div className="ds-staff-section">
+      <div className="app-section">
         <div
           style={{
             display: "flex",
@@ -327,31 +327,31 @@ export function RosterPage() {
         ) : filtered.length === 0 ? (
           <p className="muted">No one here yet.</p>
         ) : (
-          <div className="ds-roster">
+          <div className="roster">
             {filtered.map((r) => {
               const isSelf = meUserId !== null && r.userId === meUserId;
               return (
-                <div className="ds-roster__row" key={r.userId}>
-                  <div className="ds-roster__person">
+                <div className="roster__row" key={r.userId}>
+                  <div className="roster__person">
                     <Avatar name={r.displayName || r.email} />
                     <div style={{ minWidth: 0 }}>
-                      <div className="ds-roster__name">
+                      <div className="roster__name">
                         <Link to={`/users/${r.userId}`}>
                           {r.displayName || r.email}
                         </Link>
                         {isSelf && <span className="muted small"> · you</span>}
                       </div>
-                      <div className="ds-roster__email">{r.email}</div>
+                      <div className="roster__email">{r.email}</div>
                     </div>
                   </div>
-                  <span className="ds-roster__meta">
+                  <span className="roster__meta">
                     Joined {relativeTime(r.joinedAt)}
                     {" · "}
                     {r.lastSeenAt
                       ? `Last seen ${relativeTime(r.lastSeenAt)}`
                       : "Never signed in"}
                   </span>
-                  <div className="ds-roster__actions">
+                  <div className="roster__actions">
                     {/* The instructor can't downgrade or remove themselves in
                         the UI; the server enforces the same rules. */}
                     <Select
@@ -392,8 +392,8 @@ export function RosterPage() {
 
       {/* Join codes — the kit's join-code panel, expanded to the real
           multi-code management this page already supported. */}
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">
+      <div className="app-section">
+        <span className="mono-label app-section__label">
           Invite students
         </span>
         <p className="muted small">
@@ -403,7 +403,7 @@ export function RosterPage() {
           ALLOWED_EMAIL_DOMAINS — see the operations docs.
         </p>
         {codesError && <p className="error">{codesError}</p>}
-        <div className="ds-joincode">
+        <div className="joincode">
           <div style={{ flex: 1, minWidth: "10rem" }}>
             <Field label="Max uses (optional)">
               <Input
@@ -437,18 +437,18 @@ export function RosterPage() {
             No codes yet.
           </p>
         ) : (
-          <div className="ds-src-list" style={{ marginTop: "1rem" }}>
+          <div className="src-list" style={{ marginTop: "1rem" }}>
             {codes.map((c) => {
               const active =
                 !c.revokedAt &&
                 (c.expiresAt === null || c.expiresAt > Date.now()) &&
                 (c.maxUses === null || c.uses < c.maxUses);
               return (
-                <div className="ds-src-row" key={c.code}>
-                  <span className="ds-joincode__code" style={{ fontSize: "1rem" }}>
+                <div className="src-row" key={c.code}>
+                  <span className="joincode__code" style={{ fontSize: "1rem" }}>
                     {c.code}
                   </span>
-                  <span className="ds-src-row__name" style={{ fontWeight: 400 }}>
+                  <span className="src-row__name" style={{ fontWeight: 400 }}>
                     Used {c.uses}
                     {c.maxUses !== null ? ` / ${c.maxUses}` : " times"}
                     {c.emailDomain ? ` · legacy @${c.emailDomain}` : ""}

@@ -57,12 +57,12 @@ export function CollectionsListPage() {
   }
 
   return (
-    <div className="ds-staff-page">
-      <div className="ds-staff-head">
+    <div className="app-page">
+      <div className="app-page__head">
         <div>
           <span className="eyebrow">Instructor · Sources</span>
           <h1>Libraries</h1>
-          <div className="ds-staff-head__scope">
+          <div className="app-page__scope">
             A library is a set of documents you attach to an agent. The agent
             answers from these sources and cites them in line.
           </div>
@@ -71,9 +71,9 @@ export function CollectionsListPage() {
 
       {error && <p className="error">{error}</p>}
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">New library</span>
-        <div className="ds-staff-row">
+      <div className="app-section">
+        <span className="mono-label app-section__label">New library</span>
+        <div className="app-row">
           <Field label="Name">
             <Input
               type="text"
@@ -103,36 +103,32 @@ export function CollectionsListPage() {
         </div>
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Your libraries</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Your libraries</span>
         {collections === null ? (
           <p className="muted">Loading…</p>
         ) : collections.length === 0 ? (
           <p className="muted">No libraries yet.</p>
         ) : (
-          <div className="ds-staff-list">
+          <div className="app-list">
             {collections.map((c) => (
               <Link
                 key={c.id}
                 to={`/course/${courseId}/instructor/collections/${c.id}`}
-                className="ds-staff-list__row"
+                className="app-list__row"
               >
-                <span
-                  className="ds-id__icon"
-                  style={{ width: 36, height: 36, color: "var(--text-muted)" }}
-                  aria-hidden
-                >
-                  <BookIcon size={18} />
+                <span className="app-coll-ic" aria-hidden>
+                  <BookIcon size={20} />
                 </span>
-                <div className="ds-staff-list__main">
-                  <div className="ds-staff-list__title">{c.name}</div>
-                  <div className="ds-staff-list__sub">
+                <div className="app-list__main">
+                  <div className="app-list__title">{c.name}</div>
+                  <div className="app-list__sub">
                     {c.description ? `${c.description} · ` : ""}
                     {c.sourceCount} {c.sourceCount === 1 ? "source" : "sources"} ·
                     updated {relativeTime(c.updatedAt)}
                   </div>
                 </div>
-                <div className="ds-staff-list__actions">
+                <div className="app-list__meta">
                   <Badge tone="neutral">{c.sourceCount}</Badge>
                 </div>
               </Link>

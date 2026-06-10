@@ -13,6 +13,13 @@
  * screen rebuild). A missing partial is created empty so the import resolves.
  * ------------------------------------------------------------------ */
 
+/* The authoritative unified app stylesheet (verbatim from the design system).
+   Every product screen renders this `app-` markup; this file is the single
+   source of truth for the app's layout. The per-screen partials below carry
+   only what app.css doesn't (provenance editor, attendance specifics) plus
+   transitional shims during the port. */
+@import "./css/app.css";
+
 @import "./css/screens/student-home.css";
 @import "./css/screens/student-conversation.css";
 @import "./css/screens/staff.css";

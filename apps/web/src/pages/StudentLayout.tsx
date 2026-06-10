@@ -83,35 +83,41 @@ export function StudentLayout() {
 
   return (
     <CourseContext.Provider value={value}>
-      <div className="ds-home">
-        <header className="ds-topbar">
-          <div className="ds-topbar__inner">
-            <Link to={home} aria-label="Home">
+      {/* DS app shell: a locked viewport (the page itself never scrolls) with a
+          fixed topbar and a single scrolling body region. This is the
+          structural fix for the runaway outer scroll that dragged the topbar —
+          previously each page was a min-height:100vh block under a sticky bar,
+          so the chat (100vh) pushed the whole page past one screen. */}
+      <div className="app">
+        <header className="app-topbar">
+          <div className="app-topbar__inner">
+            <Link to={home} aria-label="Home" className="app-lockup-link">
               <Wordmark />
             </Link>
-            <div className="ds-topbar__actions">
+            <div className="app-topbar__spacer" />
+            <div className="app-topbar__actions">
               <Button
                 variant="ghost"
                 size="sm"
                 icon={<HistoryIcon size={16} />}
                 href={`${home}/history`}
               >
-                <span className="ds-hide-sm">History</span>
+                <span className="app-hide-sm">History</span>
               </Button>
-              <span className="ds-topbar__divider" aria-hidden />
+              <span className="app-topbar__divider" aria-hidden />
               <RoleSwitch
                 courseId={courseId}
                 role={value.role}
                 isAdmin={value.isAdmin}
                 current="student"
               />
-              <span className="ds-topbar__divider" aria-hidden />
+              <span className="app-topbar__divider" aria-hidden />
               {identity && (
-                <span className="ds-id">
-                  <span className="ds-id__icon">
+                <span className="app-id">
+                  <span className="app-id__icon">
                     <UserIcon />
                   </span>
-                  <span className="ds-id__name">{identity}</span>
+                  <span className="app-id__name">{identity}</span>
                 </span>
               )}
               <IconButton title="Sign out" onClick={signOut}>
@@ -125,7 +131,9 @@ export function StudentLayout() {
           <PreviewBanner courseId={courseId} courseName={value.courseName} />
         )}
 
-        <Outlet />
+        <div className="app__body">
+          <Outlet />
+        </div>
       </div>
     </CourseContext.Provider>
   );

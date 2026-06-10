@@ -30,7 +30,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { MeEnrollment } from "../api.js";
-import { ChevronIcon, CheckIcon } from "../icons.js";
+import { ChevronIcon } from "../icons.js";
 
 export type RoleSurface = "student" | "author" | "admin";
 
@@ -108,10 +108,10 @@ export function RoleSwitch({ courseId, role, isAdmin, current }: RoleSwitchProps
         : "Instructor";
 
   return (
-    <div className="ds-roleswitch" ref={ref}>
+    <div className="app-roles" ref={ref}>
       <button
         type="button"
-        className="ds-roleswitch__btn"
+        className="app-roles__btn"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -120,7 +120,7 @@ export function RoleSwitch({ courseId, role, isAdmin, current }: RoleSwitchProps
         <ChevronIcon size={14} />
       </button>
       {open && (
-        <div className="ds-roleswitch__menu" role="menu">
+        <div className="app-roles__menu" role="menu">
           {options.map((o) => {
             const active = o.key === current;
             return (
@@ -129,23 +129,15 @@ export function RoleSwitch({ courseId, role, isAdmin, current }: RoleSwitchProps
                 type="button"
                 role="menuitem"
                 className={
-                  "ds-roleswitch__opt" +
-                  (active ? " ds-roleswitch__opt--active" : "")
+                  "app-roles__opt" + (active ? " app-roles__opt--active" : "")
                 }
                 onClick={() => {
                   setOpen(false);
                   navigate(o.to);
                 }}
               >
-                <span className="ds-roleswitch__opt-main">
-                  <b>{o.label}</b>
-                  <span>{o.detail}</span>
-                </span>
-                {active && (
-                  <span className="ds-roleswitch__tick" aria-hidden>
-                    <CheckIcon size={15} />
-                  </span>
-                )}
+                <b>{o.label}</b>
+                <span>{o.detail}</span>
               </button>
             );
           })}

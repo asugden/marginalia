@@ -106,8 +106,8 @@ function JoinPrompt() {
         </div>
       </header>
 
-      <div className="ds-home__inner">
-        <div className="ds-home__head">
+      <div className="app-home__inner">
+        <div className="app-head">
           <span className="ds-rule" />
           <h1>Welcome.</h1>
         </div>

@@ -297,24 +297,24 @@ export function AuthorEditPage() {
 
   if (loading) {
     return (
-      <div className="ds-staff-page">
+      <div className="app-page">
         <p className="muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="ds-staff-page">
-      <div className="ds-staff-head">
+    <div className="app-page">
+      <div className="app-page__head">
         <div>
           <span className="eyebrow">Instructor · Guided agent</span>
           <h1>{isNew ? "New agent" : draft.title || "Edit agent"}</h1>
-          <div className="ds-staff-head__scope">
+          <div className="app-page__scope">
             Students see this agent on their home page. It leads them through
             the outline below.
           </div>
         </div>
-        <div className="ds-staff-actions">
+        <div className="app-page__actions">
           <Button variant="subtle" href={`/course/${courseId}/instructor/agents`}>
             Cancel
           </Button>
@@ -332,7 +332,7 @@ export function AuthorEditPage() {
 
       {loadError && <p className="error">{loadError}</p>}
 
-      <div className="ds-staff-section ds-staff-row">
+      <div className="app-section app-row">
         <Field label="Agent title">
           <Input
             type="text"
@@ -342,7 +342,7 @@ export function AuthorEditPage() {
         </Field>
       </div>
 
-      <div className="ds-staff-section">
+      <div className="app-section">
         <Field
           label="What students see first (optional)"
           hint="A short note shown at the top of every conversation, so students know what this is and how it behaves. Leave blank to use the default. This is for clarity, not rules — the agent still works the way you configure it."
@@ -356,8 +356,8 @@ export function AuthorEditPage() {
         </Field>
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Voice</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Voice</span>
         <p className="muted small" style={{ marginTop: "-0.3rem", marginBottom: "0.7rem" }}>
           How the agent talks. <Link to="/author/voices">Manage your voices →</Link>
         </p>
@@ -415,7 +415,7 @@ export function AuthorEditPage() {
         )}
       </div>
 
-      <div className="ds-staff-section">
+      <div className="app-section">
         <div
           style={{
             display: "flex",
@@ -438,7 +438,7 @@ export function AuthorEditPage() {
 
         {draft.hasBackbone && (
           <div style={{ marginTop: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="ds-staff-row">
+            <div className="app-row">
               <Field label="Default turn budget" hint="Max student turns before nudging on.">
                 <Input
                   type="number"
@@ -486,27 +486,27 @@ export function AuthorEditPage() {
               {draft.topics.map((t, i) => {
                 const open = openTopic === i;
                 return (
-                  <div key={t.id} className={"ds-topic" + (open ? " ds-topic--open" : "")}>
+                  <div key={t.id} className={"topic" + (open ? " topic--open" : "")}>
                     <div
-                      className="ds-topic__head"
+                      className="topic__head"
                       onClick={() => setOpenTopic(open ? -1 : i)}
                     >
-                      <span className="ds-topic__drag" title="Reorder (use the arrows when expanded)" aria-hidden>
+                      <span className="topic__drag" title="Reorder (use the arrows when expanded)" aria-hidden>
                         <DragIcon size={18} />
                       </span>
-                      <span className="ds-topic__num">{i + 1}</span>
-                      <span className="ds-topic__title">
+                      <span className="topic__num">{i + 1}</span>
+                      <span className="topic__title">
                         {t.title || <span className="muted">Untitled topic</span>}
                       </span>
                       {t.turnBudget.trim() && (
-                        <span className="ds-topic__budget">{t.turnBudget} turns</span>
+                        <span className="topic__budget">{t.turnBudget} turns</span>
                       )}
-                      <span className="ds-topic__chev">
+                      <span className="topic__chev">
                         <ChevronIcon size={18} />
                       </span>
                     </div>
                     {open && (
-                      <div className="ds-topic__body">
+                      <div className="topic__body">
                         <Field label="Topic prompt" hint="What the agent opens this topic with.">
                           <Input
                             type="text"
@@ -523,7 +523,7 @@ export function AuthorEditPage() {
                             onChange={(e) => updateTopic(i, { guidance: e.target.value })}
                           />
                         </Field>
-                        <div className="ds-staff-row">
+                        <div className="app-row">
                           <Field
                             label="Turn budget"
                             hint={`Default ${draft.defaultTurnBudget || "—"}.`}
@@ -574,7 +574,7 @@ export function AuthorEditPage() {
                 );
               })}
 
-              <div className="ds-staff-addtopic">
+              <div className="app-addtopic">
                 <Button
                   variant="subtle"
                   size="sm"
@@ -592,8 +592,8 @@ export function AuthorEditPage() {
         )}
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Sources</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Sources</span>
         <Checkbox
           checked={draft.hasCollection}
           onChange={(e) => update("hasCollection", e.target.checked)}
@@ -615,7 +615,7 @@ export function AuthorEditPage() {
               </p>
             ) : (
               <>
-                <span className="mono-label ds-staff-section__label">Library</span>
+                <span className="mono-label app-section__label">Library</span>
                 <RadioCardGroup>
                   {collections.map((c) => (
                     <RadioCard
@@ -638,8 +638,8 @@ export function AuthorEditPage() {
         )}
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Model</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Model</span>
         <RadioCardGroup inline>
           {MODEL_OPTIONS.map((m) => (
             <RadioCard
@@ -657,7 +657,7 @@ export function AuthorEditPage() {
 
       {saveError && <p className="error">{saveError}</p>}
 
-      <div className="ds-staff-actions" style={{ justifyContent: "flex-end" }}>
+      <div className="app-page__actions" style={{ justifyContent: "flex-end" }}>
         <Button variant="subtle" href={`/course/${courseId}/instructor/agents`}>
           Cancel
         </Button>

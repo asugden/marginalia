@@ -5,20 +5,22 @@
 
 .ds-home { position: relative; min-height: 100vh; background: var(--bg); padding-bottom: 4rem; }
 
-/* Persistent translucent top bar — content held to the reading measure. */
+/* Shared top bar — DS .app-topbar spec: a fixed-height bar, solid surface,
+   content centered to the shell measure. Sticky here (the student shell is a
+   normal scrolling page); the conversation screen locks the viewport so the
+   bar can't drift. */
 .ds-topbar {
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  backdrop-filter: blur(8px);
-  position: sticky; top: 0; z-index: 5;
+  flex: none; height: 60px; display: flex; align-items: center;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+  position: sticky; top: 0; z-index: 20;
 }
 .ds-topbar__inner {
-  max-width: 800px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0.8rem 2rem;
+  width: 100%; max-width: 880px; margin: 0 auto;
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0 1.5rem;
 }
-.ds-topbar__actions { display: flex; align-items: center; gap: 0.45rem; }
-.ds-topbar__divider { width: 1px; height: 1.3rem; background: var(--border-strong); margin: 0 0.35rem; }
+.ds-topbar__actions { display: flex; align-items: center; gap: 0.4rem; flex: none; margin-left: auto; }
+.ds-topbar__divider { width: 1px; height: 1.3rem; background: var(--border-strong); flex: none; margin: 0 0.2rem; }
 .ds-navlink {
   font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--text-muted);
@@ -35,7 +37,7 @@
 .ds-id__icon svg { width: 17px; height: 17px; }
 .ds-id__name { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
 
-.ds-home__inner { max-width: 800px; margin: 0 auto; padding: 3rem 2rem 0; position: relative; z-index: 1; }
+.ds-home__inner { max-width: 800px; margin: 0 auto; padding: 3rem 2rem 4rem; position: relative; z-index: 1; }
 
 /* Eyebrow → heading lockup with the short accent rule. */
 .ds-home__head { margin-bottom: 2.25rem; }
@@ -118,6 +120,27 @@
 .ds-home__joinform { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; }
 .ds-home__joinform .ds-field { flex: 1; min-width: 200px; }
 .ds-home__muted { color: var(--text-muted); font-size: var(--text-sm); }
+
+/* History — a flat, recency-ordered conversation list (DS .app-history). */
+.ds-history { max-width: 720px; margin: 0 auto; padding: 3rem 2rem 4rem; }
+.ds-history__list { list-style: none; margin: 1.25rem 0 0; padding: 0; }
+.ds-history__list li { border-bottom: 1px solid var(--border); }
+.ds-history__list a {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.95rem 0.25rem; text-decoration: none; border-radius: var(--radius-sm);
+  transition: background var(--dur-2) var(--ease-out);
+}
+.ds-history__list a:hover { background: var(--surface-hover); }
+.ds-history__h { color: var(--text-strong); font-weight: 600; font-size: var(--text-base); }
+.ds-history__right { display: flex; align-items: center; gap: 0.7rem; flex: none; }
+.ds-history__when {
+  font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .ds-history { padding: 1.75rem 1rem 3rem; }
+}
 
 /* Join landing — warm-card register, centered, reusing the home panel. */
 .ds-join { min-height: 100vh; background: var(--bg); }

@@ -1,6 +1,40 @@
-/* Shared navigation chrome that crosses shells: the role switch (Student ·
-   Author · Admin) that sits in every topbar, and the instructor "previewing as
-   student" banner. ds- prefix, generic tokens only. */
+/* Shared navigation chrome that crosses shells: the brand lockup, the role
+   switch dropdown that sits in every topbar, and the instructor "previewing as
+   student" banner. ds- prefix, generic tokens only.
+   Translated verbatim from the design-system app kit (.app-lockup / .app-roles
+   / .app-preview), keyed to the class names the React components render. */
+
+/* ---- App shell (DS .app) ----
+   A locked viewport: the page itself never scrolls; only .app__body does. This
+   is the structural fix for the runaway outer scroll that dragged the topbar.
+   Both the student and the staff/instructor layouts wrap in .app. */
+.app {
+  height: 100vh; display: flex; flex-direction: column;
+  overflow: hidden; background: var(--bg);
+}
+.app__body { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+/* The conversation screen manages its own internal scroll, so when the body
+   holds the chat it must NOT scroll (no double scrollbar, no topbar drift).
+   :has() lets the router-driven layout pick this up without a manual modifier. */
+.app__body:has(.ds-chat),
+.app__body--fixed { overflow: hidden; }
+
+/* ---- Brand lockup ----
+   The header wordmark: an optional mark image + the wordmark text, with the
+   leading N characters painted in the accent (brand.wordmark_accent_len). This
+   is rendered by <Wordmark> in EVERY topbar; previously it had no global
+   styling (only a provenance-scoped tweak), so the wordmark rendered in the
+   default font with no accent — the most visible chrome regression. */
+.ds-lockup { display: inline-flex; align-items: center; gap: 0.55rem; text-decoration: none; flex: none; }
+.ds-lockup__mark { width: 24px; height: auto; display: block; }
+.ds-lockup__word {
+  font-family: var(--font-mono); font-weight: 700; font-size: 1.22rem;
+  letter-spacing: -0.05em; color: var(--text-strong); line-height: 1;
+}
+.ds-lockup__word em { font-style: normal; color: var(--accent); }
+.ds-lockup--sm .ds-lockup__word { font-size: 1.05rem; }
+.ds-lockup--sm .ds-lockup__mark { width: 20px; }
+.ds-lockup--lg .ds-lockup__word { font-size: 1.5rem; }
 
 /* ---- Role switch ----
    A small dropdown: a pill trigger naming the surface you're on, opening a menu

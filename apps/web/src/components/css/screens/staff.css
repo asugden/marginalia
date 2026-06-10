@@ -6,25 +6,43 @@
 
 .ds-staff { min-height: 100vh; background: var(--bg); display: flex; flex-direction: column; }
 
-/* ---- Top bar ---- */
+/* ---- Top bar (DS .app-topbar spec: fixed 60px, solid surface, centered to
+   the wide shell measure) ---- */
 .ds-staff-top {
-  display: flex; align-items: center; gap: 1rem; padding: 0.85rem 1.5rem;
+  flex: none; height: 60px; display: flex; align-items: center; gap: 1rem;
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--border); background: var(--surface);
-  position: sticky; top: 0; z-index: 5;
+  position: sticky; top: 0; z-index: 20;
 }
+/* Hold the bar's content to the same wide measure the page frame uses, so the
+   lockup lines up with the page content below it. */
+.ds-staff-top > * { position: relative; }
 .ds-staff-top__role {
   font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--text-muted);
-  border-left: 1px solid var(--border-strong); padding-left: 0.7rem; margin-left: 0.2rem;
+  border-left: 1px solid var(--border-strong); padding-left: 0.7rem; flex: none;
 }
-.ds-staff-top__course { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; font-size: var(--text-sm); color: var(--text-muted); }
+.ds-staff-top__course { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; font-size: var(--text-sm); color: var(--text-muted); flex: none; }
+/* Pushes the role switch + sign-out to the far right of the instructor bar. */
+.ds-staff-top__spacer { flex: 1; }
+.ds-staff-top__lockup { display: inline-flex; flex: none; text-decoration: none; }
 
-/* Course switcher popover */
-.ds-switcher { position: relative; }
+/* Course switcher (DS .app-course): a quiet trigger in the bar showing the
+   current course name; opens a left-aligned menu. */
+.ds-switcher { position: relative; flex: none; }
+.ds-switcher__btn {
+  appearance: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.45rem;
+  background: none; border: 0; border-radius: var(--radius-sm);
+  padding: 0.3rem 0.4rem 0.3rem 0.55rem; color: var(--text-secondary); max-width: 230px;
+  transition: color var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
+}
+.ds-switcher__btn:hover { background: var(--surface-hover); color: var(--text-strong); }
+.ds-switcher__name { font-size: var(--text-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-switcher__btn svg { width: 14px; height: 14px; opacity: 0.7; flex: none; }
 .ds-switcher__menu {
-  position: absolute; right: 0; top: calc(100% + 0.4rem); z-index: 20;
-  list-style: none; margin: 0; padding: 0.35rem; min-width: 14rem;
-  background: var(--surface-raised); border: 1px solid var(--border);
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 60;
+  list-style: none; margin: 0; padding: 0.35rem; min-width: 300px;
+  background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
 }
 .ds-switcher__menu button {
@@ -47,24 +65,43 @@
 .ds-switcher__new strong { color: var(--accent-deep); }
 .ds-switcher__new .muted { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; }
 
-/* ---- Nav tabs ---- */
-.ds-staff-nav {
-  display: flex; gap: 1.5rem; padding: 0 1.5rem;
-  border-bottom: 1px solid var(--border); background: var(--surface);
+/* Collection icon tile (DS .app-coll-ic): an accent-tinted book glyph leading
+   each collection row. Replaces the misused student-shell .ds-id__icon. */
+.ds-coll-ic {
+  width: 38px; height: 38px; flex: none; border-radius: var(--radius-sm);
+  background: var(--accent-wash); color: var(--accent-ink);
+  display: inline-flex; align-items: center; justify-content: center;
 }
+.ds-coll-ic svg { width: 20px; height: 20px; }
+
+/* ---- Modal (DS .app-modal): a centered card over a scrim. Used by the
+   "copy agent from another course" picker; previously rendered unstyled. ---- */
+.ds-modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+  background: color-mix(in srgb, var(--ink-900) 45%, transparent);
+}
+.ds-modal-card {
+  width: 100%; max-width: 32rem; max-height: 88vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
+  padding: 1.3rem 1.5rem;
+}
+
+/* ---- Nav tabs (DS .app-nav): inline pills in the bar, NOT a separate strip.
+   Active state is colour-only — no border/underline — so moving the active tab
+   never changes the row height (the "instructor header button jump" fix). ---- */
+.ds-staff-nav { display: flex; align-items: center; gap: 0.35rem; height: 100%; flex: none; }
 .ds-staff-nav__item {
-  appearance: none; background: none; border: 0; cursor: pointer; padding: 0.85rem 0.1rem;
+  appearance: none; background: none; border: 0; cursor: pointer;
   font-family: var(--font-sans); font-weight: 600; font-size: var(--text-sm);
-  color: var(--text-muted); text-decoration: none;
-  /* Active underline via inset box-shadow, NOT border-bottom: box-shadow has
-     zero layout impact, so moving the active tab never shifts the row height
-     (the "instructor header button jump" the border + margin hack caused).
-     Matches the DS app-nav technique. */
-  box-shadow: inset 0 -2px 0 transparent;
-  transition: color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+  color: var(--text-muted); padding: 0.45rem 0.7rem; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; text-decoration: none;
+  transition: color var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
 }
-.ds-staff-nav__item:hover { color: var(--text-strong); }
-.ds-staff-nav__item--active { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.ds-staff-nav__item:hover { color: var(--text-strong); background: var(--surface-hover); }
+.ds-staff-nav__item--active { color: var(--accent); }
+.ds-staff-nav__item--active:hover { background: transparent; }
 
 /* Course-picker inline create form. */
 .ds-picker__create {
@@ -143,6 +180,19 @@
 .ds-staff-list__title { font-weight: 600; color: var(--text-strong); font-size: var(--text-base); }
 .ds-staff-list__sub { color: var(--text-muted); font-size: var(--text-sm); margin-top: 0.1rem; }
 .ds-staff-list__actions { display: flex; gap: 0.4rem; align-items: center; flex: none; }
+
+/* Mid widths: the instructor bar (lockup + switcher + nav + role switch) gets
+   crowded, so the nav drops to its own scrollable row beneath the bar — the DS
+   .app-topbar--instructor behaviour. */
+@media (max-width: 1080px) {
+  .ds-staff-top--instructor { height: auto; min-height: 60px; flex-wrap: wrap; padding-top: 0.4rem; padding-bottom: 0.4rem; }
+  .ds-staff-top--instructor .ds-staff-nav {
+    order: 10; flex-basis: 100%; width: 100%; height: auto;
+    overflow-x: auto; scrollbar-width: none;
+    border-top: 1px solid var(--border); padding-top: 0.4rem; margin-top: 0.1rem;
+  }
+  .ds-staff-top--instructor .ds-staff-nav::-webkit-scrollbar { display: none; }
+}
 
 @media (max-width: 760px) {
   .ds-staff-page { padding: 1.5rem 1rem 3rem; }

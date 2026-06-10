@@ -8,7 +8,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { listConversations, type ConversationSummary } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
-import { Avatar, Badge } from "../components/index.js";
+import { Badge } from "../components/index.js";
 
 function rowTitle(c: ConversationSummary): string {
   // Backbone rows already arrive titled by the server ("Agent — topic 2/4" /
@@ -33,61 +33,56 @@ export function HistoryPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="ds-home__inner">
-      <div className="ds-home__head">
+    <div className="app-history">
+      <div className="app-head">
         <span className="eyebrow">Your conversations</span>
-        <span className="ds-rule" />
-        <h1>History</h1>
+        <span className="app-rule" />
+        <h1>Your history</h1>
+        <p className="app-head__sub">
+          Every conversation you&rsquo;ve had — pick one up where you left off.
+        </p>
       </div>
 
       {error && <p className="error">{error}</p>}
 
       {conversations === null ? (
-        <p className="ds-home__muted">Loading…</p>
+        <p className="app-empty">Loading…</p>
       ) : conversations.length === 0 ? (
-        <p className="ds-home__muted">
+        <p className="app-empty">
           No conversations yet. <Link to={base}>Pick an agent</Link> to get
           started.
         </p>
       ) : (
-        <div className="ds-agents">
+        <ul className="app-history__list">
           {conversations.map((c) => (
-            <div
-              key={c.id}
-              className="ds-agent"
-              role="link"
-              tabIndex={0}
-              onClick={() => navigate(`${base}/chat/${c.id}`)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") navigate(`${base}/chat/${c.id}`);
-              }}
-            >
-                <Avatar name={c.agentName || rowTitle(c)} agent />
-                <div className="ds-agent__main">
-                  <div className="ds-agent__title">{rowTitle(c)}</div>
-                  <div className="ds-agent__meta">
-                    {c.agentName && (
-                      <span className="ds-agent__topics" style={{ paddingLeft: 0 }}>
-                        {c.agentName}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="ds-agent__action" style={{ width: "auto" }}>
+            <li key={c.id}>
+              <a
+                href={`${base}/chat/${c.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(`${base}/chat/${c.id}`);
+                }}
+              >
+                <span className="app-history__h">{rowTitle(c)}</span>
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}
+                >
                   {c.completedAt !== null ? (
                     <Badge tone="success" dot>
-                      Completed
+                      done
                     </Badge>
                   ) : (
-                    <span className="ds-agent__topics" style={{ paddingLeft: 0 }}>
-                      {relativeTime(c.updatedAt)}
-                    </span>
+                    c.agentName && <Badge tone="ghost">{c.agentName}</Badge>
                   )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  <span className="app-history__when">
+                    {relativeTime(c.updatedAt)}
+                  </span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

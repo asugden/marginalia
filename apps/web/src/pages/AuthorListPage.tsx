@@ -94,17 +94,17 @@ export function AuthorListPage() {
   );
 
   return (
-    <div className="ds-staff-page">
-      <div className="ds-staff-head">
+    <div className="app-page">
+      <div className="app-page__head">
         <div>
           <span className="eyebrow">Instructor · Agents</span>
           <h1>Agents</h1>
-          <div className="ds-staff-head__scope">
+          <div className="app-page__scope">
             AI tutors your students can chat with — each carries a voice and,
             optionally, an outline of topics or a library of sources.
           </div>
         </div>
-        <div className="ds-staff-actions">
+        <div className="app-page__actions">
           <Button variant="ghost" href="/author/voices">
             Voices
           </Button>
@@ -134,14 +134,14 @@ export function AuthorListPage() {
           its answers.
         </p>
       ) : (
-        <div className="ds-staff-list">
+        <div className="app-list">
           {agents.map((a) => (
-            <div className="ds-staff-list__row" key={a.id}>
+            <div className="app-list__row" key={a.id}>
               <Avatar name={a.title} agent={a.hasBackbone} />
-              <div className="ds-staff-list__main">
-                <div className="ds-staff-list__title">{a.title}</div>
+              <div className="app-list__main">
+                <div className="app-list__title">{a.title}</div>
                 <div
-                  className="ds-staff-list__sub"
+                  className="app-list__sub"
                   style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
                 >
                   <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
@@ -154,7 +154,7 @@ export function AuthorListPage() {
                   )}
                 </div>
               </div>
-              <div className="ds-staff-list__actions">
+              <div className="app-list__meta">
                 <Button
                   variant="subtle"
                   size="sm"
@@ -183,9 +183,9 @@ export function AuthorListPage() {
           aria-modal="true"
           aria-label="Copy agent from another course"
           onClick={() => setPickerOpen(false)}
-          className="ds-modal-backdrop"
+          className="app-modal-backdrop"
         >
-          <div onClick={(e) => e.stopPropagation()} className="ds-modal-card">
+          <div onClick={(e) => e.stopPropagation()} className="app-modal">
             <div
               style={{
                 display: "flex",
@@ -220,13 +220,13 @@ export function AuthorListPage() {
                   {g.agents.length === 0 ? (
                     <p className="muted small">No agents in this course.</p>
                   ) : (
-                    <div className="ds-staff-list">
+                    <div className="app-list">
                       {g.agents.map((a) => (
-                        <div className="ds-staff-list__row" key={a.id}>
-                          <div className="ds-staff-list__main">
-                            <div className="ds-staff-list__title">{a.title}</div>
+                        <div className="app-list__row" key={a.id}>
+                          <div className="app-list__main">
+                            <div className="app-list__title">{a.title}</div>
                             <div
-                              className="ds-staff-list__sub"
+                              className="app-list__sub"
                               style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
                             >
                               <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
@@ -239,7 +239,7 @@ export function AuthorListPage() {
                               )}
                             </div>
                           </div>
-                          <div className="ds-staff-list__actions">
+                          <div className="app-list__meta">
                             <Button
                               variant="subtle"
                               size="sm"

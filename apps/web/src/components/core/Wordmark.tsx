@@ -20,13 +20,15 @@ type WordmarkProps = {
 export function Wordmark({ size = "md", className = "" }: WordmarkProps) {
   const accent = WORDMARK.slice(0, ACCENT_LEN);
   const rest = WORDMARK.slice(ACCENT_LEN);
-  const cls = ["ds-lockup", size !== "md" ? `ds-lockup--${size}` : "", className]
+  // Emits the design-system `.app-lockup` markup so the wordmark is identical
+  // wherever it appears (every topbar). Size modifiers map to the DS lockup.
+  const cls = ["app-lockup", size !== "md" ? `app-lockup--${size}` : "", className]
     .filter(Boolean)
     .join(" ");
   return (
     <span className={cls}>
-      {MARK_URL && <img className="ds-lockup__mark" src={MARK_URL} alt="" aria-hidden />}
-      <span className="ds-lockup__word">
+      {MARK_URL && <img className="app-lockup__mark" src={MARK_URL} alt="" aria-hidden />}
+      <span className="app-lockup__word">
         {accent && <em>{accent}</em>}
         {rest}
       </span>

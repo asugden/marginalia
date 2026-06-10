@@ -4,20 +4,14 @@
    generic tokens. The Message / ChatComposer / OutlineRail components carry
    their own styling; this is the layout around them. */
 
-/* Height containment (DS ground truth: the chat is a height-locked grid; only
-   the message thread scrolls). The chat mounts as StudentLayout's <Outlet>
-   *under* the sticky topbar inside .ds-home. If the chat is 100vh, the page
-   becomes topbar + 100vh and the whole .ds-home scrolls — dragging the sticky
-   topbar with it (the "runaway outer scroll" bug). So when .ds-home holds a
-   chat, lock it to one viewport as a flex column: the topbar takes its natural
-   height and the chat fills the rest. Other student pages (home, history) keep
-   .ds-home's default min-height:100vh and scroll normally. */
-.ds-home:has(.ds-chat) { height: 100vh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.ds-home:has(.ds-chat) > .ds-topbar { flex: none; }
-
+/* Height containment (DS .app-chat: a height-locked grid; only the message
+   thread scrolls). The chat mounts inside .app__body, which is itself the
+   non-scrolling flex child of the locked .app shell (see nav-chrome.css). So
+   the chat just fills that body at height:100% with min-height:0 — no page
+   scroll, the topbar can't drift. */
 .ds-chat {
   display: grid; grid-template-columns: var(--sidebar-width) 1fr;
-  flex: 1; min-height: 0; height: 100%;
+  height: 100%; min-height: 0;
   background: var(--surface);
   transition: grid-template-columns var(--dur-4) var(--ease-out);
 }

@@ -63,7 +63,7 @@ export function AdminPage() {
   if (isAdmin === null) {
     return (
       <div className="ds-staff">
-        <div className="ds-staff-page">
+        <div className="app-page">
           <p className="muted">Loading…</p>
         </div>
       </div>
@@ -76,8 +76,8 @@ export function AdminPage() {
           <Wordmark size="sm" />
           <span className="ds-staff-top__role">Admin</span>
         </header>
-        <div className="ds-staff-page">
-          <div className="ds-staff-head">
+        <div className="app-page">
+          <div className="app-page__head">
             <div>
               <span className="eyebrow">Admin</span>
               <h1>No access</h1>
@@ -105,19 +105,19 @@ export function AdminPage() {
           </IconButton>
         </div>
       </header>
-      <div className="ds-staff-page">
-        <div className="ds-staff-head">
+      <div className="app-page">
+        <div className="app-page__head">
           <div>
             <span className="eyebrow">Instance</span>
             <h1>Admin</h1>
-            <div className="ds-staff-head__scope">
+            <div className="app-page__scope">
               Everyone who has signed in to this instance, plus instance-wide
               controls. Each row links into a per-user page where role and admin
               status are managed.
             </div>
           </div>
         </div>
-        <div className="ds-staff-section">
+        <div className="app-section">
           <SegmentedControl
             value={tab}
             onChange={(v) => setTab(v as Tab)}
@@ -191,8 +191,8 @@ function CoursesTab() {
   }
 
   return (
-    <div className="ds-staff-section">
-      <span className="mono-label ds-staff-section__label">Courses</span>
+    <div className="app-section">
+      <span className="mono-label app-section__label">Courses</span>
       {error && <p className="error">{error}</p>}
       <form
         onSubmit={onCreate}
@@ -224,18 +224,18 @@ function CoursesTab() {
       ) : courses.length === 0 ? (
         <p className="muted">No courses yet.</p>
       ) : (
-        <div className="ds-staff-list">
+        <div className="app-list">
           {courses.map((c) => (
-            <div className="ds-staff-list__row" key={c.id}>
-              <div className="ds-staff-list__main">
-                <div className="ds-staff-list__title">{c.name}</div>
-                <div className="ds-staff-list__sub">
+            <div className="app-list__row" key={c.id}>
+              <div className="app-list__main">
+                <div className="app-list__title">{c.name}</div>
+                <div className="app-list__sub">
                   {c.enrollmentCount}{" "}
                   {c.enrollmentCount === 1 ? "enrollment" : "enrollments"} ·
                   created {relativeTime(c.createdAt)} · {c.id}
                 </div>
               </div>
-              <div className="ds-staff-list__actions">
+              <div className="app-list__meta">
                 <IconButton
                   variant="ghost"
                   size="sm"
@@ -285,8 +285,8 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
   }
 
   return (
-    <div className="ds-staff-section">
-      <span className="mono-label ds-staff-section__label">Admins</span>
+    <div className="app-section">
+      <span className="mono-label app-section__label">Admins</span>
       <p className="muted small">
         Admins can create / delete courses, promote other admins, and view every
         user. Promote-by-email only works for users who have signed in at least
@@ -324,28 +324,28 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
           No admins. Bootstrap one via the INSTANCE_ADMIN_EMAILS env var.
         </p>
       ) : (
-        <div className="ds-staff-list">
+        <div className="app-list">
           {admins.map((a) => {
             const isSelf = meUserId === a.userId;
             return (
               <Link
                 key={a.userId}
                 to={`/users/${a.userId}`}
-                className="ds-staff-list__row"
+                className="app-list__row"
               >
                 <Avatar name={a.displayName || a.email} />
-                <div className="ds-staff-list__main">
-                  <div className="ds-staff-list__title">
+                <div className="app-list__main">
+                  <div className="app-list__title">
                     {a.email}
                     {isSelf && <span className="muted small"> · you</span>}
                   </div>
-                  <div className="ds-staff-list__sub">
+                  <div className="app-list__sub">
                     {a.lastSeenAt
                       ? `Last seen ${relativeTime(a.lastSeenAt)}`
                       : "Never signed in"}
                   </div>
                 </div>
-                <div className="ds-staff-list__actions">
+                <div className="app-list__meta">
                   <Badge tone="brand">admin</Badge>
                 </div>
               </Link>
@@ -368,24 +368,24 @@ function UsersTab() {
   }, []);
 
   return (
-    <div className="ds-staff-section">
-      <span className="mono-label ds-staff-section__label">Users</span>
+    <div className="app-section">
+      <span className="mono-label app-section__label">Users</span>
       {error && <p className="error">{error}</p>}
       {users === null ? (
         <p className="muted">Loading…</p>
       ) : users.length === 0 ? (
         <p className="muted">No users yet.</p>
       ) : (
-        <div className="ds-staff-list">
+        <div className="app-list">
           {users.map((u) => (
             <Link
               key={u.userId}
               to={`/users/${u.userId}`}
-              className="ds-staff-list__row"
+              className="app-list__row"
             >
               <Avatar name={u.displayName || u.email} />
-              <div className="ds-staff-list__main">
-                <div className="ds-staff-list__title">
+              <div className="app-list__main">
+                <div className="app-list__title">
                   {u.email}
                   {u.isAdmin && (
                     <>
@@ -394,7 +394,7 @@ function UsersTab() {
                     </>
                   )}
                 </div>
-                <div className="ds-staff-list__sub">
+                <div className="app-list__sub">
                   {u.enrollmentCount} enrollment
                   {u.enrollmentCount === 1 ? "" : "s"} ·{" "}
                   {u.lastSeenAt
@@ -422,20 +422,20 @@ function AuditTab() {
   }, []);
 
   return (
-    <div className="ds-staff-section">
-      <span className="mono-label ds-staff-section__label">Audit log</span>
+    <div className="app-section">
+      <span className="mono-label app-section__label">Audit log</span>
       {error && <p className="error">{error}</p>}
       {entries === null ? (
         <p className="muted">Loading…</p>
       ) : entries.length === 0 ? (
         <p className="muted">No entries yet.</p>
       ) : (
-        <div className="ds-staff-list">
+        <div className="app-list">
           {entries.map((e) => (
-            <div className="ds-staff-list__row" key={e.id}>
-              <div className="ds-staff-list__main">
-                <div className="ds-staff-list__title">{e.action}</div>
-                <div className="ds-staff-list__sub">
+            <div className="app-list__row" key={e.id}>
+              <div className="app-list__main">
+                <div className="app-list__title">{e.action}</div>
+                <div className="app-list__sub">
                   {relativeTime(e.createdAt)}
                   {e.targetKind && e.targetId
                     ? ` · ${e.targetKind}=${e.targetId}`

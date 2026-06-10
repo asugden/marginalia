@@ -169,7 +169,7 @@ export function CollectionDetailPage() {
 
   if (!detail) {
     return (
-      <div className="ds-staff-page">
+      <div className="app-page">
         {error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}
         <Button variant="ghost" href={`/course/${courseId}/instructor/collections`}>
           ← All libraries
@@ -184,17 +184,17 @@ export function CollectionDetailPage() {
   );
 
   return (
-    <div className="ds-staff-page">
-      <div className="ds-staff-head">
+    <div className="app-page">
+      <div className="app-page__head">
         <div>
           <span className="eyebrow">Instructor · Sources</span>
           <h1>{detail.collection.name}</h1>
-          <div className="ds-staff-head__scope">
+          <div className="app-page__scope">
             {detail.collection.description ||
               "The agent only argues from these documents, and cites them in line so students can check the source."}
           </div>
         </div>
-        <div className="ds-staff-actions">
+        <div className="app-page__actions">
           <Button variant="ghost" href={`/course/${courseId}/instructor/collections`}>
             ← All libraries
           </Button>
@@ -203,8 +203,8 @@ export function CollectionDetailPage() {
 
       {error && <p className="error">{error}</p>}
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Add a source</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Add a source</span>
         <SegmentedControl
           value={tab}
           onChange={(v) => setTab(v as Tab)}
@@ -302,7 +302,7 @@ export function CollectionDetailPage() {
         </div>
       </div>
 
-      <div className="ds-staff-section">
+      <div className="app-section">
         <div
           style={{
             display: "flex",
@@ -323,11 +323,11 @@ export function CollectionDetailPage() {
         {detail.sources.length === 0 ? (
           <p className="muted">No sources yet.</p>
         ) : (
-          <div className="ds-src-list">
+          <div className="src-list">
             {detail.sources.map((s) => (
-              <div className="ds-src-row" key={s.id}>
+              <div className="src-row" key={s.id}>
                 <Tag kind={s.kind}>{kindLabel(s.kind)}</Tag>
-                <span className="ds-src-row__name">
+                <span className="src-row__name">
                   {s.filename}
                   {s.sourceUrl && (
                     <a
@@ -344,7 +344,7 @@ export function CollectionDetailPage() {
                     <span className="error small"> · {s.error}</span>
                   )}
                 </span>
-                <span className="ds-src-row__chunks">
+                <span className="src-row__chunks">
                   {humanBytes(s.byteSize)}
                   {s.status === "indexed" ? ` · ${s.chunks} chunks` : ""}
                   {s.kind === "url" && s.fetchedAt !== null

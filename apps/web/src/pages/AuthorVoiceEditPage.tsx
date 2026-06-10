@@ -217,7 +217,7 @@ export function AuthorVoiceEditPage() {
           </Button>
         </div>
       </header>
-      <div className="ds-staff-page">{children}</div>
+      <div className="app-page">{children}</div>
     </div>
   );
 
@@ -262,33 +262,33 @@ export function AuthorVoiceEditPage() {
 
   return (
     <Shell>
-      <div className="ds-staff-head">
+      <div className="app-page__head">
         <div>
           <span className="eyebrow">Instructor · Voice</span>
           <h1>
             {isNew ? "New voice" : isLibrary ? "Library voice" : draft.name || "Edit voice"}
           </h1>
           {isLibrary && (
-            <div className="ds-staff-head__scope">
+            <div className="app-page__scope">
               Library voices are read-only. Use Customize to fork this into a new
               voice you own — you can then edit, share, and use it the same way
               as any of your own voices.
             </div>
           )}
           {isReadOnly && !isLibrary && (
-            <div className="ds-staff-head__scope">
+            <div className="app-page__scope">
               This voice is shared with you by another author. You can use it in
               your agents, but you can&rsquo;t edit or delete it. Use Duplicate
               to fork it into a new voice you own.
             </div>
           )}
         </div>
-        <div className="ds-staff-actions">{actions}</div>
+        <div className="app-page__actions">{actions}</div>
       </div>
 
       {loadError && <p className="error">{loadError}</p>}
 
-      <div className="ds-staff-section ds-staff-row">
+      <div className="app-section app-row">
         <Field label="Name">
           <Input
             type="text"
@@ -308,16 +308,16 @@ export function AuthorVoiceEditPage() {
         </Field>
       </div>
 
-      <div className="ds-staff-section">
+      <div className="app-section">
         <Field
           label="System prompt fragment"
           hint="Describe persona, tone, and method. Keep topic content out — that lives in agent backbones."
         >
           <Textarea
-            rows={10}
+            rows={12}
             value={draft.systemPromptFragment}
             disabled={isReadOnly}
-            className="ds-input--mono"
+            className="ds-textarea--prompt"
             placeholder="Describe persona, tone, and method."
             onChange={(e) =>
               setDraft({ ...draft, systemPromptFragment: e.target.value })
@@ -326,8 +326,8 @@ export function AuthorVoiceEditPage() {
         </Field>
       </div>
 
-      <div className="ds-staff-section">
-        <span className="mono-label ds-staff-section__label">Preview</span>
+      <div className="app-section">
+        <span className="mono-label app-section__label">Preview</span>
         <p className="muted small">
           One-turn preview against a fixed question. Lets you feel the voice
           before saving an agent against it.
@@ -367,8 +367,8 @@ export function AuthorVoiceEditPage() {
       </div>
 
       {!isNew && isOwner && (
-        <div className="ds-staff-section">
-          <span className="mono-label ds-staff-section__label">Sharing</span>
+        <div className="app-section">
+          <span className="mono-label app-section__label">Sharing</span>
           <p className="muted small">
             Share this voice with another author by email. They can use it in
             their own agents but can&rsquo;t edit or delete it. You can revoke at
@@ -406,22 +406,22 @@ export function AuthorVoiceEditPage() {
           ) : shares.length === 0 ? (
             <p className="muted">Not shared with anyone yet.</p>
           ) : (
-            <div className="ds-roster">
+            <div className="roster">
               {shares.map((s) => (
-                <div className="ds-roster__row" key={s.userId}>
-                  <div className="ds-roster__person">
+                <div className="roster__row" key={s.userId}>
+                  <div className="roster__person">
                     <Avatar name={s.displayName || s.email} />
                     <div style={{ minWidth: 0 }}>
-                      <div className="ds-roster__name">
+                      <div className="roster__name">
                         {s.displayName || s.email}
                       </div>
-                      <div className="ds-roster__email">{s.email}</div>
+                      <div className="roster__email">{s.email}</div>
                     </div>
                   </div>
-                  <span className="ds-roster__meta">
+                  <span className="roster__meta">
                     Shared {relativeTime(s.createdAt)}
                   </span>
-                  <div className="ds-roster__actions">
+                  <div className="roster__actions">
                     <Button
                       variant="danger"
                       size="sm"
@@ -440,7 +440,7 @@ export function AuthorVoiceEditPage() {
 
       {saveError && <p className="error">{saveError}</p>}
 
-      <div className="ds-staff-actions" style={{ justifyContent: "flex-end" }}>
+      <div className="app-page__actions" style={{ justifyContent: "flex-end" }}>
         <Button variant="subtle" href="/author/voices">
           Cancel
         </Button>

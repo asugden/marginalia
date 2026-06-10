@@ -54,8 +54,8 @@ export function JoinPage() {
 
   return (
     <div className="ds-join">
-      <header className="ds-topbar">
-        <div className="ds-topbar__inner">
+      <header className="app-topbar">
+        <div className="app-topbar__inner">
           <Wordmark />
         </div>
       </header>
@@ -65,7 +65,7 @@ export function JoinPage() {
             <>
               <span className="eyebrow">Joining</span>
               <span className="ds-rule" />
-              <p className="ds-home__note">Joining…</p>
+              <p className="app-writing__note">Joining…</p>
             </>
           ) : state.kind === "error" ? (
             <>
@@ -94,7 +94,7 @@ export function JoinPage() {
               </span>
               <span className="ds-rule" />
               <h2>{state.alreadyEnrolled ? "You're already in." : "You're in!"}</h2>
-              <p className="ds-home__note">
+              <p className="app-writing__note">
                 {state.alreadyEnrolled
                   ? "You were already enrolled in this course."
                   : "You've been enrolled. Head in to pick something to begin."}

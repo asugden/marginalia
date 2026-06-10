@@ -74,12 +74,12 @@ export function HomePage() {
     agents?.filter((a) => a.hasBackbone && a.lastCompletedAt !== null).length ?? 0;
 
   return (
-    <div className="ds-home__inner">
-      <div className="ds-home__head">
+    <div className="app-home__inner">
+      <div className="app-head">
         {courseName && <span className="eyebrow">{courseName}</span>}
-        <span className="ds-rule" />
+        <span className="app-rule" />
         <h1>Pick something to begin.</h1>
-        <p className="ds-home__sub">
+        <p className="app-head__sub">
           Each one is set up by your instructor — it&rsquo;ll tell you up front
           how it works and what it&rsquo;s for, then lead you through it.
         </p>
@@ -88,23 +88,23 @@ export function HomePage() {
       {error && <p className="error">{error}</p>}
 
       {agents === null ? (
-        <p className="ds-home__muted">Loading…</p>
+        <p className="app-empty">Loading…</p>
       ) : agents.length === 0 ? (
-        <p className="ds-home__muted">
+        <p className="app-empty">
           Your instructor hasn&rsquo;t set anything up in this course yet. Check
           back soon.
         </p>
       ) : (
         <>
-          <div className="ds-agents__bar">
+          <div className="app-agents__bar">
             <span className="mono-label">Your agents</span>
-            <span className="ds-agents__stat">
+            <span className="app-agents__stat">
               {agents.length} total
               <i>·</i> {inProgressCount} in progress
               <i>·</i> {doneCount} done
             </span>
           </div>
-          <div className="ds-agents">
+          <div className="app-agents">
             {agents.map((a, i) => (
               <AgentRow
                 key={a.id}
@@ -118,21 +118,18 @@ export function HomePage() {
         </>
       )}
 
-      {/* Writing tool entry point (#19). The provenance surface lands on the
-          student's own list of past writings, so a single link covers both
-          "start writing" and "my past papers". Always available. Set off from
-          the agent list by its own rule + breathing room, so it never crowds
-          the rows above it. */}
-      <section className="ds-home__writing">
-        <div className="ds-home__panel">
-          <div className="ds-home__panel-text">
-            <span className="mono-label">Writing</span>
+      {/* Writing tool entry point. DS .app-writing zone: set off by a top rule,
+          a sunken card with an eyebrow→heading lockup and one primary action. */}
+      <section className="app-writing">
+        <div className="app-writing__card">
+          <div className="app-writing__text">
+            <span className="mono-label app-writing__label">Writing</span>
             <h2>Provenance writing space</h2>
-            <p className="ds-home__note">
+            <p className="app-writing__note">
               Write here to share the history and provenance of your work.
             </p>
           </div>
-          <div className="ds-home__panel-action">
+          <div className="app-writing__action">
             <Button href={`${base}/write`} icon={<PencilIcon size={16} />}>
               Open writing &amp; past papers
             </Button>
@@ -192,7 +189,7 @@ function AgentRow({
       <Button
         variant="primary"
         href={continueHref}
-        className="ds-agent__cta"
+        className="app-agent__cta"
         iconRight={<ArrowIcon size={16} />}
       >
         Continue
@@ -204,7 +201,7 @@ function AgentRow({
     <Button
       variant="primary"
       href={startHref}
-      className="ds-agent__cta"
+      className="app-agent__cta"
       iconRight={<ArrowIcon size={16} />}
     >
       Start
@@ -217,7 +214,7 @@ function AgentRow({
   // nested anchors; keyboard users get a focusable role="link".
   return (
     <div
-      className="ds-agent"
+      className="app-agent"
       role="link"
       tabIndex={0}
       onClick={() => navigate(target)}
@@ -225,11 +222,11 @@ function AgentRow({
         if (e.key === "Enter") navigate(target);
       }}
     >
-      <span className="ds-agent__index">{String(n).padStart(2, "0")}</span>
+      <span className="app-agent__index">{String(n).padStart(2, "0")}</span>
       <Avatar name={a.title} agent={a.hasBackbone} size="lg" />
-      <div className="ds-agent__main">
-        <div className="ds-agent__title">{a.title}</div>
-        <div className="ds-agent__meta">
+      <div className="app-agent__main">
+        <div className="app-agent__title">{a.title}</div>
+        <div className="app-agent__meta">
           <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
             {a.hasBackbone ? "guided" : "free-form"}
           </Badge>
@@ -240,10 +237,7 @@ function AgentRow({
           )}
         </div>
       </div>
-      <div
-        className="ds-agent__action"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="app-agent__action" onClick={(e) => e.stopPropagation()}>
         {action}
       </div>
     </div>

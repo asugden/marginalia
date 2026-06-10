@@ -17,12 +17,12 @@ export interface PreviewBannerProps {
 
 export function PreviewBanner({ courseId, courseName }: PreviewBannerProps) {
   return (
-    <div className="ds-preview-banner" role="status">
-      <span className="ds-preview-banner__label">
+    <div className="app-preview" role="status">
+      <span>
         <b>Previewing {courseName} as a student.</b> The student&rsquo;s view of
         this course.
       </span>
-      <Link to={`/course/${courseId}/instructor`} className="ds-preview-banner__back">
+      <Link to={`/course/${courseId}/instructor`} className="app-preview__back">
         Back to instructor
       </Link>
     </div>
