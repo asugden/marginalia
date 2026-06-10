@@ -288,7 +288,7 @@ export function AuthorEditPage() {
       } else {
         await updateAgent(courseId, agentId!, draft.title.trim(), definition);
       }
-      navigate(`/course/${courseId}/agents`);
+      navigate(`/course/${courseId}/instructor/agents`);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed");
       setSaving(false);
@@ -315,7 +315,7 @@ export function AuthorEditPage() {
           </div>
         </div>
         <div className="ds-staff-actions">
-          <Button variant="subtle" href={`/course/${courseId}/agents`}>
+          <Button variant="subtle" href={`/course/${courseId}/instructor/agents`}>
             Cancel
           </Button>
           <Button
@@ -608,7 +608,7 @@ export function AuthorEditPage() {
             ) : collections.length === 0 ? (
               <p className="muted small">
                 No libraries yet.{" "}
-                <Link to={`/course/${courseId}/collections`}>
+                <Link to={`/course/${courseId}/instructor/collections`}>
                   Create one and add sources
                 </Link>
                 .
@@ -630,7 +630,7 @@ export function AuthorEditPage() {
                   ))}
                 </RadioCardGroup>
                 <p className="muted small" style={{ marginTop: "0.6rem" }}>
-                  <Link to={`/course/${courseId}/collections`}>Manage libraries →</Link>
+                  <Link to={`/course/${courseId}/instructor/collections`}>Manage libraries →</Link>
                 </p>
               </>
             )}
@@ -658,7 +658,7 @@ export function AuthorEditPage() {
       {saveError && <p className="error">{saveError}</p>}
 
       <div className="ds-staff-actions" style={{ justifyContent: "flex-end" }}>
-        <Button variant="subtle" href={`/course/${courseId}/agents`}>
+        <Button variant="subtle" href={`/course/${courseId}/instructor/agents`}>
           Cancel
         </Button>
         <Button variant="primary" onClick={save} loading={saving} disabled={saving}>

@@ -7,8 +7,9 @@
 // 30s server-side rotation never leaves the projector showing a stale code.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import QRCode from "qrcode";
+import { useCourse } from "../../../course/useCourse.js";
 import {
   closeSession,
   exportCsvUrl,
@@ -37,6 +38,8 @@ const FLAG_LABEL: Record<string, string> = {
 
 export function DisplayPage() {
   const { id = "" } = useParams<{ id: string }>();
+  const { courseId } = useCourse();
+  const sessionsHref = `/course/${courseId}/instructor/attendance`;
   const [session, setSession] = useState<SessionDTO | null>(null);
   const [checkins, setCheckins] = useState<CheckinDTO[]>([]);
   const [token, setToken] = useState<QrToken | null>(null);
@@ -104,7 +107,9 @@ export function DisplayPage() {
   const Shell = ({ children }: { children: React.ReactNode }) => (
     <div className="ds-staff">
       <header className="ds-staff-top">
-        <Wordmark size="sm" />
+        <Link to={sessionsHref} aria-label="All sessions">
+          <Wordmark size="sm" />
+        </Link>
         <span className="ds-staff-top__role">Attendance</span>
       </header>
       <div className="ds-staff-page ds-att-page--wide">{children}</div>
@@ -130,7 +135,9 @@ export function DisplayPage() {
   return (
     <div className="ds-staff">
       <header className="ds-staff-top">
-        <Wordmark size="sm" />
+        <Link to={sessionsHref} aria-label="All sessions">
+          <Wordmark size="sm" />
+        </Link>
         <span className="ds-staff-top__role">Attendance</span>
       </header>
       <div className="ds-staff-page" style={{ maxWidth: "1080px" }}>
@@ -141,7 +148,7 @@ export function DisplayPage() {
             <div className="ds-staff-head__scope">{session.sessionDate}</div>
           </div>
           <div className="ds-staff-actions">
-            <Button variant="ghost" size="sm" href="/attendance">
+            <Button variant="ghost" size="sm" href={sessionsHref}>
               All sessions
             </Button>
             <Button

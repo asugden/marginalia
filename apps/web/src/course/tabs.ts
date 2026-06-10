@@ -18,19 +18,22 @@ export interface TabVisibilityFlags {
 }
 
 export interface TabSpec {
-  /** URL slug after /course/:courseId/. Empty string = dashboard index.
-   *  When `external` is true, this is the full absolute path instead. */
+  /** URL slug under the staff base /course/:courseId/instructor/. Empty
+   *  string = the dashboard index. */
   slug: string;
   /** Visible label in the strip and in the page-header breadcrumb. */
   label: string;
   /** One-line description shown on the dashboard index under the tab strip. */
   description: string;
   visible: (e: TabVisibilityFlags | undefined) => boolean;
-  /** When true, the tab navigates *out* of the course-scoped routes.
-   *  Provenance lives at /write today (course-agnostic surface owned by
-   *  another module); the dashboard still surfaces it as a first-class
-   *  destination so instructors can find it. */
-  external?: boolean;
+  /** When set, the tab links to a *student-scoped* surface instead of the
+   *  staff base — i.e. /course/:courseId/<href> rather than
+   *  /course/:courseId/instructor/<slug>. Provenance uses this: the writing
+   *  tool is one surface under the student root (/course/:id/write); the
+   *  instructor opens the same page and gets instructor-mode chrome (the
+   *  marks toggle) from their role in context, rather than a separate staff
+   *  copy. */
+  studentHref?: string;
   /** Lazy-reveal feature key. Present on tabs that stay hidden until the
    *  course turns them on. The dashboard's "Add a tool" affordance and
    *  the worker's reveal-tab endpoint both key off this. Absent on
@@ -47,12 +50,12 @@ export const TABS: TabSpec[] = [
     visible: () => true,
   },
   {
-    slug: "/write",
+    slug: "write",
     label: "Provenance",
     description:
       "Writing assignments where every word is tagged by where it came from — typed, pasted, or generated. Lives at its own surface so all documents are visible together.",
     visible: () => true,
-    external: true,
+    studentHref: "write",
   },
   {
     slug: "attendance",
@@ -79,16 +82,36 @@ export const TABS: TabSpec[] = [
   },
 ];
 
+/** Build the URL a tab links to. Most tabs live under the staff base
+ *  (/course/:id/instructor/<slug>); a `studentHref` tab links to the
+ *  student-scoped surface (/course/:id/<href>) instead. */
+export function tabHref(tab: TabSpec, courseId: string): string {
+  if (tab.studentHref) return `/course/${courseId}/${tab.studentHref}`;
+  const base = `/course/${courseId}/instructor`;
+  return tab.slug ? `${base}/${tab.slug}` : base;
+}
+
 /** Find the tab matching the current URL pathname. Returns null on the
- *  dashboard index, or for any path that doesn't match a known tab. */
+ *  dashboard index, or for any path that doesn't match a known tab. Matches
+ *  both the staff base (/course/:id/instructor/<slug>) and a tab's
+ *  student-scoped surface (/course/:id/<href>). */
 export function tabForPathname(
   pathname: string,
   courseId: string,
 ): TabSpec | null {
+  const staffBase = `/course/${courseId}/instructor`;
+  if (pathname.startsWith(staffBase)) {
+    const rest = pathname.slice(staffBase.length).replace(/^\//, "");
+    if (rest === "") return null;
+    const head = rest.split("/")[0]!;
+    return TABS.find((t) => t.slug === head && !t.studentHref) ?? null;
+  }
+  // A student-scoped tab surface (e.g. the provenance writing tool) viewed
+  // from within the staff strip.
   const prefix = `/course/${courseId}`;
   if (!pathname.startsWith(prefix)) return null;
   const rest = pathname.slice(prefix.length).replace(/^\//, "");
   if (rest === "") return null;
   const head = rest.split("/")[0]!;
-  return TABS.find((t) => t.slug === head) ?? null;
+  return TABS.find((t) => t.studentHref === head) ?? null;
 }

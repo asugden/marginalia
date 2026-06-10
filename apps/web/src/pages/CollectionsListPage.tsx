@@ -48,7 +48,7 @@ export function CollectionsListPage() {
       // form, not the just-submitted values (per v0.4 plan §3).
       setDraftName("");
       setDraftDescription("");
-      navigate(`/course/${courseId}/collections/${created.id}`);
+      navigate(`/course/${courseId}/instructor/collections/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed");
     } finally {
@@ -114,7 +114,7 @@ export function CollectionsListPage() {
             {collections.map((c) => (
               <Link
                 key={c.id}
-                to={`/course/${courseId}/collections/${c.id}`}
+                to={`/course/${courseId}/instructor/collections/${c.id}`}
                 className="ds-staff-list__row"
               >
                 <span

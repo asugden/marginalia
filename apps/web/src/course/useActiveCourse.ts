@@ -1,18 +1,17 @@
-// Course resolution for *course-agnostic* surfaces — pages that live
-// outside `/course/:courseId/*` (and thus outside <CourseLayout>) but
-// still need a course id for their API calls. The provenance writing
-// tool at /write is the first such surface.
+// Course resolution for surfaces that need a course id but resolve it
+// themselves rather than from a layout. The provenance editor (a standalone
+// full-screen route at /course/:courseId/write/:id) is the remaining user: it
+// passes its URL :courseId in as `preferCourseId` so the hook resolves to that
+// course directly.
 //
 // Resolution rule:
-//   * 0 enrollments → notEnrolled (caller renders a join prompt).
+//   * 0 enrollments → notEnrolled.
 //   * 1 enrollment  → that course, automatically.
-//   * 2+ enrollments → the one whose id is stored in localStorage if it's
-//     still a valid enrollment, else the most recent. The caller exposes
-//     a switcher (see StandalonePage) that calls setCourseId.
+//   * 2+ enrollments → `preferCourseId` if it's a valid enrollment, else the
+//     id stored in localStorage if still valid, else the most recent.
 //
-// This is deliberately NOT useCourse() — that one throws outside
-// CourseLayout. This hook does its own /api/me fetch and owns the
-// single-vs-many resolution that CourseLayout gets from the URL instead.
+// This is deliberately NOT useCourse() — that one throws outside a course
+// layout. This hook does its own /api/me fetch.
 
 import { useCallback, useEffect, useState } from "react";
 import { getMe, type MeEnrollment } from "../client.js";
@@ -47,11 +46,16 @@ function resolve(enrollments: MeEnrollment[], preferred: string | null): MeEnrol
   return enrollments[0]!;
 }
 
-export function useActiveCourse(): ActiveCourseState {
+export function useActiveCourse(preferCourseId?: string | null): ActiveCourseState {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enrollments, setEnrollments] = useState<MeEnrollment[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(() => readStored());
+  // An explicit course id (e.g. from a /course/:courseId/* URL) wins over the
+  // localStorage fallback so a deep-linked surface resolves to the course in
+  // its own URL, not whatever was last active.
+  const [activeId, setActiveId] = useState<string | null>(
+    () => preferCourseId ?? readStored(),
+  );
 
   useEffect(() => {
     const ctrl = new AbortController();

@@ -19,6 +19,15 @@ export interface CourseContextValue {
   role: MeEnrollment["role"];
   showAttendance: boolean;
   showCollections: boolean;
+  /** Whether students see provenance origin colouring. Instructors always
+   *  see marks; the provenance editor reads this to seed its instructor-only
+   *  "hide marks from students" toggle. Carried on the context (not the
+   *  tab-visibility predicate) so the writing surface can read it without a
+   *  separate fetch. */
+  hideProvenanceMarks: boolean;
+  /** Instance-wide admin flag (from /api/me). Orthogonal to course role —
+   *  feeds the topbar RoleSwitch so it can offer the Admin segment. */
+  isAdmin: boolean;
 }
 
 export const CourseContext = createContext<CourseContextValue | null>(null);

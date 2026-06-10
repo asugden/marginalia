@@ -2,15 +2,11 @@
 //
 // Renders the list of courses the caller is enrolled in. Each card
 // navigates to the right per-course home depending on role:
-//   * instructor → /course/:courseId  (the v1.0 §3 dashboard)
-//   * student    → /                  (single-course landing, scoped via
-//                  the picker's choice — for v1.0 a student with two
-//                  enrollments still lands on the original / and the
-//                  agent list is for whichever course they pick. The
-//                  full per-student scoping is a v1.1 problem.)
+//   * instructor → /course/:courseId/instructor  (the dashboard)
+//   * student    → /course/:courseId             (the student home)
 //
 // Reachable via:
-//   * GET / when the caller has >1 enrollments (HomePage redirects).
+//   * GET / (RootRedirect) when the caller has >1 enrollments.
 //   * the dashboard's "Switch course" menu (the menu navigates directly,
 //     but the picker is also a deep-linkable surface for completeness).
 //
@@ -18,7 +14,7 @@
 // a meta-surface, not the inside of a course.
 
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getMe, type MeEnrollment } from "../client.js";
 import { readBootstrap } from "../bootstrap.js";
 import { Badge, Wordmark } from "../components/index.js";
@@ -41,9 +37,12 @@ export function CoursePickerPage() {
         // Lone enrollment? Send them where they'd have landed anyway.
         if (m.enrollments.length === 1) {
           const only = m.enrollments[0]!;
-          navigate(only.role === "instructor" ? `/course/${only.courseId}` : "/", {
-            replace: true,
-          });
+          navigate(
+            only.role === "instructor"
+              ? `/course/${only.courseId}/instructor`
+              : `/course/${only.courseId}`,
+            { replace: true },
+          );
         }
       })
       .catch((e) => {
@@ -56,7 +55,9 @@ export function CoursePickerPage() {
   return (
     <div className="ds-staff">
       <header className="ds-staff-top">
-        <Wordmark size="sm" />
+        <Link to="/courses" aria-label="Courses">
+          <Wordmark size="sm" />
+        </Link>
         <span className="ds-staff-top__role">Courses</span>
       </header>
 
@@ -91,7 +92,9 @@ export function CoursePickerPage() {
                 style={{ cursor: "pointer", textAlign: "left" }}
                 onClick={() =>
                   navigate(
-                    e.role === "instructor" ? `/course/${e.courseId}` : "/",
+                    e.role === "instructor"
+                      ? `/course/${e.courseId}/instructor`
+                      : `/course/${e.courseId}`,
                   )
                 }
               >

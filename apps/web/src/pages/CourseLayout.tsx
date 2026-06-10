@@ -27,9 +27,10 @@ import {
 } from "react-router-dom";
 import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
-import { TABS, tabForPathname } from "../course/tabs.js";
-import { Button, Wordmark } from "../components/index.js";
-import { ChevronIcon } from "../icons.js";
+import { TABS, tabForPathname, tabHref } from "../course/tabs.js";
+import { Button, IconButton, RoleSwitch, Wordmark } from "../components/index.js";
+import { ChevronIcon, SignOutIcon } from "../icons.js";
+import { signOut } from "../session.js";
 
 export function CourseLayout() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -58,6 +59,8 @@ export function CourseLayout() {
           role: e.role,
           showAttendance: e.showAttendance,
           showCollections: e.showCollections,
+          hideProvenanceMarks: e.hideProvenanceMarks,
+          isAdmin: Boolean(m.isAdmin),
         });
       })
       .catch((err) => {
@@ -91,12 +94,15 @@ export function CourseLayout() {
         {/* Staff register top bar: wordmark lockup · role · course name (with
             the switcher) · back to student view. */}
         <header className="ds-staff-top">
-          <Link to={`/course/${courseId}`} aria-label="Course home">
+          <Link to={`/course/${courseId}/instructor`} aria-label="Course home">
             <Wordmark size="sm" />
           </Link>
-          <span className="ds-staff-top__role">
-            {value.role === "instructor" ? "Instructor" : value.role}
-          </span>
+          <RoleSwitch
+            courseId={courseId}
+            role={value.role}
+            isAdmin={value.isAdmin}
+            current="author"
+          />
           <div className="ds-staff-top__course">
             {others.length > 0 ? (
               <div className="ds-switcher">
@@ -117,7 +123,7 @@ export function CourseLayout() {
                           type="button"
                           onClick={() => {
                             setSwitcherOpen(false);
-                            navigate(`/course/${e.courseId}`);
+                            navigate(`/course/${e.courseId}/instructor`);
                           }}
                         >
                           <strong>{e.courseName}</strong>
@@ -131,15 +137,15 @@ export function CourseLayout() {
             ) : (
               <span>{value.courseName}</span>
             )}
-            <Button variant="ghost" size="sm" href="/">
-              ← Student view
-            </Button>
+            <IconButton title="Sign out" onClick={signOut}>
+              <SignOutIcon />
+            </IconButton>
           </div>
         </header>
 
         <nav className="ds-staff-nav" aria-label="Course sections">
           {visibleTabs.map((t) => {
-            const to = t.external ? t.slug : `/course/${courseId}/${t.slug}`;
+            const to = tabHref(t, courseId);
             const active = currentTab?.slug === t.slug;
             return (
               <Link

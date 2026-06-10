@@ -18,6 +18,7 @@ import {
 } from "../api.js";
 import { useByoKey, maskKey } from "./useByoKey.js";
 import { Button, Field, Input } from "../../../components/index.js";
+import { KeyIcon, SendIcon, StopIcon, TrashIcon } from "../../../icons.js";
 
 interface Props {
   documentId: string;
@@ -264,10 +265,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
           aria-label={byo.active ? "Using your own LLM key" : "Use your own LLM key"}
           title={byo.active ? "Using your own key" : "Use your own key"}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M14 7a4 4 0 1 0-3.9 5h.4l1.5 1.5 1.5-1.5 1.5 1.5L18 12l-1.6-1.6A4 4 0 0 0 14 7Zm-4.5 1.5h.01"
-              stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <KeyIcon size={18} />
         </button>
         {active && (
           <button
@@ -277,10 +275,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
             aria-label="Delete this conversation"
             title="Delete this conversation"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7"
-                stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            </svg>
+            <TrashIcon size={18} />
           </button>
         )}
       </header>
@@ -304,7 +299,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
       {showAgentPicker && agents && (
         <div className="prov-chat-agent-picker">
           {agents.length === 0 ? (
-            <p className="muted small">No agents yet. Visit <a href="/write/agents">My agents</a> to add one.</p>
+            <p className="muted small">No agents yet. Visit <a href={`/course/${courseId}/write/agents`}>My agents</a> to add one.</p>
           ) : (
             <ul>
               {agents.map((a) => (
@@ -406,9 +401,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
                   aria-label="Stop streaming"
                   title="Stop"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
-                  </svg>
+                  <StopIcon size={14} />
                 </button>
               ) : (
                 <button
@@ -419,9 +412,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
                   aria-label="Send"
                   title="Send"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                  <SendIcon size={18} />
                 </button>
               )}
             </div>

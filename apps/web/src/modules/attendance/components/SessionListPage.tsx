@@ -52,7 +52,7 @@ export function SessionListPage() {
         centerLon: lon,
         radiusM: useGeofence ? DEFAULT_RADIUS : null,
       });
-      navigate(`/course/${courseId}/attendance/sessions/${s.id}`);
+      navigate(`/course/${courseId}/instructor/attendance/sessions/${s.id}`);
     } catch (e) {
       setErr(String((e as Error).message));
     } finally {
@@ -136,7 +136,7 @@ export function SessionListPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  href={`/course/${courseId}/attendance/sessions/${s.id}`}
+                  href={`/course/${courseId}/instructor/attendance/sessions/${s.id}`}
                 >
                   {s.closedAt ? "View" : "Open"}
                 </Button>

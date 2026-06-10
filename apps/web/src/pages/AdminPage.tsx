@@ -30,11 +30,13 @@ import {
   Badge,
   Button,
   Field,
+  IconButton,
   Input,
   SegmentedControl,
   Wordmark,
 } from "../components/index.js";
-import { PlusIcon } from "../icons.js";
+import { PlusIcon, SignOutIcon, TrashIcon } from "../icons.js";
+import { signOut } from "../session.js";
 
 type Tab = "courses" | "admins" | "users" | "audit";
 
@@ -98,9 +100,9 @@ export function AdminPage() {
         </Link>
         <span className="ds-staff-top__role">Admin</span>
         <div className="ds-staff-top__course">
-          <Button variant="ghost" size="sm" href="/">
-            ← Home
-          </Button>
+          <IconButton title="Sign out" onClick={signOut}>
+            <SignOutIcon />
+          </IconButton>
         </div>
       </header>
       <div className="ds-staff-page">
@@ -234,14 +236,15 @@ function CoursesTab() {
                 </div>
               </div>
               <div className="ds-staff-list__actions">
-                <Button
-                  variant="danger"
+                <IconButton
+                  variant="ghost"
                   size="sm"
+                  title={`Delete course "${c.name}"`}
                   disabled={busy}
                   onClick={() => onDelete(c)}
                 >
-                  Delete
-                </Button>
+                  <TrashIcon size={16} />
+                </IconButton>
               </div>
             </div>
           ))}

@@ -6,9 +6,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { listConversations, type ConversationSummary } from "../client.js";
+import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
-import { Avatar, Badge, Button, Wordmark } from "../components/index.js";
-import { BackIcon } from "../icons.js";
+import { Avatar, Badge } from "../components/index.js";
 
 function rowTitle(c: ConversationSummary): string {
   // Backbone rows already arrive titled by the server ("Agent — topic 2/4" /
@@ -18,6 +18,8 @@ function rowTitle(c: ConversationSummary): string {
 }
 
 export function HistoryPage() {
+  const { courseId } = useCourse();
+  const base = `/course/${courseId}`;
   const [conversations, setConversations] =
     useState<ConversationSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,47 +33,35 @@ export function HistoryPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="ds-home">
-      <header className="ds-topbar">
-        <div className="ds-topbar__inner">
-          <Wordmark />
-          <div className="ds-topbar__actions">
-            <Button variant="ghost" size="sm" icon={<BackIcon size={16} />} href="/">
-              <span className="ds-hide-sm">Home</span>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className="ds-home__inner">
+      <div className="ds-home__head">
+        <span className="eyebrow">Your conversations</span>
+        <span className="ds-rule" />
+        <h1>History</h1>
+      </div>
 
-      <div className="ds-home__inner">
-        <div className="ds-home__head">
-          <span className="eyebrow">Your conversations</span>
-          <span className="ds-rule" />
-          <h1>History</h1>
-        </div>
+      {error && <p className="error">{error}</p>}
 
-        {error && <p className="error">{error}</p>}
-
-        {conversations === null ? (
-          <p className="ds-home__muted">Loading…</p>
-        ) : conversations.length === 0 ? (
-          <p className="ds-home__muted">
-            No conversations yet. <Link to="/">Pick an agent</Link> to get
-            started.
-          </p>
-        ) : (
-          <div className="ds-agents">
-            {conversations.map((c) => (
-              <div
-                key={c.id}
-                className="ds-agent"
-                role="link"
-                tabIndex={0}
-                onClick={() => navigate(`/c/${c.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") navigate(`/c/${c.id}`);
-                }}
-              >
+      {conversations === null ? (
+        <p className="ds-home__muted">Loading…</p>
+      ) : conversations.length === 0 ? (
+        <p className="ds-home__muted">
+          No conversations yet. <Link to={base}>Pick an agent</Link> to get
+          started.
+        </p>
+      ) : (
+        <div className="ds-agents">
+          {conversations.map((c) => (
+            <div
+              key={c.id}
+              className="ds-agent"
+              role="link"
+              tabIndex={0}
+              onClick={() => navigate(`${base}/chat/${c.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") navigate(`${base}/chat/${c.id}`);
+              }}
+            >
                 <Avatar name={c.agentName || rowTitle(c)} agent />
                 <div className="ds-agent__main">
                   <div className="ds-agent__title">{rowTitle(c)}</div>
@@ -98,7 +88,6 @@ export function HistoryPage() {
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }

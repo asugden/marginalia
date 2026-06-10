@@ -1,0 +1,32 @@
+/* Shared navigation chrome that crosses shells: the role switch (Student ·
+   Author · Admin) that sits in every topbar, and the instructor "previewing as
+   student" banner. ds- prefix, generic tokens only. */
+
+/* ---- Role switch ----
+   Reuses the segmented-control track (.ds-seg) but its options are <Link>s, so
+   reset the anchor defaults the seg button styles assume on a <button>. */
+.ds-roleswitch .ds-seg__btn {
+  text-decoration: none;
+  line-height: 1;
+}
+
+/* ---- Preview banner ----
+   A thin strip under the student topbar, shown only when an instructor is
+   previewing their own course as a student. Tinted with the accent so it reads
+   as a system affordance, not page content. */
+.ds-preview-banner {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 1.5rem;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  font-size: var(--text-sm);
+}
+.ds-preview-banner__label {
+  font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.ds-preview-banner__label i { color: var(--text-muted); font-style: normal; margin: 0 0.1rem; }
+.ds-preview-banner__back {
+  margin-left: auto; font-weight: 600; color: var(--accent); text-decoration: none;
+}
+.ds-preview-banner__back:hover { text-decoration: underline; }

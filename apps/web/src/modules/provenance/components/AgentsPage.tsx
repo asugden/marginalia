@@ -1,11 +1,9 @@
 // My-agents management page. Lists course defaults (read-only) + the
-// student's own agents (editable). Course comes from useActiveCourse();
-// chrome from <StandalonePage>.
+// student's own agents (editable). Rendered as a body page inside StudentLayout
+// at /course/:courseId/write/agents — course id comes from useCourse().
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { useActiveCourse } from "../../../course/useActiveCourse.js";
-import { StandalonePage } from "../../../course/StandalonePage.js";
+import { useCourse } from "../../../course/useCourse.js";
 import {
   createAgent,
   deleteAgent,
@@ -27,8 +25,8 @@ interface DraftState {
 }
 
 export function AgentsPage() {
-  const { active, enrollments, setCourseId, loading, notEnrolled } = useActiveCourse();
-  const courseId = active?.courseId ?? null;
+  const { courseId } = useCourse();
+  const writeBase = `/course/${courseId}/write`;
 
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +34,6 @@ export function AgentsPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!courseId) return;
     refresh(courseId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
@@ -48,7 +45,6 @@ export function AgentsPage() {
   }
 
   async function startEdit(id: string) {
-    if (!courseId) return;
     setError(null);
     try {
       const agent = await getAgent(courseId, id);
@@ -64,7 +60,7 @@ export function AgentsPage() {
   }
 
   async function onSave() {
-    if (!draft || !courseId) return;
+    if (!draft) return;
     setBusy(true);
     setError(null);
     try {
@@ -83,7 +79,6 @@ export function AgentsPage() {
   }
 
   async function onDelete(id: string) {
-    if (!courseId) return;
     if (!confirm("Delete this agent? Existing conversations will keep their snapshot.")) return;
     try {
       await deleteAgent(courseId, id);
@@ -96,71 +91,62 @@ export function AgentsPage() {
   const courseDefaults = agents?.filter((a) => !a.mine) ?? [];
   const mine = agents?.filter((a) => a.mine) ?? [];
 
-  const actions = (
-    <>
-      <Button variant="ghost" href="/write">
-        ← Documents
-      </Button>
-      <Button
-        variant="primary"
-        icon={<PlusIcon size={16} />}
-        onClick={startCreate}
-        disabled={!courseId}
-      >
-        New agent
-      </Button>
-    </>
-  );
-
   return (
-    <StandalonePage
-      title="Writing"
-      section="Agents"
-      titleTo="/write"
-      actions={actions}
-      course={{ active, enrollments, onSwitch: setCourseId }}
-      note="Personal prompts for the chat side-panel. Course defaults are shared with everyone in the class; agents you create are yours alone."
-    >
-      {error && <p className="error">{error}</p>}
-      {loading && <p className="muted">Loading…</p>}
-      {notEnrolled && (
-        <p className="muted">
-          You aren't enrolled in any course yet. Use a join code on the{" "}
-          <Link to="/">home page</Link> to get started.
+    <div className="ds-home__inner">
+      <div className="ds-home__head">
+        <span className="eyebrow">Provenance · Agents</span>
+        <span className="ds-rule" />
+        <h1>My agents</h1>
+        <p className="ds-home__sub">
+          Personal prompts for the chat side-panel. Course defaults are shared
+          with everyone in the class; agents you create are yours alone.
         </p>
+      </div>
+
+      <div className="ds-agents__bar">
+        <span className="mono-label">Agents</span>
+        <span className="ds-staff-actions">
+          <Button variant="ghost" href={writeBase}>
+            ← Documents
+          </Button>
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={16} />}
+            onClick={startCreate}
+          >
+            New agent
+          </Button>
+        </span>
+      </div>
+
+      {error && <p className="error">{error}</p>}
+      {agents === null && <p className="ds-home__muted">Loading…</p>}
+
+      <AgentSection
+        heading="Course defaults"
+        empty="No course-default agents yet."
+        agents={courseDefaults}
+        onOpen={startEdit}
+      />
+
+      <AgentSection
+        heading="Mine"
+        empty="No personal agents yet. Click New agent to create one."
+        agents={mine}
+        onOpen={startEdit}
+        onDelete={onDelete}
+      />
+
+      {draft && (
+        <AgentEditor
+          draft={draft}
+          busy={busy}
+          onChange={setDraft}
+          onCancel={() => setDraft(null)}
+          onSave={onSave}
+        />
       )}
-
-      {courseId && (
-        <>
-          {agents === null && <p className="muted">Loading…</p>}
-
-          <AgentSection
-            heading="Course defaults"
-            empty="No course-default agents yet."
-            agents={courseDefaults}
-            onOpen={startEdit}
-          />
-
-          <AgentSection
-            heading="Mine"
-            empty="No personal agents yet. Click New agent to create one."
-            agents={mine}
-            onOpen={startEdit}
-            onDelete={onDelete}
-          />
-
-          {draft && (
-            <AgentEditor
-              draft={draft}
-              busy={busy}
-              onChange={setDraft}
-              onCancel={() => setDraft(null)}
-              onSave={onSave}
-            />
-          )}
-        </>
-      )}
-    </StandalonePage>
+    </div>
   );
 }
 

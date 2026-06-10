@@ -171,7 +171,7 @@ export function CollectionDetailPage() {
     return (
       <div className="ds-staff-page">
         {error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}
-        <Button variant="ghost" href={`/course/${courseId}/collections`}>
+        <Button variant="ghost" href={`/course/${courseId}/instructor/collections`}>
           ← All libraries
         </Button>
       </div>
@@ -195,7 +195,7 @@ export function CollectionDetailPage() {
           </div>
         </div>
         <div className="ds-staff-actions">
-          <Button variant="ghost" href={`/course/${courseId}/collections`}>
+          <Button variant="ghost" href={`/course/${courseId}/instructor/collections`}>
             ← All libraries
           </Button>
         </div>

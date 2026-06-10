@@ -1,12 +1,13 @@
 import React, { Suspense, lazy } from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-// HomePage stays eager — it's what a cold load hits. ConversationPage is
-// the second most-likely first-paint URL (a Continue link) and is small
-// enough to keep eager too. Everything else is staff-only or rarely
-// reached on first paint; lazy-load them so a student isn't shipping
-// AdminPage + RosterPage + the entire author surface on the first
-// navigation. v0.7 §2 / audit fix.
+// RootRedirect (the `/` resolver) and the student HomePage + ConversationPage
+// stay eager — they're what a cold load hits. RootRedirect uses the inlined
+// bootstrap to bounce straight to /course/:id with no Loading flash; the
+// student home + chat are the immediate landing targets. Everything else is
+// staff-only or rarely reached on first paint; lazy-load it so a student isn't
+// shipping AdminPage + the entire author surface on first navigation.
+import { RootRedirect } from "./pages/RootRedirect.js";
 import { HomePage } from "./pages/HomePage.js";
 import { ConversationPage } from "./pages/ConversationPage.js";
 import "./styles.css";
@@ -50,9 +51,12 @@ const AttendanceDisplayPage = lazy(() =>
 const AttendanceCheckInPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.CheckInPage })));
 
-// v1.0 §1 — course-scoped routes mount under <CourseLayout>, which reads
-// :courseId from the URL and provides it via context. CourseDashboardPage
-// is the per-course instructor home (v1.0 §3).
+// Two course-rooted shells. The student is the primary surface and owns the
+// clean course root (/course/:courseId/*, StudentLayout); the instructor view
+// is secondary and prefixed (/course/:courseId/instructor/*, CourseLayout).
+// Both read :courseId from the URL and provide it via CourseContext.
+const StudentLayout = lazy(() =>
+  import("./pages/StudentLayout.js").then((m) => ({ default: m.StudentLayout })));
 const CourseLayout = lazy(() =>
   import("./pages/CourseLayout.js").then((m) => ({ default: m.CourseLayout })));
 const CourseDashboardPage = lazy(() =>
@@ -70,55 +74,73 @@ function lz(node: React.ReactNode) {
 }
 
 const router = createBrowserRouter([
-  { path: "/", element: <HomePage /> },
-  { path: "/c/:conversationId", element: <ConversationPage /> },
-  // Compose mode (v0.4 §14): render the chat surface for an agent with no
-  // conversation row yet. The first send creates the row and replaces this
-  // URL with /c/:id.
-  { path: "/new/:agentId", element: <ConversationPage /> },
-  { path: "/history", element: lz(<HistoryPage />) },
-  // v1.0 §7.2 — legacy /author/... paths redirect into the default course
-  // so bookmarks and Slack links keep working. Stay ≥6 months past v1.0
-  // before deletion.
-  { path: "/author/agents", element: lz(<LegacyCourseRedirect to="/agents" />) },
-  { path: "/author/agents/new", element: lz(<LegacyCourseRedirect to="/agents/new" />) },
-  { path: "/author/agents/:id", element: lz(<LegacyCourseRedirect to="/agents/:id" />) },
-  { path: "/author/collections", element: lz(<LegacyCourseRedirect to="/collections" />) },
-  { path: "/author/collections/:id", element: lz(<LegacyCourseRedirect to="/collections/:id" />) },
-  { path: "/author/roster", element: lz(<LegacyCourseRedirect to="/roster" />) },
-  // v0.7 §1 — per-author voice library.
+  // `/` resolves to the right course-rooted home (or the join prompt).
+  { path: "/", element: <RootRedirect /> },
+  // v1.0 §2 — explicit picker entry point (deep-linkable from the dashboard's
+  // "Switch course" menu).
+  { path: "/courses", element: lz(<CoursePickerPage />) },
+
+  // ── Legacy redirect shims (keep ≥6 months past the cutover) ──────────────
+  // Course-agnostic student URLs from before the course-rooted model.
+  // LegacyCourseRedirect resolves the caller's default course and replaces the
+  // URL with the new course-scoped equivalent.
+  { path: "/c/:conversationId", element: lz(<LegacyCourseRedirect to="/chat/:conversationId" />) },
+  { path: "/new/:agentId", element: lz(<LegacyCourseRedirect to="/chat/new/:agentId" />) },
+  { path: "/history", element: lz(<LegacyCourseRedirect to="/history" />) },
+  { path: "/write", element: lz(<LegacyCourseRedirect to="/write" />) },
+  { path: "/write/agents", element: lz(<LegacyCourseRedirect to="/write/agents" />) },
+  { path: "/write/:id", element: lz(<LegacyCourseRedirect to="/write/:id" />) },
+  // Legacy /author/... → the instructor surface.
+  { path: "/author/agents", element: lz(<LegacyCourseRedirect to="/instructor/agents" />) },
+  { path: "/author/agents/new", element: lz(<LegacyCourseRedirect to="/instructor/agents/new" />) },
+  { path: "/author/agents/:id", element: lz(<LegacyCourseRedirect to="/instructor/agents/:id" />) },
+  { path: "/author/collections", element: lz(<LegacyCourseRedirect to="/instructor/collections" />) },
+  { path: "/author/collections/:id", element: lz(<LegacyCourseRedirect to="/instructor/collections/:id" />) },
+  { path: "/author/roster", element: lz(<LegacyCourseRedirect to="/instructor/roster" />) },
+  { path: "/attendance", element: lz(<LegacyCourseRedirect to="/instructor/attendance" />) },
+  {
+    path: "/attendance/sessions/:id",
+    element: lz(<LegacyCourseRedirect to="/instructor/attendance/sessions/:id" />),
+  },
+
+  // ── Course-agnostic survivors ────────────────────────────────────────────
+  // v0.7 §1 — per-author voice library. Voices are reusable across an author's
+  // courses, so this stays global (not course-scoped).
   { path: "/author/voices", element: lz(<AuthorVoicesPage />) },
   { path: "/author/voices/new", element: lz(<AuthorVoiceEditPage />) },
   { path: "/author/voices/:id", element: lz(<AuthorVoiceEditPage />) },
   { path: "/join/:code", element: lz(<JoinPage />) },
   { path: "/admin", element: lz(<AdminPage />) },
-  // v0.7 §3.8 — per-user detail. Linked into from AdminPage Users tab and
-  // RosterPage Students/Authors lists. Admin-only on the server.
+  // v0.7 §3.8 — per-user detail. Admin-only on the server.
   { path: "/users/:id", element: lz(<UserDetailPage />) },
-  // Provenance writing tool (slice 1+ — see modules/provenance/README.md).
-  { path: "/write", element: lz(<ProvenanceDocumentListPage />) },
-  { path: "/write/agents", element: lz(<ProvenanceAgentsPage />) },
-  { path: "/write/:id", element: lz(<ProvenanceEditorPage />) },
   // Public, unauthenticated shared-submission viewer (slice 6).
   { path: "/s/:token", element: lz(<ProvenancePublicPage />) },
-  // Attendance: QR check-in for in-person sessions. Legacy /attendance
-  // and /attendance/sessions/:id redirect into the course-scoped path
-  // (v1.0 §7.2). /a/:id stays as-is — it's the public QR target and is
-  // course-agnostic by design.
-  { path: "/attendance", element: lz(<LegacyCourseRedirect to="/attendance" />) },
-  {
-    path: "/attendance/sessions/:id",
-    element: lz(<LegacyCourseRedirect to="/attendance/sessions/:id" />),
-  },
+  // Public QR check-in target — course-agnostic by design.
   { path: "/a/:id", element: lz(<AttendanceCheckInPage />) },
-  // v1.0 §1 — course-scoped routes. Old `/author/...` and `/attendance`
-  // paths above keep working unchanged until each page is migrated to
-  // `useCourse()` (then they'll become <Navigate> shims per v1.0 §7.2).
-  // v1.0 §2 — explicit /courses entry point for the picker (deep-linkable
-  // from the dashboard's "Switch course" menu).
-  { path: "/courses", element: lz(<CoursePickerPage />) },
+
+  // ── Student shell: the clean course root ─────────────────────────────────
   {
     path: "/course/:courseId",
+    element: lz(<StudentLayout />),
+    children: [
+      { index: true, element: <HomePage /> },
+      { path: "chat/:conversationId", element: <ConversationPage /> },
+      // Compose mode (v0.4 §14): chat surface for an agent with no row yet.
+      // First send creates the row and replaces the URL with chat/:id.
+      { path: "chat/new/:agentId", element: <ConversationPage /> },
+      { path: "history", element: lz(<HistoryPage />) },
+      { path: "write", element: lz(<ProvenanceDocumentListPage />) },
+      { path: "write/agents", element: lz(<ProvenanceAgentsPage />) },
+    ],
+  },
+  // The provenance editor is its own full-screen surface (own prov-shell
+  // chrome), so it mounts as a standalone course-scoped route rather than a
+  // StudentLayout child — avoids stacking the student topbar above its header.
+  { path: "/course/:courseId/write/:id", element: lz(<ProvenanceEditorPage />) },
+
+  // ── Instructor shell: the prefixed, secondary surface ────────────────────
+  {
+    path: "/course/:courseId/instructor",
     element: lz(<CourseLayout />),
     children: [
       { index: true, element: lz(<CourseDashboardPage />) },

@@ -22,7 +22,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { revealCourseTab } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
-import { TABS } from "../course/tabs.js";
+import { TABS, tabHref } from "../course/tabs.js";
 import { Button } from "../components/index.js";
 import { PlusIcon } from "../icons.js";
 
@@ -56,8 +56,10 @@ export function CourseDashboardPage() {
       await revealCourseTab(ctx.courseId, feature);
       // The flag is now set server-side; navigate straight into the tab.
       // The next /api/me (on the tab page's CourseLayout mount) returns
-      // the flipped flag, so the tab strip shows it from then on.
-      navigate(`/course/${ctx.courseId}/${slug}`);
+      // the flipped flag, so the tab strip shows it from then on. Revealable
+      // features (attendance, collections) are always staff-scoped, so the
+      // /instructor base is correct here.
+      navigate(`/course/${ctx.courseId}/instructor/${slug}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't add that tool");
       setRevealing(null);
@@ -82,7 +84,7 @@ export function CourseDashboardPage() {
 
       <div className="ds-staff-section ds-staff-list">
         {visibleTabs.map((t) => {
-          const to = t.external ? t.slug : `/course/${ctx.courseId}/${t.slug}`;
+          const to = tabHref(t, ctx.courseId);
           return (
             <Link key={t.slug} to={to} className="ds-staff-list__row">
               <div className="ds-staff-list__main">

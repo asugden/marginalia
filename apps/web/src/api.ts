@@ -362,6 +362,9 @@ export interface MeResponse {
   email: string;
   registered: boolean;
   userId: string | null;
+  /** Instance-wide admin flag (users.is_admin). Orthogonal to course role —
+   *  drives the Admin segment of the topbar RoleSwitch. */
+  isAdmin: boolean;
   /** Every course the caller is enrolled in, joined-date desc. Empty when
    *  unauthenticated or not yet claimed. */
   enrollments: MeEnrollment[];

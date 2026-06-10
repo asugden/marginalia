@@ -304,6 +304,7 @@ export async function getMe(): Promise<{
   email: string;
   registered: boolean;
   userId: string | null;
+  isAdmin: boolean;
   enrollments: Array<{
     courseId: string;
     courseName: string;
@@ -318,6 +319,7 @@ export async function getMe(): Promise<{
     email: "mock@marginalia.local",
     registered: true,
     userId: "user_mock",
+    isAdmin: true,
     enrollments: [
       {
         courseId: "course_demo",

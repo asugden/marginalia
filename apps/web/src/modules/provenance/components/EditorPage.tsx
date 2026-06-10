@@ -57,10 +57,14 @@ function loadSplit(): number {
 }
 
 export function EditorPage() {
-  const { id } = useParams<{ id: string }>();
-  const { active } = useActiveCourse();
+  const { id, courseId: courseParam } = useParams<{ id: string; courseId: string }>();
+  // The editor is a standalone full-screen surface (its own prov-shell chrome,
+  // not nested under StudentLayout), so it resolves its own course from the
+  // /course/:courseId/write/:id URL rather than useCourse().
+  const { active } = useActiveCourse(courseParam ?? null);
   const courseId = active?.courseId ?? null;
   const isInstructor = active?.role === "instructor";
+  const writeBase = `/course/${courseParam}/write`;
 
   // "Hide marks from students" (display-only; recording is unaffected).
   // Seeded from /api/me; instructors can flip it live. Students never see
@@ -288,12 +292,14 @@ export function EditorPage() {
     return (
       <div className="ds-staff">
         <header className="ds-staff-top">
-          <Wordmark size="sm" />
+          <Link to={writeBase} aria-label="Back to documents">
+            <Wordmark size="sm" />
+          </Link>
           <span className="ds-staff-top__role">Provenance</span>
         </header>
         <div className="ds-staff-page">
           <p className="error">{loadError}</p>
-          <Button variant="subtle" href="/write">
+          <Button variant="subtle" href={writeBase}>
             ← Back to documents
           </Button>
         </div>
@@ -305,7 +311,9 @@ export function EditorPage() {
     return (
       <div className="ds-staff">
         <header className="ds-staff-top">
-          <Wordmark size="sm" />
+          <Link to={writeBase} aria-label="Back to documents">
+            <Wordmark size="sm" />
+          </Link>
           <span className="ds-staff-top__role">Provenance</span>
         </header>
         <div className="ds-staff-page">
@@ -322,11 +330,11 @@ export function EditorPage() {
   return (
     <div className="prov-shell no-watermark">
       <header className="prov-shell-header">
-        <Link to="/write" aria-label="Home">
+        <Link to={writeBase} aria-label="Back to documents">
           <Wordmark size="sm" />
         </Link>
         <span className="prov-shell-role">Provenance</span>
-        <IconButton title="Back to documents" href="/write">
+        <IconButton title="Back to documents" href={writeBase}>
           <BackIcon size={20} />
         </IconButton>
         <input

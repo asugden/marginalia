@@ -81,7 +81,7 @@ export function AuthorListPage() {
         : `Copied "${sourceTitle}".`;
       if (r.droppedCollection) window.alert(msg);
       setPickerOpen(false);
-      navigate(`/course/${courseId}/agents/${r.id}`);
+      navigate(`/course/${courseId}/instructor/agents/${r.id}`);
     } catch (e) {
       setPickerError(e instanceof Error ? e.message : "Duplicate failed");
     } finally {
@@ -114,7 +114,7 @@ export function AuthorListPage() {
           <Button
             variant="primary"
             icon={<PlusIcon size={16} />}
-            href={`/course/${courseId}/agents/new`}
+            href={`/course/${courseId}/instructor/agents/new`}
           >
             New agent
           </Button>
@@ -128,7 +128,7 @@ export function AuthorListPage() {
       ) : agents.length === 0 ? (
         <p className="muted">
           You haven&rsquo;t built any agents yet.{" "}
-          <Link to={`/course/${courseId}/agents/new`}>Make the first one</Link>.
+          <Link to={`/course/${courseId}/instructor/agents/new`}>Make the first one</Link>.
           An agent is a tutor your students can chat with — a voice, optionally
           an outline of topics, and optionally a library of sources to ground
           its answers.
@@ -158,7 +158,7 @@ export function AuthorListPage() {
                 <Button
                   variant="subtle"
                   size="sm"
-                  href={`/course/${courseId}/agents/${a.id}`}
+                  href={`/course/${courseId}/instructor/agents/${a.id}`}
                 >
                   Edit
                 </Button>

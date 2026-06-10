@@ -32,7 +32,8 @@ import {
 } from "../client.js";
 import { clarityNoteFor } from "@marginalia/backbone";
 import type { Topic } from "@marginalia/backbone";
-import { BackIcon, MenuIcon, PlusIcon } from "../icons.js";
+import { useCourse } from "../course/useCourse.js";
+import { BackIcon, MenuIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 import {
   Avatar,
@@ -56,6 +57,8 @@ export function ConversationPage() {
   // a real id mid-stream (on the `started` event).
   const params = useParams<{ conversationId?: string; agentId?: string }>();
   const navigate = useNavigate();
+  const { courseId } = useCourse();
+  const base = `/course/${courseId}`;
   const composeAgentId = params.agentId ?? null;
   const [activeConvId, setActiveConvId] = useState<string | null>(
     params.conversationId ?? null,
@@ -77,11 +80,6 @@ export function ConversationPage() {
   // (from the agent definition); for an existing conversation we fetch the
   // agent's definition by id. Empty when the agent has no backbone.
   const [topics, setTopics] = useState<Topic[]>([]);
-  // v1.0 §7.1 — the conversation's course. Populated from getConversation
-  // (existing rows) or from the agent's row (compose mode); used only to
-  // build citation open-URLs. Null until we know it; citationOpenUrl
-  // gracefully degrades when the courseId is missing.
-  const [courseId, setCourseId] = useState<string | null>(null);
   // v1.0 — the student-facing clarity line, shown as a quiet, persistent
   // note at the top of the conversation. Resolved server-side for
   // existing rows; computed locally from the agent definition in compose
@@ -139,7 +137,6 @@ export function ConversationPage() {
           setAgentTitle(c.agent?.title ?? null);
           setCurrentTopic(c.currentTopic?.title ?? null);
           setCompletedAt(c.completedAt);
-          setCourseId(c.courseId);
           setClarityNote(c.clarityNote);
           // Fetch the agent definition for the full topic list (so the
           // OutlineRail can render the whole done/current/upcoming sequence —
@@ -169,7 +166,6 @@ export function ConversationPage() {
         .then((a) => {
           if (ctrl.signal.aborted) return;
           setAgentTitle(a.title);
-          setCourseId(a.courseId);
           setClarityNote(clarityNoteFor(a.definition));
           const hasBb = !!a.definition.backbone;
           setHasBackbone(hasBb);
@@ -266,7 +262,7 @@ export function ConversationPage() {
           // the URL swap below (would otherwise race the server's user-
           // message persistence and wipe the optimistic bubble).
           skipLoadForIdRef.current = ev.conversationId;
-          navigate(`/c/${ev.conversationId}`, { replace: true });
+          navigate(`${base}/chat/${ev.conversationId}`, { replace: true });
         } else if (ev.type === "delta") {
           if (!assistantOpened) {
             // First content from the model — now we can safely show the
@@ -418,14 +414,14 @@ export function ConversationPage() {
                     key={h.id}
                     className={h.id === activeConvId ? "is-active" : ""}
                   >
-                    <Link to={`/c/${h.id}`}>
+                    <Link to={`${base}/chat/${h.id}`}>
                       <span>{h.title || "Untitled"}</span>
                       <small>{relativeTime(h.updatedAt)}</small>
                     </Link>
                   </li>
                 ))}
               </ul>
-              <Link to="/history" className="ds-side__seeall">
+              <Link to={`${base}/history`} className="ds-side__seeall">
                 See all →
               </Link>
             </div>
@@ -442,7 +438,7 @@ export function ConversationPage() {
 
       <main className="ds-conv">
         <header className="ds-conv__head">
-          <IconButton title="Back to home" href="/">
+          <IconButton title="Back to home" href={base}>
             <BackIcon size={20} />
           </IconButton>
           <IconButton
@@ -533,7 +529,7 @@ export function ConversationPage() {
               day: "numeric",
               year: "numeric",
             })}
-            . Start a <Link to="/">new chat</Link> to continue.
+            . Start a <Link to={base}>new chat</Link> to continue.
           </div>
         ) : (
           <div className="ds-conv__composer">
@@ -547,7 +543,6 @@ export function ConversationPage() {
                   ? "Conversation complete"
                   : "Message " + agentLabel + "…"
               }
-              leadIcon={<PlusIcon size={18} />}
               footer={
                 <span>
                   {hasBackbone

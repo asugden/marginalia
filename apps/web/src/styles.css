@@ -79,7 +79,15 @@ body::before {
   width: 30%;
   min-width: 750px;
   aspect-ratio: 1 / 1;
-  background: var(--brand-watermark-url) bottom left / contain no-repeat;
+  /* Longhands, not the `background` shorthand: substituting a custom property
+   * holding a url("…") into the shorthand makes the whole declaration invalid
+   * at computed-value time in some engines (the var resolves on body but the
+   * ::before background never paints). background-image keeps the url() in a
+   * property that consumes it cleanly. Default is `none`, which is valid here. */
+  background-image: var(--brand-watermark-url);
+  background-position: bottom left;
+  background-size: contain;
+  background-repeat: no-repeat;
   opacity: var(--brand-watermark-opacity);
   pointer-events: none;
   z-index: -1;
@@ -147,13 +155,17 @@ a:hover { color: var(--text-link-hover); }
   margin-bottom: 1.5rem;
 }
 
-/* --- Buttons --------------------------------------------------------------- */
-/* The one filled accent action per region. Depth without gradient: a hairline
- * inset top sheen + an accent-tinted, layered drop shadow read as a physical,
- * pressable key (design-system Button --primary). Composer & icon buttons opt
- * out below.
+/* --- Bare buttons ---------------------------------------------------------- *
+ * Fallback styling for a <button> that carries NO class. Every real control in
+ * the app is a design-system component (.ds-btn / .ds-iconbtn / .ds-composer__*
+ * / .ds-seg__btn) or a module-prefixed button (.prov-* / .attendance-*), each
+ * with its own complete styling. This rule is scoped to :not([class]) so it can
+ * never override those — historically it was a bare `button {}` rule that filled
+ * EVERY button accent-red and turned text/background red on hover, leaking onto
+ * the neutral DS ghost/subtle variants. Scoping it kills that leak while still
+ * giving an unclassed button a sane accent look.
  */
-button {
+button:not([class]) {
   background: var(--accent);
   color: var(--text-on-accent);
   border: 1px solid transparent;
@@ -172,7 +184,7 @@ button {
     transform var(--dur-1) var(--ease-out),
     box-shadow var(--dur-3) var(--ease-out);
 }
-button:hover:not(:disabled) {
+button:not([class]):hover:not(:disabled) {
   background: var(--accent-hover);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
@@ -180,17 +192,17 @@ button:hover:not(:disabled) {
     0 2px 4px color-mix(in srgb, var(--accent-strong) 34%, transparent),
     0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
 }
-button:active:not(:disabled) {
+button:not([class]):active:not(:disabled) {
   transform: translateY(1px);
   box-shadow:
     inset 0 1px 2px color-mix(in srgb, var(--accent-strong) 45%, transparent),
     0 1px 2px color-mix(in srgb, var(--accent-strong) 25%, transparent);
 }
-button:focus-visible {
+button:not([class]):focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
-button:disabled {
+button:not([class]):disabled {
   opacity: 0.45;
   cursor: default;
   box-shadow: none;
