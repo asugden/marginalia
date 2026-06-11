@@ -126,7 +126,7 @@ export function AuthorListPage() {
       {agents === null ? (
         <p className="muted">Loading…</p>
       ) : agents.length === 0 ? (
-        <p className="muted">
+        <p className="app-empty">
           You haven&rsquo;t built any agents yet.{" "}
           <Link to={`/course/${courseId}/instructor/agents/new`}>Make the first one</Link>.
           An agent is a tutor your students can chat with — a voice, optionally
@@ -145,7 +145,7 @@ export function AuthorListPage() {
                   style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
                 >
                   <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
-                    {a.hasBackbone ? "outline" : "open"}
+                    {a.hasBackbone ? "guided" : "free-form"}
                   </Badge>
                   {a.hasCollection && (
                     <Badge tone="info" dot>
@@ -230,7 +230,7 @@ export function AuthorListPage() {
                               style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
                             >
                               <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
-                                {a.hasBackbone ? "outline" : "open"}
+                                {a.hasBackbone ? "guided" : "free-form"}
                               </Badge>
                               {a.hasCollection && (
                                 <Badge tone="info" dot>

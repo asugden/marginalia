@@ -9,6 +9,7 @@
 // way back into authoring without hunting for the role switch.
 
 import { Link } from "react-router-dom";
+import { EyeIcon } from "../icons.js";
 
 export interface PreviewBannerProps {
   courseId: string;
@@ -18,6 +19,7 @@ export interface PreviewBannerProps {
 export function PreviewBanner({ courseId, courseName }: PreviewBannerProps) {
   return (
     <div className="app-preview" role="status">
+      <EyeIcon size={16} aria-hidden />
       <span>
         <b>Previewing {courseName} as a student.</b> The student&rsquo;s view of
         this course.

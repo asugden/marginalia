@@ -90,7 +90,11 @@ body::before {
   background-repeat: no-repeat;
   opacity: var(--brand-watermark-opacity);
   pointer-events: none;
-  z-index: -1;
+  /* z-index 0 (not -1): the fixed pseudo-element must paint ABOVE the in-flow
+   * .app wrapper (position:static, z-index:auto). With -1 it sat behind .app's
+   * fill and was never visible. .app is transparent and content layers carry
+   * z-index:1, so the faint mark shows through between paper and content. */
+  z-index: 0;
 }
 
 body:has(.no-watermark)::before {

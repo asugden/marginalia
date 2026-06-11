@@ -10,7 +10,10 @@
    Both the student and the staff/instructor layouts wrap in .app. */
 .app {
   height: 100vh; display: flex; flex-direction: column;
-  overflow: hidden; background: var(--bg);
+  /* Transparent (not var(--bg)): the body paints the --bg paper, so the fixed
+   * body::before watermark sits between the paper and this wrapper's content
+   * instead of being buried behind an opaque .app fill. */
+  overflow: hidden; background: transparent;
 }
 .app__body { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
 /* The conversation screen manages its own internal scroll, so when the body
