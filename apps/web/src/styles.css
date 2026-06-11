@@ -97,13 +97,20 @@ body:has(.no-watermark)::before {
   display: none;
 }
 
-/* h1–h4 base styling lives in tokens/typography.css. The app keeps two
- * local conventions on top of it: a heavier hero h1, and an h2 that reads
- * as an uppercase mono-ish section label (used in sidebars / card sections). */
+/* h1–h4 base styling lives in tokens/typography.css (heavy sans — the design
+ * system's heading voice; mono is reserved for the eyebrow ABOVE a heading,
+ * never the heading itself). Keep the hero h1 margin here. The old global
+ * "h2 = uppercase mono section label" override has been removed — it was
+ * fighting the design system and rendering card/section headings (e.g. the
+ * student "Provenance writing space") in all-caps mono. The few legacy
+ * surfaces that still want the label look scope it themselves below. */
 h1 {
   margin: 0 0 0.5rem;
 }
-h2 {
+/* Legacy mono-uppercase section-label h2 — scoped to the old surfaces that
+ * relied on the former global rule, so DS `h2`s stay heavy sans. */
+.sidebar h2,
+.field-group > h2 {
   font-family: var(--font-mono);
   font-weight: var(--weight-bold);
   font-size: var(--text-sm);

@@ -24,6 +24,7 @@ import {
   listCollections,
   listJoinCodes,
   listRoster,
+  revealCourseTab,
   type MeEnrollment,
 } from "../client.js";
 import { readBootstrap } from "../bootstrap.js";
@@ -47,17 +48,12 @@ export function CoursePickerPage() {
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setEnrollments(m.enrollments);
-        // Lone enrollment? Send them where they'd have landed anyway — unless
-        // they came here explicitly to create a course.
-        if (m.enrollments.length === 1 && searchParams.get("new") !== "1") {
-          const only = m.enrollments[0]!;
-          navigate(
-            only.role === "instructor"
-              ? `/course/${only.courseId}/instructor`
-              : `/course/${only.courseId}`,
-            { replace: true },
-          );
-        }
+        // No auto-redirect here. RootRedirect (the `/` resolver) already
+        // fast-paths a lone-enrollment user straight into their course, so
+        // reaching /courses is always a *deliberate* destination — the
+        // switcher's "All courses", or an instructor who needs the dashboard
+        // (to create a course or enable a module). Bouncing them back into
+        // their only course would trap them away from it.
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
@@ -212,15 +208,27 @@ function CourseCard({
           </Button>
         </div>
       </div>
-      {open && isInstructor && <CourseAdmin courseId={e.courseId} />}
+      {open && isInstructor && (
+        <CourseAdmin
+          courseId={e.courseId}
+          showAttendance={e.showAttendance}
+        />
+      )}
     </div>
   );
 }
 
 // Lazy-loaded course detail: counts + join code, fetched only when a card is
-// expanded. Read-only here — editing name/modules/lifecycle lives inside the
-// course (and the admin console), not on the all-courses dashboard.
-function CourseAdmin({ courseId }: { courseId: string }) {
+// expanded. Also where an instructor turns on optional modules (Attendance) —
+// once on, it appears in the course's nav. (Sources & Provenance are always
+// on; Attendance is opt-in because it implies in-person sessions.)
+function CourseAdmin({
+  courseId,
+  showAttendance,
+}: {
+  courseId: string;
+  showAttendance: boolean;
+}) {
   const [stats, setStats] = useState<{
     agents: number;
     collections: number;
@@ -228,6 +236,23 @@ function CourseAdmin({ courseId }: { courseId: string }) {
     joinCode: string | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Local optimistic copy of the attendance flag so the toggle reflects
+  // instantly (the server flag is one-way; /api/me catches up on next load).
+  const [attendanceOn, setAttendanceOn] = useState(showAttendance);
+  const [enabling, setEnabling] = useState(false);
+
+  async function enableAttendance() {
+    if (attendanceOn || enabling) return;
+    setEnabling(true);
+    try {
+      await revealCourseTab(courseId, "attendance");
+      setAttendanceOn(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't enable attendance");
+    } finally {
+      setEnabling(false);
+    }
+  }
 
   useEffect(() => {
     let live = true;
@@ -294,6 +319,41 @@ function CourseAdmin({ courseId }: { courseId: string }) {
               </Button>
             </div>
           )}
+
+          {/* Optional modules. Sources + Provenance are always on; Attendance
+              is opt-in (it implies in-person sessions). Turning it on adds the
+              Attendance tab to this course's nav. */}
+          <div className="app-modules" style={{ marginTop: "1.25rem" }}>
+            <div className="app-module app-module--on">
+              <span className="app-module__main">
+                <b>Sources &amp; Provenance</b>
+                <span>Always available in every course.</span>
+              </span>
+              <span className="app-dcourse__mod">On</span>
+            </div>
+            <div className={"app-module" + (attendanceOn ? " app-module--on" : "")}>
+              <span className="app-module__main">
+                <b>Attendance</b>
+                <span>
+                  QR check-in for in-person classes. Adds the Attendance tab.
+                </span>
+              </span>
+              {attendanceOn ? (
+                <span className="app-dcourse__mod">On</span>
+              ) : (
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  icon={<PlusIcon size={16} />}
+                  loading={enabling}
+                  disabled={enabling}
+                  onClick={enableAttendance}
+                >
+                  Enable
+                </Button>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>

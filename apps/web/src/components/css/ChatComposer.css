@@ -29,11 +29,18 @@
 .ds-composer__lead:hover { color: var(--text-strong); border-color: var(--ink-400); background: var(--surface-hover); }
 .ds-composer__lead svg { width: 18px; height: 18px; }
 
-.ds-composer__textarea {
-  flex: 1; resize: none; border: 0; outline: none; background: transparent;
+.ds-composer__textarea,
+.ds-composer__textarea:focus {
+  flex: 1; resize: none; background: transparent;
   font-family: var(--font-sans); font-size: var(--text-md); color: var(--text-strong);
   line-height: 1.5; padding: 0.5rem 0.15rem; max-height: 200px; overflow-y: auto;
   align-self: center;
+  /* The composer's border + focus ring live on the outer .ds-composer__field
+     (:focus-within). The inner textarea must stay borderless even on focus —
+     the global `textarea:focus { border-color: accent }` rule (styles.css)
+     would otherwise paint a red border on the input itself. The :focus
+     selector here matches that specificity and wins by source order. */
+  border: 0; outline: none; box-shadow: none;
 }
 .ds-composer__textarea::placeholder { color: var(--text-faint); }
 

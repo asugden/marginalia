@@ -73,6 +73,10 @@
 }
 .ds-btn--primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  /* Keep the label white on hover. Buttons rendered as <a href> would
+     otherwise inherit the global `a:hover { color: accent }` and the text
+     would flip red on the red fill. */
+  color: var(--text-on-accent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18),
               inset 0 -1px 0 color-mix(in srgb, var(--accent-ink) 32%, transparent),
               0 2px 4px color-mix(in srgb, var(--accent-ink) 34%, transparent),

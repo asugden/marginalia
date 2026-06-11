@@ -34,6 +34,10 @@ export interface TabSpec {
    *  marks toggle) from their role in context, rather than a separate staff
    *  copy. */
   studentHref?: string;
+  /** When set, the tab links to this absolute path verbatim (no course
+   *  prefix). Used by Voices, which is a per-author library shared across an
+   *  instructor's courses and lives at the course-agnostic /author/voices. */
+  absoluteHref?: string;
   /** Lazy-reveal feature key. Present on tabs that stay hidden until the
    *  course turns them on. The dashboard's "Add a tool" affordance and
    *  the worker's reveal-tab endpoint both key off this. Absent on
@@ -50,12 +54,34 @@ export const TABS: TabSpec[] = [
     visible: () => true,
   },
   {
+    slug: "voices",
+    label: "Voices",
+    description:
+      "The personas your agents speak in — tone, style, and pedagogy. Voices are yours and reusable across every course you teach.",
+    visible: () => true,
+    absoluteHref: "/author/voices",
+  },
+  {
     slug: "write",
     label: "Provenance",
     description:
       "Writing assignments where every word is tagged by where it came from — typed, pasted, or generated. Lives at its own surface so all documents are visible together.",
     visible: () => true,
     studentHref: "write",
+  },
+  {
+    slug: "collections",
+    label: "Sources",
+    description:
+      "Document libraries you can attach to an agent. The agent answers from the sources you choose and cites them in line.",
+    visible: () => true,
+  },
+  {
+    slug: "roster",
+    label: "People",
+    description:
+      "Who's enrolled in this course. Add by email, share a join code, or remove people who shouldn't be here.",
+    visible: () => true,
   },
   {
     slug: "attendance",
@@ -65,27 +91,13 @@ export const TABS: TabSpec[] = [
     visible: (e) => !!e?.showAttendance,
     revealFeature: "attendance",
   },
-  {
-    slug: "collections",
-    label: "Sources",
-    description:
-      "Document libraries you can attach to an agent. The agent answers from the sources you choose and cites them in line.",
-    visible: (e) => !!e?.showCollections,
-    revealFeature: "collections",
-  },
-  {
-    slug: "roster",
-    label: "People",
-    description:
-      "Who's enrolled in this course. Add by email, share a join code, or remove people who shouldn't be here.",
-    visible: () => true,
-  },
 ];
 
 /** Build the URL a tab links to. Most tabs live under the staff base
  *  (/course/:id/instructor/<slug>); a `studentHref` tab links to the
  *  student-scoped surface (/course/:id/<href>) instead. */
 export function tabHref(tab: TabSpec, courseId: string): string {
+  if (tab.absoluteHref) return tab.absoluteHref;
   if (tab.studentHref) return `/course/${courseId}/${tab.studentHref}`;
   const base = `/course/${courseId}/instructor`;
   return tab.slug ? `${base}/${tab.slug}` : base;
@@ -99,6 +111,13 @@ export function tabForPathname(
   pathname: string,
   courseId: string,
 ): TabSpec | null {
+  // Absolute-href tabs (Voices → /author/voices) match by their own path,
+  // independent of the active course.
+  const abs = TABS.find(
+    (t) => t.absoluteHref && pathname.startsWith(t.absoluteHref),
+  );
+  if (abs) return abs;
+
   const staffBase = `/course/${courseId}/instructor`;
   if (pathname.startsWith(staffBase)) {
     const rest = pathname.slice(staffBase.length).replace(/^\//, "");

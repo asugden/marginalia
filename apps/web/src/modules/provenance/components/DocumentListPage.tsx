@@ -66,21 +66,21 @@ export function DocumentListPage() {
   }
 
   return (
-    <div className="ds-home__inner">
-      <div className="ds-home__head">
+    <div className="app-home__inner">
+      <div className="app-head">
         <span className="eyebrow">Provenance</span>
-        <span className="ds-rule" />
+        <span className="app-rule" />
         <h1>Writing</h1>
-        <p className="ds-home__sub">
+        <p className="app-head__sub">
           A writing space that records the origin of every word — typed, pasted,
           or pulled from a chat agent — so you and your instructor can have an
           honest conversation about how a piece came together.
         </p>
       </div>
 
-      <div className="ds-agents__bar">
+      <div className="app-agents__bar">
         <span className="mono-label">Your documents</span>
-        <span className="ds-staff-actions">
+        <span className="app-page__actions">
           <Button variant="ghost" href={`${writeBase}/agents`}>
             My agents
           </Button>
@@ -98,30 +98,26 @@ export function DocumentListPage() {
       {error && <p className="error">{error}</p>}
 
       {docs === null ? (
-        <p className="ds-home__muted">Loading…</p>
+        <p className="app-empty">Loading…</p>
       ) : docs.length === 0 ? (
-        <p className="ds-home__muted">No documents yet. Start one to begin writing.</p>
+        <p className="app-empty">No documents yet. Start one to begin writing.</p>
       ) : (
-        <div className="ds-staff-list">
+        <div className="app-list">
           {docs.map((d) => (
-            <div className="ds-staff-list__row" key={d.id}>
-              <span
-                className="ds-id__icon"
-                style={{ width: 36, height: 36, color: "var(--text-muted)" }}
-                aria-hidden
-              >
+            <div className="app-list__row" key={d.id}>
+              <span className="app-papers__ic" aria-hidden>
                 <DocIcon size={18} />
               </span>
-              <div className="ds-staff-list__main">
-                <div className="ds-staff-list__title">
+              <div className="app-list__main">
+                <div className="app-list__title">
                   <Link to={`${writeBase}/${d.id}`}>{d.title}</Link>
                 </div>
-                <div className="ds-staff-list__sub">
+                <div className="app-list__sub">
                   {d.wordCount.toLocaleString()} word
                   {d.wordCount === 1 ? "" : "s"} · {relativeTime(d.updatedAt)}
                 </div>
               </div>
-              <div className="ds-staff-list__actions">
+              <div className="app-list__meta">
                 <Button variant="subtle" size="sm" href={`${writeBase}/${d.id}`}>
                   Open
                 </Button>

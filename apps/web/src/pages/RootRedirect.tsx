@@ -49,7 +49,18 @@ export function RootRedirect() {
         if (m.enrollments.length > 1) {
           setRes({ kind: "to", path: "/courses" });
         } else if (m.enrollments.length === 1) {
-          setRes({ kind: "to", path: `/course/${m.enrollments[0]!.courseId}` });
+          // Land on the right home for the role: an instructor goes to their
+          // course's instructor surface (Agents + the full nav), a student to
+          // the student home. Sending an instructor to the student root was
+          // why a lone-course instructor saw the student view by default.
+          const only = m.enrollments[0]!;
+          setRes({
+            kind: "to",
+            path:
+              only.role === "instructor"
+                ? `/course/${only.courseId}/instructor`
+                : `/course/${only.courseId}`,
+          });
         } else {
           setRes({ kind: "join" });
         }
