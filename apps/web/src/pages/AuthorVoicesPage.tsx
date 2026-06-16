@@ -16,11 +16,17 @@ import {
   type SharedVoiceSummary,
   type VoiceSummary,
 } from "../client.js";
+import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
-import { Avatar, Badge, Button, Wordmark } from "../components/index.js";
+import { Avatar, Badge, Button } from "../components/index.js";
 import { PlusIcon } from "../icons.js";
 
 export function AuthorVoicesPage() {
+  // Mounted inside CourseLayout, which supplies the instructor chrome (top bar
+  // + nav). Voice *data* is still per-author and cross-course; the course id
+  // only scopes the URLs so the nav persists.
+  const { courseId } = useCourse();
+  const voicesBase = `/course/${courseId}/instructor/voices`;
   const [owned, setOwned] = useState<VoiceSummary[] | null>(null);
   const [shared, setShared] = useState<SharedVoiceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,21 +57,8 @@ export function AuthorVoicesPage() {
   }
 
   return (
-    <div className="ds-staff">
-      <header className="ds-staff-top">
-        <Link to="/" aria-label="Home">
-          <Wordmark size="sm" />
-        </Link>
-        <span className="ds-staff-top__role">Instructor</span>
-        <div className="ds-staff-top__course">
-          <Button variant="ghost" size="sm" href="/courses">
-            ← Courses
-          </Button>
-        </div>
-      </header>
-
-      <div className="app-page">
-        <div className="app-page__head">
+    <div className="app-page">
+      <div className="app-page__head">
           <div>
             <span className="eyebrow">Instructor · Voices</span>
             <h1>Voices</h1>
@@ -80,7 +73,7 @@ export function AuthorVoicesPage() {
             <Button
               variant="primary"
               icon={<PlusIcon size={16} />}
-              href="/author/voices/new"
+              href={`${voicesBase}/new`}
             >
               New voice
             </Button>
@@ -96,7 +89,7 @@ export function AuthorVoicesPage() {
           ) : owned.length === 0 ? (
             <p className="muted">
               No custom voices yet. Start with{" "}
-              <Link to="/author/voices/new">a new voice</Link>, or open the
+              <Link to={`${voicesBase}/new`}>a new voice</Link>, or open the
               agent editor and use Customize on a library voice.
             </p>
           ) : (
@@ -106,7 +99,7 @@ export function AuthorVoicesPage() {
                   <Avatar name={v.name} />
                   <div className="app-list__main">
                     <div className="app-list__title">
-                      <Link to={`/author/voices/${v.id}`}>{v.name}</Link>
+                      <Link to={`${voicesBase}/${v.id}`}>{v.name}</Link>
                     </div>
                     <div className="app-list__sub">
                       {v.description}
@@ -114,7 +107,7 @@ export function AuthorVoicesPage() {
                     </div>
                   </div>
                   <div className="app-list__meta">
-                    <Button variant="subtle" size="sm" href={`/author/voices/${v.id}`}>
+                    <Button variant="subtle" size="sm" href={`${voicesBase}/${v.id}`}>
                       Edit
                     </Button>
                     <Button
@@ -151,7 +144,7 @@ export function AuthorVoicesPage() {
                   <Avatar name={v.name} />
                   <div className="app-list__main">
                     <div className="app-list__title">
-                      <Link to={`/author/voices/${v.id}`}>{v.name}</Link>{" "}
+                      <Link to={`${voicesBase}/${v.id}`}>{v.name}</Link>{" "}
                       <Badge tone="ghost">shared</Badge>
                     </div>
                     <div className="app-list__sub">
@@ -160,7 +153,7 @@ export function AuthorVoicesPage() {
                     </div>
                   </div>
                   <div className="app-list__meta">
-                    <Button variant="subtle" size="sm" href={`/author/voices/${v.id}`}>
+                    <Button variant="subtle" size="sm" href={`${voicesBase}/${v.id}`}>
                       View
                     </Button>
                     <Button
@@ -178,7 +171,6 @@ export function AuthorVoicesPage() {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }

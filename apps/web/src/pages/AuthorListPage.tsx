@@ -105,7 +105,7 @@ export function AuthorListPage() {
           </div>
         </div>
         <div className="app-page__actions">
-          <Button variant="ghost" href="/author/voices">
+          <Button variant="ghost" href={`/course/${courseId}/instructor/voices`}>
             Voices
           </Button>
           <Button variant="subtle" icon={<PlusIcon size={16} />} onClick={openPicker}>

@@ -97,6 +97,13 @@ const router = createBrowserRouter([
   { path: "/author/collections", element: lz(<LegacyCourseRedirect to="/instructor/collections" />) },
   { path: "/author/collections/:id", element: lz(<LegacyCourseRedirect to="/instructor/collections/:id" />) },
   { path: "/author/roster", element: lz(<LegacyCourseRedirect to="/instructor/roster" />) },
+  // Voices moved into the course shell so the instructor nav persists. They
+  // remain a per-author, cross-course library in *content* — the course prefix
+  // is only there to keep the chrome. Old global URLs redirect to the caller's
+  // default course.
+  { path: "/author/voices", element: lz(<LegacyCourseRedirect to="/instructor/voices" />) },
+  { path: "/author/voices/new", element: lz(<LegacyCourseRedirect to="/instructor/voices/new" />) },
+  { path: "/author/voices/:id", element: lz(<LegacyCourseRedirect to="/instructor/voices/:id" />) },
   { path: "/attendance", element: lz(<LegacyCourseRedirect to="/instructor/attendance" />) },
   {
     path: "/attendance/sessions/:id",
@@ -104,11 +111,6 @@ const router = createBrowserRouter([
   },
 
   // ── Course-agnostic survivors ────────────────────────────────────────────
-  // v0.7 §1 — per-author voice library. Voices are reusable across an author's
-  // courses, so this stays global (not course-scoped).
-  { path: "/author/voices", element: lz(<AuthorVoicesPage />) },
-  { path: "/author/voices/new", element: lz(<AuthorVoiceEditPage />) },
-  { path: "/author/voices/:id", element: lz(<AuthorVoiceEditPage />) },
   { path: "/join/:code", element: lz(<JoinPage />) },
   { path: "/admin", element: lz(<AdminPage />) },
   // v0.7 §3.8 — per-user detail. Admin-only on the server.
@@ -147,6 +149,11 @@ const router = createBrowserRouter([
       { path: "agents", element: lz(<AuthorListPage />) },
       { path: "agents/new", element: lz(<AuthorEditPage />) },
       { path: "agents/:id", element: lz(<AuthorEditPage />) },
+      // Voices: a per-author, cross-course library, mounted here so the
+      // instructor nav persists. The pages stay course-agnostic in content.
+      { path: "voices", element: lz(<AuthorVoicesPage />) },
+      { path: "voices/new", element: lz(<AuthorVoiceEditPage />) },
+      { path: "voices/:id", element: lz(<AuthorVoiceEditPage />) },
       { path: "collections", element: lz(<CollectionsListPage />) },
       { path: "collections/:id", element: lz(<CollectionDetailPage />) },
       { path: "roster", element: lz(<RosterPage />) },

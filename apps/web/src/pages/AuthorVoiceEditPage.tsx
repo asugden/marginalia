@@ -16,7 +16,7 @@
 //   - Shared-with voices: read-only view + Duplicate button.
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   createVoice,
   createVoiceShare,
@@ -30,6 +30,7 @@ import {
   type VoiceFull,
   type VoiceShareEntry,
 } from "../client.js";
+import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
 import {
   Avatar,
@@ -40,7 +41,6 @@ import {
   Message,
   Select,
   Textarea,
-  Wordmark,
 } from "../components/index.js";
 import { SparkleIcon } from "../icons.js";
 
@@ -66,6 +66,11 @@ export function AuthorVoiceEditPage() {
   const navigate = useNavigate();
   const { id: voiceId } = useParams<{ id: string }>();
   const isNew = !voiceId;
+  // Mounted inside CourseLayout (which draws the instructor chrome + nav). The
+  // voice itself is per-author and cross-course; the course id only scopes the
+  // URLs so the surrounding nav persists.
+  const { courseId } = useCourse();
+  const voicesBase = `/course/${courseId}/instructor/voices`;
 
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [loaded, setLoaded] = useState<VoiceFull | null>(null);
@@ -124,7 +129,7 @@ export function AuthorVoiceEditPage() {
       } else if (voiceId) {
         await updateVoice(voiceId, draft);
       }
-      navigate("/author/voices");
+      navigate(voicesBase);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed");
       setSaving(false);
@@ -138,7 +143,7 @@ export function AuthorVoiceEditPage() {
     setSaveError(null);
     try {
       await deleteVoice(voiceId);
-      navigate("/author/voices");
+      navigate(voicesBase);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Delete failed");
       setDeleting(false);
@@ -166,7 +171,7 @@ export function AuthorVoiceEditPage() {
     if (!voiceId) return;
     try {
       const r = await duplicateVoice(voiceId);
-      navigate(`/author/voices/${r.id}`);
+      navigate(`${voicesBase}/${r.id}`);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Customize failed");
     }
@@ -204,21 +209,9 @@ export function AuthorVoiceEditPage() {
     }
   }
 
+  // CourseLayout supplies the top bar + nav; this page renders only its body.
   const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="ds-staff">
-      <header className="ds-staff-top">
-        <Link to="/" aria-label="Home">
-          <Wordmark size="sm" />
-        </Link>
-        <span className="ds-staff-top__role">Instructor</span>
-        <div className="ds-staff-top__course">
-          <Button variant="ghost" size="sm" href="/author/voices">
-            ← All voices
-          </Button>
-        </div>
-      </header>
-      <div className="app-page">{children}</div>
-    </div>
+    <div className="app-page">{children}</div>
   );
 
   if (loading) {
@@ -441,7 +434,7 @@ export function AuthorVoiceEditPage() {
       {saveError && <p className="error">{saveError}</p>}
 
       <div className="app-page__actions" style={{ justifyContent: "flex-end" }}>
-        <Button variant="subtle" href="/author/voices">
+        <Button variant="subtle" href={voicesBase}>
           Cancel
         </Button>
         {actions}

@@ -359,7 +359,8 @@ export function AuthorEditPage() {
       <div className="app-section">
         <span className="mono-label app-section__label">Voice</span>
         <p className="muted small" style={{ marginTop: "-0.3rem", marginBottom: "0.7rem" }}>
-          How the agent talks. <Link to="/author/voices">Manage your voices →</Link>
+          How the agent talks.{" "}
+          <Link to={`/course/${courseId}/instructor/voices`}>Manage your voices →</Link>
         </p>
         <h3 className="mono-label" style={{ margin: "0.3rem 0 0.4rem" }}>Library</h3>
         <RadioCardGroup>

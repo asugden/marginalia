@@ -59,16 +59,16 @@ export const TABS: TabSpec[] = [
     description:
       "The personas your agents speak in — tone, style, and pedagogy. Voices are yours and reusable across every course you teach.",
     visible: () => true,
-    absoluteHref: "/author/voices",
   },
-  {
-    slug: "write",
-    label: "Provenance",
-    description:
-      "Writing assignments where every word is tagged by where it came from — typed, pasted, or generated. Lives at its own surface so all documents are visible together.",
-    visible: () => true,
-    studentHref: "write",
-  },
+  // Provenance is intentionally absent from the instructor nav for now. The
+  // Claude Design system did not include an instructor-side provenance surface
+  // (only the student writing tool + the per-document editor exist). An
+  // instructor view — assignment setup, a class roster of submissions, the
+  // marks/origin review — still needs to be designed and built before it earns
+  // a tab here. Students still reach the writing tool from their home page's
+  // writing zone (/course/:id/write); this only removes the *instructor* tab.
+  // TODO(provenance-instructor): design + build the instructor provenance
+  // surface, then re-add a tab (studentHref: "write" or a dedicated staff slug).
   {
     slug: "collections",
     label: "Sources",
