@@ -67,7 +67,15 @@ export function getAuthProvider(env: Env): AuthProvider | null {
 
 function callbackUrl(req: Request): string {
   const u = new URL(req.url);
-  return `${u.origin}/auth/callback`;
+  // Force https on the redirect_uri. The worker echoes back whatever scheme
+  // the browser arrived with, so a plain http:// link would emit an http
+  // redirect_uri and Google (which only has the https URI registered) rejects
+  // it with redirect_uri_mismatch. Cloudflare's "Always Use HTTPS" should
+  // upgrade first, but this makes the worker structurally incapable of
+  // emitting http even if that edge setting is ever off. Localhost stays http
+  // so local dev (http://localhost:8787/auth/callback) keeps working.
+  const scheme = u.hostname === "localhost" ? u.protocol : "https:";
+  return `${scheme}//${u.host}/auth/callback`;
 }
 
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
