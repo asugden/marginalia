@@ -45,7 +45,7 @@ import {
   retrieve,
   type Retrieved,
 } from "./rag.js";
-import type { CollectionSourceKind, VoiceRow } from "@marginalia/schema";
+import type { CollectionSourceKind, EnrollmentRole, VoiceRow } from "@marginalia/schema";
 import { routeProvenance, routeProvenancePublic } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
 
@@ -246,15 +246,24 @@ async function route(
     // so the SPA's CourseLayout can validate :courseId without a second
     // round-trip, and HomePage can render the multi-enrollment picker.
     // Empty array for unauthenticated / not-yet-registered users.
-    const enrollments = identity.userId
+    const enrollmentsRaw = identity.userId
       ? await repo.listEnrollmentsForUserEnriched(env.DB, identity.userId)
       : [];
+    // While acting-as-student, report every instructor enrollment as student
+    // so the SPA's own role-based gating matches what the worker enforces.
+    const enrollments = enrollmentsRaw.map((e) =>
+      downgradeIfActingAsStudent(identity, e),
+    );
     return json({
       email: identity.email,
       registered: identity.userId !== null,
       userId: identity.userId,
       displayName: identity.displayName,
       isAdmin: identity.isAdmin,
+      // Session-scoped "act as student" downgrade. The SPA uses this to show a
+      // persistent exit affordance; the enrollments above are already
+      // downgraded so per-course role checks agree.
+      actingAsStudent: identity.actingAsStudent,
       via: identity.via,
       enrollments,
     });
@@ -493,20 +502,39 @@ async function route(
  */
 async function resolveUser(
   env: Env,
-  email: string,
+  identity: Identity,
   courseId: string,
-  userIdHint?: string | null,
 ) {
   let user: { id: string } | null;
-  if (userIdHint) {
-    user = { id: userIdHint };
+  if (identity.userId) {
+    user = { id: identity.userId };
   } else {
-    user = await repo.findUserByEmail(env.DB, DEFAULT_ORG, email);
+    user = await repo.findUserByEmail(env.DB, DEFAULT_ORG, identity.email);
   }
   if (!user) return null;
   const enrollment = await repo.findEnrollment(env.DB, courseId, user.id);
   if (!enrollment) return null;
-  return { user, enrollment };
+  return { user, enrollment: downgradeIfActingAsStudent(identity, enrollment) };
+}
+
+/**
+ * "Act as student" is honored at exactly one place: whenever a caller's
+ * enrollment role is read for an authorization decision, route it through
+ * here first. When the session's acting_as_student flag is set, an
+ * instructor's role is reported as `student`, so every downstream gate
+ * (requireInstructor, isAuthor, inline `role !== "instructor"`) refuses
+ * exactly as it would for a real student — no per-route changes needed.
+ * The instructor's real `enrollments` row is untouched; this only rewrites
+ * the value the request sees.
+ */
+function downgradeIfActingAsStudent<T extends { role: EnrollmentRole }>(
+  identity: Identity,
+  enrollment: T,
+): T {
+  if (identity.actingAsStudent && enrollment.role === "instructor") {
+    return { ...enrollment, role: "student" };
+  }
+  return enrollment;
 }
 
 /** Instructor gate. Used by every author endpoint. v0.6 collapsed the
@@ -1074,7 +1102,7 @@ async function getAgentRoute(
   }
   if (!row) return error("Agent not found", 404);
   const courseId = row.course_id;
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
 
   return json({
@@ -1099,7 +1127,7 @@ async function createAgentRoute(
   if (!body?.courseId || !body.title || !body.definition) {
     return error("courseId, title, definition required", 400);
   }
-  const resolved = await resolveUser(env, identity.email, body.courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, body.courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1134,7 +1162,7 @@ async function updateAgentRoute(
   if (!body?.courseId || !body.title || !body.definition) {
     return error("courseId, title, definition required", 400);
   }
-  const resolved = await resolveUser(env, identity.email, body.courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, body.courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1173,7 +1201,7 @@ async function deleteAgentRoute(
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
 
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (resolved.enrollment.role !== "instructor") {
     return error("Instructor only", 403);
@@ -1218,21 +1246,11 @@ async function duplicateAgentToRoute(
   // Authorize on both ends. Same-course duplication is allowed (it's how
   // an instructor forks an agent within a course) but in practice the UI
   // exposes the cross-course case.
-  const sourceAuth = await resolveUser(
-    env,
-    identity.email,
-    source.course_id,
-    identity.userId,
-  );
+  const sourceAuth = await resolveUser(env, identity, source.course_id);
   if (!sourceAuth || !isAuthor(sourceAuth.enrollment.role)) {
     return error("Instructor on the source course required", 403);
   }
-  const targetAuth = await resolveUser(
-    env,
-    identity.email,
-    body.targetCourseId,
-    identity.userId,
-  );
+  const targetAuth = await resolveUser(env, identity, body.targetCourseId);
   if (!targetAuth || !isAuthor(targetAuth.enrollment.role)) {
     return error("Instructor on the target course required", 403);
   }
@@ -1449,7 +1467,7 @@ async function revealTabRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1472,7 +1490,7 @@ async function setFeatureRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1587,7 +1605,7 @@ async function createCollectionRoute(
   if (!body?.courseId || !body.name) {
     return error("courseId and name are required", 400);
   }
-  const resolved = await resolveUser(env, identity.email, body.courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, body.courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1620,7 +1638,7 @@ async function listCollectionSourcesRoute(
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
 
   const collection = await repo.getCollection(env.DB, courseId, collectionId);
@@ -1659,7 +1677,7 @@ async function uploadCollectionSourceRoute(
   const url = new URL(req.url);
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1829,7 +1847,7 @@ async function urlCollectionSourceRoute(
   const url = new URL(req.url);
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1892,7 +1910,7 @@ async function refreshCollectionSourceRoute(
   const url = new URL(req.url);
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -1985,7 +2003,7 @@ async function deleteCollectionSourceRoute(
   const url = new URL(req.url);
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
@@ -2114,7 +2132,7 @@ async function requireInstructor(
   identity: Identity,
   courseId: string,
 ): Promise<{ user: { id: string }; enrollment: { role: string } } | Response> {
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
   if (resolved.enrollment.role !== "instructor") {
     return error("Instructor only", 403);
@@ -2130,11 +2148,14 @@ async function listRosterRoute(
   // Parallelize the instructor gate with the roster fetch — same v0.7 §2
   // pattern as the agent list, but with a role check on top of enrollment.
   if (!identity.userId) return error("Sign in required", 401);
-  const [enrollment, roster] = await Promise.all([
+  const [enrollmentRaw, roster] = await Promise.all([
     repo.findEnrollment(env.DB, courseId, identity.userId),
     repo.listRosterForCourse(env.DB, courseId),
   ]);
-  if (!enrollment) return error("Not enrolled in this course", 403);
+  if (!enrollmentRaw) return error("Not enrolled in this course", 403);
+  // Route through the same downgrade as resolveUser so "act as student"
+  // hides the roster exactly as it is hidden from a real student.
+  const enrollment = downgradeIfActingAsStudent(identity, enrollmentRaw);
   if (enrollment.role !== "instructor") return error("Instructor only", 403);
   return json({ roster });
 }
@@ -2841,7 +2862,7 @@ async function startConversation(
     : await repo.findAgentById(env.DB, body.agentId);
   if (!agent) return error("Agent not found", 404);
   const courseId = agent.course_id;
-  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
 
   // Snapshot the definition into the conversation row. If the instructor

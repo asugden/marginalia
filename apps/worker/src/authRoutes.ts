@@ -22,6 +22,7 @@ import {
   OIDC_STATE_MAX_AGE,
   parseCookies,
   SESSION_COOKIE,
+  setActingAsStudent,
   signState,
   verifyState,
   type AuthProvider,
@@ -118,7 +119,51 @@ export async function handleAuthRoute(
   if (segment === "session" && req.method === "GET") {
     return handleSession(req, env);
   }
+  if (segment === "act-as-student" && req.method === "POST") {
+    return handleActAsStudent(req, env);
+  }
   return new Response("Not found", { status: 404 });
+}
+
+/**
+ * POST /auth/act-as-student  { acting: boolean }
+ *
+ * Flip the current session's "act as student" downgrade. Entering (acting
+ * true) is gated on holding an instructor enrollment *somewhere* — the same
+ * instance-wide check the voice-preview feature uses — so a plain student
+ * can't grant themselves the (harmless, but confusing) student-of-a-student
+ * state. Exiting is always allowed so a session can never get stuck.
+ *
+ * The flag lives on the session row, so it clears on logout/expiry and is
+ * invisible to any other device the user is signed in on.
+ */
+async function handleActAsStudent(req: Request, env: Env): Promise<Response> {
+  const cookies = parseCookies(req.headers.get("cookie"));
+  const sid = cookies[SESSION_COOKIE];
+  if (!sid) return json({ error: "Not signed in" }, 401);
+  const session = await findActiveSession(env.DB, sid, Date.now());
+  if (!session) return json({ error: "Not signed in" }, 401);
+
+  const body = (await req.json().catch(() => null)) as {
+    acting?: boolean;
+  } | null;
+  const acting = body?.acting === true;
+
+  if (acting) {
+    const isInstructor = await repo.userIsInstructorAnywhere(
+      env.DB,
+      session.user_id,
+    );
+    if (!isInstructor) {
+      return json(
+        { error: "Only instructors can preview the student experience." },
+        403,
+      );
+    }
+  }
+
+  await setActingAsStudent(env.DB, sid, acting);
+  return json({ actingAsStudent: acting });
 }
 
 async function handleLogin(

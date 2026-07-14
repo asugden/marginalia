@@ -64,6 +64,9 @@ export async function createSession(
     last_seen_at: now,
     user_agent: params.userAgent ?? null,
     ip_hash: params.ipHash ?? null,
+    // Fresh sessions always start with full powers; "act as student" is an
+    // opt-in toggle flipped later via setActingAsStudent().
+    acting_as_student: 0,
   };
   await db
     .prepare(
@@ -82,6 +85,23 @@ export async function createSession(
     )
     .run();
   return row;
+}
+
+/**
+ * Flip the session-scoped "act as student" downgrade. Idempotent. The caller
+ * (worker /auth routes) is responsible for authorizing *entry* — only a user
+ * who holds an instructor enrollment somewhere may set this to true; exiting
+ * (false) is always allowed.
+ */
+export async function setActingAsStudent(
+  db: D1Database,
+  sessionId: string,
+  acting: boolean,
+): Promise<void> {
+  await db
+    .prepare(`UPDATE sessions SET acting_as_student = ? WHERE id = ?`)
+    .bind(acting ? 1 : 0, sessionId)
+    .run();
 }
 
 /** Look up by cookie id, scoping to "not yet expired" so an expired row
@@ -122,6 +142,7 @@ export async function findActiveSessionWithUser(
          s.last_seen_at AS s_last_seen_at,
          s.user_agent   AS s_user_agent,
          s.ip_hash      AS s_ip_hash,
+         s.acting_as_student AS s_acting_as_student,
          u.*
        FROM sessions s
        JOIN users u ON u.id = s.user_id
@@ -138,6 +159,7 @@ export async function findActiveSessionWithUser(
     last_seen_at: row.s_last_seen_at as number,
     user_agent: (row.s_user_agent as string | null) ?? null,
     ip_hash: (row.s_ip_hash as string | null) ?? null,
+    acting_as_student: (row.s_acting_as_student as number | null) ?? 0,
   };
   // The rest of the columns are users.* — strip the s_ prefixed ones.
   const user = {} as Record<string, unknown>;

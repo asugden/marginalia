@@ -62,6 +62,7 @@ export function CourseLayout() {
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
           isAdmin: Boolean(m.isAdmin),
+          actingAsStudent: Boolean(m.actingAsStudent),
         });
       })
       .catch((err) => {
@@ -209,6 +210,7 @@ export function CourseLayout() {
                 role={value.role}
                 isAdmin={value.isAdmin}
                 current="author"
+                actingAsStudent={value.actingAsStudent}
               />
               <span className="app-topbar__divider" aria-hidden />
               <IconButton title="Sign out" onClick={signOut}>

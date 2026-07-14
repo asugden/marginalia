@@ -310,6 +310,7 @@ export async function getMe(): Promise<{
   registered: boolean;
   userId: string | null;
   isAdmin: boolean;
+  actingAsStudent: boolean;
   enrollments: Array<{
     courseId: string;
     courseName: string;
@@ -326,6 +327,7 @@ export async function getMe(): Promise<{
     registered: true,
     userId: "user_mock",
     isAdmin: true,
+    actingAsStudent: false,
     enrollments: [
       {
         courseId: "course_demo",
@@ -339,6 +341,13 @@ export async function getMe(): Promise<{
       },
     ],
   };
+}
+
+export async function setActingAsStudent(
+  acting: boolean,
+): Promise<{ actingAsStudent: boolean }> {
+  // Mock has no session store; echo back so the UI toggle still round-trips.
+  return { actingAsStudent: acting };
 }
 
 export async function listRoster(): Promise<{ roster: never[] }> {

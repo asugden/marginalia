@@ -31,6 +31,11 @@ export interface CourseContextValue {
   /** Instance-wide admin flag (from /api/me). Orthogonal to course role —
    *  feeds the topbar RoleSwitch so it can offer the Admin segment. */
   isAdmin: boolean;
+  /** Session-scoped: an instructor is previewing this course as a student.
+   *  While true, `role` above is already reported as `student` (so marks etc.
+   *  match a real student), so the RoleSwitch reads this flag to keep offering
+   *  the way back to Instructor. */
+  actingAsStudent: boolean;
 }
 
 export const CourseContext = createContext<CourseContextValue | null>(null);

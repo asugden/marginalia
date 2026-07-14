@@ -55,6 +55,7 @@ export const getConversation = impl.getConversation;
 export const listConversations = impl.listConversations;
 export const sendMessage = impl.sendMessage;
 export const getMe = impl.getMe;
+export const setActingAsStudent = impl.setActingAsStudent;
 export const listVoices = impl.listVoices;
 // v0.7 §1 — voice CRUD. Mock mode doesn't implement these (no per-user
 // voices in the mock data model); the AuthorVoicesPage etc. throw if

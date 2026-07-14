@@ -65,6 +65,7 @@ export function StudentLayout() {
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
           isAdmin: Boolean(m.isAdmin),
+          actingAsStudent: Boolean(m.actingAsStudent),
         });
       })
       .catch((err) => {
@@ -88,7 +89,11 @@ export function StudentLayout() {
   }
 
   const home = `/course/${courseId}`;
-  const previewing = value.role === "instructor";
+  // An instructor is previewing when they're really an instructor. With a live
+  // act-as-student downgrade, `value.role` is reported as `student`, so also
+  // treat the flag as previewing — otherwise the banner would vanish exactly
+  // when the downgrade is active.
+  const previewing = value.role === "instructor" || value.actingAsStudent;
 
   // The module nav highlights the active panel only on the course home (the
   // scroll-stack it targets). On a focused sub-screen (a conversation) a click
@@ -127,6 +132,7 @@ export function StudentLayout() {
                 role={value.role}
                 isAdmin={value.isAdmin}
                 current="student"
+                actingAsStudent={value.actingAsStudent}
               />
               <span className="app-topbar__divider" aria-hidden />
               {identity && (

@@ -376,12 +376,29 @@ export interface MeResponse {
   /** Instance-wide admin flag (users.is_admin). Orthogonal to course role —
    *  drives the Admin segment of the topbar RoleSwitch. */
   isAdmin: boolean;
+  /** Session-scoped: an instructor is previewing the student experience. While
+   *  true, the worker also reports every `enrollments` role below as `student`,
+   *  so role-based UI (e.g. hiding provenance marks) matches a real student. */
+  actingAsStudent: boolean;
   /** Every course the caller is enrolled in, joined-date desc. Empty when
    *  unauthenticated or not yet claimed. */
   enrollments: MeEnrollment[];
 }
 export function getMe(signal?: AbortSignal) {
   return jsonFetch<MeResponse>("/api/me", { signal });
+}
+
+/**
+ * Enter (or leave) "act as student" — a session-scoped role downgrade that
+ * lets an instructor run their own course exactly as a student would, hidden
+ * marks and all. Entering requires an instructor enrollment somewhere
+ * (enforced by the worker); leaving is always allowed.
+ */
+export function setActingAsStudent(acting: boolean) {
+  return jsonFetch<{ actingAsStudent: boolean }>("/auth/act-as-student", {
+    method: "POST",
+    body: JSON.stringify({ acting }),
+  });
 }
 
 /** Parse the Worker's `event:`/`data:`/blank-line SSE framing into TurnEvents.

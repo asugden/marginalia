@@ -30,6 +30,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { MeEnrollment } from "../api.js";
+import { setActingAsStudent } from "../client.js";
 import { ChevronIcon } from "../icons.js";
 
 export type RoleSurface = "student" | "author" | "admin";
@@ -43,6 +44,11 @@ export interface RoleSwitchProps {
    *  the checked option). On the student surface this only renders when the
    *  caller is an instructor/admin previewing — a pure student gets nothing. */
   current: RoleSurface;
+  /** Session-scoped act-as-student. While previewing, `role` is reported as
+   *  `student`, so without this the control would vanish and trap the
+   *  instructor on the student surface. When true, treat the caller as an
+   *  instructor for the purpose of showing the "back to Instructor" option. */
+  actingAsStudent?: boolean;
 }
 
 interface Option {
@@ -52,11 +58,43 @@ interface Option {
   to: string;
 }
 
-export function RoleSwitch({ courseId, role, isAdmin, current }: RoleSwitchProps) {
-  const isInstructor = role === "instructor";
+export function RoleSwitch({
+  courseId,
+  role,
+  isAdmin,
+  current,
+  actingAsStudent = false,
+}: RoleSwitchProps) {
+  // While previewing, the reported role is `student`; the caller is really an
+  // instructor, so treat them as one for building the switch options.
+  const isInstructor = role === "instructor" || actingAsStudent;
   const [open, setOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Moving to the student surface is a *real* role downgrade, not just
+  // navigation: flip the session's act-as-student flag so the worker reports
+  // this instructor as a student everywhere (hidden marks and all), then land
+  // on the student view. Moving back to Instructor/Admin clears it. We await
+  // the toggle before navigating so the destination page's /api/me already
+  // reflects the new role. Admin ⇄ author both run as full instructor.
+  async function go(target: RoleSurface, to: string) {
+    setOpen(false);
+    if (switching) return;
+    setSwitching(true);
+    try {
+      if (target === "student") {
+        await setActingAsStudent(true);
+      } else if (current === "student") {
+        // Leaving the student preview for Instructor or Admin.
+        await setActingAsStudent(false);
+      }
+      navigate(to);
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   useEffect(() => {
     function away(e: MouseEvent) {
@@ -131,10 +169,8 @@ export function RoleSwitch({ courseId, role, isAdmin, current }: RoleSwitchProps
                 className={
                   "app-roles__opt" + (active ? " app-roles__opt--active" : "")
                 }
-                onClick={() => {
-                  setOpen(false);
-                  navigate(o.to);
-                }}
+                disabled={switching}
+                onClick={() => go(o.key, o.to)}
               >
                 <b>{o.label}</b>
                 <span>{o.detail}</span>

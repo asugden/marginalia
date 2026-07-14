@@ -36,6 +36,7 @@ export {
 
 export {
   createSession,
+  setActingAsStudent,
   findActiveSession,
   findActiveSessionWithUser,
   touchSession,

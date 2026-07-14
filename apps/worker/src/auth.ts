@@ -27,6 +27,13 @@ export interface Identity {
   email: string;
   displayName: string | null;
   isAdmin: boolean;
+  /**
+   * Session-scoped "act as student" downgrade (migration 0016). When true,
+   * resolveUser() reports the caller's per-course role as `student`, so an
+   * instructor experiences their own course exactly as a student would.
+   * Always false on the dev bypass (no session row to carry it).
+   */
+  actingAsStudent: boolean;
   /** Which mechanism authenticated this request. */
   via: "session" | "dev";
 }
@@ -71,6 +78,7 @@ export async function authenticate(
       email,
       displayName: user?.display_name ?? null,
       isAdmin: user?.is_admin === 1,
+      actingAsStudent: false,
       via: "dev",
     };
   }
@@ -92,6 +100,7 @@ export async function authenticate(
         email: user.email,
         displayName: user.display_name,
         isAdmin: user.is_admin === 1,
+        actingAsStudent: session.acting_as_student === 1,
         via: "session",
       };
     }

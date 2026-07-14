@@ -169,6 +169,14 @@ export interface SessionRow {
   last_seen_at: number;
   user_agent: string | null;
   ip_hash: string | null;
+  /**
+   * Session-scoped "act as student" downgrade (migration 0016). When 1, the
+   * worker reports the owner's per-course role as `student` so an instructor
+   * can run their own authored agents exactly as a student would, without a
+   * second account. Ephemeral: clears on logout/expiry; never touches the
+   * real `enrollments` role.
+   */
+  acting_as_student: number;
 }
 
 /**
