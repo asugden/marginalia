@@ -66,18 +66,24 @@ export function EditorPage() {
   // The editor is a standalone full-screen surface (its own prov-shell chrome,
   // not nested under StudentLayout), so it resolves its own course from the
   // /course/:courseId/write/:id URL rather than useCourse().
-  const { active } = useActiveCourse(courseParam ?? null);
+  const { active, actingAsStudent } = useActiveCourse(courseParam ?? null);
   const courseId = active?.courseId ?? null;
-  const isInstructor = active?.role === "instructor";
   const writeBase = `/course/${courseParam}/write`;
-  // "Preview as student": an instructor reaches the editor with ?preview=1 from
-  // the student Writing panel. The standalone editor can't read StudentLayout's
-  // preview context, so this URL param is the signal that it should replicate
-  // the student view — most importantly, actually hiding the marks. Without it,
-  // an instructor (who may have no student account) could never see the hidden
-  // state their students get. See fix in hideMarksForEditor below.
+  // "Preview as student" — the instructor wants to see this course exactly as a
+  // student does, hidden marks and all. There are two ways it turns on:
+  //   1. The session-scoped act-as-student downgrade (RoleSwitch / "Preview as
+  //      student"). This is the intuitive path and the source of truth: while
+  //      it's set, /api/me already reports the caller's role as `student`.
+  //   2. Legacy `?preview=1` on the URL, kept working for older links.
+  // Either makes `previewing` true. We do NOT depend on the role alone, so the
+  // editor behaves identically however the instructor arrived.
   const [searchParams] = useSearchParams();
-  const previewing = isInstructor && searchParams.get("preview") === "1";
+  const previewing = actingAsStudent || searchParams.get("preview") === "1";
+  // "Working as an instructor" = an instructor who is NOT previewing. Because
+  // the act-as-student downgrade reports role as `student`, an instructor in
+  // preview reads role !== "instructor" — which is exactly right: they should
+  // get the student experience. So this is only true when genuinely authoring.
+  const isInstructor = active?.role === "instructor" && !previewing;
   const provenanceEnabled = active?.provenanceEnabled ?? true;
 
   // "Hide marks from students" (display-only; recording is unaffected).
@@ -91,11 +97,12 @@ export function EditorPage() {
     setHideMarksSetting(active?.hideProvenanceMarks ?? false);
   }, [active?.hideProvenanceMarks]);
   const [savingHideMarks, setSavingHideMarks] = useState(false);
-  // Instructors normally always see coloring (they own the toggle and review
-  // with it), so `!isInstructor` keeps marks on for them. But when previewing
-  // as a student, they must see exactly what the student sees — so preview mode
-  // overrides that and hides the marks too.
-  const hideMarksForEditor = hideMarksSetting && (!isInstructor || previewing);
+  // Marks are hidden when the course setting says so AND the viewer should see
+  // the student experience. `isInstructor` above is false while previewing, so
+  // a previewing instructor and a real student both get marks hidden here; an
+  // instructor actually authoring keeps coloring on (they own the toggle and
+  // review with it).
+  const hideMarksForEditor = hideMarksSetting && !isInstructor;
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
@@ -376,9 +383,10 @@ export function EditorPage() {
           placeholder="Untitled"
         />
         <SaveStatus state={saveState} />
-        {/* The marks toggle is an authoring control — hide it while previewing
-            as a student (the whole point of preview is to see, not set). */}
-        {isInstructor && !previewing && (
+        {/* The marks toggle is an authoring control. `isInstructor` is already
+            false while previewing as a student, so it's hidden there (the whole
+            point of preview is to see what students see, not to set it). */}
+        {isInstructor && (
           <button
             type="button"
             className={"prov-toggle" + (hideMarksSetting ? "" : " is-on")}

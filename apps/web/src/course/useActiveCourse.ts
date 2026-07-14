@@ -25,6 +25,12 @@ export interface ActiveCourseState {
   enrollments: MeEnrollment[];
   /** The resolved active enrollment, or null while loading / not enrolled. */
   active: MeEnrollment | null;
+  /** Session-scoped: an instructor is previewing as a student. Surfaced here
+   *  (not on `active`, since it's a top-level /api/me flag) so standalone
+   *  surfaces like the provenance editor can replicate the student view
+   *  regardless of how the caller arrived. While true, `active.role` is
+   *  already reported as `student`. */
+  actingAsStudent: boolean;
   notEnrolled: boolean;
   /** Switch the active course (persists to localStorage). No-op for an id
    *  the caller isn't enrolled in. */
@@ -50,6 +56,7 @@ export function useActiveCourse(preferCourseId?: string | null): ActiveCourseSta
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enrollments, setEnrollments] = useState<MeEnrollment[]>([]);
+  const [actingAsStudent, setActingAsStudent] = useState(false);
   // An explicit course id (e.g. from a /course/:courseId/* URL) wins over the
   // localStorage fallback so a deep-linked surface resolves to the course in
   // its own URL, not whatever was last active.
@@ -63,6 +70,7 @@ export function useActiveCourse(preferCourseId?: string | null): ActiveCourseSta
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setEnrollments(m.enrollments);
+        setActingAsStudent(Boolean(m.actingAsStudent));
         setLoading(false);
       })
       .catch((e) => {
@@ -90,6 +98,7 @@ export function useActiveCourse(preferCourseId?: string | null): ActiveCourseSta
     error,
     enrollments,
     active,
+    actingAsStudent,
     notEnrolled: !loading && error === null && enrollments.length === 0,
     setCourseId,
   };

@@ -26,15 +26,18 @@ import { relativeTime } from "../time.js";
 import { Avatar, Badge, Button, IconButton } from "../components/index.js";
 
 export function HomePage() {
-  const { courseId, courseName, role, provenanceEnabled } = useCourse();
+  const { courseId, courseName, role, provenanceEnabled, actingAsStudent } =
+    useCourse();
   const location = useLocation();
   const navigate = useNavigate();
   const base = `/course/${courseId}`;
-  // Instructor viewing their own course is "preview as student".
-  const scoped = role === "instructor";
-  // When previewing, editor links carry ?preview=1 so the standalone editor
-  // (which can't read this context) knows to replicate the student view —
-  // including hiding provenance marks. See EditorPage.
+  // "Preview as student" is true either because an instructor is on their own
+  // course root, or because the act-as-student downgrade is active (in which
+  // case `role` already reads `student`). Either way, frame this as a preview.
+  const scoped = role === "instructor" || actingAsStudent;
+  // Editor links carry ?preview=1 as a belt-and-suspenders signal for the
+  // standalone editor. (The editor also reads the act-as-student flag directly,
+  // so this is a legacy fallback; harmless to keep.)
   const editorSuffix = scoped ? "?preview=1" : "";
 
   // v0.7 §2 / v1.0 §7.1 — consume the worker-injected bootstrap *synchronously*
