@@ -106,8 +106,10 @@ export function AgentsPage() {
       <div className="ds-agents__bar">
         <span className="mono-label">Agents</span>
         <span className="ds-staff-actions">
+          {/* Peer nav to the documents list (mirrors "My agents" from there),
+              not a back button — the topbar module nav is the way home. */}
           <Button variant="ghost" href={writeBase}>
-            ← Documents
+            Documents
           </Button>
           <Button
             variant="primary"

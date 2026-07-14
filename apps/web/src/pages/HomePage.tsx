@@ -1,28 +1,40 @@
-// Student home — the agent picker, rendered as the body of StudentLayout's
-// outlet at /course/:courseId (the clean course root). The shell owns the
-// topbar + chrome; this page renders only the heading lockup, the agent list,
-// and the writing entry.
+// Student course home — a single scrolling STACK of the course's enabled
+// modules, each in the shared ModulePanel frame so they read as peers. Agents
+// is the always-present core; Writing (provenance) is always shown; Attendance
+// appears only when the course turned it on. The topbar module nav scrolls the
+// matching panel into view (via a `#module` hash this page reads) — which is
+// why no module needs a per-screen back button. The shell (StudentLayout) owns
+// the topbar + chrome; this page renders the heading lockup and the module
+// stack.
 //
-// Presentation follows the design-system student kit: an eyebrow→heading
-// lockup, and agent rows with zero-padded ordinals, an avatar, kind/grounded
-// badges, and a hover accent rail. Course id / name come from useCourse() (the
-// shell validated enrollment); the worker-injected bootstrap still seeds the
-// first paint with rows when present, avoiding a "Loading…" flash.
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+// Presentation follows the design-system app kit: an eyebrow→heading lockup,
+// then `app-modstack` of `app-modpanel`s. Course id / name / flags come from
+// useCourse() (the shell validated enrollment). The worker-injected bootstrap
+// still seeds the first paint with agent rows when present.
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { listAgents, type AgentSummary } from "../client.js";
+import {
+  createDocument,
+  listDocuments,
+  type DocumentSummary,
+} from "../modules/provenance/api.js";
 import { useCourse } from "../course/useCourse.js";
 import { logPerf, readBootstrap } from "../bootstrap.js";
-import { ArrowIcon, PencilIcon, PlusIcon } from "../icons.js";
+import { ArrowIcon, DocIcon, PencilIcon, PlusIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 import { Avatar, Badge, Button, IconButton } from "../components/index.js";
 
 export function HomePage() {
-  const { courseId, courseName } = useCourse();
+  const { courseId, courseName, role } = useCourse();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const base = `/course/${courseId}`;
+  // Instructor viewing their own course is "preview as student".
+  const scoped = role === "instructor";
+
   // v0.7 §2 / v1.0 §7.1 — consume the worker-injected bootstrap *synchronously*
-  // in the useState initializer so the very first render already has rows;
-  // without this we'd flash "Loading…" for one render cycle even when the data
-  // is sitting on the page. The bootstrap only seeds when it's for this course.
+  // in the useState initializer so the very first render already has rows.
   const initialBoot = (() => {
     const boot = readBootstrap();
     return boot && boot.kind === "agents" && boot.courseId === courseId
@@ -32,21 +44,19 @@ export function HomePage() {
   const [agents, setAgents] = useState<AgentSummary[] | null>(
     initialBoot?.agents ?? null,
   );
+  const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const base = `/course/${courseId}`;
+  const [creatingDoc, setCreatingDoc] = useState(false);
 
   useEffect(() => {
-    // v0.7 §2 — within 30s of the bootstrap, trust it and skip the
-    // refetch. Past that, refetch so the student sees current state.
     const fresh =
       initialBoot &&
       typeof window.__BOOTSTRAP_AT__ === "number" &&
       Date.now() - window.__BOOTSTRAP_AT__ < 30_000;
     if (initialBoot) {
       logPerf("agents-from-bootstrap", { count: initialBoot.agents.length });
-      if (fresh) return;
     }
+    if (initialBoot && fresh) return;
     const fetchStart = performance.now();
     listAgents(courseId)
       .then((r) => {
@@ -59,83 +69,206 @@ export function HomePage() {
       .catch((e) => {
         const message = e instanceof Error ? e.message : "Load failed";
         if (/redirecting to sign-in/i.test(message)) {
-          // jsonFetch is already bouncing through /auth/login; don't
-          // flash the transient error to the user.
+          // jsonFetch is already bouncing through /auth/login; don't flash.
         } else {
           setError(message);
         }
       });
   }, [courseId, initialBoot]);
 
-  const inProgressCount =
+  // Writing module data. Best-effort: a failed load leaves the panel empty
+  // rather than blocking the whole home.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listDocuments(courseId, ctrl.signal)
+      .then((d) => setDocs(d))
+      .catch(() => {
+        if (!ctrl.signal.aborted) setDocs([]);
+      });
+    return () => ctrl.abort();
+  }, [courseId]);
+
+  // Scroll the module panel named by the URL hash to the top of the scrolling
+  // body when the topbar nav asks for it. Re-fires whenever the hash (with its
+  // trailing nonce) changes, even for the same module. Agents is the home
+  // module — land at the very top so the course header shows.
+  const panelRefs = useRef<Record<string, HTMLElement | null>>({});
+  useEffect(() => {
+    const id = location.hash.replace(/^#/, "").split("-")[0];
+    if (!id) return;
+    const el = panelRefs.current[id];
+    if (!el) return;
+    const scroller = el.closest(".app__body");
+    if (!scroller) return;
+    const top = id === "agents" ? 0 : Math.max(0, el.offsetTop - 12);
+    // Instant jump — a smooth scroll kicked off during the same render that
+    // carried the hash change gets cancelled and never moves.
+    scroller.scrollTo({ top, behavior: "auto" });
+  }, [location.hash, agents, docs]);
+
+  const setRef = (id: string) => (n: HTMLElement | null) => {
+    panelRefs.current[id] = n;
+  };
+
+  const inProgress =
     agents?.filter((a) => a.lastConversationId !== null && a.lastCompletedAt === null)
       .length ?? 0;
-  const doneCount =
+  const done =
     agents?.filter((a) => a.hasBackbone && a.lastCompletedAt !== null).length ?? 0;
+
+  async function onNewDocument() {
+    if (creatingDoc) return;
+    setCreatingDoc(true);
+    try {
+      const doc = await createDocument(courseId);
+      navigate(`${base}/write/${doc.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't start a document");
+      setCreatingDoc(false);
+    }
+  }
 
   return (
     <div className="app-home__inner">
       <div className="app-head">
-        {courseName && <span className="eyebrow">{courseName}</span>}
+        <span className="eyebrow">
+          {scoped ? "Course preview" : courseName || "Course"}
+        </span>
         <span className="app-rule" />
-        <h1>Pick something to begin.</h1>
+        <h1>{courseName}</h1>
         <p className="app-head__sub">
-          Each one is set up by your instructor — it&rsquo;ll tell you up front
-          how it works and what it&rsquo;s for, then lead you through it.
+          {scoped
+            ? "The student’s view of this course — every module it has turned on."
+            : "Each one is set up by your instructor — it’ll tell you up front how it works and what it’s for, then lead you through it."}
         </p>
       </div>
 
       {error && <p className="error">{error}</p>}
 
-      {agents === null ? (
-        <p className="app-empty">Loading…</p>
-      ) : agents.length === 0 ? (
-        <p className="app-empty">
-          Your instructor hasn&rsquo;t set anything up in this course yet. Check
-          back soon.
-        </p>
-      ) : (
-        <>
-          <div className="app-agents__bar">
-            <span className="mono-label">Your agents</span>
-            <span className="app-agents__stat">
-              {agents.length} total
-              <i>·</i> {inProgressCount} in progress
-              <i>·</i> {doneCount} done
-            </span>
+      <div className="app-modstack">
+        {/* ── Agents ─────────────────────────────────────────────────────── */}
+        <section
+          ref={setRef("agents")}
+          className="app-modpanel app-modpanel--open"
+          data-module="agents"
+        >
+          <div className="app-modpanel__head">
+            <div className="app-modpanel__heading">
+              <span className="eyebrow">Tutors to talk to</span>
+              <h2>Agents</h2>
+            </div>
+            {agents && agents.length > 0 && (
+              <span className="app-modpanel__meta">
+                {agents.length} total &middot; {inProgress} in progress &middot;{" "}
+                {done} done
+              </span>
+            )}
           </div>
-          <div className="app-agents">
-            {agents.map((a, i) => (
-              <AgentRow
-                key={a.id}
-                agent={a}
-                n={i + 1}
-                base={base}
-                navigate={navigate}
-              />
-            ))}
+          <div className="app-modpanel__body">
+            {agents === null ? (
+              <p className="app-empty">Loading…</p>
+            ) : agents.length === 0 ? (
+              <p className="app-empty">
+                Your instructor hasn&rsquo;t set anything up in this course yet.
+                Check back soon.
+              </p>
+            ) : (
+              <div className="app-agents">
+                {agents.map((a, i) => (
+                  <AgentRow
+                    key={a.id}
+                    agent={a}
+                    n={i + 1}
+                    base={base}
+                    navigate={navigate}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        </>
-      )}
+        </section>
 
-      {/* Writing tool entry point. DS .app-writing zone: set off by a top rule,
-          a sunken card with an eyebrow→heading lockup and one primary action. */}
-      <section className="app-writing">
-        <div className="app-writing__card">
-          <div className="app-writing__text">
-            <span className="mono-label app-writing__label">Writing</span>
-            <h2>Provenance writing space</h2>
-            <p className="app-writing__note">
-              Write here to share the history and provenance of your work.
-            </p>
+        {/* ── Writing (provenance) ───────────────────────────────────────── */}
+        <section
+          ref={setRef("writing")}
+          className="app-modpanel app-modpanel--open"
+          data-module="writing"
+        >
+          <div className="app-modpanel__head">
+            <div className="app-modpanel__heading">
+              <span className="eyebrow">Provenance</span>
+              <h2>Writing</h2>
+            </div>
+            {docs && docs.length > 0 && (
+              <span className="app-modpanel__meta">
+                {docs.length} document{docs.length === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
-          <div className="app-writing__action">
-            <Button href={`${base}/write`} icon={<PencilIcon size={16} />}>
-              Open writing &amp; past papers
-            </Button>
+          <div className="app-modpanel__body">
+            <div className="app-writing__intro">
+              <p className="app-writing__note">
+                Write here and every word is tagged by where it came from —
+                typed, pasted, or generated — so you can share the history of
+                your work.
+              </p>
+              <Button
+                variant="primary"
+                icon={<PencilIcon size={16} />}
+                onClick={onNewDocument}
+                loading={creatingDoc}
+                disabled={creatingDoc}
+              >
+                New document
+              </Button>
+            </div>
+            {docs === null ? (
+              <p className="app-empty">Loading…</p>
+            ) : docs.length === 0 ? (
+              <p className="app-papers__empty">
+                No documents in this course yet.
+              </p>
+            ) : (
+              <ul className="app-papers__list">
+                {docs.map((d) => (
+                  <li key={d.id}>
+                    <a
+                      href={`${base}/write/${d.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`${base}/write/${d.id}`);
+                      }}
+                    >
+                      <span className="app-papers__ic" aria-hidden>
+                        <DocIcon size={18} />
+                      </span>
+                      <span className="app-papers__main">
+                        <span className="app-papers__title">{d.title}</span>
+                        <span className="app-papers__meta">
+                          {d.wordCount.toLocaleString()} word
+                          {d.wordCount === 1 ? "" : "s"}
+                          <i>·</i>
+                          edited {relativeTime(d.updatedAt)}
+                        </span>
+                      </span>
+                      <span className="app-papers__go" aria-hidden>
+                        <ArrowIcon size={18} />
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* No Attendance panel: check-in is QR-gated (a student arrives via a
+            scanned session code at /a/:id), and there is no student-facing
+            attendance-HISTORY API yet — a bare "scan the QR" card would be
+            noise. When a student can see their own past check-in statuses,
+            re-add an Attendance module panel here (and the nav item in
+            StudentLayout), gated on `showAttendance`. */}
+      </div>
     </div>
   );
 }
@@ -176,8 +309,6 @@ function AgentRow({
     <>
       {!a.hasBackbone && (
         // v0.5 §10 + v0.7 §3.1: free-form agents can have parallel threads.
-        // A round +icon to the left of Continue keeps the primary affordance
-        // (Continue) the same shape every other row uses.
         <IconButton
           variant="round"
           href={startHref}
@@ -210,8 +341,7 @@ function AgentRow({
 
   // The whole row is clickable (→ the row's default action), but the action
   // column holds its own real links, so a click there must not also fire the
-  // row navigation. The row is a div (not an <a>) so the inner links aren't
-  // nested anchors; keyboard users get a focusable role="link".
+  // row navigation.
   return (
     <div
       className="app-agent"

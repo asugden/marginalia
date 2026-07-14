@@ -33,7 +33,7 @@ import {
 import { clarityNoteFor } from "@marginalia/backbone";
 import type { Topic } from "@marginalia/backbone";
 import { useCourse } from "../course/useCourse.js";
-import { BackIcon, MenuIcon } from "../icons.js";
+import { MenuIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 import {
   Avatar,
@@ -76,6 +76,10 @@ export function ConversationPage() {
   // load paths.
   const [grounded, setGrounded] = useState<boolean>(false);
   const [agentTitle, setAgentTitle] = useState<string | null>(null);
+  // The agent this conversation belongs to, used to scope the sidebar history
+  // to just this agent's threads. Resolved from the loaded conversation (or the
+  // compose-mode agent id) — see the load effect below.
+  const [agentId, setAgentId] = useState<string | null>(null);
   // The full topic list for the OutlineRail. Available directly in compose mode
   // (from the agent definition); for an existing conversation we fetch the
   // agent's definition by id. Empty when the agent has no backbone.
@@ -135,6 +139,7 @@ export function ConversationPage() {
           setState(c.state);
           setHasBackbone(c.state !== null);
           setAgentTitle(c.agent?.title ?? null);
+          setAgentId(c.agent?.id ?? null);
           setCurrentTopic(c.currentTopic?.title ?? null);
           setCompletedAt(c.completedAt);
           setClarityNote(c.clarityNote);
@@ -162,6 +167,7 @@ export function ConversationPage() {
       // Compose mode (§14): no conversation row yet. Seed the sidebar from
       // the agent definition so the student sees the topic outline before
       // typing the first message.
+      setAgentId(composeAgentId);
       getAgentById(composeAgentId)
         .then((a) => {
           if (ctrl.signal.aborted) return;
@@ -183,12 +189,14 @@ export function ConversationPage() {
     return () => ctrl.abort();
   }, [params.conversationId, composeAgentId]);
 
-  // Sidebar conversation history (§5: capped at 10, link to /history for full list).
-  // Re-fetch when the active conversation changes or it transitions to completed —
-  // those are the events that change the sidebar's top row.
+  // Sidebar conversation history — scoped to THIS agent's threads only (a
+  // per-agent history, not a cross-agent list). Capped at 10. Re-fetch when the
+  // agent resolves, when the active conversation changes, or when it transitions
+  // to completed — the events that change the sidebar's top row.
   useEffect(() => {
+    if (!agentId) return;
     const ctrl = new AbortController();
-    listConversations(ctrl.signal)
+    listConversations(ctrl.signal, agentId)
       .then((r) => {
         if (ctrl.signal.aborted) return;
         setHistory(r.conversations.slice(0, SIDEBAR_CONVERSATION_LIMIT));
@@ -197,7 +205,7 @@ export function ConversationPage() {
         // Sidebar history is non-essential — failure shouldn't block the chat UI.
       });
     return () => ctrl.abort();
-  }, [activeConvId, completedAt]);
+  }, [agentId, activeConvId, completedAt]);
 
   // Abort any in-flight stream on unmount. Without this a student who closes
   // the tab mid-reply keeps the Worker isolate billable until Anthropic
@@ -421,9 +429,6 @@ export function ConversationPage() {
                   </li>
                 ))}
               </ul>
-              <Link to={`${base}/history`} className="ds-side__seeall">
-                See all →
-              </Link>
             </div>
           )}
         </div>
@@ -438,9 +443,8 @@ export function ConversationPage() {
 
       <main className="app-conv">
         <header className="app-conv__head">
-          <IconButton title="Back to home" href={base}>
-            <BackIcon size={20} />
-          </IconButton>
+          {/* No back button — the topbar module nav (and the lockup) are the
+              way back to the course home. */}
           <IconButton
             title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             onClick={() => setSidebarOpen((v) => !v)}

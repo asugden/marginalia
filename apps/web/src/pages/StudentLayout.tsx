@@ -8,30 +8,58 @@
 // read course id / role / flags from one validated place (no useActiveCourse,
 // no localStorage course resolution).
 //
+// The student topbar carries an inline MODULE NAV — one item per enabled module
+// (Agents always; Writing when provenance is on; Attendance when the course
+// turned it on). The home is a single scrolling stack of those module panels;
+// a nav item scrolls its panel into view (via a `#module` hash the home reads),
+// and the lockup is home. Together they retire the per-screen back buttons the
+// student surfaces used to each invent — the header always gets you to any
+// module, so nothing needs its own "← back" affordance.
+//
 // When the caller is an instructor, this is "preview as student" of their own
-// course: the RoleSwitch shows Author/Admin to step back out, and a
+// course: the RoleSwitch shows Instructor/Admin to step back out, and a
 // PreviewBanner makes the mode explicit. A real student sees neither — for them
 // this is simply home. The worker re-checks enrollment on every endpoint, so a
 // deep-link by a non-enrolled user still 403s at the API layer; the redirect
 // here is best-effort UX.
 
 import { useEffect, useState } from "react";
-import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
-import { getMe, type MeEnrollment } from "../client.js";
+import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { getMe } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import {
-  Button,
   IconButton,
   PreviewBanner,
   RoleSwitch,
   Wordmark,
 } from "../components/index.js";
-import { HistoryIcon, SignOutIcon, UserIcon } from "../icons.js";
+import { SignOutIcon, UserIcon } from "../icons.js";
 import { signOut } from "../session.js";
+
+/** The student module nav. Agents is the always-present core; Writing and
+ *  Attendance appear only when the course enabled them. Each item points at the
+ *  course home with a `#module` hash the home reads to scroll the panel into
+ *  view — a single deep-linkable source of truth, no shared scroll state. */
+interface StudentModule {
+  id: string;
+  label: string;
+}
+function studentModules(): StudentModule[] {
+  // Agents and Writing are the two student modules the home renders as panels.
+  // Attendance is intentionally absent: check-in is QR-gated and there is no
+  // student attendance-history surface yet, so there's nothing to nav to. Add
+  // it back here (and a panel in HomePage) once a student can see their own
+  // past check-ins.
+  return [
+    { id: "agents", label: "Agents" },
+    { id: "writing", label: "Writing" },
+  ];
+}
 
 export function StudentLayout() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [value, setValue] = useState<CourseContextValue | null>(null);
   const [identity, setIdentity] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,30 +109,52 @@ export function StudentLayout() {
   const home = `/course/${courseId}`;
   const previewing = value.role === "instructor";
 
+  // The module nav shows only on the course home (the scroll-stack it targets).
+  // On a focused sub-screen (a conversation, the writing editor, history) the
+  // items still render but a click first returns home, then scrolls — so the
+  // nav does the job the per-screen back buttons used to.
+  const modules = studentModules();
+  const onHome = location.pathname === home || location.pathname === `${home}/`;
+  const activeModule = onHome
+    ? (location.hash.replace(/^#/, "") || "agents")
+    : null;
+
   return (
     <CourseContext.Provider value={value}>
       {/* DS app shell: a locked viewport (the page itself never scrolls) with a
           fixed topbar and a single scrolling body region. This is the
-          structural fix for the runaway outer scroll that dragged the topbar —
-          previously each page was a min-height:100vh block under a sticky bar,
-          so the chat (100vh) pushed the whole page past one screen. */}
+          structural fix for the runaway outer scroll that dragged the topbar. */}
       <div className="app">
-        <header className="app-topbar">
+        <header className="app-topbar app-topbar--student">
           <div className="app-topbar__inner">
             <Link to={home} aria-label="Home" className="app-lockup-link">
               <Wordmark />
             </Link>
+
+            {/* Module nav — the course's enabled modules. A click navigates to
+                the course home with a `#module` hash; the home scrolls the
+                matching panel into view. This replaces every per-screen back
+                button. */}
+            <nav className="app-nav app-nav--student" aria-label="Course modules">
+              {modules.map((mod) => (
+                <Link
+                  key={mod.id}
+                  to={`${home}#${mod.id}`}
+                  className={
+                    "app-nav__item" +
+                    (activeModule === mod.id ? " app-nav__item--active" : "")
+                  }
+                >
+                  {mod.label}
+                </Link>
+              ))}
+            </nav>
+
             <div className="app-topbar__spacer" />
             <div className="app-topbar__actions">
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<HistoryIcon size={16} />}
-                href={`${home}/history`}
-              >
-                <span className="app-hide-sm">History</span>
-              </Button>
-              <span className="app-topbar__divider" aria-hidden />
+              {/* The role switch is an INSTRUCTOR/admin affordance only — a
+                  pure student never sees it (RoleSwitch renders null), so
+                  there's no way to leave the student view. */}
               <RoleSwitch
                 courseId={courseId}
                 role={value.role}

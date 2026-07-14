@@ -452,7 +452,7 @@ async function route(
   // /api/conversations[/:id[/messages]]
   if (head === "conversations") {
     if (req.method === "GET" && parts.length === 2) {
-      return listConversationsRoute(env, ctx, identity);
+      return listConversationsRoute(env, ctx, identity, url);
     }
     if (req.method === "POST" && parts.length === 2) {
       return startConversation(req, env, identity);
@@ -3001,6 +3001,7 @@ async function listConversationsRoute(
   env: Env,
   ctx: ExecutionContext,
   identity: Identity,
+  url: URL,
 ): Promise<Response> {
   // Skip the redundant findUserByEmail when identity.userId is already known.
   let userId = identity.userId;
@@ -3010,8 +3011,15 @@ async function listConversationsRoute(
     userId = user.id;
   }
 
+  // Optional per-agent scope: the conversation sidebar asks for one agent's
+  // threads only (?agentId=…). Absent → every conversation the user owns.
+  const agentIdFilter = url.searchParams.get("agentId");
+
   const SIDEBAR_LIMIT = 50;
-  const rows = await repo.listConversationsForUser(env.DB, userId, SIDEBAR_LIMIT);
+  const allRows = await repo.listConversationsForUser(env.DB, userId, SIDEBAR_LIMIT);
+  const rows = agentIdFilter
+    ? allRows.filter((r) => r.agent_id === agentIdFilter)
+    : allRows;
 
   const items = rows.map((r) => {
     const def = JSON.parse(r.definition_snapshot) as AgentDefinition;
@@ -3040,6 +3048,7 @@ async function listConversationsRoute(
     return {
       id: r.id,
       title: derivedTitle,
+      agentId: r.agent_id,
       agentName,
       topicProgress,
       completedAt: r.completed_at,

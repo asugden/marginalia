@@ -104,7 +104,10 @@ export async function getConversation(id: string): Promise<ConversationView> {
   };
 }
 
-export async function listConversations(): Promise<{
+export async function listConversations(
+  _signal?: AbortSignal,
+  agentId?: string | null,
+): Promise<{
   conversations: ConversationSummary[];
 }> {
   const items: ConversationSummary[] = Array.from(store.entries())
@@ -117,6 +120,7 @@ export async function listConversations(): Promise<{
         title: completed
           ? `${MOCK_AGENT_TITLE} — completed`
           : `${MOCK_AGENT_TITLE} — topic ${idx + 1}/${total}`,
+        agentId: MOCK_AGENT_ID,
         agentName: MOCK_AGENT_TITLE,
         topicProgress: { index: idx, total },
         completedAt: c.completedAt,
@@ -124,6 +128,7 @@ export async function listConversations(): Promise<{
         hasBackbone: true,
       };
     })
+    .filter((c) => !agentId || c.agentId === agentId)
     .sort((a, b) => b.updatedAt - a.updatedAt);
   return { conversations: items };
 }

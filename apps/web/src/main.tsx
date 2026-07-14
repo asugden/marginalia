@@ -20,8 +20,6 @@ const CollectionsListPage = lazy(() =>
   import("./pages/CollectionsListPage.js").then((m) => ({ default: m.CollectionsListPage })));
 const CollectionDetailPage = lazy(() =>
   import("./pages/CollectionDetailPage.js").then((m) => ({ default: m.CollectionDetailPage })));
-const HistoryPage = lazy(() =>
-  import("./pages/HistoryPage.js").then((m) => ({ default: m.HistoryPage })));
 const RosterPage = lazy(() =>
   import("./pages/RosterPage.js").then((m) => ({ default: m.RosterPage })));
 const JoinPage = lazy(() =>
@@ -86,7 +84,10 @@ const router = createBrowserRouter([
   // URL with the new course-scoped equivalent.
   { path: "/c/:conversationId", element: lz(<LegacyCourseRedirect to="/chat/:conversationId" />) },
   { path: "/new/:agentId", element: lz(<LegacyCourseRedirect to="/chat/new/:agentId" />) },
-  { path: "/history", element: lz(<LegacyCourseRedirect to="/history" />) },
+  // History page removed (v1.1) — each module owns its own history now (agents
+  // in the conversation sidebar, writing in the document list). The old
+  // course-agnostic /history bounces to the course home.
+  { path: "/history", element: lz(<LegacyCourseRedirect to="/" />) },
   { path: "/write", element: lz(<LegacyCourseRedirect to="/write" />) },
   { path: "/write/agents", element: lz(<LegacyCourseRedirect to="/write/agents" />) },
   { path: "/write/:id", element: lz(<LegacyCourseRedirect to="/write/:id" />) },
@@ -130,7 +131,6 @@ const router = createBrowserRouter([
       // Compose mode (v0.4 §14): chat surface for an agent with no row yet.
       // First send creates the row and replaces the URL with chat/:id.
       { path: "chat/new/:agentId", element: <ConversationPage /> },
-      { path: "history", element: lz(<HistoryPage />) },
       { path: "write", element: lz(<ProvenanceDocumentListPage />) },
       { path: "write/agents", element: lz(<ProvenanceAgentsPage />) },
     ],

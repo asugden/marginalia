@@ -31,7 +31,7 @@ import type { TrackedEvent } from "./ProvenanceTracker.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { SubmissionModal } from "./SubmissionModal.js";
 import { Button, IconButton, Wordmark } from "../../../components/index.js";
-import { BackIcon, ShareIcon } from "../../../icons.js";
+import { ShareIcon } from "../../../icons.js";
 
 const SAVE_DEBOUNCE_MS = 1_000;
 const EVENTS_FLUSH_MS = 3_000;
@@ -300,7 +300,7 @@ export function EditorPage() {
         <div className="ds-staff-page">
           <p className="error">{loadError}</p>
           <Button variant="subtle" href={writeBase}>
-            ← Back to documents
+            Go to documents
           </Button>
         </div>
       </div>
@@ -334,9 +334,8 @@ export function EditorPage() {
           <Wordmark size="sm" />
         </Link>
         <span className="prov-shell-role">Provenance</span>
-        <IconButton title="Back to documents" href={writeBase}>
-          <BackIcon size={20} />
-        </IconButton>
+        {/* No explicit back button — the wordmark lockup returns to the
+            documents list. */}
         <input
           className="prov-shell-title"
           value={titleDraft}

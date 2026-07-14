@@ -200,6 +200,9 @@ export interface ConversationView {
 export interface ConversationSummary {
   id: string;
   title: string;
+  /** The agent this conversation belongs to (null for a deleted agent). Lets
+   *  the conversation sidebar scope history to the current agent. */
+  agentId: string | null;
   agentName: string;
   topicProgress: { index: number; total: number } | null;
   completedAt: number | null;
@@ -334,9 +337,13 @@ export function getConversation(id: string, signal?: AbortSignal) {
   return jsonFetch<ConversationView>(`/api/conversations/${id}`, { signal });
 }
 
-export function listConversations(signal?: AbortSignal) {
+export function listConversations(
+  signal?: AbortSignal,
+  agentId?: string | null,
+) {
+  const qs = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
   return jsonFetch<{ conversations: ConversationSummary[] }>(
-    "/api/conversations",
+    `/api/conversations${qs}`,
     { signal },
   );
 }

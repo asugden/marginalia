@@ -10,6 +10,10 @@
  * instructor can "Preview as student" — same shell, student chrome, with a
  * banner that makes the mode explicit.
  * ========================================================================== */
+
+/* Shell width var + the lockup is rendered by the <Wordmark> component (a
+   span) which the topbars wrap in a link, rather than the mock's inline
+   <a class="app-lockup">. Keep both working. */
 :root { --shell-max: 880px; }
 
 /* ---- App shell: lock the viewport; only inner regions scroll. This is the
@@ -50,13 +54,12 @@ html, body { height: 100%; }
 }
 .app-topbar--wide .app-topbar__inner { max-width: 1100px; }
 
-/* The lockup is rendered by <Wordmark> as a span; the topbar wraps it in a
-   link. Keep the link a bare inline-flex so it doesn't disturb the lockup. */
-.app-lockup-link { display: inline-flex; align-items: center; text-decoration: none; flex: none; }
 .app-lockup { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; flex: none; }
 .app-lockup img { width: 24px; height: auto; display: block; }
 .app-lockup__word { font-family: var(--font-mono); font-weight: 700; font-size: 1.22rem; letter-spacing: -0.05em; color: var(--text-strong); line-height: 1; }
 .app-lockup__word em { font-style: normal; color: var(--accent); }
+/* marginalia: <Wordmark> wrapper link + its size modifiers (sm/lg). */
+.app-lockup-link { display: inline-flex; align-items: center; text-decoration: none; flex: none; }
 .app-lockup--sm .app-lockup__word { font-size: 1.05rem; }
 .app-lockup--sm .app-lockup__mark { width: 20px; }
 .app-lockup--lg .app-lockup__word { font-size: 1.5rem; }
@@ -274,6 +277,7 @@ html, body { height: 100%; }
 .app-side__history a:hover { background: var(--surface); }
 .app-side__history li.is-active a { background: var(--surface); box-shadow: var(--shadow-xs); }
 .app-side__history li.is-active a span { color: var(--text-strong); font-weight: 600; }
+.app-side__histempty { padding: 0.45rem 0.55rem; color: var(--text-faint); font-size: var(--text-sm); }
 
 .app-conv { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; }
 .app-conv__head { flex: none; display: flex; align-items: center; gap: 0.4rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface); }
@@ -469,6 +473,25 @@ select.app-input {
 .app-coursegroup__name { font-weight: 700; font-size: var(--text-lg); color: var(--text-strong); letter-spacing: -0.01em; display: inline-flex; align-items: baseline; gap: 0.6rem; }
 .app-coursegroup__name i { font-style: normal; font-weight: 500; font-size: var(--text-2xs); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
 
+/* ---- Student: back link + course picker (multi-course landing) ---- */
+.app-backlink { display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: 0; cursor: pointer; padding: 0 0 0.9rem; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; transition: color var(--dur-2) var(--ease-out); }
+.app-backlink:hover { color: var(--accent); }
+.app-backlink svg { width: 14px; height: 14px; }
+
+.app-picker { list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.9rem; align-items: stretch; }
+.app-picker li { display: flex; }
+.app-picker__card { position: relative; display: flex; flex-direction: column; gap: 0.35rem; width: 100%; height: 100%; text-align: left; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.3rem 1.4rem; box-shadow: var(--shadow-xs); overflow: hidden; transition: box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
+.app-picker__card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); transform: scaleY(0); transition: transform var(--dur-3) var(--ease-out); }
+.app-picker__card:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
+.app-picker__card:hover::before { transform: scaleY(1); }
+.app-picker__term { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.app-picker__name { font-weight: 700; font-size: var(--text-xl); color: var(--text-strong); letter-spacing: -0.01em; line-height: 1.2; padding-right: 1.6rem; }
+.app-picker__meta { display: flex; align-items: center; flex-wrap: wrap; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 0.2rem; }
+.app-picker__meta i { font-style: normal; color: var(--border-strong); margin: 0 0.4rem; }
+.app-picker__go { position: absolute; top: 1.3rem; right: 1.3rem; color: var(--text-faint); display: inline-flex; transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
+.app-picker__card:hover .app-picker__go { color: var(--accent); transform: translateX(2px); }
+.app-picker__go svg { width: 18px; height: 18px; }
+
 /* ---- Writing zone: course-tagged new doc + past papers ---- */
 .app-writing__new { display: flex; align-items: flex-end; gap: 0.7rem; flex: none; }
 .app-writing__pick { min-width: 0; }
@@ -482,11 +505,14 @@ select.app-input {
 
 .app-papers { margin-top: 1.5rem; }
 .app-papers__bar { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0.2rem 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.6rem; }
-.app-papers__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.app-papers__list li { border-bottom: 1px solid var(--border-faint); }
-.app-papers__list li:last-child { border-bottom: 0; }
-.app-papers__list a { display: flex; align-items: center; gap: 0.85rem; padding: 0.8rem 0.4rem; text-decoration: none; border-radius: var(--radius-sm); transition: background var(--dur-2) var(--ease-out); }
-.app-papers__list a:hover { background: var(--surface-hover); }
+.app-papers__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.app-papers__list li { list-style: none; }
+.app-papers__list a { display: flex; align-items: center; gap: 0.85rem; padding: 0.75rem 0.9rem; text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); transition: box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
+.app-papers__list a:hover { border-color: var(--border-strong); box-shadow: var(--shadow-hover); }
+.app-papers__go { flex: none; display: inline-flex; align-items: center; color: var(--text-faint); transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
+.app-papers__go svg { width: 18px; height: 18px; }
+.app-papers__list a:hover .app-papers__go { color: var(--accent); transform: translateX(2px); }
+.app-papers__list a:hover .app-papers__title { color: var(--accent-ink); }
 .app-papers__ic { flex: none; width: 34px; height: 34px; border-radius: var(--radius-sm); background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; }
 .app-papers__ic svg { width: 18px; height: 18px; }
 .app-papers__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
@@ -626,3 +652,57 @@ select.app-input {
 
 /* Account-tweak helper note inside the Tweaks panel. */
 .app-tweak-note { margin: 0.7rem 0 0; font-size: 0.78rem; line-height: 1.45; color: var(--text-secondary); opacity: 0.85; }
+
+/* ======================= Student module nav + stack ===================== *
+ * The student top bar now carries the same kind of inline module nav the
+ * instructor bar does — one item per ENABLED module (Agents always; Writing
+ * and Attendance when the course turns them on). Clicking one scrolls its
+ * panel into view; the lockup is home. Together they retire the per-screen
+ * back buttons the student surfaces used to each invent their own way.
+ * ------------------------------------------------------------------------ */
+.app-nav--student { /* inherits .app-nav */ }
+.app-nav__item--up { color: var(--text-soft); }
+.app-nav__item--up::after { content: ""; width: 1px; height: 1.1em; margin-left: 0.5rem; background: var(--border); }
+
+/* Each module on the course page sits in the SAME container so they read as
+ * peers — the fix for the writing/provenance module having no frame while the
+ * agent list did. Two frames, switchable via the Module-frame tweak:
+ *   · card — a sunken well per module; white items (agent rows) pop against it
+ *   · open — no fill, just an eyebrow→title header over a hairline rule
+ */
+.app-modstack { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.app-modpanel__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.app-modpanel__heading .eyebrow { display: block; margin-bottom: 0.3rem; }
+.app-modpanel__heading h2 { font-size: var(--text-xl); margin: 0; }
+.app-modpanel__meta { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); white-space: nowrap; flex: none; }
+
+.app-modpanel--card {
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 1.4rem 1.5rem 1.5rem;
+}
+/* Alternate the well tone so a stack of modules has rhythm instead of reading
+   as one flat block. Two warm sand steps — both keep inner white cards popping. */
+.app-modstack > .app-modpanel--card:nth-of-type(odd)  { background: var(--sand-100); }
+.app-modstack > .app-modpanel--card:nth-of-type(even) { background: var(--sand-200); border-color: var(--sand-300); }
+.app-modpanel--card .app-modpanel__head { margin-bottom: 1.15rem; }
+
+.app-modpanel--open .app-modpanel__head { align-items: baseline; padding-bottom: 0.85rem; border-bottom: 1px solid var(--border); margin-bottom: 1.1rem; }
+
+/* Writing module body: a lead + New-document action, then the document list. */
+.app-writing__intro { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; margin-bottom: 0.5rem; }
+.app-writing__intro .app-writing__note { margin: 0; flex: 1; }
+.app-writing__intro .ds-btn { flex: none; white-space: nowrap; }
+
+/* Attendance module body: the open session + a one-tap check-in. */
+.app-attblock { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); padding: 1rem 1.15rem; }
+.app-attblock__label { font-weight: 600; color: var(--text-strong); font-size: var(--text-base); }
+.app-attblock__date { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 0.15rem; }
+
+@media (max-width: 680px) {
+  .app-modpanel--card { padding: 1.1rem 1.1rem 1.2rem; }
+  .app-writing__intro { flex-direction: column; align-items: stretch; }
+  .app-writing__intro .ds-btn { width: 100%; justify-content: center; }
+  .app-attblock { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+  .app-attblock .ds-btn { width: 100%; justify-content: center; }
+}

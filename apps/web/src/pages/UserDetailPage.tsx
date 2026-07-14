@@ -21,7 +21,17 @@ import {
   type UserDetail,
 } from "../client.js";
 import { relativeTime } from "../time.js";
-import { Avatar, Badge, Button, Select, Wordmark } from "../components/index.js";
+import {
+  Avatar,
+  Badge,
+  Button,
+  IconButton,
+  RoleSwitch,
+  Select,
+  Wordmark,
+} from "../components/index.js";
+import { SignOutIcon } from "../icons.js";
+import { signOut } from "../session.js";
 
 export function UserDetailPage() {
   const { id: userId } = useParams<{ id: string }>();
@@ -112,20 +122,36 @@ export function UserDetailPage() {
     }
   }
 
+  // The app topbar in its admin register — same chrome as the Admin console,
+  // so opening a user reads as a drill-in, not a separate page. The lockup
+  // returns to the console; the RoleSwitch is the way out to the instructor
+  // surface. No per-page back button.
   const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="ds-staff">
-      <header className="ds-staff-top">
-        <Link to="/" aria-label="Home">
-          <Wordmark size="sm" />
-        </Link>
-        <span className="ds-staff-top__role">Admin</span>
-        <div className="ds-staff-top__course">
-          <Button variant="ghost" size="sm" href="/admin">
-            ← Admin
-          </Button>
+    <div className="app">
+      <header className="app-topbar app-topbar--wide app-topbar--admin">
+        <div className="app-topbar__inner">
+          <Link to="/admin" aria-label="Admin console" className="app-lockup-link">
+            <Wordmark size="sm" />
+          </Link>
+          <span className="app-lockup__role">Admin console</span>
+          <div className="app-topbar__spacer" />
+          <div className="app-topbar__actions">
+            <RoleSwitch
+              courseId={null}
+              role="instructor"
+              isAdmin
+              current="admin"
+            />
+            <span className="app-topbar__divider" aria-hidden />
+            <IconButton title="Sign out" onClick={signOut}>
+              <SignOutIcon />
+            </IconButton>
+          </div>
         </div>
       </header>
-      <div className="app-page">{children}</div>
+      <div className="app__body">
+        <div className="app-page">{children}</div>
+      </div>
     </div>
   );
 
