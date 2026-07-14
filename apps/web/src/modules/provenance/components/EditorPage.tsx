@@ -87,10 +87,9 @@ export function EditorPage() {
   const isInstructor = active?.role === "instructor" && !previewing;
   const provenanceEnabled = active?.provenanceEnabled ?? true;
 
-  // "Hide marks from students" (display-only; recording is unaffected).
-  // Seeded from /api/me; instructors can flip it live. Students never see
-  // coloring while it's on; instructors always see coloring so they can
-  // review, and get a toggle to control the student view.
+  // "Hide marks from students" — the persisted course setting (display-only;
+  // recording is unaffected). Seeded from /api/me; an instructor flips it with
+  // the header toggle.
   const [hideMarksSetting, setHideMarksSetting] = useState<boolean>(
     active?.hideProvenanceMarks ?? false,
   );
@@ -98,12 +97,15 @@ export function EditorPage() {
     setHideMarksSetting(active?.hideProvenanceMarks ?? false);
   }, [active?.hideProvenanceMarks]);
   const [savingHideMarks, setSavingHideMarks] = useState(false);
-  // Marks are hidden when the course setting says so AND the viewer should see
-  // the student experience. `isInstructor` above is false while previewing, so
-  // a previewing instructor and a real student both get marks hidden here; an
-  // instructor actually authoring keeps coloring on (they own the toggle and
-  // review with it).
-  const hideMarksForEditor = hideMarksSetting && !isInstructor;
+  // What THIS editor renders follows the setting directly, for everyone. There
+  // is no separate "instructors always see coloring" carve-out: that made the
+  // toggle appear to do nothing in the instructor's own view and contradicted
+  // "act as student" (which is supposed to be a genuine student view). Now:
+  //   • Instructor, "Marks shown"  → coloring on (authoring/review view).
+  //   • Instructor, "Marks hidden" → coloring off — the instructor sees exactly
+  //     what students will see, so the toggle gives immediate feedback.
+  //   • Student / acting-as-student → follows the setting; no toggle to change it.
+  const hideMarksForEditor = hideMarksSetting;
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");

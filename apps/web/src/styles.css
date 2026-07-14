@@ -2330,6 +2330,20 @@ body.prov-dragging * {
   display: flex;
   justify-content: flex-end;
   margin-top: 0.45rem;
+  /* Reveal on hover/focus only — keep the bubble uncluttered until the writer
+   * reaches for it. Opacity (not display) so the row's height is reserved and
+   * bubbles don't jump as the button fades in. Always shown when a control
+   * inside is keyboard-focused, for accessibility, and on touch (no hover). */
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.prov-bubble:hover .prov-bubble-actions,
+.prov-bubble:focus-within .prov-bubble-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* Touch devices have no hover — never hide the action there. */
+  .prov-bubble-actions { opacity: 1; }
 }
 /* "Insert at cursor" on an assistant bubble — the design's info-tinted pill
  * (matches the "from chat" origin colour the inserted text will get). Overrides

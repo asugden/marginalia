@@ -222,6 +222,18 @@ export const ProvenanceTracker = Extension.create<
     // flush an insert event so we don't keep cumulating across bursts.
     let keystroke: KeystrokeWindow | null = null;
 
+    // Rolling window for slow-retype laundering detection. Accumulates the text
+    // and doc range of consecutive *human* inserts (typically one char each) so
+    // that typing out remembered LLM wording by hand — which never triggers the
+    // per-event reversion check, since each keystroke is under the min length —
+    // is still caught once enough matching characters have accrued. Reset on any
+    // non-adjacent or non-human edit. Closes TODO(reversion-slow-typing).
+    let humanRun: { text: string; from: number; to: number } | null = null;
+    // Keep the buffer bounded: no remembered contribution is longer than the
+    // longest LLM run, so once we exceed that we can drop the oldest chars.
+    const maxRunLen = () =>
+      llmContributions.reduce((n, c) => Math.max(n, c.length), 0);
+
     // Is this typed text an exact retype of a remembered LLM contribution?
     // Match on normalized whitespace; require MIN_REVERSION_LENGTH so short
     // common words ("the model") don't get swept up.
@@ -238,6 +250,25 @@ export const ProvenanceTracker = Extension.create<
       const norm = normalizeForMatch(text);
       if (norm.trim().length < MIN_REVERSION_LENGTH) return false;
       return llmContributions.some((c) => c.includes(norm.trim()));
+    };
+
+    // Slow-retype detection: does the trailing end of the accumulated human run
+    // reproduce a remembered LLM contribution? If so, return how many trailing
+    // characters of the run to re-stamp as origin="llm". We match the longest
+    // suffix (contributions are sorted longest-first) so a fully-retyped
+    // sentence re-marks in full, and require MIN_REVERSION_LENGTH so incidental
+    // short overlaps ("the model") don't trip it.
+    const trailingLlmMatchLen = (runText: string): number => {
+      const norm = normalizeForMatch(runText).trim();
+      if (norm.length < MIN_REVERSION_LENGTH) return 0;
+      for (const c of llmContributions) {
+        // c is already normalized+trimmed. A retype "launders" when the run
+        // ends with an LLM contribution (they typed up through the end of it).
+        if (norm.endsWith(c) && c.length >= MIN_REVERSION_LENGTH) {
+          return c.length;
+        }
+      }
+      return 0;
     };
 
     return [
@@ -305,7 +336,7 @@ export const ProvenanceTracker = Extension.create<
         // Tag inserted text with the origin mark, and emit events.
         // appendTransaction runs after the user's transaction is applied
         // and lets us add a follow-up transaction with the mark.
-        appendTransaction: (transactions, _oldState, newState) => {
+        appendTransaction: (transactions, oldState, newState) => {
           const userTrs = transactions.filter((t) => t.docChanged);
           if (userTrs.length === 0) return null;
 
@@ -339,6 +370,29 @@ export const ProvenanceTracker = Extension.create<
                 ? newState.doc.textBetween(insertedFrom, insertedTo, "\n", "\n")
                 : "";
 
+              // Did this step overwrite text that was LLM-authored? tr.docs[i]
+              // is the document *before* step i, so step.from/step.to are valid
+              // coords in it. If any character in the replaced range carried an
+              // origin="llm" mark, the user is editing over LLM wording — that
+              // new text should read as "edited" (derived from LLM), never as
+              // fresh "human". Guards the most direct laundering path: select an
+              // LLM run and type your own words over it.
+              const preStepDoc = tr.docs[i] ?? oldState.doc;
+              let replacedLlm = false;
+              if (removedLen > 0 && originMarkType) {
+                preStepDoc.nodesBetween(step.from, step.to, (node) => {
+                  if (
+                    node.isText &&
+                    node.marks.some(
+                      (m) => m.type === originMarkType && m.attrs.origin === "llm",
+                    )
+                  ) {
+                    replacedLlm = true;
+                  }
+                  return !replacedLlm; // stop descending once found
+                });
+              }
+
               if (removedLen > 0) {
                 events.push({
                   kind: "delete",
@@ -346,6 +400,10 @@ export const ProvenanceTracker = Extension.create<
                   length: removedLen,
                   text: "",
                 });
+                // A pure deletion breaks the contiguous typed run. (A replace —
+                // removedLen>0 AND sliceSize>0 — is handled in the insert branch
+                // below, which rebuilds the run from the inserted text.)
+                if (sliceSize === 0) humanRun = null;
               }
 
               if (sliceSize > 0) {
@@ -375,6 +433,13 @@ export const ProvenanceTracker = Extension.create<
                   kind = "llm_insert";
                   origin = "llm";
                   sourceMessageId = null;
+                } else if (kind === "insert" && replacedLlm) {
+                  // Typed over LLM-authored text: not a verbatim reversion (that
+                  // branch already ran), but derived from the model's wording —
+                  // so mark it "edited" (yellow), not fresh "human". Prevents
+                  // laundering LLM prose by rewriting it in place.
+                  kind = "replace";
+                  origin = "edited";
                 }
 
                 if (originMarkType) {
@@ -398,6 +463,60 @@ export const ProvenanceTracker = Extension.create<
                   event.timingGapsMs = keystroke.gaps.slice();
                 }
                 events.push(event);
+
+                // ── Slow-retype laundering detection ──────────────────────
+                // Only plain human inserts feed the rolling buffer. Anything
+                // else (paste, llm, edited, a reversion we already caught)
+                // breaks the run.
+                if (kind === "insert" && origin === "human") {
+                  const contiguous =
+                    humanRun !== null && insertedFrom === humanRun.to;
+                  humanRun = contiguous
+                    ? {
+                        text: humanRun!.text + insertedText,
+                        from: humanRun!.from,
+                        to: insertedTo,
+                      }
+                    : { text: insertedText, from: insertedFrom, to: insertedTo };
+
+                  // Bound the buffer so it can't grow without limit.
+                  const cap = maxRunLen();
+                  if (cap > 0 && humanRun.text.length > cap) {
+                    const drop = humanRun.text.length - cap;
+                    humanRun = {
+                      text: humanRun.text.slice(drop),
+                      from: humanRun.from + drop,
+                      to: humanRun.to,
+                    };
+                  }
+
+                  const matchLen = trailingLlmMatchLen(humanRun.text);
+                  if (matchLen > 0 && originMarkType) {
+                    // Re-stamp the trailing matchLen characters of the run as
+                    // llm. Work in normalized space is unnecessary here: the
+                    // match is a suffix of the raw run of that character length
+                    // (whitespace normalization only collapses runs, and we
+                    // re-mark by document position, which is exact).
+                    const reFrom = Math.max(humanRun.from, humanRun.to - matchLen);
+                    markTr = markTr.addMark(
+                      reFrom,
+                      humanRun.to,
+                      originMarkType.create({ origin: "llm", sourceMessageId: null }),
+                    );
+                    didMark = true;
+                    events.push({
+                      kind: "llm_insert",
+                      offset: reFrom,
+                      length: humanRun.to - reFrom,
+                      text: newState.doc.textBetween(reFrom, humanRun.to, "\n", "\n"),
+                      origin: "llm",
+                    });
+                    humanRun = null; // consumed; start fresh
+                  }
+                } else {
+                  // Non-human insert breaks the contiguous human run.
+                  humanRun = null;
+                }
               }
             }
           }
