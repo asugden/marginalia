@@ -1,9 +1,10 @@
 // /author/voices — the per-author voice library (v0.7 §1.1).
 //
-// Two sections: voices the signed-in user owns ("My voices") and voices
-// other authors have shared with them ("Shared with me"). Library voices
-// are not surfaced here — they live in the agent editor's voice picker,
-// where a "Customize" button forks them into a new owned voice.
+// Three sections: the built-in "Default voices" (the shared library, incl.
+// Socratic) that every course starts with, voices the signed-in user owns
+// ("My voices"), and voices other authors shared with them ("Shared with me").
+// Default voices are read-only; "Customize" forks one into a new owned voice
+// the instructor can edit.
 //
 // This page is the place to author voices; editing happens at
 // /author/voices/:id and /author/voices/new.
@@ -27,6 +28,7 @@ export function AuthorVoicesPage() {
   // only scopes the URLs so the nav persists.
   const { courseId } = useCourse();
   const voicesBase = `/course/${courseId}/instructor/voices`;
+  const [library, setLibrary] = useState<VoiceSummary[] | null>(null);
   const [owned, setOwned] = useState<VoiceSummary[] | null>(null);
   const [shared, setShared] = useState<SharedVoiceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function AuthorVoicesPage() {
     setError(null);
     listVoices()
       .then((r) => {
+        setLibrary(r.library);
         setOwned(r.owned);
         setShared(r.shared);
       })
@@ -81,6 +84,45 @@ export function AuthorVoicesPage() {
         </div>
 
         {error && <p className="error">{error}</p>}
+
+        <div className="app-section">
+          <span className="mono-label app-section__label">Default voices</span>
+          <p className="muted small">
+            Built-in personas every course starts with — including the Socratic
+            default. They&rsquo;re read-only; Customize forks one into a new
+            voice you own and can edit.
+          </p>
+          {library === null ? (
+            <p className="muted">Loading…</p>
+          ) : library.length === 0 ? (
+            <p className="muted">No default voices.</p>
+          ) : (
+            <div className="app-list">
+              {library.map((v) => (
+                <div key={v.id} className="app-list__row">
+                  <Avatar name={v.name} />
+                  <div className="app-list__main">
+                    <div className="app-list__title">
+                      {v.name} <Badge tone="ghost">default</Badge>
+                    </div>
+                    <div className="app-list__sub">{v.description}</div>
+                  </div>
+                  <div className="app-list__meta">
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => onDuplicate(v.id)}
+                      title="Copy this default into a new voice you own and can edit."
+                    >
+                      Customize
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="app-section">
           <span className="mono-label app-section__label">My voices</span>

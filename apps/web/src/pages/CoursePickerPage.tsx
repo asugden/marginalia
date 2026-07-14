@@ -25,6 +25,7 @@ import {
   listJoinCodes,
   listRoster,
   revealCourseTab,
+  setCourseFeature,
   type MeEnrollment,
 } from "../client.js";
 import { readBootstrap } from "../bootstrap.js";
@@ -212,6 +213,8 @@ function CourseCard({
         <CourseAdmin
           courseId={e.courseId}
           showAttendance={e.showAttendance}
+          showCollections={e.showCollections}
+          provenanceEnabled={e.provenanceEnabled}
         />
       )}
     </div>
@@ -219,15 +222,19 @@ function CourseCard({
 }
 
 // Lazy-loaded course detail: counts + join code, fetched only when a card is
-// expanded. Also where an instructor turns on optional modules (Attendance) —
-// once on, it appears in the course's nav. (Sources & Provenance are always
-// on; Attendance is opt-in because it implies in-person sessions.)
+// expanded. Also where an instructor toggles the optional modules. Sources and
+// Provenance are real on/off toggles (default on); Attendance is opt-in (it
+// implies in-person sessions). All three ride the same set-feature endpoint.
 function CourseAdmin({
   courseId,
   showAttendance,
+  showCollections,
+  provenanceEnabled,
 }: {
   courseId: string;
   showAttendance: boolean;
+  showCollections: boolean;
+  provenanceEnabled: boolean;
 }) {
   const [stats, setStats] = useState<{
     agents: number;
@@ -236,9 +243,11 @@ function CourseAdmin({
     joinCode: string | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Local optimistic copy of the attendance flag so the toggle reflects
-  // instantly (the server flag is one-way; /api/me catches up on next load).
+  // Local optimistic copies so the toggles reflect instantly; /api/me catches
+  // up on next load.
   const [attendanceOn, setAttendanceOn] = useState(showAttendance);
+  const [sourcesOn, setSourcesOn] = useState(showCollections);
+  const [provenanceOn, setProvenanceOn] = useState(provenanceEnabled);
   const [enabling, setEnabling] = useState(false);
 
   async function enableAttendance() {
@@ -251,6 +260,23 @@ function CourseAdmin({
       setError(err instanceof Error ? err.message : "Couldn't enable attendance");
     } finally {
       setEnabling(false);
+    }
+  }
+
+  // Bidirectional toggle for Sources / Provenance. Optimistic with rollback on
+  // failure so the switch never lies about the persisted state.
+  async function toggleFeature(
+    feature: "collections" | "provenance",
+    next: boolean,
+  ) {
+    const setLocal = feature === "collections" ? setSourcesOn : setProvenanceOn;
+    setLocal(next);
+    setError(null);
+    try {
+      await setCourseFeature(courseId, feature, next);
+    } catch (err) {
+      setLocal(!next); // rollback
+      setError(err instanceof Error ? err.message : "Couldn't update module");
     }
   }
 
@@ -320,17 +346,41 @@ function CourseAdmin({
             </div>
           )}
 
-          {/* Optional modules. Sources + Provenance are always on; Attendance
-              is opt-in (it implies in-person sessions). Turning it on adds the
-              Attendance tab to this course's nav. */}
+          {/* Optional modules. Sources and Provenance are real on/off toggles
+              (default on); Attendance is opt-in (it implies in-person sessions).
+              Turning a module off removes it from this course's nav and the
+              students' view. */}
           <div className="app-modules" style={{ marginTop: "1.25rem" }}>
-            <div className="app-module app-module--on">
+            <label className={"app-module" + (sourcesOn ? " app-module--on" : "")}>
               <span className="app-module__main">
-                <b>Sources &amp; Provenance</b>
-                <span>Always available in every course.</span>
+                <b>Sources</b>
+                <span>
+                  Document collections you attach to an agent to ground it. Adds
+                  the Sources tab.
+                </span>
               </span>
-              <span className="app-dcourse__mod">On</span>
-            </div>
+              <input
+                type="checkbox"
+                className="app-switch"
+                checked={sourcesOn}
+                onChange={(ev) => toggleFeature("collections", ev.target.checked)}
+              />
+            </label>
+            <label className={"app-module" + (provenanceOn ? " app-module--on" : "")}>
+              <span className="app-module__main">
+                <b>Provenance writing</b>
+                <span>
+                  A writing space that records where every word came from. Adds
+                  the Writing tool for students.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                className="app-switch"
+                checked={provenanceOn}
+                onChange={(ev) => toggleFeature("provenance", ev.target.checked)}
+              />
+            </label>
             <div className={"app-module" + (attendanceOn ? " app-module--on" : "")}>
               <span className="app-module__main">
                 <b>Attendance</b>

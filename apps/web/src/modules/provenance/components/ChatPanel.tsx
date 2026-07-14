@@ -33,6 +33,15 @@ interface PendingAssistant { text: string }
 
 interface RefChip { id: string; text: string }
 
+// The built-in default voice, always offered first in the agent picker so a
+// fresh course (no instructor-authored chat agents) still has a working tutor.
+// The id is resolved server-side from the shared voice library.
+const SOCRATIC_DEFAULT: AgentSummary = {
+  id: "builtin:socratic",
+  name: "Socratic",
+  mine: false,
+};
+
 export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: Props) {
   const [refs, setRefs] = useState<RefChip[]>([]);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
@@ -83,7 +92,15 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
     ])
       .then(([a, c]) => {
         if (ctrl.signal.aborted) return;
-        setAgents(a);
+        // Always offer the built-in Socratic voice as a default, first in the
+        // list, so a fresh course (no instructor-authored chat agents) still
+        // has something to talk to. The worker resolves "builtin:socratic" from
+        // the shared voice library — see createConversationRoute.
+        const withDefault = [
+          SOCRATIC_DEFAULT,
+          ...a.filter((x) => x.id !== SOCRATIC_DEFAULT.id),
+        ];
+        setAgents(withDefault);
         setConversations(c);
         if (c.length > 0) setActive((cur) => cur ?? c[0]!);
       })

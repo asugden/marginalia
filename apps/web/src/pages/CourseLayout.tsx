@@ -60,6 +60,7 @@ export function CourseLayout() {
           showAttendance: e.showAttendance,
           showCollections: e.showCollections,
           hideProvenanceMarks: e.hideProvenanceMarks,
+          provenanceEnabled: e.provenanceEnabled,
           isAdmin: Boolean(m.isAdmin),
         });
       })

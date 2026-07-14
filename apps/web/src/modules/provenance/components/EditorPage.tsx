@@ -15,7 +15,7 @@
 // ratio in localStorage so it sticks across reloads.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useActiveCourse } from "../../../course/useActiveCourse.js";
 import {
@@ -30,7 +30,12 @@ import { ProvenanceEditor, type EditorChange } from "./Editor.js";
 import type { TrackedEvent } from "./ProvenanceTracker.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { SubmissionModal } from "./SubmissionModal.js";
-import { Button, IconButton, Wordmark } from "../../../components/index.js";
+import {
+  Button,
+  IconButton,
+  StudentModuleNav,
+  Wordmark,
+} from "../../../components/index.js";
 import { ShareIcon } from "../../../icons.js";
 
 const SAVE_DEBOUNCE_MS = 1_000;
@@ -65,6 +70,15 @@ export function EditorPage() {
   const courseId = active?.courseId ?? null;
   const isInstructor = active?.role === "instructor";
   const writeBase = `/course/${courseParam}/write`;
+  // "Preview as student": an instructor reaches the editor with ?preview=1 from
+  // the student Writing panel. The standalone editor can't read StudentLayout's
+  // preview context, so this URL param is the signal that it should replicate
+  // the student view — most importantly, actually hiding the marks. Without it,
+  // an instructor (who may have no student account) could never see the hidden
+  // state their students get. See fix in hideMarksForEditor below.
+  const [searchParams] = useSearchParams();
+  const previewing = isInstructor && searchParams.get("preview") === "1";
+  const provenanceEnabled = active?.provenanceEnabled ?? true;
 
   // "Hide marks from students" (display-only; recording is unaffected).
   // Seeded from /api/me; instructors can flip it live. Students never see
@@ -77,7 +91,11 @@ export function EditorPage() {
     setHideMarksSetting(active?.hideProvenanceMarks ?? false);
   }, [active?.hideProvenanceMarks]);
   const [savingHideMarks, setSavingHideMarks] = useState(false);
-  const hideMarksForEditor = hideMarksSetting && !isInstructor;
+  // Instructors normally always see coloring (they own the toggle and review
+  // with it), so `!isInstructor` keeps marks on for them. But when previewing
+  // as a student, they must see exactly what the student sees — so preview mode
+  // overrides that and hides the marks too.
+  const hideMarksForEditor = hideMarksSetting && (!isInstructor || previewing);
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
@@ -329,13 +347,27 @@ export function EditorPage() {
 
   return (
     <div className="prov-shell no-watermark">
+      {/* App module-nav strip — the same lockup + Agents/Writing nav the rest
+          of the student surface carries, so a writer can jump back to the course
+          home / Agents. The editor's own title/toggle bar sits below it. */}
+      {courseParam && (
+        <header className="app-topbar app-topbar--student prov-appbar">
+          <div className="app-topbar__inner">
+            <StudentModuleNav
+              courseId={courseParam}
+              provenanceEnabled={provenanceEnabled}
+              activeModule="writing"
+            />
+            <div className="app-topbar__spacer" />
+          </div>
+        </header>
+      )}
       <header className="prov-shell-header">
         <Link to={writeBase} aria-label="Back to documents">
-          <Wordmark size="sm" />
+          <span className="prov-shell-role">Provenance</span>
         </Link>
-        <span className="prov-shell-role">Provenance</span>
-        {/* No explicit back button — the wordmark lockup returns to the
-            documents list. */}
+        {/* No explicit back button — the lockup above and this Provenance link
+            both return toward the course / documents list. */}
         <input
           className="prov-shell-title"
           value={titleDraft}
@@ -344,7 +376,9 @@ export function EditorPage() {
           placeholder="Untitled"
         />
         <SaveStatus state={saveState} />
-        {isInstructor && (
+        {/* The marks toggle is an authoring control — hide it while previewing
+            as a student (the whole point of preview is to see, not set). */}
+        {isInstructor && !previewing && (
           <button
             type="button"
             className={"prov-toggle" + (hideMarksSetting ? "" : " is-on")}

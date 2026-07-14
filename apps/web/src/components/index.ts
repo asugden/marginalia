@@ -11,6 +11,7 @@ export { Tag } from "./core/Tag.js";
 export { Wordmark } from "./core/Wordmark.js";
 export { RoleSwitch } from "./RoleSwitch.js";
 export { PreviewBanner } from "./PreviewBanner.js";
+export { StudentModuleNav, studentModules } from "./StudentModuleNav.js";
 
 export { ChatComposer } from "./chat/ChatComposer.js";
 export { Message, ThinkingDots } from "./chat/Message.js";

@@ -74,7 +74,10 @@ export const TABS: TabSpec[] = [
     label: "Sources",
     description:
       "Document libraries you can attach to an agent. The agent answers from the sources you choose and cites them in line.",
-    visible: () => true,
+    // v1.1 — Sources is a real optional module (default on). Absent flag reads
+    // as on (see the COALESCE default in listEnrollmentsForUserEnriched), so
+    // only an explicit instructor toggle-off hides it.
+    visible: (e) => e?.showCollections ?? true,
   },
   {
     slug: "roster",

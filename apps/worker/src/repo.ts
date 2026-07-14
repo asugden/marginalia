@@ -183,6 +183,10 @@ export interface UserEnrollmentRow {
    *  origin coloring (recording is unaffected). Instructors always see it.
    *  Default false. */
   hideProvenanceMarks: boolean;
+  /** Whether the provenance writing module is enabled for this course (v1.1).
+   *  A real on/off toggle, default ON — when off, students don't see the
+   *  writing tool at all. */
+  provenanceEnabled: boolean;
 }
 export async function listEnrollmentsForUserEnriched(
   db: D1Database,
@@ -194,11 +198,16 @@ export async function listEnrollmentsForUserEnriched(
   // is absent.
   const { results } = await db
     .prepare(
+      // Sources (show_collections) and Provenance (provenance_enabled) default
+      // ON when there is no settings row (COALESCE default 1) — both are
+      // optional modules that ship enabled. Attendance stays default-off
+      // (opt-in, in-person only). See migration 0015.
       `SELECT e.course_id, c.name AS course_name, e.role,
               e.created_at AS joined_at,
               COALESCE(s.show_attendance, 0)  AS show_attendance,
-              COALESCE(s.show_collections, 0) AS show_collections,
-              COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks
+              COALESCE(s.show_collections, 1) AS show_collections,
+              COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks,
+              COALESCE(s.provenance_enabled, 1) AS provenance_enabled
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        LEFT JOIN course_settings s ON s.course_id = e.course_id
@@ -214,6 +223,7 @@ export async function listEnrollmentsForUserEnriched(
       show_attendance: number;
       show_collections: number;
       hide_provenance_marks: number;
+      provenance_enabled: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
@@ -223,6 +233,7 @@ export async function listEnrollmentsForUserEnriched(
     showAttendance: r.show_attendance === 1,
     showCollections: r.show_collections === 1,
     hideProvenanceMarks: r.hide_provenance_marks === 1,
+    provenanceEnabled: r.provenance_enabled === 1,
   }));
 }
 
@@ -252,6 +263,34 @@ export async function markCourseFeatureShown(
          SET ${column} = 1, updated_at = excluded.updated_at`,
     )
     .bind(courseId, ts)
+    .run();
+}
+
+/** v1.1 — set a per-course module flag to an explicit on/off value. Unlike
+ *  markCourseFeatureShown (one-way reveal), this is bidirectional so the
+ *  course-admin toggles can turn Sources / Provenance / Attendance back off.
+ *  Same single-round-trip upsert; the column allow-list keeps the interpolated
+ *  identifier safe. */
+export async function setCourseFeature(
+  db: D1Database,
+  courseId: string,
+  feature: "attendance" | "collections" | "provenance",
+  enabled: boolean,
+): Promise<void> {
+  const column =
+    feature === "attendance"
+      ? "show_attendance"
+      : feature === "collections"
+        ? "show_collections"
+        : "provenance_enabled";
+  await db
+    .prepare(
+      `INSERT INTO course_settings (course_id, ${column}, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(course_id) DO UPDATE
+         SET ${column} = excluded.${column}, updated_at = excluded.updated_at`,
+    )
+    .bind(courseId, enabled ? 1 : 0, now())
     .run();
 }
 

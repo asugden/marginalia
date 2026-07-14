@@ -25,6 +25,9 @@ export interface CourseContextValue {
    *  tab-visibility predicate) so the writing surface can read it without a
    *  separate fetch. */
   hideProvenanceMarks: boolean;
+  /** v1.1 — whether the provenance writing module is on for this course. When
+   *  false, the student view drops the Writing module (nav + home panel). */
+  provenanceEnabled: boolean;
   /** Instance-wide admin flag (from /api/me). Orthogonal to course role —
    *  feeds the topbar RoleSwitch so it can offer the Admin segment. */
   isAdmin: boolean;

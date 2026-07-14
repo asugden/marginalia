@@ -415,6 +415,18 @@ async function route(
     }
   }
 
+  // /api/courses/:courseId/set-feature — instructor toggles an optional
+  // module on or off (v1.1). Bidirectional, unlike reveal-tab: Sources and
+  // Provenance are real on/off toggles (default on); Attendance too.
+  if (
+    head === "courses" &&
+    sub === "set-feature" &&
+    req.method === "POST" &&
+    parts.length === 4
+  ) {
+    return setFeatureRoute(req, env, identity, tail!);
+  }
+
   // /api/courses/:courseId/reveal-tab — instructor opts a lazy-reveal
   // feature (attendance / collections) into the dashboard tab strip
   // without having to use it first (v1.0 §6 / dashboard "Add a tool").
@@ -1449,6 +1461,41 @@ async function revealTabRoute(
     return error("feature must be 'attendance' or 'collections'", 400);
   }
   await repo.markCourseFeatureShown(env.DB, courseId, body.feature);
+  return json({ ok: true });
+}
+
+/** POST /api/courses/:courseId/set-feature — instructor toggles an optional
+ *  module on/off. Bidirectional counterpart to revealTabRoute. */
+async function setFeatureRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  courseId: string,
+): Promise<Response> {
+  const resolved = await resolveUser(env, identity.email, courseId, identity.userId);
+  if (!resolved) return error("Not enrolled in this course", 403);
+  if (!isAuthor(resolved.enrollment.role)) {
+    return error("Instructor only", 403);
+  }
+  const body = (await req.json().catch(() => null)) as {
+    feature?: "attendance" | "collections" | "provenance";
+    enabled?: boolean;
+  } | null;
+  const feature = body?.feature;
+  if (
+    feature !== "attendance" &&
+    feature !== "collections" &&
+    feature !== "provenance"
+  ) {
+    return error(
+      "feature must be 'attendance', 'collections', or 'provenance'",
+      400,
+    );
+  }
+  if (typeof body?.enabled !== "boolean") {
+    return error("enabled must be a boolean", 400);
+  }
+  await repo.setCourseFeature(env.DB, courseId, feature, body.enabled);
   return json({ ok: true });
 }
 

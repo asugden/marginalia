@@ -31,30 +31,10 @@ import {
   IconButton,
   PreviewBanner,
   RoleSwitch,
-  Wordmark,
+  StudentModuleNav,
 } from "../components/index.js";
 import { SignOutIcon, UserIcon } from "../icons.js";
 import { signOut } from "../session.js";
-
-/** The student module nav. Agents is the always-present core; Writing and
- *  Attendance appear only when the course enabled them. Each item points at the
- *  course home with a `#module` hash the home reads to scroll the panel into
- *  view — a single deep-linkable source of truth, no shared scroll state. */
-interface StudentModule {
-  id: string;
-  label: string;
-}
-function studentModules(): StudentModule[] {
-  // Agents and Writing are the two student modules the home renders as panels.
-  // Attendance is intentionally absent: check-in is QR-gated and there is no
-  // student attendance-history surface yet, so there's nothing to nav to. Add
-  // it back here (and a panel in HomePage) once a student can see their own
-  // past check-ins.
-  return [
-    { id: "agents", label: "Agents" },
-    { id: "writing", label: "Writing" },
-  ];
-}
 
 export function StudentLayout() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -83,6 +63,7 @@ export function StudentLayout() {
           showAttendance: e.showAttendance,
           showCollections: e.showCollections,
           hideProvenanceMarks: e.hideProvenanceMarks,
+          provenanceEnabled: e.provenanceEnabled,
           isAdmin: Boolean(m.isAdmin),
         });
       })
@@ -109,11 +90,10 @@ export function StudentLayout() {
   const home = `/course/${courseId}`;
   const previewing = value.role === "instructor";
 
-  // The module nav shows only on the course home (the scroll-stack it targets).
-  // On a focused sub-screen (a conversation, the writing editor, history) the
-  // items still render but a click first returns home, then scrolls — so the
-  // nav does the job the per-screen back buttons used to.
-  const modules = studentModules();
+  // The module nav highlights the active panel only on the course home (the
+  // scroll-stack it targets). On a focused sub-screen (a conversation) a click
+  // first returns home, then scrolls — so the nav does the job the per-screen
+  // back buttons used to.
   const onHome = location.pathname === home || location.pathname === `${home}/`;
   const activeModule = onHome
     ? (location.hash.replace(/^#/, "") || "agents")
@@ -127,28 +107,15 @@ export function StudentLayout() {
       <div className="app">
         <header className="app-topbar app-topbar--student">
           <div className="app-topbar__inner">
-            <Link to={home} aria-label="Home" className="app-lockup-link">
-              <Wordmark />
-            </Link>
-
-            {/* Module nav — the course's enabled modules. A click navigates to
-                the course home with a `#module` hash; the home scrolls the
-                matching panel into view. This replaces every per-screen back
-                button. */}
-            <nav className="app-nav app-nav--student" aria-label="Course modules">
-              {modules.map((mod) => (
-                <Link
-                  key={mod.id}
-                  to={`${home}#${mod.id}`}
-                  className={
-                    "app-nav__item" +
-                    (activeModule === mod.id ? " app-nav__item--active" : "")
-                  }
-                >
-                  {mod.label}
-                </Link>
-              ))}
-            </nav>
+            {/* Lockup + module nav (the course's enabled modules). A click
+                navigates to the course home with a `#module` hash; the home
+                scrolls the matching panel into view. This replaces every
+                per-screen back button. */}
+            <StudentModuleNav
+              courseId={courseId}
+              provenanceEnabled={value.provenanceEnabled}
+              activeModule={activeModule}
+            />
 
             <div className="app-topbar__spacer" />
             <div className="app-topbar__actions">

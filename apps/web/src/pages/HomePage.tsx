@@ -26,12 +26,16 @@ import { relativeTime } from "../time.js";
 import { Avatar, Badge, Button, IconButton } from "../components/index.js";
 
 export function HomePage() {
-  const { courseId, courseName, role } = useCourse();
+  const { courseId, courseName, role, provenanceEnabled } = useCourse();
   const location = useLocation();
   const navigate = useNavigate();
   const base = `/course/${courseId}`;
   // Instructor viewing their own course is "preview as student".
   const scoped = role === "instructor";
+  // When previewing, editor links carry ?preview=1 so the standalone editor
+  // (which can't read this context) knows to replicate the student view —
+  // including hiding provenance marks. See EditorPage.
+  const editorSuffix = scoped ? "?preview=1" : "";
 
   // v0.7 §2 / v1.0 §7.1 — consume the worker-injected bootstrap *synchronously*
   // in the useState initializer so the very first render already has rows.
@@ -121,7 +125,7 @@ export function HomePage() {
     setCreatingDoc(true);
     try {
       const doc = await createDocument(courseId);
-      navigate(`${base}/write/${doc.id}`);
+      navigate(`${base}/write/${doc.id}${editorSuffix}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't start a document");
       setCreatingDoc(false);
@@ -188,7 +192,8 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ── Writing (provenance) ───────────────────────────────────────── */}
+        {/* ── Writing (provenance) — only when the module is enabled ─────── */}
+        {provenanceEnabled && (
         <section
           ref={setRef("writing")}
           className="app-modpanel app-modpanel--open"
@@ -233,10 +238,10 @@ export function HomePage() {
                 {docs.map((d) => (
                   <li key={d.id}>
                     <a
-                      href={`${base}/write/${d.id}`}
+                      href={`${base}/write/${d.id}${editorSuffix}`}
                       onClick={(e) => {
                         e.preventDefault();
-                        navigate(`${base}/write/${d.id}`);
+                        navigate(`${base}/write/${d.id}${editorSuffix}`);
                       }}
                     >
                       <span className="app-papers__ic" aria-hidden>
@@ -261,6 +266,7 @@ export function HomePage() {
             )}
           </div>
         </section>
+        )}
 
         {/* No Attendance panel: check-in is QR-gated (a student arrives via a
             scanned session code at /a/:id), and there is no student-facing

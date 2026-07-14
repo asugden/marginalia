@@ -2056,41 +2056,60 @@ body.prov-dragging * {
 .prov-bubble-menu {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   padding: 4px;
-  background: #1a1c20;
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.15);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
 }
 .prov-bubble-button {
   background: transparent;
   border: 0;
-  color: #f4f5f7;
-  font: 500 0.85rem var(--font-sans);
-  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-sm);
   min-width: 30px;
   height: 30px;
   padding: 0 0.5rem;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   box-shadow: none;
-  transition: background 120ms ease, color 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 .prov-bubble-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--surface-hover);
+  color: var(--text-strong);
   box-shadow: none;
 }
 .prov-bubble-button.is-active {
-  background: var(--brand-primary);
-  color: #fff;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
 }
 .prov-bubble-button sub { font-size: 0.75em; vertical-align: -0.15em; }
 .prov-bubble-sep {
   display: inline-block;
   width: 1px;
   height: 18px;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--border-strong);
   margin: 0 2px;
+}
+/* The "Reference" action reads as the accent affordance in the bubble menu. */
+.prov-bubble-reference {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-ink);
+}
+.prov-bubble-reference:hover:not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
 }
 
 /* Stats + legend footer. */
@@ -2099,28 +2118,30 @@ body.prov-dragging * {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.6rem 1.5rem;
-  border-top: 1px solid var(--line);
-  background: var(--bg);
-  font: 0.82rem var(--font-sans);
-  color: var(--ink-soft);
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-faint);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
 }
 .prov-editor-counts-stats {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.55rem;
+  text-transform: uppercase;
 }
 .prov-editor-counts-stats strong {
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--text-secondary);
+  font-weight: 700;
 }
 .prov-counts-sep {
   display: inline-block;
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--muted);
-  opacity: 0.5;
+  background: var(--border-strong);
 }
 .prov-editor-legend {
   display: inline-flex;
@@ -2131,6 +2152,9 @@ body.prov-dragging * {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  /* Match the design kit: the legend reads as mono-uppercase metadata. */
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .prov-legend-swatch {
   display: inline-block;
@@ -2307,24 +2331,26 @@ body.prov-dragging * {
   justify-content: flex-end;
   margin-top: 0.45rem;
 }
-.prov-bubble-insert {
-  font-size: 0.78rem;
-  padding: 0.3rem 0.7rem;
-}
-
-/* "Reference" action inside the selection bubble menu — the accent variant of
- * a bubble button, with the quote glyph. Only shown when the selection is
- * within the cap (see Editor.tsx); over the cap it simply isn't rendered. */
-.prov-bubble-reference {
+/* "Insert at cursor" on an assistant bubble — the design's info-tinted pill
+ * (matches the "from chat" origin colour the inserted text will get). Overrides
+ * the ghost Button base. */
+.prov-bubble-insert.prov-bubble-insert {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: var(--accent-bright);
-  font-weight: var(--weight-semibold);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--status-info-fg);
+  background: var(--status-info-bg);
+  border: 1px solid color-mix(in srgb, var(--status-info-fg) 25%, transparent);
+  border-radius: var(--radius-pill);
+  padding: 0.28rem 0.6rem;
 }
-.prov-bubble-reference:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+.prov-bubble-insert.prov-bubble-insert:hover {
+  background: color-mix(in srgb, var(--status-info-bg) 55%, var(--surface));
+  color: var(--status-info-fg);
 }
 .prov-bubble-reference svg { flex: none; }
 

@@ -364,6 +364,10 @@ export interface MeEnrollment {
    *  origin coloring while they write (recording is unaffected). Instructors
    *  always see coloring. Default false. */
   hideProvenanceMarks: boolean;
+  /** v1.1 — whether the provenance writing module is enabled for this course.
+   *  A real on/off toggle, default ON. When off, the writing tool disappears
+   *  from the student view entirely. */
+  provenanceEnabled: boolean;
 }
 export interface MeResponse {
   email: string;
@@ -853,6 +857,20 @@ export function revealCourseTab(
   return jsonFetch<{ ok: true }>(
     `/api/courses/${encodeURIComponent(courseId)}/reveal-tab`,
     { method: "POST", body: JSON.stringify({ feature }) },
+  );
+}
+
+/** v1.1 — toggle an optional course module on/off (bidirectional, unlike
+ *  revealCourseTab). Sources and Provenance are real on/off toggles that
+ *  default ON; Attendance is opt-in. Instructor-only on the server. */
+export function setCourseFeature(
+  courseId: string,
+  feature: "attendance" | "collections" | "provenance",
+  enabled: boolean,
+) {
+  return jsonFetch<{ ok: true }>(
+    `/api/courses/${encodeURIComponent(courseId)}/set-feature`,
+    { method: "POST", body: JSON.stringify({ feature, enabled }) },
   );
 }
 

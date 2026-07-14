@@ -10,9 +10,35 @@ import {
   type LLMProvider,
   type Message as LLMMessage,
 } from "@marginalia/providers";
+import { findLibraryVoice } from "@marginalia/voices";
+import type { ProvenanceAgentRow } from "@marginalia/schema";
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import * as repo from "./repo.js";
+
+// Built-in provenance chat voices — synthesized from the shared voice library
+// rather than stored in provenance_agents. This gives every course a working
+// default (Socratic) even before an instructor authors any chat agents. The id
+// is prefixed "builtin:" so it can never collide with a DB row id. The prompt is
+// snapshotted onto the conversation at creation like any other agent, so later
+// library changes don't rewrite past conversations.
+const BUILTIN_AGENT_PREFIX = "builtin:";
+function builtinAgentRow(agentId: string, courseId: string): ProvenanceAgentRow | null {
+  if (!agentId.startsWith(BUILTIN_AGENT_PREFIX)) return null;
+  const voiceId = agentId.slice(BUILTIN_AGENT_PREFIX.length);
+  const voice = findLibraryVoice(voiceId);
+  if (!voice) return null;
+  const ts = Date.now();
+  return {
+    id: agentId,
+    course_id: courseId,
+    owner_user_id: null,
+    name: voice.name,
+    system_prompt: voice.systemPromptFragment,
+    created_at: ts,
+    updated_at: ts,
+  };
+}
 import { buildRender, plainTextFromDoc } from "./render.js";
 import {
   toAgentDTO,
@@ -589,7 +615,12 @@ export async function createConversationRoute(
   if (enrollmentError) return enrollmentError;
   const doc = await repo.getDocument(env.DB, body.courseId, userId, documentId);
   if (!doc) return error("Document not found", 404);
-  const agent = await repo.getAgent(env.DB, body.courseId, body.agentId);
+  // A "builtin:" agent id resolves to a synthesized library voice (e.g. the
+  // default Socratic), not a provenance_agents row — no DB lookup, no owner
+  // check. Everything else is a real course/personal agent.
+  const agent =
+    builtinAgentRow(body.agentId, body.courseId) ??
+    (await repo.getAgent(env.DB, body.courseId, body.agentId));
   if (!agent) return error("Agent not found", 404);
   if (agent.owner_user_id !== null && agent.owner_user_id !== userId) {
     return error("Agent not found", 404);

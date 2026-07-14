@@ -318,6 +318,7 @@ export async function getMe(): Promise<{
     showAttendance: boolean;
     showCollections: boolean;
     hideProvenanceMarks: boolean;
+    provenanceEnabled: boolean;
   }>;
 }> {
   return {
@@ -334,6 +335,7 @@ export async function getMe(): Promise<{
         showAttendance: true,
         showCollections: true,
         hideProvenanceMarks: false,
+        provenanceEnabled: true,
       },
     ],
   };

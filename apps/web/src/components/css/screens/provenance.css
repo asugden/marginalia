@@ -5,14 +5,23 @@
    editor body, origin-mark coloring, and chat internals are unchanged. All
    generic tokens; accent-derived; no institution-specific name or literal. */
 
+/* App module-nav strip above the editor's own bar — the shared student topbar
+   (lockup + Agents/Writing). Slimmer than the full app topbar and its own
+   bottom rule so it reads as a distinct band above the document chrome. */
+.prov-appbar { height: 52px; }
+.prov-appbar .app-topbar__inner { max-width: none; }
+
 /* Header — align the existing .prov-shell-header to the kit's lockup bar. */
 .prov-shell-header { gap: 0.6rem; }
 .prov-shell-header .ds-lockup { flex: none; margin-right: 0.1rem; }
+/* Provenance role tag — now the first item in the bar (the lockup moved up to
+   the app strip), so no left divider. It links back to the documents list. */
+.prov-shell-header > a { text-decoration: none; flex: none; }
 .prov-shell-role {
   font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--text-muted);
-  border-left: 1px solid var(--border-strong); padding-left: 0.6rem; flex: none;
+  text-transform: uppercase; color: var(--text-muted); flex: none;
 }
+.prov-shell-header > a:hover .prov-shell-role { color: var(--text-strong); }
 
 /* Mono switch toggle (marks visibility / chat) — the kit's pill-with-switch. */
 .prov-toggle {
