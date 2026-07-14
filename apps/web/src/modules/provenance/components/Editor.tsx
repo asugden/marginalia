@@ -220,8 +220,8 @@ export function ProvenanceEditor({
           <span className="prov-editor-legend" aria-label="Word-origin legend">
             <Swatch className="legend-human" label="typed" />
             <Swatch className="legend-pasted" label="pasted" />
-            <Swatch className="legend-llm" label="from chat" />
-            <Swatch className="legend-edited" label="edited" />
+            <Swatch className="legend-llm" label="unknown" />
+            <Swatch className="legend-edited" label="autocorrect" />
           </span>
         )}
       </footer>

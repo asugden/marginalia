@@ -98,8 +98,8 @@ export function PublicSubmissionPage() {
         <div className="prov-public-legend" aria-label="Word-origin legend">
           <span className="prov-legend-item"><span className="prov-legend-swatch legend-human" /> typed</span>
           <span className="prov-legend-item"><span className="prov-legend-swatch legend-pasted" /> pasted</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-llm" /> from chat</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-edited" /> edited</span>
+          <span className="prov-legend-item"><span className="prov-legend-swatch legend-llm" /> unknown</span>
+          <span className="prov-legend-item"><span className="prov-legend-swatch legend-edited" /> autocorrect</span>
         </div>
       </header>
 

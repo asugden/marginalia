@@ -229,6 +229,12 @@ export const ProvenanceTracker = Extension.create<
     // is still caught once enough matching characters have accrued. Reset on any
     // non-adjacent or non-human edit. Closes TODO(reversion-slow-typing).
     let humanRun: { text: string; from: number; to: number } | null = null;
+    // Caret position at the end of the current "rewriting LLM text" run. While
+    // an insert is contiguous with this (insertedFrom === llmEditRun), keep
+    // stamping it as the yellow/laundering origin so a multi-keystroke rewrite
+    // of LLM wording doesn't decay to "human" after the first character. Reset
+    // by any non-contiguous or non-typing change.
+    let llmEditRun: number | null = null;
     // Keep the buffer bounded: no remembered contribution is longer than the
     // longest LLM run, so once we exceed that we can drop the oldest chars.
     const maxRunLen = () =>
@@ -370,27 +376,40 @@ export const ProvenanceTracker = Extension.create<
                 ? newState.doc.textBetween(insertedFrom, insertedTo, "\n", "\n")
                 : "";
 
-              // Did this step overwrite text that was LLM-authored? tr.docs[i]
-              // is the document *before* step i, so step.from/step.to are valid
-              // coords in it. If any character in the replaced range carried an
-              // origin="llm" mark, the user is editing over LLM wording — that
-              // new text should read as "edited" (derived from LLM), never as
-              // fresh "human". Guards the most direct laundering path: select an
-              // LLM run and type your own words over it.
+              // Is this edit touching LLM-authored text? tr.docs[i] is the
+              // document *before* step i, so step.from/step.to are valid coords
+              // in it. Editing LLM wording — whether by (a) replacing a range
+              // that contains LLM text, or (b) typing at a caret that sits
+              // inside/against an LLM run — should read as "edited" (derived
+              // from the model), never as fresh "human". This guards the direct
+              // laundering path: select an LLM run and retype it in your own
+              // words, one keystroke at a time.
               const preStepDoc = tr.docs[i] ?? oldState.doc;
-              let replacedLlm = false;
-              if (removedLen > 0 && originMarkType) {
-                preStepDoc.nodesBetween(step.from, step.to, (node) => {
-                  if (
-                    node.isText &&
-                    node.marks.some(
-                      (m) => m.type === originMarkType && m.attrs.origin === "llm",
-                    )
-                  ) {
-                    replacedLlm = true;
-                  }
-                  return !replacedLlm; // stop descending once found
-                });
+              const hasLlmMark = (marks: readonly { type: unknown; attrs: { origin?: string } }[]) =>
+                marks.some(
+                  (m) => m.type === originMarkType && m.attrs.origin === "llm",
+                );
+              let editingLlm = false;
+              if (originMarkType) {
+                if (removedLen > 0) {
+                  // (a) Replaced a range — does any of it carry the llm mark?
+                  preStepDoc.nodesBetween(step.from, step.to, (node) => {
+                    if (node.isText && hasLlmMark(node.marks)) editingLlm = true;
+                    return !editingLlm;
+                  });
+                } else {
+                  // (b) Pure insertion at a caret. Treat it as editing LLM only
+                  // when the caret is *inside* an LLM run — i.e. the character
+                  // right after it is llm (you're inserting into the middle or
+                  // front of LLM text). Appending immediately AFTER an LLM run
+                  // (only the char before is llm) is deliberately NOT treated as
+                  // editing: writing a fresh sentence after LLM prose is your
+                  // own. The llmEditRun continuation below handles keeping a
+                  // multi-keystroke rewrite "edited" once one has started.
+                  const $pos = preStepDoc.resolve(step.from);
+                  const na = $pos.nodeAfter;
+                  if (na && na.isText && hasLlmMark(na.marks)) editingLlm = true;
+                }
               }
 
               if (removedLen > 0) {
@@ -400,10 +419,13 @@ export const ProvenanceTracker = Extension.create<
                   length: removedLen,
                   text: "",
                 });
-                // A pure deletion breaks the contiguous typed run. (A replace —
-                // removedLen>0 AND sliceSize>0 — is handled in the insert branch
-                // below, which rebuilds the run from the inserted text.)
-                if (sliceSize === 0) humanRun = null;
+                // A pure deletion breaks the contiguous typed/edited runs. (A
+                // replace — removedLen>0 AND sliceSize>0 — is handled in the
+                // insert branch below, which rebuilds the run.)
+                if (sliceSize === 0) {
+                  humanRun = null;
+                  llmEditRun = null;
+                }
               }
 
               if (sliceSize > 0) {
@@ -425,21 +447,40 @@ export const ProvenanceTracker = Extension.create<
                     : "human";
                 let sourceMessageId =
                   kind === "llm_insert" ? hint?.sourceMessageId ?? null : null;
+                // True only for the "rewriting LLM text" path, so the run
+                // tracker below can distinguish it from a genuine clipboard
+                // paste (which also ends up origin="pasted").
+                let isLlmEdit = false;
 
-                // Reversion: a plain human insert that exactly re-types a
-                // remembered LLM contribution is re-stamped origin="llm" (and
-                // logged as llm_insert) so suggested wording stays attributed.
+                // Reversion: a plain insert that reproduces remembered LLM
+                // wording verbatim (e.g. copy the reply out of chat and paste
+                // it, bypassing "Insert at cursor"). It's still LLM-sourced
+                // text, just unattributed — so it stays BLUE ("llm" = LLM
+                // origin, known-or-unknown). Blue is the "this came from the
+                // model" colour; only genuine *rewriting* (below) is treated as
+                // the fishier yellow.
                 if (kind === "insert" && isLlmReversion(insertedText)) {
                   kind = "llm_insert";
                   origin = "llm";
                   sourceMessageId = null;
-                } else if (kind === "insert" && replacedLlm) {
-                  // Typed over LLM-authored text: not a verbatim reversion (that
-                  // branch already ran), but derived from the model's wording —
-                  // so mark it "edited" (yellow), not fresh "human". Prevents
-                  // laundering LLM prose by rewriting it in place.
-                  kind = "replace";
-                  origin = "edited";
+                } else if (
+                  kind === "insert" &&
+                  (editingLlm ||
+                    (llmEditRun !== null && insertedFrom === llmEditRun))
+                ) {
+                  // Typed over / into LLM-authored text, producing something
+                  // that is NOT a verbatim reproduction (that's the blue
+                  // reversion branch above). Rewriting model prose by hand is
+                  // inherently fishy — the writer is reworking AI output while
+                  // making it look typed — so it's YELLOW ("suspected"), not
+                  // green "edited" (reserved for benign autocorrect/spellcheck)
+                  // and not blue "llm" (a faithful reproduction). llmEditRun
+                  // tracks the caret so the 2nd, 3rd, … keystrokes of a
+                  // multi-char rewrite stay yellow instead of decaying to a
+                  // fresh "human" run after the first character.
+                  kind = "paste";
+                  origin = "pasted";
+                  isLlmEdit = true;
                 }
 
                 if (originMarkType) {
@@ -463,6 +504,12 @@ export const ProvenanceTracker = Extension.create<
                   event.timingGapsMs = keystroke.gaps.slice();
                 }
                 events.push(event);
+
+                // Maintain the "rewriting LLM" continuation caret. Extend it
+                // when this insert was part of an LLM rewrite so the next
+                // contiguous keystroke stays yellow; clear it otherwise (a
+                // genuine paste does NOT start a continuation run).
+                llmEditRun = isLlmEdit ? insertedTo : null;
 
                 // ── Slow-retype laundering detection ──────────────────────
                 // Only plain human inserts feed the rolling buffer. Anything
@@ -492,11 +539,13 @@ export const ProvenanceTracker = Extension.create<
 
                   const matchLen = trailingLlmMatchLen(humanRun.text);
                   if (matchLen > 0 && originMarkType) {
-                    // Re-stamp the trailing matchLen characters of the run as
-                    // llm. Work in normalized space is unnecessary here: the
-                    // match is a suffix of the raw run of that character length
-                    // (whitespace normalization only collapses runs, and we
-                    // re-mark by document position, which is exact).
+                    // The student hand-retyped remembered LLM wording verbatim
+                    // (char-by-char, under the per-event threshold). It's a
+                    // faithful reproduction of model text, so it's BLUE ("llm" =
+                    // LLM-sourced) — same as re-pasting it. (Genuine *rewriting*
+                    // into different words is the yellow path above; this branch
+                    // only fires on an exact match.) Re-mark by document
+                    // position (exact); the match is a suffix of the raw run.
                     const reFrom = Math.max(humanRun.from, humanRun.to - matchLen);
                     markTr = markTr.addMark(
                       reFrom,
