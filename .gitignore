@@ -10,6 +10,13 @@ dist/
 # Per-deploy config — copy from wrangler.toml.example.
 apps/worker/wrangler.toml
 
+# Agent-instruction files are per-deployer / private and must never be
+# committed to this public tree — belongs in the deployer's own overlay.
+CLAUDE.md
+AGENTS.md
+**/CLAUDE.md
+**/AGENTS.md
+
 # Local theme overlay — copy/symlink from your private branding repo.
 apps/web/src/branding/theme.yaml
 
