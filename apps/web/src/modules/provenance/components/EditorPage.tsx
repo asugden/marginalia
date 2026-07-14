@@ -33,6 +33,7 @@ import { SubmissionModal } from "./SubmissionModal.js";
 import {
   Button,
   IconButton,
+  PreviewBanner,
   StudentModuleNav,
   Wordmark,
 } from "../../../components/index.js";
@@ -368,6 +369,13 @@ export function EditorPage() {
             <div className="app-topbar__spacer" />
           </div>
         </header>
+      )}
+      {/* When an instructor is previewing as a student, the editor is otherwise
+          a full-screen surface with no role switch — so mirror StudentLayout's
+          banner here to (a) make the preview state obvious and (b) give a
+          one-click way out that clears the act-as-student downgrade. */}
+      {previewing && courseId && (
+        <PreviewBanner courseId={courseId} courseName={active?.courseName ?? ""} />
       )}
       <header className="prov-shell-header">
         <Link to={writeBase} aria-label="Back to documents">

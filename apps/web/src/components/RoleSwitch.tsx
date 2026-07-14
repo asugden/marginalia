@@ -84,12 +84,14 @@ export function RoleSwitch({
     if (switching) return;
     setSwitching(true);
     try {
-      if (target === "student") {
-        await setActingAsStudent(true);
-      } else if (current === "student") {
-        // Leaving the student preview for Instructor or Admin.
-        await setActingAsStudent(false);
-      }
+      // Target is the source of truth: entering the student surface sets the
+      // downgrade, anywhere else (Instructor / Admin) clears it. We must NOT
+      // gate the clear on `current === "student"` — an instructor can be
+      // acting-as-student on a surface that isn't the student home (e.g. the
+      // standalone provenance editor), and choosing Instructor from there must
+      // still un-stick them. setActingAsStudent is idempotent, so clearing when
+      // already cleared is a harmless no-op.
+      await setActingAsStudent(target === "student");
       navigate(to);
     } finally {
       setSwitching(false);
