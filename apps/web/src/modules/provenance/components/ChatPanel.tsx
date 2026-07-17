@@ -17,7 +17,14 @@ import {
   type MessageDTO,
 } from "../api.js";
 import { useByoKey, maskKey } from "./useByoKey.js";
-import { Button, Field, Input } from "../../../components/index.js";
+import {
+  Button,
+  Dropdown,
+  Field,
+  Input,
+  Modal,
+  useConfirm,
+} from "../../../components/index.js";
 import { KeyIcon, SendIcon, StopIcon, TrashIcon } from "../../../icons.js";
 
 interface Props {
@@ -52,14 +59,23 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The "New conversation" picker is a modal (not an inline drawer under the
+  // button) so it reads clearly over the existing conversation.
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [pickAgentId, setPickAgentId] = useState<string>("");
   const [showKeyModal, setShowKeyModal] = useState(false);
   const byo = useByoKey();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const abortStreamRef = useRef<(() => void) | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const refSeqRef = useRef(0);
+
+  // Track whether a conversation is active without re-subscribing addReference
+  // to every `active` change (onReady wires the imperative handle once).
+  const activeRef = useRef<ConversationDTO | null>(null);
+  useEffect(() => { activeRef.current = active; }, [active]);
 
   // Expose addReference to the parent (the editor's select-to-reference action).
   useEffect(() => {
@@ -73,8 +89,15 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
             ? cur
             : [...cur, { id: `ref_${++refSeqRef.current}`, text: clean }],
         );
-        // Bring focus to the composer so the student can type around the quote.
-        setTimeout(() => composerRef.current?.focus(), 0);
+        // With no conversation yet, the composer isn't shown — so a referenced
+        // passage would silently vanish. Open the picker so the student can
+        // start one; the chip is preserved and carries into the first message.
+        if (!activeRef.current) {
+          setShowAgentPicker(true);
+        } else {
+          // Bring focus to the composer so the student can type around the quote.
+          setTimeout(() => composerRef.current?.focus(), 0);
+        }
       },
     });
   }, [onReady]);
@@ -149,6 +172,13 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
     };
   }, []);
 
+  const openAgentPicker = useCallback(() => {
+    // Seed the dropdown with the first available agent (Socratic default is
+    // always first) so a one-click "Start" works without touching the picker.
+    setPickAgentId((cur) => cur || agents?.[0]?.id || SOCRATIC_DEFAULT.id);
+    setShowAgentPicker(true);
+  }, [agents]);
+
   const startConversation = useCallback(
     async (agentId: string) => {
       setError(null);
@@ -170,7 +200,14 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
   );
 
   async function onDeleteConversation(id: string) {
-    if (!confirm("Delete this conversation?")) return;
+    if (
+      !(await confirm({
+        title: "Delete this conversation?",
+        body: "The transcript is removed for good. This can't be undone.",
+        confirmLabel: "Delete",
+      }))
+    )
+      return;
     try {
       await deleteConversation(courseId, id);
       setConversations((cur) => (cur ?? []).filter((c) => c.id !== id));
@@ -245,23 +282,20 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
     <div className="prov-chat">
       <header className="prov-chat-header">
         {conversations && conversations.length > 0 ? (
-          <select
-            className="prov-chat-select"
+          <Dropdown
+            className="prov-chat-select ds-dropdown--block"
+            ariaLabel="Conversation"
             value={active?.id ?? ""}
-            onChange={(e) => {
-              const id = e.target.value;
+            onChange={(id) => {
               const conv = conversations.find((c) => c.id === id) ?? null;
               setActive(conv);
               setShowAgentPicker(false);
             }}
-            aria-label="Conversation"
-          >
-            {conversations.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title ?? "(new)"} — {c.agentName}
-              </option>
-            ))}
-          </select>
+            options={conversations.map((c) => ({
+              value: c.id,
+              label: `${c.title ?? "(new)"} — ${c.agentName}`,
+            }))}
+          />
         ) : (
           <span className="prov-chat-header-blank">Chat</span>
         )}
@@ -269,7 +303,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
           variant="subtle"
           size="sm"
           className="prov-chat-new"
-          onClick={() => setShowAgentPicker((v) => !v)}
+          onClick={openAgentPicker}
           disabled={busy || agents === null}
           title="Start a new conversation"
         >
@@ -314,27 +348,66 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
       )}
 
       {showAgentPicker && agents && (
-        <div className="prov-chat-agent-picker">
+        <Modal
+          title="New conversation"
+          busy={busy}
+          onClose={() => setShowAgentPicker(false)}
+          maxWidth="26rem"
+        >
+          <h2 className="ds-modal-title">New conversation</h2>
           {agents.length === 0 ? (
-            <p className="muted small">No agents yet. Visit <a href={`/course/${courseId}/write/agents`}>My agents</a> to add one.</p>
+            <p className="muted small">
+              No agents yet. Visit{" "}
+              <a href={`/course/${courseId}/write/agents`}>My agents</a> to add one.
+            </p>
           ) : (
-            <ul>
-              {agents.map((a) => (
-                <li key={a.id}>
-                  <button
-                    type="button"
-                    className="prov-chat-agent-row"
-                    disabled={busy}
-                    onClick={() => startConversation(a.id)}
-                  >
-                    <span className="prov-chat-agent-name">{a.name}</span>
-                    {a.mine && <span className="prov-chat-mine-pill">mine</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="ds-modal-body">
+                Pick a voice to start chatting. Anything you ask is logged with the
+                document — the instructor can read it if you share this document
+                later.
+              </p>
+              {refs.length > 0 && (
+                <p className="ds-modal-body">
+                  {refs.length} referenced passage{refs.length === 1 ? "" : "s"} will
+                  carry into your first message.
+                </p>
+              )}
+              <Field label="Voice">
+                <Dropdown
+                  className="ds-dropdown--block"
+                  ariaLabel="Voice"
+                  value={pickAgentId}
+                  onChange={setPickAgentId}
+                  options={agents.map((a) => ({
+                    value: a.id,
+                    label: a.mine ? `${a.name} · mine` : a.name,
+                  }))}
+                />
+              </Field>
+              <div className="ds-modal-actions">
+                <span className="ds-modal-actions-spacer" />
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => setShowAgentPicker(false)}
+                  disabled={busy}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={busy}
+                  disabled={busy || !pickAgentId}
+                  onClick={() => startConversation(pickAgentId)}
+                >
+                  Start
+                </Button>
+              </div>
+            </>
           )}
-        </div>
+        </Modal>
       )}
 
       {!active && !showAgentPicker && (
@@ -344,9 +417,29 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
             with the document — the instructor can read it if you share
             this document later.
           </p>
+          {refs.length > 0 && (
+            <div className="prov-composer-refs">
+              {refs.map((r) => (
+                <span key={r.id} className="prov-ref-chip">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M7 7h4v4c0 2.2-1.3 3.7-3.5 4.3l-.5-1.3c1.3-.4 2-1.1 2-2H7V7zm6 0h4v4c0 2.2-1.3 3.7-3.5 4.3l-.5-1.3c1.3-.4 2-1.1 2-2h-2V7z" />
+                  </svg>
+                  <span className="prov-ref-chip-text">{r.text}</span>
+                  <button
+                    type="button"
+                    className="prov-ref-chip-x"
+                    onClick={() => removeRef(r.id)}
+                    aria-label="Remove reference"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <Button
             variant="primary"
-            onClick={() => setShowAgentPicker(true)}
+            onClick={openAgentPicker}
             disabled={agents === null}
           >
             Start a conversation
@@ -438,6 +531,7 @@ export function ChatPanel({ documentId, courseId, onInsertAtCursor, onReady }: P
       )}
 
       {error && <p className="prov-chat-error">{error}</p>}
+      {confirmDialog}
     </div>
   );
 }

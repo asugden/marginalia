@@ -2199,22 +2199,10 @@ body.prov-dragging * {
   letter-spacing: 0.08em;
   color: var(--ink-soft);
 }
-.prov-chat-select {
-  flex: 1;
-  min-width: 0;
-  font: 500 0.88rem var(--font-sans);
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  cursor: pointer;
-}
-.prov-chat-select:focus {
-  outline: none;
-  border-color: var(--brand-primary);
-  box-shadow: var(--focus-ring);
-}
+/* The conversation switcher is now the custom Dropdown (.ds-dropdown); this
+   only sizes it to fill the header row. Its own trigger carries border/focus. */
+.prov-chat-select { flex: 1; min-width: 0; }
+.prov-chat-select .ds-dropdown__trigger { font-weight: 500; }
 .prov-chat-new { padding: 0.32rem 0.7rem; font-size: 0.82rem; }
 
 .prov-chat-icon-button {
@@ -2438,11 +2426,17 @@ body.prov-dragging * {
   border-color: var(--brand-primary);
   box-shadow: var(--focus-ring);
 }
-.prov-composer-field textarea {
+/* Include :focus so this beats the global `textarea:focus` rule (same
+   specificity, later in source order) — otherwise that rule paints a focus
+   ring directly on the textarea, nested inside the field's own :focus-within
+   ring. The field wrapper carries the only ring we want. */
+.prov-composer-field textarea,
+.prov-composer-field textarea:focus {
   flex: 1;
   resize: none;
   border: 0;
   outline: none;
+  box-shadow: none;
   background: transparent;
   padding: 0.4rem 0.25rem;
   font: 0.94rem var(--font-sans);

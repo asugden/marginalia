@@ -16,7 +16,7 @@ import {
   type DuplicableAgentsGroup,
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
-import { Avatar, Badge, Button, IconButton } from "../components/index.js";
+import { Avatar, Badge, Button, IconButton, useConfirm } from "../components/index.js";
 import { PlusIcon, TrashIcon } from "../icons.js";
 
 export function AuthorListPage() {
@@ -29,6 +29,7 @@ export function AuthorListPage() {
   const [pickerGroups, setPickerGroups] = useState<DuplicableAgentsGroup[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const { confirm, notify, dialog: confirmDialog } = useConfirm();
 
   function reload() {
     listAgents(courseId)
@@ -41,10 +42,11 @@ export function AuthorListPage() {
 
   async function onDelete(a: AgentSummary) {
     if (
-      !window.confirm(
-        `Delete agent "${a.title}"? Past conversations against this agent ` +
-          `remain visible (read-only) but cannot be restarted.`,
-      )
+      !(await confirm({
+        title: `Delete agent “${a.title}”?`,
+        body: "Past conversations against this agent stay visible (read-only) but can't be restarted.",
+        confirmLabel: "Delete agent",
+      }))
     ) {
       return;
     }
@@ -76,11 +78,13 @@ export function AuthorListPage() {
     setPickerError(null);
     try {
       const r = await duplicateAgentTo(sourceAgentId, courseId);
-      const msg = r.droppedCollection
-        ? `Copied "${sourceTitle}". The source library isn't in this course; pick a new one (or leave empty).`
-        : `Copied "${sourceTitle}".`;
-      if (r.droppedCollection) window.alert(msg);
       setPickerOpen(false);
+      if (r.droppedCollection) {
+        await notify({
+          title: `Copied “${sourceTitle}”`,
+          body: "The source library isn't in this course; pick a new one (or leave empty).",
+        });
+      }
       navigate(`/course/${courseId}/instructor/agents/${r.id}`);
     } catch (e) {
       setPickerError(e instanceof Error ? e.message : "Duplicate failed");
@@ -260,6 +264,7 @@ export function AuthorListPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

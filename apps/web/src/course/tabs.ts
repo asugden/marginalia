@@ -71,7 +71,7 @@ export const TABS: TabSpec[] = [
   // surface, then re-add a tab (studentHref: "write" or a dedicated staff slug).
   {
     slug: "collections",
-    label: "Sources",
+    label: "Library",
     description:
       "Document libraries you can attach to an agent. The agent answers from the sources you choose and cites them in line.",
     // v1.1 — Sources is a real optional module (default on). Absent flag reads

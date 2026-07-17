@@ -424,6 +424,9 @@ export interface SubmissionSummary {
   token: string;
   createdAt: number;
   revokedAt: number | null;
+  /** Whether the caller may revoke this link. Student-created links are
+   *  permanent, so this is false for students (see the worker). */
+  canRevoke: boolean;
 }
 
 export async function mintSubmission(

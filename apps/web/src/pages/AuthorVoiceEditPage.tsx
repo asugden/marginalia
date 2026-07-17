@@ -36,11 +36,12 @@ import {
   Avatar,
   Badge,
   Button,
+  Dropdown,
   Field,
   Input,
   Message,
-  Select,
   Textarea,
+  useConfirm,
 } from "../components/index.js";
 import { SparkleIcon } from "../icons.js";
 
@@ -71,6 +72,7 @@ export function AuthorVoiceEditPage() {
   // URLs so the surrounding nav persists.
   const { courseId } = useCourse();
   const voicesBase = `/course/${courseId}/instructor/voices`;
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [loaded, setLoaded] = useState<VoiceFull | null>(null);
@@ -138,7 +140,14 @@ export function AuthorVoiceEditPage() {
 
   async function onDelete() {
     if (!voiceId) return;
-    if (!window.confirm(`Delete voice "${draft.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: `Delete voice “${draft.name}”?`,
+        body: "This can't be undone. Agents still using this voice will block the delete.",
+        confirmLabel: "Delete voice",
+      }))
+    )
+      return;
     setDeleting(true);
     setSaveError(null);
     try {
@@ -195,7 +204,14 @@ export function AuthorVoiceEditPage() {
   }
   async function onRevokeShare(userId: string, email: string) {
     if (!voiceId) return;
-    if (!window.confirm(`Revoke sharing with ${email}?`)) return;
+    if (
+      !(await confirm({
+        title: `Revoke sharing with ${email}?`,
+        body: "They'll immediately lose access to this voice.",
+        confirmLabel: "Revoke",
+      }))
+    )
+      return;
     setShareBusy(true);
     setShareError(null);
     try {
@@ -327,17 +343,14 @@ export function AuthorVoiceEditPage() {
         </p>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", marginTop: "0.5rem" }}>
           <div style={{ maxWidth: "18rem", flex: 1 }}>
-            <Select
+            <Dropdown
+              className="ds-dropdown--block"
+              ariaLabel="Preview question"
               value={previewKey}
               disabled={previewBusy}
-              onChange={(e) => setPreviewKey(e.target.value)}
-            >
-              {PREVIEW_OPTIONS.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
-            </Select>
+              onChange={setPreviewKey}
+              options={PREVIEW_OPTIONS.map((p) => ({ value: p.key, label: p.label }))}
+            />
           </div>
           <Button
             variant="subtle"
@@ -439,6 +452,7 @@ export function AuthorVoiceEditPage() {
         </Button>
         {actions}
       </div>
+      {confirmDialog}
     </Shell>
   );
 }

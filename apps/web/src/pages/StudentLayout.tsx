@@ -100,9 +100,15 @@ export function StudentLayout() {
   // first returns home, then scrolls — so the nav does the job the per-screen
   // back buttons used to.
   const onHome = location.pathname === home || location.pathname === `${home}/`;
+  // Inside an agent conversation the header takes the same register as the
+  // provenance editor: full width, no sign-out / identity chrome, and the
+  // "Agents" module marked active (rendered accent/red by the brand).
+  const inAgent = location.pathname.startsWith(`${home}/chat`);
   const activeModule = onHome
     ? (location.hash.replace(/^#/, "") || "agents")
-    : null;
+    : inAgent
+      ? "agents"
+      : null;
 
   return (
     <CourseContext.Provider value={value}>
@@ -110,7 +116,11 @@ export function StudentLayout() {
           fixed topbar and a single scrolling body region. This is the
           structural fix for the runaway outer scroll that dragged the topbar. */}
       <div className="app">
-        <header className="app-topbar app-topbar--student">
+        <header
+          className={
+            "app-topbar app-topbar--student" + (inAgent ? " prov-appbar" : "")
+          }
+        >
           <div className="app-topbar__inner">
             {/* Lockup + module nav (the course's enabled modules). A click
                 navigates to the course home with a `#module` hash; the home
@@ -123,30 +133,35 @@ export function StudentLayout() {
             />
 
             <div className="app-topbar__spacer" />
-            <div className="app-topbar__actions">
-              {/* The role switch is an INSTRUCTOR/admin affordance only — a
-                  pure student never sees it (RoleSwitch renders null), so
-                  there's no way to leave the student view. */}
-              <RoleSwitch
-                courseId={courseId}
-                role={value.role}
-                isAdmin={value.isAdmin}
-                current="student"
-                actingAsStudent={value.actingAsStudent}
-              />
-              <span className="app-topbar__divider" aria-hidden />
-              {identity && (
-                <span className="app-id">
-                  <span className="app-id__icon">
-                    <UserIcon />
+            {/* Inside an agent the header matches the provenance editor: no
+                sign-out / identity chrome. Instructors previewing still exit
+                via the PreviewBanner below, so nothing is trapped. */}
+            {!inAgent && (
+              <div className="app-topbar__actions">
+                {/* The role switch is an INSTRUCTOR/admin affordance only — a
+                    pure student never sees it (RoleSwitch renders null), so
+                    there's no way to leave the student view. */}
+                <RoleSwitch
+                  courseId={courseId}
+                  role={value.role}
+                  isAdmin={value.isAdmin}
+                  current="student"
+                  actingAsStudent={value.actingAsStudent}
+                />
+                <span className="app-topbar__divider" aria-hidden />
+                {identity && (
+                  <span className="app-id">
+                    <span className="app-id__icon">
+                      <UserIcon />
+                    </span>
+                    <span className="app-id__name">{identity}</span>
                   </span>
-                  <span className="app-id__name">{identity}</span>
-                </span>
-              )}
-              <IconButton title="Sign out" onClick={signOut}>
-                <SignOutIcon />
-              </IconButton>
-            </div>
+                )}
+                <IconButton title="Sign out" onClick={signOut}>
+                  <SignOutIcon />
+                </IconButton>
+              </div>
+            )}
           </div>
         </header>
 

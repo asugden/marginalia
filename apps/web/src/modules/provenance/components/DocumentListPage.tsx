@@ -15,7 +15,7 @@ import {
   listDocuments,
   type DocumentSummary,
 } from "../api.js";
-import { Button, IconButton } from "../../../components/index.js";
+import { Button, IconButton, useConfirm } from "../../../components/index.js";
 import { DocIcon, PlusIcon, TrashIcon } from "../../../icons.js";
 
 export function DocumentListPage() {
@@ -26,6 +26,7 @@ export function DocumentListPage() {
   const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     setDocs(null);
@@ -56,7 +57,14 @@ export function DocumentListPage() {
   }
 
   async function onDelete(id: string) {
-    if (!confirm("Delete this document? This cannot be undone.")) return;
+    if (
+      !(await confirm({
+        title: "Delete this document?",
+        body: "This can't be undone.",
+        confirmLabel: "Delete",
+      }))
+    )
+      return;
     try {
       await deleteDocument(courseId, id);
       setDocs((cur) => (cur ?? []).filter((d) => d.id !== id));
@@ -134,6 +142,7 @@ export function DocumentListPage() {
           ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

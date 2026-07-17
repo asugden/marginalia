@@ -25,6 +25,7 @@ import {
   SegmentedControl,
   Tag,
   Textarea,
+  useConfirm,
 } from "../components/index.js";
 import { TrashIcon, UploadIcon } from "../icons.js";
 
@@ -56,6 +57,7 @@ export function CollectionDetailPage() {
   const [pasteTitle, setPasteTitle] = useState("");
   const [pasteBody, setPasteBody] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   function reload() {
     if (!collectionId) return;
@@ -142,11 +144,11 @@ export function CollectionDetailPage() {
   async function onRemoveSource(sourceId: string, filename: string) {
     if (!collectionId) return;
     if (
-      !window.confirm(
-        `Remove "${filename}" from this collection? Past conversation ` +
-          `citations to this source keep working but new chats will no ` +
-          `longer retrieve from it.`,
-      )
+      !(await confirm({
+        title: "Remove this source?",
+        body: `"${filename}" will no longer be retrieved in new chats. Past conversation citations to this source keep working.`,
+        confirmLabel: "Remove",
+      }))
     ) {
       return;
     }
@@ -171,9 +173,6 @@ export function CollectionDetailPage() {
     return (
       <div className="app-page">
         {error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}
-        <Button variant="ghost" href={`/course/${courseId}/instructor/collections`}>
-          ← All libraries
-        </Button>
       </div>
     );
   }
@@ -187,17 +186,12 @@ export function CollectionDetailPage() {
     <div className="app-page">
       <div className="app-page__head">
         <div>
-          <span className="eyebrow">Instructor · Sources</span>
+          <span className="eyebrow">Instructor · Library</span>
           <h1>{detail.collection.name}</h1>
           <div className="app-page__scope">
             {detail.collection.description ||
               "The agent only argues from these documents, and cites them in line so students can check the source."}
           </div>
-        </div>
-        <div className="app-page__actions">
-          <Button variant="ghost" href={`/course/${courseId}/instructor/collections`}>
-            ← All libraries
-          </Button>
         </div>
       </div>
 
@@ -379,6 +373,7 @@ export function CollectionDetailPage() {
           </div>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }

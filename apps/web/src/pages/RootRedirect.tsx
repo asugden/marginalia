@@ -61,6 +61,12 @@ export function RootRedirect() {
                 ? `/course/${only.courseId}/instructor`
                 : `/course/${only.courseId}`,
           });
+        } else if (m.isAdmin) {
+          // A pure admin (no course enrollments) has nowhere to be *sent*
+          // among courses, but they aren't an unenrolled student either —
+          // the join prompt is wrong for them. Land them on the admin
+          // console, the surface they actually have access to.
+          setRes({ kind: "to", path: "/admin" });
         } else {
           setRes({ kind: "join" });
         }

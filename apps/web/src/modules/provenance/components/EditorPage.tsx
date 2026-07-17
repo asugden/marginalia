@@ -428,6 +428,7 @@ export function EditorPage() {
         <SubmissionModal
           documentId={doc.id}
           courseId={courseId}
+          canRevoke={isInstructor}
           onClose={() => setShareOpen(false)}
         />
       )}

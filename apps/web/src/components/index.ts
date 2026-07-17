@@ -7,6 +7,9 @@ export { Badge } from "./core/Badge.js";
 export { Button } from "./core/Button.js";
 export { Card } from "./core/Card.js";
 export { IconButton } from "./core/IconButton.js";
+export { Modal } from "./core/Modal.js";
+export { ConfirmDialog } from "./core/ConfirmDialog.js";
+export { useConfirm } from "./core/useConfirm.js";
 export { Tag } from "./core/Tag.js";
 export { Wordmark } from "./core/Wordmark.js";
 export { RoleSwitch } from "./RoleSwitch.js";
@@ -19,6 +22,8 @@ export { CitationPill, SourcesStrip } from "./chat/CitationPill.js";
 
 export { Field, Input, Textarea } from "./forms/Input.js";
 export { Select } from "./forms/Select.js";
+export { Dropdown } from "./forms/Dropdown.js";
+export type { DropdownOption } from "./forms/Dropdown.js";
 export { Checkbox, Switch } from "./forms/Checkbox.js";
 export { RadioCard, RadioCardGroup } from "./forms/RadioCard.js";
 

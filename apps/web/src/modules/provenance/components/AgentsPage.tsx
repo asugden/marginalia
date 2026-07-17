@@ -12,7 +12,7 @@ import {
   updateAgent,
   type AgentSummary,
 } from "../api.js";
-import { Badge, Button, Field, IconButton, Input, Textarea } from "../../../components/index.js";
+import { Badge, Button, Field, IconButton, Input, Textarea, useConfirm } from "../../../components/index.js";
 import { PlusIcon, TrashIcon } from "../../../icons.js";
 
 const DEFAULT_PROMPT =
@@ -32,6 +32,7 @@ export function AgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     refresh(courseId);
@@ -79,7 +80,14 @@ export function AgentsPage() {
   }
 
   async function onDelete(id: string) {
-    if (!confirm("Delete this agent? Existing conversations will keep their snapshot.")) return;
+    if (
+      !(await confirm({
+        title: "Delete this agent?",
+        body: "Existing conversations keep their snapshot.",
+        confirmLabel: "Delete",
+      }))
+    )
+      return;
     try {
       await deleteAgent(courseId, id);
       refresh(courseId);
@@ -148,6 +156,7 @@ export function AgentsPage() {
           onSave={onSave}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }

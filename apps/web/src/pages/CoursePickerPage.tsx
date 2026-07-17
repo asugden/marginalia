@@ -24,7 +24,6 @@ import {
   listCollections,
   listJoinCodes,
   listRoster,
-  revealCourseTab,
   setCourseFeature,
   type MeEnrollment,
 } from "../client.js";
@@ -149,7 +148,7 @@ function CourseCard({
 
   // Module chips from the flags /api/me already gave us — no fetch needed.
   const mods: string[] = [];
-  if (e.showCollections) mods.push("Sources");
+  if (e.showCollections) mods.push("Library");
   if (e.showAttendance) mods.push("Attendance");
 
   return (
@@ -248,28 +247,19 @@ function CourseAdmin({
   const [attendanceOn, setAttendanceOn] = useState(showAttendance);
   const [sourcesOn, setSourcesOn] = useState(showCollections);
   const [provenanceOn, setProvenanceOn] = useState(provenanceEnabled);
-  const [enabling, setEnabling] = useState(false);
 
-  async function enableAttendance() {
-    if (attendanceOn || enabling) return;
-    setEnabling(true);
-    try {
-      await revealCourseTab(courseId, "attendance");
-      setAttendanceOn(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't enable attendance");
-    } finally {
-      setEnabling(false);
-    }
-  }
-
-  // Bidirectional toggle for Sources / Provenance. Optimistic with rollback on
-  // failure so the switch never lies about the persisted state.
+  // Bidirectional toggle for Attendance / Sources / Provenance. Optimistic with
+  // rollback on failure so the switch never lies about the persisted state.
   async function toggleFeature(
-    feature: "collections" | "provenance",
+    feature: "attendance" | "collections" | "provenance",
     next: boolean,
   ) {
-    const setLocal = feature === "collections" ? setSourcesOn : setProvenanceOn;
+    const setLocal =
+      feature === "collections"
+        ? setSourcesOn
+        : feature === "provenance"
+          ? setProvenanceOn
+          : setAttendanceOn;
     setLocal(next);
     setError(null);
     try {
@@ -346,17 +336,17 @@ function CourseAdmin({
             </div>
           )}
 
-          {/* Optional modules. Sources and Provenance are real on/off toggles
-              (default on); Attendance is opt-in (it implies in-person sessions).
+          {/* Optional modules — all real on/off toggles. Sources and Provenance
+              default on; Attendance is opt-in (it implies in-person sessions).
               Turning a module off removes it from this course's nav and the
               students' view. */}
           <div className="app-modules" style={{ marginTop: "1.25rem" }}>
             <label className={"app-module" + (sourcesOn ? " app-module--on" : "")}>
               <span className="app-module__main">
-                <b>Sources</b>
+                <b>Library</b>
                 <span>
                   Document collections you attach to an agent to ground it. Adds
-                  the Sources tab.
+                  the Library tab.
                 </span>
               </span>
               <input
@@ -381,28 +371,20 @@ function CourseAdmin({
                 onChange={(ev) => toggleFeature("provenance", ev.target.checked)}
               />
             </label>
-            <div className={"app-module" + (attendanceOn ? " app-module--on" : "")}>
+            <label className={"app-module" + (attendanceOn ? " app-module--on" : "")}>
               <span className="app-module__main">
                 <b>Attendance</b>
                 <span>
                   QR check-in for in-person classes. Adds the Attendance tab.
                 </span>
               </span>
-              {attendanceOn ? (
-                <span className="app-dcourse__mod">On</span>
-              ) : (
-                <Button
-                  variant="subtle"
-                  size="sm"
-                  icon={<PlusIcon size={16} />}
-                  loading={enabling}
-                  disabled={enabling}
-                  onClick={enableAttendance}
-                >
-                  Enable
-                </Button>
-              )}
-            </div>
+              <input
+                type="checkbox"
+                className="app-switch"
+                checked={attendanceOn}
+                onChange={(ev) => toggleFeature("attendance", ev.target.checked)}
+              />
+            </label>
           </div>
         </>
       )}

@@ -636,6 +636,19 @@ export async function listSubmissionsForDocument(
   return results ?? [];
 }
 
+/** Fetch a submission row by token regardless of revoked state — used to
+ *  authorize revocation (needs the owner + course before deciding). */
+export async function getSubmissionMeta(
+  db: D1Database,
+  token: string,
+): Promise<ProvenanceSubmissionRow | null> {
+  const row = await db
+    .prepare(`SELECT * FROM provenance_submissions WHERE token = ?`)
+    .bind(token)
+    .first<ProvenanceSubmissionRow>();
+  return row ?? null;
+}
+
 /** Revoke a token. Owner-scoped. Returns true if a row was revoked. */
 export async function revokeSubmission(
   db: D1Database,

@@ -25,9 +25,10 @@ import {
   Avatar,
   Badge,
   Button,
+  Dropdown,
   IconButton,
   RoleSwitch,
-  Select,
+  useConfirm,
   Wordmark,
 } from "../components/index.js";
 import { SignOutIcon } from "../icons.js";
@@ -39,6 +40,7 @@ export function UserDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [meUserId, setMeUserId] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   function reload() {
     if (!userId) return;
@@ -74,7 +76,15 @@ export function UserDetailPage() {
   }
   async function onDemote() {
     if (!detail) return;
-    if (!window.confirm(`Revoke admin from ${detail.user.email}?`)) return;
+    if (
+      !(await confirm({
+        title: "Revoke admin?",
+        body: `${detail.user.email} will lose instance-admin access.`,
+        confirmLabel: "Revoke",
+      }))
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -94,7 +104,16 @@ export function UserDetailPage() {
     if (!detail) return;
     if (currentRole === nextRole) return;
     if (currentRole === "instructor" && nextRole === "student") {
-      if (!window.confirm(`Downgrade ${detail.user.email} to student on this course?`)) return;
+      if (
+        !(await confirm({
+          title: "Downgrade to student?",
+          body: `${detail.user.email} will become a student on this course and lose instructor access to it.`,
+          confirmLabel: "Downgrade",
+          danger: false,
+        }))
+      ) {
+        return;
+      }
     }
     setBusy(true);
     setError(null);
@@ -109,7 +128,15 @@ export function UserDetailPage() {
   }
   async function onRemove(courseId: string, courseName: string) {
     if (!detail) return;
-    if (!window.confirm(`Remove ${detail.user.email} from ${courseName}?`)) return;
+    if (
+      !(await confirm({
+        title: "Remove from course?",
+        body: `${detail.user.email} will be removed from ${courseName}.`,
+        confirmLabel: "Remove",
+      }))
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -249,21 +276,19 @@ export function UserDetailPage() {
                 </div>
                 <span className="roster__meta" />
                 <div className="roster__actions">
-                  <Select
+                  <Dropdown
+                    ariaLabel="Role"
+                    title={isSelf ? "You can't change your own role." : undefined}
                     value={e.role}
                     disabled={busy || isSelf}
-                    title={isSelf ? "You can't change your own role." : undefined}
-                    onChange={(ev) =>
-                      onChangeRole(
-                        e.courseId,
-                        e.role,
-                        ev.target.value as EnrollmentRole,
-                      )
+                    onChange={(v) =>
+                      onChangeRole(e.courseId, e.role, v as EnrollmentRole)
                     }
-                  >
-                    <option value="student">Student</option>
-                    <option value="instructor">Instructor</option>
-                  </Select>
+                    options={[
+                      { value: "student", label: "Student" },
+                      { value: "instructor", label: "Instructor" },
+                    ]}
+                  />
                   <Button
                     variant="danger"
                     size="sm"
@@ -311,6 +336,7 @@ export function UserDetailPage() {
           </div>
         )}
       </div>
+      {confirmDialog}
     </Shell>
   );
 }

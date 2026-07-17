@@ -902,21 +902,31 @@ export async function listSubmissionsRoute(
   if (userId instanceof Response) return userId;
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const enrollmentError = await requireEnrollment(env, userId, courseId);
-  if (enrollmentError) return enrollmentError;
+  const enrollment = await loadEnrollment(env, userId, courseId);
+  if (enrollment instanceof Response) return enrollment;
   const doc = await repo.getDocument(env.DB, courseId, userId, documentId);
   if (!doc) return error("Document not found", 404);
   const rows = await repo.listSubmissionsForDocument(env.DB, documentId, userId);
+  // Listing is owner-scoped, so every row here was created by the caller.
+  // Student-created share links are permanent — once a student shares their
+  // writing with an instructor they can't quietly un-share it — so only an
+  // instructor may revoke. The client hides the Revoke control accordingly and
+  // revokeSubmissionRoute enforces the same rule.
+  const canRevoke = enrollment.role === "instructor";
   return json({
     submissions: rows.map((r) => ({
       token: r.token,
       createdAt: r.created_at,
       revokedAt: r.revoked_at,
+      canRevoke,
     })),
   });
 }
 
-/** DELETE /submissions/:token — revoke. Owner-only. */
+/** DELETE /submissions/:token — revoke. Owner-only, instructors only.
+ *  Student-created links are permanent (see listSubmissionsRoute), so a student
+ *  is refused here even for their own link — the client hides the button but the
+ *  policy is enforced server-side too. */
 export async function revokeSubmissionRoute(
   env: Env,
   identity: Identity,
@@ -924,6 +934,13 @@ export async function revokeSubmissionRoute(
 ): Promise<Response> {
   const userId = requireUser(identity);
   if (userId instanceof Response) return userId;
+  const sub = await repo.getSubmissionMeta(env.DB, token);
+  if (!sub || sub.user_id !== userId) return error("Submission not found", 404);
+  const enrollment = await loadEnrollment(env, userId, sub.course_id);
+  if (enrollment instanceof Response) return enrollment;
+  if (enrollment.role !== "instructor") {
+    return error("Student share links can't be revoked", 403);
+  }
   const ok = await repo.revokeSubmission(env.DB, token, userId);
   if (!ok) return error("Submission not found", 404);
   return json({ ok: true });

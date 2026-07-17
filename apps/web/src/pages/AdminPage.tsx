@@ -22,6 +22,7 @@ import {
   addRosterEntry,
   createAdminCourse,
   deleteAdminCourse,
+  demoteAdmin,
   getMe,
   listAdmins,
   listAdminCourses,
@@ -41,12 +42,13 @@ import {
   Avatar,
   Badge,
   Button,
+  Dropdown,
   Field,
   IconButton,
   Input,
   RoleSwitch,
-  Select,
   SegmentedControl,
+  useConfirm,
   Wordmark,
 } from "../components/index.js";
 import { PlusIcon, SignOutIcon, TrashIcon } from "../icons.js";
@@ -191,6 +193,7 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
   const [draftEmail, setDraftEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     listAdminCourses()
@@ -228,7 +231,13 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
     }
   }
   async function onRemove(entry: RosterEntry) {
-    if (!window.confirm(`Remove ${entry.email} as an instructor of this course?`)) {
+    if (
+      !(await confirm({
+        title: "Remove instructor?",
+        body: `${entry.email} will no longer be an instructor of this course.`,
+        confirmLabel: "Remove",
+      }))
+    ) {
       return;
     }
     setBusy(true);
@@ -279,23 +288,24 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
         </div>
         <div style={{ flex: "0 0 16rem", minWidth: 0 }}>
           <Field label="Course">
-            <Select
+            <Dropdown
+              className="ds-dropdown--block"
+              ariaLabel="Course"
               value={courseId}
               disabled={busy || courses === null || courses.length === 0}
-              onChange={(e) => setCourseId(e.target.value)}
-            >
-              {courses === null ? (
-                <option>Loading…</option>
-              ) : courses.length === 0 ? (
-                <option value="">No courses</option>
-              ) : (
-                courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))
-              )}
-            </Select>
+              onChange={(v) => setCourseId(v)}
+              placeholder={
+                courses === null
+                  ? "Loading…"
+                  : courses.length === 0
+                    ? "No courses"
+                    : undefined
+              }
+              options={(courses ?? []).map((c) => ({
+                value: c.id,
+                label: c.name,
+              }))}
+            />
           </Field>
         </div>
         <Button
@@ -348,6 +358,7 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
           })}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -357,6 +368,7 @@ function CoursesTab() {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   function reload() {
     setError(null);
@@ -383,12 +395,11 @@ function CoursesTab() {
   }
   async function onDelete(course: AdminCourse) {
     if (
-      !window.confirm(
-        `Delete course "${course.name}"?\n\nThis removes every agent, ` +
-        `collection, source, join code, and enrollment. Student transcripts ` +
-        `are preserved as orphaned rows but become unreachable through the ` +
-        `app. This action cannot be undone.`,
-      )
+      !(await confirm({
+        title: `Delete course “${course.name}”?`,
+        body: "This removes every agent, collection, source, join code, and enrollment. Student transcripts are preserved as orphaned rows but become unreachable through the app. This action cannot be undone.",
+        confirmLabel: "Delete",
+      }))
     ) {
       return;
     }
@@ -464,6 +475,7 @@ function CoursesTab() {
           ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -473,6 +485,7 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   function reload() {
     setError(null);
@@ -498,13 +511,36 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
     }
   }
 
+  async function onRevoke(entry: AdminEntry) {
+    if (
+      !(await confirm({
+        title: "Revoke admin?",
+        body: `${entry.email} will lose instance-admin access.`,
+        confirmLabel: "Revoke",
+      }))
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await demoteAdmin(entry.userId);
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Revoke failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="app-section">
       <span className="mono-label app-section__label">Admins</span>
       <p className="muted small">
         Admins can create / delete courses, promote other admins, and view every
         user. Promote-by-email only works for users who have signed in at least
-        once. To revoke admin, open the user.
+        once. Revoke here or from the user&rsquo;s page; you can&rsquo;t revoke
+        your own admin.
       </p>
       {error && <p className="error">{error}</p>}
       <form
@@ -542,31 +578,43 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
           {admins.map((a) => {
             const isSelf = meUserId === a.userId;
             return (
-              <Link
-                key={a.userId}
-                to={`/users/${a.userId}`}
-                className="app-list__row"
-              >
-                <Avatar name={a.displayName || a.email} />
-                <div className="app-list__main">
-                  <div className="app-list__title">
-                    {a.email}
-                    {isSelf && <span className="muted small"> · you</span>}
+              <div key={a.userId} className="app-list__row">
+                <Link
+                  to={`/users/${a.userId}`}
+                  className="app-list__link"
+                  style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: 0 }}
+                >
+                  <Avatar name={a.displayName || a.email} />
+                  <div className="app-list__main">
+                    <div className="app-list__title">
+                      {a.email}
+                      {isSelf && <span className="muted small"> · you</span>}
+                    </div>
+                    <div className="app-list__sub">
+                      {a.lastSeenAt
+                        ? `Last seen ${relativeTime(a.lastSeenAt)}`
+                        : "Never signed in"}
+                    </div>
                   </div>
-                  <div className="app-list__sub">
-                    {a.lastSeenAt
-                      ? `Last seen ${relativeTime(a.lastSeenAt)}`
-                      : "Never signed in"}
-                  </div>
-                </div>
+                </Link>
                 <div className="app-list__meta">
                   <Badge tone="brand">admin</Badge>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy || isSelf}
+                    title={isSelf ? "You can't revoke your own admin." : undefined}
+                    onClick={() => onRevoke(a)}
+                  >
+                    Revoke
+                  </Button>
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

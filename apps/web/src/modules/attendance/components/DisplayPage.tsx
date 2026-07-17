@@ -19,7 +19,7 @@ import {
   type QrToken,
   type SessionDTO,
 } from "../api.js";
-import { Badge, Button, Wordmark } from "../../../components/index.js";
+import { Badge, Button, Wordmark, useConfirm } from "../../../components/index.js";
 import { CheckIcon, DownloadIcon, FlagIcon } from "../../../icons.js";
 
 const TOKEN_POLL_MS = 5_000;
@@ -46,6 +46,7 @@ export function DisplayPage() {
   const [err, setErr] = useState<string | null>(null);
   const [qrSvg, setQrSvg] = useState<string>("");
   const [zoomed, setZoomed] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     if (!id) return;
@@ -94,7 +95,14 @@ export function DisplayPage() {
 
   const onClose = useCallback(async () => {
     if (!id) return;
-    if (!confirm("Close this session? Students will no longer be able to check in.")) return;
+    if (
+      !(await confirm({
+        title: "Close this session?",
+        body: "Students will no longer be able to check in.",
+        confirmLabel: "Close session",
+      }))
+    )
+      return;
     try {
       await closeSession(id);
       const data = await getSession(id);
@@ -102,7 +110,7 @@ export function DisplayPage() {
     } catch (e) {
       setErr(String((e as Error).message));
     }
-  }, [id]);
+  }, [id, confirm]);
 
   const Shell = ({ children }: { children: React.ReactNode }) => (
     <div className="ds-staff">
@@ -247,6 +255,7 @@ export function DisplayPage() {
           <div className="ds-att-zoom__url">{session.checkInUrl}</div>
         </button>
       )}
+      {confirmDialog}
     </div>
   );
 }

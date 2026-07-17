@@ -10,12 +10,15 @@ import {
   revokeSubmission,
   type SubmissionSummary,
 } from "../api.js";
-import { Button, Input } from "../../../components/index.js";
+import { Button, Input, useConfirm } from "../../../components/index.js";
 import { ShareIcon } from "../../../icons.js";
 
 interface Props {
   documentId: string;
   courseId: string;
+  /** Whether the viewer may revoke links. Students can't (their shares are
+   *  permanent); the worker enforces the same rule. */
+  canRevoke: boolean;
   onClose: () => void;
 }
 
@@ -23,11 +26,12 @@ function shareUrl(token: string): string {
   return `${window.location.origin}/s/${token}`;
 }
 
-export function SubmissionModal({ documentId, courseId, onClose }: Props) {
+export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Props) {
   const [subs, setSubs] = useState<SubmissionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -42,7 +46,7 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
     setError(null);
     try {
       const { token, createdAt } = await mintSubmission(documentId, courseId);
-      setSubs((cur) => [{ token, createdAt, revokedAt: null }, ...(cur ?? [])]);
+      setSubs((cur) => [{ token, createdAt, revokedAt: null, canRevoke }, ...(cur ?? [])]);
       await copy(token);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create link");
@@ -62,7 +66,14 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
   }
 
   async function onRevoke(token: string) {
-    if (!confirm("Revoke this link? Anyone holding it will lose access.")) return;
+    if (
+      !(await confirm({
+        title: "Revoke this link?",
+        body: "Anyone holding it will immediately lose access.",
+        confirmLabel: "Revoke",
+      }))
+    )
+      return;
     try {
       await revokeSubmission(token);
       setSubs((cur) =>
@@ -121,9 +132,11 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
                 <Button variant="subtle" size="sm" onClick={() => copy(s.token)}>
                   {copied === s.token ? "Copied" : "Copy"}
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => onRevoke(s.token)}>
-                  Revoke
-                </Button>
+                {s.canRevoke && (
+                  <Button variant="danger" size="sm" onClick={() => onRevoke(s.token)}>
+                    Revoke
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -136,6 +149,7 @@ export function SubmissionModal({ documentId, courseId, onClose }: Props) {
           </Button>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

@@ -60,7 +60,7 @@ export function CollectionsListPage() {
     <div className="app-page">
       <div className="app-page__head">
         <div>
-          <span className="eyebrow">Instructor · Sources</span>
+          <span className="eyebrow">Instructor · Library</span>
           <h1>Libraries</h1>
           <div className="app-page__scope">
             A library is a set of documents you attach to an agent. The agent

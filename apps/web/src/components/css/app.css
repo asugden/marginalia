@@ -384,7 +384,9 @@ select.app-input {
 .roster__active { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
 
 /* Join code panel */
-.joincode { display: flex; align-items: center; gap: 1rem; background: var(--surface-sunken); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-top: 1.25rem; }
+/* flex-end so the Generate-code button bottom-aligns with the input row; the
+   left column is taller (it carries a Field label above its input). */
+.joincode { display: flex; align-items: flex-end; gap: 1rem; background: var(--surface-sunken); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-top: 1.25rem; }
 .joincode__code { font-family: var(--font-mono); font-weight: 700; font-size: 1.3rem; letter-spacing: 0.04em; color: var(--accent); }
 .joincode__label { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
 .joincode__spacer { flex: 1; }

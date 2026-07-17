@@ -31,6 +31,7 @@ import {
   Field,
   IconButton,
   Input,
+  useConfirm,
 } from "../components/index.js";
 import { PlusIcon, TrashIcon } from "../icons.js";
 
@@ -50,6 +51,7 @@ export function RosterPage() {
   const [codeDraftMaxUses, setCodeDraftMaxUses] = useState<string>("");
   const [codeBusy, setCodeBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   function reload() {
     setError(null);
@@ -105,9 +107,11 @@ export function RosterPage() {
   }
   async function onRevokeCode(code: string) {
     if (
-      !window.confirm(
-        `Revoke code "${code}"? Existing enrollments aren't affected.`,
-      )
+      !(await confirm({
+        title: "Revoke this code?",
+        body: `Code "${code}" will stop working for new students. Existing enrollments aren't affected.`,
+        confirmLabel: "Revoke",
+      }))
     ) {
       return;
     }
@@ -136,7 +140,15 @@ export function RosterPage() {
   }
 
   async function onRemove(entry: RosterEntry) {
-    if (!window.confirm(`Remove ${entry.email} from the course?`)) return;
+    if (
+      !(await confirm({
+        title: "Remove this student?",
+        body: `${entry.email} will lose access to this course. They can rejoin later with a join code.`,
+        confirmLabel: "Remove",
+      }))
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -349,6 +361,7 @@ export function RosterPage() {
           </div>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }
