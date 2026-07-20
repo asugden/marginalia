@@ -453,6 +453,32 @@ export async function deleteConversation(
   return (res.meta?.changes ?? 0) > 0;
 }
 
+/**
+ * Rename a conversation (owner only). Deliberately does NOT touch
+ * `updated_at`: that column tracks the last chat turn and drives the
+ * "last used" timestamp shown in the chat-history drawer — renaming a
+ * conversation is not the same as using it. Returns the updated row, or
+ * null if no conversation matched (wrong id or not the owner).
+ */
+export async function renameConversation(
+  db: D1Database,
+  userId: string,
+  conversationId: string,
+  title: string,
+): Promise<ProvenanceConversationRow | null> {
+  const res = await db
+    .prepare(
+      `UPDATE provenance_conversations SET title = ? WHERE id = ? AND user_id = ?`,
+    )
+    .bind(title, conversationId, userId)
+    .run();
+  if ((res.meta?.changes ?? 0) === 0) return null;
+  return db
+    .prepare(`SELECT * FROM provenance_conversations WHERE id = ?`)
+    .bind(conversationId)
+    .first<ProvenanceConversationRow>();
+}
+
 // ── Messages ─────────────────────────────────────────────────────────────
 
 export async function listMessages(

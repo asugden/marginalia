@@ -14,10 +14,21 @@
 // The divider between editor and chat is draggable. Persist the chosen
 // ratio in localStorage so it sticks across reloads.
 
+import type { Editor, JSONContent } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import type { Editor, JSONContent } from "@tiptap/react";
+import {
+  Button,
+  Field,
+  IconButton,
+  Input,
+  Modal,
+  PreviewBanner,
+  StudentModuleNav,
+  Wordmark,
+} from "../../../components/index.js";
 import { useActiveCourse } from "../../../course/useActiveCourse.js";
+import { GearIcon, KeyIcon, ShareIcon } from "../../../icons.js";
 import {
   getDocument,
   postEvents,
@@ -26,18 +37,11 @@ import {
   type DocumentDTO,
   type OutboundEvent,
 } from "../api.js";
+import { ChatPanel } from "./ChatPanel.js";
 import { ProvenanceEditor, type EditorChange } from "./Editor.js";
 import type { TrackedEvent } from "./ProvenanceTracker.js";
-import { ChatPanel } from "./ChatPanel.js";
 import { SubmissionModal } from "./SubmissionModal.js";
-import {
-  Button,
-  IconButton,
-  PreviewBanner,
-  StudentModuleNav,
-  Wordmark,
-} from "../../../components/index.js";
-import { ShareIcon } from "../../../icons.js";
+import { maskKey, useByoKey } from "./useByoKey.js";
 
 const SAVE_DEBOUNCE_MS = 1_000;
 const EVENTS_FLUSH_MS = 3_000;
@@ -112,7 +116,13 @@ export function EditorPage() {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [chatOpen, setChatOpen] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [split, setSplit] = useState<number>(() => loadSplit());
+
+  // Bring-your-own LLM key. Managed here (in the document top bar's Settings
+  // popup) rather than inside the chat panel, but consumed by the chat: the
+  // key value rides down to ChatPanel and is attached per chat request.
+  const byo = useByoKey();
 
   // ── Doc-body autosave (slice 1) ───────────────────────────────────────
   const pendingSaveRef = useRef<{
@@ -412,6 +422,18 @@ export function EditorPage() {
         <Button variant="subtle" size="sm" icon={<ShareIcon size={16} />} onClick={() => setShareOpen(true)}>
           Share
         </Button>
+        {/* Chat settings (currently the bring-your-own-key control). Only shown
+            while the chat pane is open, since that's the only thing it affects.
+            A dot on the gear signals a personal key is in effect. */}
+        {chatOpen && (
+          <IconButton
+            title={byo.active ? "Chat settings — using your own key" : "Chat settings"}
+            className={"prov-settings-gear" + (byo.active ? " is-active" : "")}
+            onClick={() => setSettingsOpen(true)}
+          >
+            <GearIcon size={18} />
+          </IconButton>
+        )}
         <button
           type="button"
           className={"prov-toggle" + (chatOpen ? " is-on" : "")}
@@ -431,6 +453,10 @@ export function EditorPage() {
           canRevoke={isInstructor}
           onClose={() => setShareOpen(false)}
         />
+      )}
+
+      {settingsOpen && (
+        <ChatSettingsModal byo={byo} onClose={() => setSettingsOpen(false)} />
       )}
 
       <div
@@ -473,6 +499,7 @@ export function EditorPage() {
               <ChatPanel
                 documentId={doc.id}
                 courseId={doc.courseId}
+                byoKey={byo.key}
                 onReady={(api) => { chatRef.current = api; }}
                 onInsertAtCursor={(text, sourceMessageId) => {
                   const ed = editorRef.current;
@@ -485,6 +512,85 @@ export function EditorPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Chat settings popup, launched from the gear in the document top bar.
+// Currently houses only the bring-your-own-key control; kept as its own
+// modal so more chat-scoped settings can join it later.
+function ChatSettingsModal({
+  byo,
+  onClose,
+}: {
+  byo: ReturnType<typeof useByoKey>;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState("");
+
+  function save() {
+    if (!value.trim()) return;
+    byo.setKey(value);
+    setValue("");
+    onClose();
+  }
+
+  return (
+    <Modal title="Chat settings" onClose={onClose} maxWidth="30rem">
+      <h2 className="ds-modal-title">Chat Settings</h2>
+
+      <section className="prov-settings-section">
+        <h3 className="prov-settings-section-title">
+          <KeyIcon size={16} />
+          Use your own LLM key
+        </h3>
+        <p className="ds-modal-body byo-key-body">
+          Paste your own provider API key and the chat will use it instead of
+          your institution's. Your key is stored only in this browser and is
+          sent only with each chat request — it is never saved on the server.
+        </p>
+
+        {byo.active ? (
+          <div className="prov-settings-current">
+            <span className="muted small">Current key</span>
+            <code>{maskKey(byo.key!)}</code>
+          </div>
+        ) : null}
+
+        <Field label={byo.active ? "Replace with a new key" : "API key"}>
+          <Input
+            mono
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="sk-…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); save(); }
+            }}
+          />
+        </Field>
+
+        <div className="ds-modal-actions">
+          {byo.active && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => { byo.clear(); onClose(); }}
+            >
+              Stop using my key
+            </Button>
+          )}
+          <span className="ds-modal-actions-spacer" />
+          <Button variant="subtle" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="sm" onClick={save} disabled={!value.trim()}>
+            Save key
+          </Button>
+        </div>
+      </section>
+    </Modal>
   );
 }
 
