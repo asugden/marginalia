@@ -2178,6 +2178,7 @@ body.prov-dragging * {
   border-left: 1px solid var(--line);
 }
 .prov-chat {
+  position: relative; /* containing block for the right-sliding history drawer */
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -2199,31 +2200,44 @@ body.prov-dragging * {
   letter-spacing: 0.08em;
   color: var(--ink-soft);
 }
-/* The conversation switcher is now the custom Dropdown (.ds-dropdown); this
-   only sizes it to fill the header row. Its own trigger carries border/focus. */
-.prov-chat-select { flex: 1; min-width: 0; }
-.prov-chat-select .ds-dropdown__trigger { font-weight: 500; }
-.prov-chat-new { padding: 0.32rem 0.7rem; font-size: 0.82rem; }
 
-.prov-chat-icon-button {
-  display: inline-flex;
+/* Active chat name + inline rename (pencil) on the left of the header. */
+.prov-chat-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  border: 0;
-  box-shadow: none;
-  cursor: pointer;
-  padding: 0;
-  transition: background 120ms ease, color 120ms ease;
+  gap: 0.15rem;
 }
-.prov-chat-icon-button:hover {
+.prov-chat-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 0.95rem var(--font-sans);
+  color: var(--ink);
+}
+.prov-chat-name-edit { color: var(--muted); }
+.prov-chat-name:hover .prov-chat-name-edit { color: var(--brand-primary); }
+.prov-chat-name-input {
+  flex: 1;
+  min-width: 0;
+  font: 600 0.95rem var(--font-sans);
+  color: var(--ink);
   background: var(--bg);
-  color: var(--brand-primary);
+  border: 1px solid var(--brand-primary);
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
+  outline: none;
 }
+
+/* Right-aligned header actions: view history + New Chat. */
+.prov-chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.prov-chat-new { padding: 0.32rem 0.7rem; font-size: 0.82rem; }
 
 /* Agent picker — collapsible card just under the header. */
 .prov-chat-agent-picker {
@@ -2407,17 +2421,17 @@ body.prov-dragging * {
 /* Composer — visually identical primitives to .composer-field on the
  * conversation page but contained inside the chat pane. */
 .prov-chat-composer {
-  padding: 0.65rem 0.85rem 0.85rem;
+  padding: 0.65rem 0.85rem;
   background: var(--panel);
   border-top: 1px solid var(--line);
 }
 .prov-composer-field {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.4rem 0.4rem 0.75rem;
+  padding: 0.4rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: 50px;
   background: var(--surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: border-color 140ms ease, box-shadow 140ms ease;
@@ -2507,38 +2521,158 @@ body.prov-dragging * {
   }
 }
 
-/* ── Provenance BYO key (slice 5) ──────────────────────────────────────── */
-.prov-chat-icon-button.is-active {
-  color: var(--brand-primary);
-  background: var(--accent-wash);
+/* ── Provenance chat settings (bring-your-own key) ─────────────────────── */
+/* Gear lives in the document top bar; a dot signals a personal key is active. */
+.prov-settings-gear { position: relative; }
+.prov-settings-gear.is-active { color: var(--brand-primary); }
+.prov-settings-gear.is-active::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-primary);
 }
-.prov-chat-byo-banner {
+/* A defined settings item within the popup — a titled section. Sections after
+   the first get a divider so they read as distinct items in a collection. */
+.prov-settings-section {
+  margin-top: 15px;
+}
+.prov-settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: 600 0.95rem var(--font-sans);
+  color: var(--ink);
+  margin: 0 0 0.4rem;
+}
+/* Key glyph sits with the heading, muted grey and sized to the text. */
+.prov-settings-section-title svg {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  color: var(--muted);
+}
+.prov-settings-section + .prov-settings-section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+.byo-key-body {
+  margin-bottom: 10px;
+}
+/* Masked current-key readout inside the settings popup. */
+.prov-settings-current {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.85rem;
-  background: var(--accent-wash);
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.prov-settings-current code { font-size: 0.95em; color: var(--ink); }
+
+/* ── Chat history drawer — slides in from the right over the chat pane ──── */
+.prov-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 45; /* below .ds-modal-backdrop (60) so the delete-confirm sits over it */
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  justify-content: flex-end;
+  animation: prov-scrim-in 200ms ease both;
+}
+.prov-drawer-scrim.is-closing { animation: prov-scrim-out 180ms ease both; }
+.prov-drawer {
+  width: min(320px, 82%);
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  /* Ease-out-quint on the way in for a fluid glide; ease-in on the way out.
+     The `.is-closing` slide-out is what the component waits on (onAnimationEnd)
+     before it unmounts — this rule MUST exist or the drawer never closes. */
+  animation: prov-drawer-slide-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.prov-drawer.is-closing {
+  animation: prov-drawer-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+@keyframes prov-drawer-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes prov-drawer-slide-out { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes prov-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes prov-scrim-out { from { opacity: 1; } to { opacity: 0; } }
+.prov-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.85rem;
   border-bottom: 1px solid var(--line);
-  font-size: 0.8rem;
+}
+.prov-drawer-title {
+  font: 600 0.78rem var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--ink-soft);
 }
-.prov-chat-byo-banner code {
-  font-size: 0.95em;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+.prov-drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
-.prov-chat-byo-banner-link {
-  margin-left: auto;
+.prov-drawer-empty { padding: 1rem 0.75rem; }
+.prov-drawer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.prov-drawer-row:hover { background: var(--bg); }
+.prov-drawer-row.is-active {
+  border-color: var(--brand-primary);
+  background: var(--accent-wash);
+}
+.prov-drawer-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: flex-start;
+  text-align: left;
   background: transparent;
   border: 0;
   box-shadow: none;
-  color: var(--brand-primary);
-  font: 600 0.8rem var(--font-sans);
   cursor: pointer;
-  padding: 0.15rem 0.3rem;
+  padding: 0.5rem 0.55rem;
 }
-.prov-chat-byo-banner-link:hover { text-decoration: underline; box-shadow: none; }
+.prov-drawer-row-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 0.9rem var(--font-sans);
+  color: var(--ink);
+}
+.prov-drawer-row-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.prov-drawer-row-trash { color: var(--muted); flex: none; }
+.prov-drawer-row-trash:hover { color: var(--danger, #c0392b); }
 
 /* Modal — reused pattern: dim scrim + centered card. */
 .prov-modal-scrim {

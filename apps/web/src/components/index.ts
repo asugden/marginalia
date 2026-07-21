@@ -11,6 +11,7 @@ export { Modal } from "./core/Modal.js";
 export { ConfirmDialog } from "./core/ConfirmDialog.js";
 export { useConfirm } from "./core/useConfirm.js";
 export { Tag } from "./core/Tag.js";
+export { Tooltip } from "./core/Tooltip.js";
 export { Wordmark } from "./core/Wordmark.js";
 export { RoleSwitch } from "./RoleSwitch.js";
 export { PreviewBanner } from "./PreviewBanner.js";

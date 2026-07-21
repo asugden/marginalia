@@ -60,6 +60,7 @@ const MAX_EVENT_TEXT_CHARS = 50_000; // a single paste / llm_insert hard cap
 
 // ── Chat limits (slice 3) ───────────────────────────────────────────────
 const MAX_AGENT_NAME = 120;
+const MAX_CONVERSATION_TITLE = 120;
 const MAX_AGENT_PROMPT = 12_000;
 const MAX_USER_MESSAGE_CHARS = 8_000;
 const MAX_CHAT_HISTORY_TURNS = 20;
@@ -649,6 +650,34 @@ export async function deleteConversationRoute(
   const ok = await repo.deleteConversation(env.DB, userId, conversationId);
   if (!ok) return error("Conversation not found", 404);
   return json({ ok: true });
+}
+
+export async function updateConversationRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  conversationId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const body = (await req.json().catch(() => null)) as {
+    courseId?: string;
+    title?: string;
+  } | null;
+  if (!body?.courseId) return error("courseId is required", 400);
+  if (typeof body.title !== "string") return error("title is required", 400);
+  const trimmed = body.title.trim().slice(0, MAX_CONVERSATION_TITLE);
+  if (!trimmed) return error("title cannot be empty", 400);
+  const enrollmentError = await requireEnrollment(env, userId, body.courseId);
+  if (enrollmentError) return enrollmentError;
+  const updated = await repo.renameConversation(
+    env.DB,
+    userId,
+    conversationId,
+    trimmed,
+  );
+  if (!updated) return error("Conversation not found", 404);
+  return json({ conversation: toConversationDTO(updated) });
 }
 
 export async function listMessagesRoute(

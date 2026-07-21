@@ -15,6 +15,7 @@
 /* Per-component partials (one file per component, avoids merge conflicts). */
 @import "./css/Button.css";
 @import "./css/IconButton.css";
+@import "./css/Tooltip.css";
 @import "./css/Badge.css";
 @import "./css/Tag.css";
 @import "./css/Avatar.css";
