@@ -63,6 +63,14 @@ const emptyDraft = (): Draft => ({
   systemPromptFragment: "",
 });
 
+// CourseLayout supplies the top bar + nav; this page renders only its body.
+// Defined at module scope, not inside the component — an inline component gets
+// a new identity every render, which remounts its subtree and blurs any focused
+// input on each keystroke.
+function Shell({ children }: { children: React.ReactNode }) {
+  return <div className="app-page">{children}</div>;
+}
+
 export function AuthorVoiceEditPage() {
   const navigate = useNavigate();
   const { id: voiceId } = useParams<{ id: string }>();
@@ -224,11 +232,6 @@ export function AuthorVoiceEditPage() {
       setShareBusy(false);
     }
   }
-
-  // CourseLayout supplies the top bar + nav; this page renders only its body.
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="app-page">{children}</div>
-  );
 
   if (loading) {
     return (

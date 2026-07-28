@@ -36,6 +36,29 @@ const FLAG_LABEL: Record<string, string> = {
   late: "late",
 };
 
+// Staff chrome wrapper. Defined at module scope, not inside DisplayPage — an
+// inline component gets a fresh identity every render, remounting its subtree
+// (and blurring any focused input) on each keystroke/state change.
+function Shell({
+  sessionsHref,
+  children,
+}: {
+  sessionsHref: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="ds-staff">
+      <header className="ds-staff-top">
+        <Link to={sessionsHref} aria-label="All sessions">
+          <Wordmark size="sm" />
+        </Link>
+        <span className="ds-staff-top__role">Attendance</span>
+      </header>
+      <div className="ds-staff-page ds-att-page--wide">{children}</div>
+    </div>
+  );
+}
+
 export function DisplayPage() {
   const { id = "" } = useParams<{ id: string }>();
   const { courseId } = useCourse();
@@ -112,27 +135,15 @@ export function DisplayPage() {
     }
   }, [id, confirm]);
 
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="ds-staff">
-      <header className="ds-staff-top">
-        <Link to={sessionsHref} aria-label="All sessions">
-          <Wordmark size="sm" />
-        </Link>
-        <span className="ds-staff-top__role">Attendance</span>
-      </header>
-      <div className="ds-staff-page ds-att-page--wide">{children}</div>
-    </div>
-  );
-
   if (err)
     return (
-      <Shell>
+      <Shell sessionsHref={sessionsHref}>
         <p className="error">{err}</p>
       </Shell>
     );
   if (!session)
     return (
-      <Shell>
+      <Shell sessionsHref={sessionsHref}>
         <p className="muted">Loading…</p>
       </Shell>
     );

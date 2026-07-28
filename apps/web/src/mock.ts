@@ -18,7 +18,9 @@ import type {
   ConversationSummary,
   ConversationView,
   TurnEvent,
+  VoiceFull,
   VoiceListing,
+  VoiceShareEntry,
 } from "./api.js";
 
 const MOCK_TOPICS = [
@@ -213,6 +215,29 @@ const mockNotSupported = (label: string) => {
   );
 };
 
+// In-memory owned-voice store so the author CRUD flow (create / edit / delete /
+// share) is exercisable under mock, mirroring the real Worker's per-user
+// voices. Resets on reload. Seeded with one voice so the delete path is
+// reachable immediately.
+interface MockVoice {
+  id: string;
+  name: string;
+  description: string;
+  systemPromptFragment: string;
+  updatedAt: number;
+  shares: VoiceShareEntry[];
+}
+let voiceSeq = 1;
+const ownedVoices = new Map<string, MockVoice>();
+ownedVoices.set("voice_seed", {
+  id: "voice_seed",
+  name: "My Socratic tutor",
+  description: "A gentle, question-led voice.",
+  systemPromptFragment: "Ask one question at a time; never give the answer directly.",
+  updatedAt: Date.now(),
+  shares: [],
+});
+
 export async function listVoices(_courseId?: string): Promise<VoiceListing> {
   return {
     library: LIBRARY.map((v) => ({
@@ -220,9 +245,125 @@ export async function listVoices(_courseId?: string): Promise<VoiceListing> {
       name: v.name,
       description: v.description,
     })),
-    owned: [],
+    owned: [...ownedVoices.values()].map((v) => ({
+      id: v.id,
+      name: v.name,
+      description: v.description,
+      updatedAt: v.updatedAt,
+    })),
     shared: [],
   };
+}
+
+export async function getVoice(voiceId: string): Promise<VoiceFull> {
+  const owned = ownedVoices.get(voiceId);
+  if (owned) {
+    return {
+      kind: "custom",
+      voice: {
+        id: owned.id,
+        name: owned.name,
+        description: owned.description,
+        systemPromptFragment: owned.systemPromptFragment,
+        ownerUserId: "me",
+        isOwner: true,
+        updatedAt: owned.updatedAt,
+      },
+    };
+  }
+  const lib = LIBRARY.find((v) => v.id === voiceId);
+  if (lib) {
+    return {
+      kind: "library",
+      voice: {
+        id: lib.id,
+        name: lib.name,
+        description: lib.description,
+        systemPromptFragment: lib.systemPromptFragment,
+      },
+    };
+  }
+  throw new Error("Voice not found");
+}
+
+export async function createVoice(params: {
+  name: string;
+  description: string;
+  systemPromptFragment: string;
+}): Promise<{ id: string }> {
+  const id = `voice_${++voiceSeq}`;
+  ownedVoices.set(id, { id, ...params, updatedAt: Date.now(), shares: [] });
+  return { id };
+}
+
+export async function updateVoice(
+  voiceId: string,
+  params: { name: string; description: string; systemPromptFragment: string },
+): Promise<{ ok: true }> {
+  const v = ownedVoices.get(voiceId);
+  if (!v) throw new Error("Voice not found");
+  ownedVoices.set(voiceId, { ...v, ...params, updatedAt: Date.now() });
+  return { ok: true };
+}
+
+export async function deleteVoice(voiceId: string): Promise<void> {
+  ownedVoices.delete(voiceId);
+}
+
+export async function duplicateVoice(voiceId: string): Promise<{ id: string }> {
+  const src =
+    ownedVoices.get(voiceId) ??
+    (() => {
+      const lib = LIBRARY.find((v) => v.id === voiceId);
+      return lib
+        ? { name: lib.name, description: lib.description, systemPromptFragment: lib.systemPromptFragment }
+        : null;
+    })();
+  if (!src) throw new Error("Voice not found");
+  return createVoice({
+    name: `${src.name} (copy)`,
+    description: src.description,
+    systemPromptFragment: src.systemPromptFragment,
+  });
+}
+
+export async function previewVoice(params: {
+  systemPromptFragment: string;
+  promptKey?: string;
+}): Promise<{ promptKey: string; question: string; reply: string }> {
+  return {
+    promptKey: params.promptKey ?? "derivative",
+    question: "Preview question",
+    reply:
+      "This is a mock preview reply. (Run against the Worker to see a real model response.)",
+  };
+}
+
+export async function listVoiceShares(
+  voiceId: string,
+): Promise<{ shares: VoiceShareEntry[] }> {
+  return { shares: ownedVoices.get(voiceId)?.shares ?? [] };
+}
+
+export async function createVoiceShare(
+  voiceId: string,
+  email: string,
+): Promise<{ userId: string; email: string }> {
+  const v = ownedVoices.get(voiceId);
+  if (!v) throw new Error("Voice not found");
+  const userId = `user_${email}`;
+  if (!v.shares.some((s) => s.userId === userId)) {
+    v.shares.push({ userId, email, displayName: null, createdAt: Date.now() });
+  }
+  return { userId, email };
+}
+
+export async function deleteVoiceShare(
+  voiceId: string,
+  userId: string,
+): Promise<void> {
+  const v = ownedVoices.get(voiceId);
+  if (v) v.shares = v.shares.filter((s) => s.userId !== userId);
 }
 
 export async function listAgents(
