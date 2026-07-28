@@ -6,10 +6,12 @@
 // redirects into the Agents tab; the course chrome (topbar + nav) is owned by
 // CourseLayout.
 
-import { Navigate } from "react-router-dom";
-import { useCourse } from "../course/useCourse.js";
+import { Navigate, useParams } from "react-router-dom";
 
 export function CourseDashboardPage() {
-  const { courseId } = useCourse();
+  // Read the course id from the URL, not from CourseContext: this index route
+  // can render before the layout's context catches up to a course switch, and
+  // trusting stale context here would redirect back to the previous course.
+  const { courseId } = useParams<{ courseId: string }>();
   return <Navigate to={`/course/${courseId}/instructor/agents`} replace />;
 }

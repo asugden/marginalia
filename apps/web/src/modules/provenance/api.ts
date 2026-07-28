@@ -283,6 +283,25 @@ export async function createConversation(
   return body.conversation;
 }
 
+export async function updateConversation(
+  courseId: string,
+  id: string,
+  title: string,
+): Promise<ConversationDTO> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/conversations/${encodeURIComponent(id)}`),
+    {
+      ...fetchInit,
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ courseId, title }),
+    },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const body = (await res.json()) as { conversation: ConversationDTO };
+  return body.conversation;
+}
+
 export async function deleteConversation(courseId: string, id: string): Promise<void> {
   const res = await fetch(
     apiUrl(

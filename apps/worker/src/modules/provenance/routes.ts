@@ -24,6 +24,7 @@
 //   POST   /api/provenance/documents/:id/conversations             create with an agent
 //   GET    /api/provenance/conversations/:id/messages?courseId=    fetch history
 //   POST   /api/provenance/conversations/:id/messages              SSE stream a turn
+//   PATCH  /api/provenance/conversations/:id                        rename (title)
 //   DELETE /api/provenance/conversations/:id?courseId=             delete
 //
 // Submissions (slice 6 — authed)
@@ -64,6 +65,7 @@ import {
   revokeSubmissionRoute,
   sendMessageRoute,
   updateAgentRoute,
+  updateConversationRoute,
   updateDocumentRoute,
   updateSettingsRoute,
 } from "./handlers.js";
@@ -128,6 +130,9 @@ export async function routeProvenance(
   }
 
   if (head === "conversations" && tail) {
+    if (parts.length === 4 && req.method === "PATCH") {
+      return updateConversationRoute(req, env, identity, tail);
+    }
     if (parts.length === 4 && req.method === "DELETE") {
       return deleteConversationRoute(env, identity, url, tail);
     }

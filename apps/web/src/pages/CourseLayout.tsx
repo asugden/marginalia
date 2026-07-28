@@ -41,6 +41,17 @@ export function CourseLayout() {
   const [error, setError] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
+  // Reset the resolved course context synchronously when the URL's `courseId`
+  // changes. Without this, switching courses re-renders this layout with the
+  // new param but keeps serving the *previous* course's context until the
+  // async /api/me fetch resolves — during that gap children (e.g. the index
+  // redirect in CourseDashboardPage) read the stale course and bounce back.
+  const [prevCourseId, setPrevCourseId] = useState(courseId);
+  if (courseId !== prevCourseId) {
+    setPrevCourseId(courseId);
+    setValue(null);
+  }
+
   useEffect(() => {
     if (!courseId) return;
     const ctrl = new AbortController();
