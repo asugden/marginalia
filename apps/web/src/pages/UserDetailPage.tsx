@@ -34,6 +34,37 @@ import {
 import { SignOutIcon } from "../icons.js";
 import { signOut } from "../session.js";
 
+// The app topbar in its admin register — same chrome as the Admin console, so
+// opening a user reads as a drill-in, not a separate page. Defined at module
+// scope, not inside the component: an inline component gets a fresh identity
+// every render, remounting its subtree and blurring any focused input on each
+// keystroke.
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="app">
+      <header className="app-topbar app-topbar--wide app-topbar--admin">
+        <div className="app-topbar__inner">
+          <Link to="/admin" aria-label="Admin console" className="app-lockup-link">
+            <Wordmark size="sm" />
+          </Link>
+          <span className="app-lockup__role">Admin console</span>
+          <div className="app-topbar__spacer" />
+          <div className="app-topbar__actions">
+            <RoleSwitch courseId={null} role="instructor" isAdmin current="admin" />
+            <span className="app-topbar__divider" aria-hidden />
+            <IconButton title="Sign out" onClick={signOut}>
+              <SignOutIcon />
+            </IconButton>
+          </div>
+        </div>
+      </header>
+      <div className="app__body">
+        <div className="app-page">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function UserDetailPage() {
   const { id: userId } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<UserDetail | null>(null);
@@ -148,39 +179,6 @@ export function UserDetailPage() {
       setBusy(false);
     }
   }
-
-  // The app topbar in its admin register — same chrome as the Admin console,
-  // so opening a user reads as a drill-in, not a separate page. The lockup
-  // returns to the console; the RoleSwitch is the way out to the instructor
-  // surface. No per-page back button.
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="app">
-      <header className="app-topbar app-topbar--wide app-topbar--admin">
-        <div className="app-topbar__inner">
-          <Link to="/admin" aria-label="Admin console" className="app-lockup-link">
-            <Wordmark size="sm" />
-          </Link>
-          <span className="app-lockup__role">Admin console</span>
-          <div className="app-topbar__spacer" />
-          <div className="app-topbar__actions">
-            <RoleSwitch
-              courseId={null}
-              role="instructor"
-              isAdmin
-              current="admin"
-            />
-            <span className="app-topbar__divider" aria-hidden />
-            <IconButton title="Sign out" onClick={signOut}>
-              <SignOutIcon />
-            </IconButton>
-          </div>
-        </div>
-      </header>
-      <div className="app__body">
-        <div className="app-page">{children}</div>
-      </div>
-    </div>
-  );
 
   if (error && !detail) {
     return (
