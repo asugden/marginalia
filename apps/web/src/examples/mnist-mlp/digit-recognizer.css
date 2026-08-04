@@ -1,0 +1,165 @@
+/* Digit-recognizer example page.
+   The page chrome uses the platform design system: it lives inside the .app
+   shell with the standard .app-topbar (red mono wordmark), an eyebrow->heading
+   lockup, and design tokens throughout — so it reads like the student
+   dashboard. The network's OWN colors (red/blue weights, white->black neurons)
+   are intrinsic to the visualization and stay literal. */
+
+.mnist-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* Breadcrumb next to the wordmark in the topbar. */
+.mnist-crumb {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border-strong);
+  padding-left: 0.7rem;
+}
+
+/* Eyebrow -> heading lockup, left-justified (DS home register). */
+.mnist-head { margin-bottom: 1.75rem; }
+.mnist-head .eyebrow { display: block; margin-bottom: 0.4rem; }
+.mnist-head h1 { margin: 0 0 0.6rem; }
+.mnist-lede {
+  font-size: var(--text-md, 1rem);
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 68ch;
+  margin: 0;
+}
+
+.mnist-error { color: var(--danger, #b4232f); }
+
+.mnist-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 1.75rem;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .mnist-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Controls column ─────────────────────────────────────────── */
+.mnist-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.mnist-readout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  min-height: 120px;
+}
+.mnist-readout__empty { color: var(--text-muted); margin: 0; font-size: var(--text-sm); }
+.mnist-guess {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.mnist-guess__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.mnist-guess__value {
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.mnist-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.mnist-bars li { display: grid; grid-template-columns: 2.5rem 1fr 2.6rem; align-items: center; gap: 0.5rem; font-size: var(--text-sm); }
+.mnist-bars__name { font-family: var(--font-mono); color: var(--text-body); font-variant-numeric: tabular-nums; }
+.mnist-bars__track { height: 8px; background: var(--surface-sunken); border-radius: 999px; overflow: hidden; }
+.mnist-bars__fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 90ms linear; }
+.mnist-bars__pct { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: var(--text-2xs); }
+
+.mnist-slider {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+}
+.mnist-slider label {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.mnist-slider__hint { text-transform: none; letter-spacing: 0; font-family: var(--font-sans); font-size: var(--text-xs); color: var(--text-muted); }
+.mnist-slider input { width: 100%; accent-color: var(--accent); }
+
+.mnist-legend { font-size: var(--text-xs); color: var(--text-muted); display: flex; flex-direction: column; gap: 0.5rem; }
+.mnist-legend__row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.mnist-legend__swatch { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+.mnist-legend__swatch--pos { background: #d1344b; }
+.mnist-legend__swatch--neg { background: #2f6fd0; }
+.mnist-legend__grad { width: 60px; height: 10px; border-radius: 3px; display: inline-block; background: linear-gradient(to right, #fff, #000); border: 1px solid var(--border); }
+
+/* ── Network canvas ──────────────────────────────────────────── */
+.mnist-canvas {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 0.5rem 0.75rem 0.75rem;
+  min-height: 400px;
+}
+.mnist-canvas__bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.35rem 0.25rem 0.15rem;
+}
+.mnist-canvas__hint {
+  margin-right: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.mnist-clear {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-body);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.mnist-clear:hover { background: var(--surface-hover); border-color: var(--accent); color: var(--accent); }
+.mnist-net { display: block; }
+.mnist-net__labels text { fill: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.mnist-loading { color: var(--text-muted); text-align: center; padding: 4rem 0; }
+
+.mnist-foot {
+  margin: 2rem 0 0;
+  max-width: 72ch;
+}
+.mnist-foot p { font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }

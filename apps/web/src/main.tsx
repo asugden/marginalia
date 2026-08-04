@@ -10,6 +10,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { RootRedirect } from "./pages/RootRedirect.js";
 import { HomePage } from "./pages/HomePage.js";
 import { ConversationPage } from "./pages/ConversationPage.js";
+import { EXAMPLES } from "./examples/registry.js";
 import "./styles.css";
 
 const AuthorListPage = lazy(() =>
@@ -41,6 +42,11 @@ const ProvenanceAgentsPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.AgentsPage })));
 const ProvenancePublicPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.PublicSubmissionPage })));
+// Examples — standalone, public, unauthenticated interactive teaching pages.
+// See apps/web/src/examples/registry.ts. Each example's page is lazy-loaded
+// from the registry; the index page lists them.
+const ExamplesIndexPage = lazy(() =>
+  import("./examples/ExamplesIndexPage.js").then((m) => ({ default: m.ExamplesIndexPage })));
 // Attendance module — see apps/web/src/modules/attendance/README.md.
 const AttendanceSessionListPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.SessionListPage })));
@@ -110,6 +116,16 @@ const router = createBrowserRouter([
     path: "/attendance/sessions/:id",
     element: lz(<LegacyCourseRedirect to="/instructor/attendance/sessions/:id" />),
   },
+
+  // ── Examples ─────────────────────────────────────────────────────────────
+  // Public, unauthenticated, course-agnostic interactive teaching pages. The
+  // index lists the registry; each example mounts at its own slug. These are
+  // static SPA routes served by env.ASSETS with no /api dependency.
+  { path: "/examples", element: lz(<ExamplesIndexPage />) },
+  ...EXAMPLES.map((ex) => ({
+    path: `/examples/${ex.slug}`,
+    element: lz(<ex.Page />),
+  })),
 
   // ── Course-agnostic survivors ────────────────────────────────────────────
   { path: "/join/:code", element: lz(<JoinPage />) },
