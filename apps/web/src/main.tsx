@@ -17,6 +17,8 @@ const AuthorListPage = lazy(() =>
   import("./pages/AuthorListPage.js").then((m) => ({ default: m.AuthorListPage })));
 const AuthorEditPage = lazy(() =>
   import("./pages/AuthorEditPage.js").then((m) => ({ default: m.AuthorEditPage })));
+const AuthorVariantResultsPage = lazy(() =>
+  import("./pages/AuthorVariantResultsPage.js").then((m) => ({ default: m.AuthorVariantResultsPage })));
 const CollectionsListPage = lazy(() =>
   import("./pages/CollectionsListPage.js").then((m) => ({ default: m.CollectionsListPage })));
 const CollectionDetailPage = lazy(() =>
@@ -165,6 +167,7 @@ const router = createBrowserRouter([
       { path: "agents", element: lz(<AuthorListPage />) },
       { path: "agents/new", element: lz(<AuthorEditPage />) },
       { path: "agents/:id", element: lz(<AuthorEditPage />) },
+      { path: "agents/:id/variants", element: lz(<AuthorVariantResultsPage />) },
       // Voices: a per-author, cross-course library, mounted here so the
       // instructor nav persists. The pages stay course-agnostic in content.
       { path: "voices", element: lz(<AuthorVoicesPage />) },

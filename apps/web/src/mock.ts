@@ -376,6 +376,7 @@ export async function listAgents(
         title: MOCK_AGENT_TITLE,
         hasBackbone: true,
         hasCollection: false,
+        hasVariants: false,
         voice: { kind: "library", id: "socratic" },
         updatedAt: 0,
         lastConversationId: null,

@@ -73,6 +73,8 @@ export interface AgentSummary {
   title: string;
   hasBackbone: boolean;
   hasCollection: boolean;
+  /** v1.1 — true only for instructors on agents with a hidden A/B split. */
+  hasVariants: boolean;
   voice: AgentDefinition["voice"];
   updatedAt: number;
   /** Most recent conversation this user has against this agent (§13). */
@@ -607,6 +609,28 @@ export function getAgent(courseId: string, agentId: string) {
 }
 export function getAgentById(agentId: string) {
   return jsonFetch<AgentDetail>(`/api/agents/${agentId}`);
+}
+
+// v1.1 — hidden-variant results (instructor-only).
+export interface VariantResultStudent {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  variantId: string;
+  /** null ⇒ arm was removed from the definition after this student was assigned. */
+  variantLabel: string | null;
+  threadCount: number;
+}
+export interface VariantResults {
+  agentId: string;
+  title: string;
+  variants: Array<{ id: string; label: string }>;
+  students: VariantResultStudent[];
+}
+export function getVariantResults(courseId: string, agentId: string) {
+  return jsonFetch<VariantResults>(
+    `/api/agents/${agentId}/variants/results?courseId=${encodeURIComponent(courseId)}`,
+  );
 }
 
 export function createAgent(

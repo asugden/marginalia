@@ -44,9 +44,21 @@ type VoiceSelection =
   | { kind: "library"; id: string }
   | { kind: "custom-ref"; voiceId: string };
 
+// v1.1 — one arm of a hidden A/B split. `label` is instructor-only; the
+// `voice` uses the same selection shape as the single-voice picker.
+interface DraftVariant {
+  id: string;
+  label: string;
+  voice: VoiceSelection;
+}
+
 interface Draft {
   title: string;
   voice: VoiceSelection;
+  // v1.1 — hidden variants. When on, `voice` is ignored and each student is
+  // randomly assigned one of `variants` at first start.
+  hasVariants: boolean;
+  variants: DraftVariant[];
   hasBackbone: boolean;
   defaultTurnBudget: string;
   exitCondition: string;
@@ -57,6 +69,12 @@ interface Draft {
   model: string;             // "" means default
   clarityNote: string;       // "" → student sees a shape-derived default
 }
+
+const newVariant = (label: string): DraftVariant => ({
+  id: `arm_${Math.random().toString(36).slice(2, 7)}`,
+  label,
+  voice: { kind: "library", id: "socratic" },
+});
 
 const MODEL_OPTIONS: Array<{ id: string; label: string; note?: string }> = [
   { id: "", label: "Default" },
@@ -75,6 +93,8 @@ const newTopic = (): DraftTopic => ({
 const emptyDraft = (): Draft => ({
   title: "",
   voice: { kind: "library", id: "socratic" },
+  hasVariants: false,
+  variants: [newVariant("Group A"), newVariant("Group B")],
   hasBackbone: true,
   defaultTurnBudget: "3",
   exitCondition: "",
@@ -86,26 +106,35 @@ const emptyDraft = (): Draft => ({
   clarityNote: "",
 });
 
+// v0.7 §1 — coerce any of the three stored voice shapes into the editor's
+// VoiceSelection (library id or custom-ref):
+//   - library: pass through.
+//   - custom-ref: pass through (current authoring form).
+//   - custom (inline): pre-v0.7 agents that pre-dated the per-author
+//     library. Treat their inline definition.id as a voice row id —
+//     it's the same string used in the voices table, so the row should
+//     exist if the migration backfilled it. If not, the user sees
+//     "Voice not shared with you" on save and can pick another.
+function voiceToSelection(voice: AgentDefinition["voice"]): VoiceSelection {
+  if (voice.kind === "library") return { kind: "library", id: voice.id };
+  if (voice.kind === "custom-ref") return { kind: "custom-ref", voiceId: voice.voiceId };
+  return { kind: "custom-ref", voiceId: voice.definition.id };
+}
+
 function fromDefinition(title: string, def: AgentDefinition): Draft {
-  // v0.7 §1 — accept all three voice shapes for backwards compatibility:
-  //   - library: pass through.
-  //   - custom-ref: pass through (current authoring form).
-  //   - custom (inline): pre-v0.7 agents that pre-dated the per-author
-  //     library. Treat their inline definition.id as a voice row id —
-  //     it's the same string used in the voices table, so the row
-  //     should exist if the migration backfilled it. If not, the user
-  //     sees "Voice not shared with you" on save and can pick another.
-  let voice: VoiceSelection;
-  if (def.voice.kind === "library") {
-    voice = { kind: "library", id: def.voice.id };
-  } else if (def.voice.kind === "custom-ref") {
-    voice = { kind: "custom-ref", voiceId: def.voice.voiceId };
-  } else {
-    voice = { kind: "custom-ref", voiceId: def.voice.definition.id };
-  }
+  const voice = voiceToSelection(def.voice);
+  const hasVariants = !!def.variants && def.variants.length >= 2;
   return {
     title,
     voice,
+    hasVariants,
+    variants: hasVariants
+      ? def.variants!.map((a) => ({
+          id: a.id,
+          label: a.label,
+          voice: voiceToSelection(a.voice),
+        }))
+      : [newVariant("Group A"), newVariant("Group B")],
     hasBackbone: !!def.backbone,
     defaultTurnBudget: def.backbone ? String(def.backbone.defaultTurnBudget) : "3",
     exitCondition: def.backbone?.exitCondition ?? "",
@@ -132,6 +161,23 @@ function toDefinition(draft: Draft): { definition: AgentDefinition; error?: stri
     version: 2,
     voice: draft.voice,
   };
+
+  // v1.1 — hidden A/B variants. The top-level voice stays as a fallback;
+  // when a split is on, each conversation's voice comes from the assigned
+  // arm. Require at least two arms, each with a label.
+  if (draft.hasVariants) {
+    if (draft.variants.length < 2) {
+      return { definition: null as never, error: "A hidden split needs at least two variants" };
+    }
+    const arms = [] as NonNullable<AgentDefinition["variants"]>;
+    for (const v of draft.variants) {
+      if (!v.label.trim()) {
+        return { definition: null as never, error: "Every variant needs a label (only you see it)" };
+      }
+      arms.push({ id: v.id, label: v.label.trim(), voice: v.voice });
+    }
+    def.variants = arms;
+  }
 
   if (draft.hasBackbone) {
     const defaultBudget = Number(draft.defaultTurnBudget);
@@ -245,6 +291,26 @@ export function AuthorEditPage() {
       return { ...d, topics };
     });
 
+  const updateVariant = (idx: number, patch: Partial<DraftVariant>) =>
+    setDraft((d) => {
+      const variants = d.variants.slice();
+      variants[idx] = { ...variants[idx]!, ...patch };
+      return { ...d, variants };
+    });
+
+  const addVariant = () =>
+    setDraft((d) => ({
+      ...d,
+      variants: [...d.variants, newVariant(`Group ${String.fromCharCode(65 + d.variants.length)}`)],
+    }));
+
+  const removeVariant = (idx: number) =>
+    setDraft((d) =>
+      d.variants.length <= 2
+        ? d
+        : { ...d, variants: d.variants.filter((_, i) => i !== idx) },
+    );
+
   // Live preview of the shape-derived default, shown as the placeholder
   // in the clarity field so the instructor sees what students get if they
   // leave it blank.
@@ -257,21 +323,86 @@ export function AuthorEditPage() {
   const ownedOptions = useMemo(() => voices?.owned ?? [], [voices]);
   const sharedOptions = useMemo(() => voices?.shared ?? [], [voices]);
 
-  function pickLibrary(id: string) {
-    setDraft((d) => ({ ...d, voice: { kind: "library", id } }));
-  }
-  function pickCustom(voiceId: string) {
-    setDraft((d) => ({ ...d, voice: { kind: "custom-ref", voiceId } }));
-  }
-  function isPicked(sel: VoiceSelection): boolean {
-    if (draft.voice.kind !== sel.kind) return false;
-    if (sel.kind === "library" && draft.voice.kind === "library") {
-      return sel.id === draft.voice.id;
-    }
-    if (sel.kind === "custom-ref" && draft.voice.kind === "custom-ref") {
-      return sel.voiceId === draft.voice.voiceId;
-    }
-    return false;
+  // The voice picker is rendered once for a single-voice agent and once per
+  // arm for a split. It's driven by the current selection plus an onPick
+  // callback, so the same three card groups (Library / My voices / Shared)
+  // serve both. `name` must be unique per picker instance so the radio
+  // groups don't bleed into each other.
+  function VoicePicker({
+    selection,
+    onPick,
+    name,
+  }: {
+    selection: VoiceSelection;
+    onPick: (sel: VoiceSelection) => void;
+    name: string;
+  }) {
+    const isPicked = (sel: VoiceSelection): boolean => {
+      if (selection.kind !== sel.kind) return false;
+      if (sel.kind === "library" && selection.kind === "library") {
+        return sel.id === selection.id;
+      }
+      if (sel.kind === "custom-ref" && selection.kind === "custom-ref") {
+        return sel.voiceId === selection.voiceId;
+      }
+      return false;
+    };
+    return (
+      <>
+        <h3 className="mono-label" style={{ margin: "0.3rem 0 0.4rem" }}>Library</h3>
+        <RadioCardGroup>
+          {libraryOptions.map((v) => (
+            <RadioCard
+              key={v.id}
+              name={name}
+              value={`lib:${v.id}`}
+              title={v.name}
+              description={v.description}
+              selected={isPicked({ kind: "library", id: v.id })}
+              onChange={() => onPick({ kind: "library", id: v.id })}
+            />
+          ))}
+        </RadioCardGroup>
+
+        {ownedOptions.length > 0 && (
+          <>
+            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>My voices</h3>
+            <RadioCardGroup>
+              {ownedOptions.map((v) => (
+                <RadioCard
+                  key={v.id}
+                  name={name}
+                  value={`own:${v.id}`}
+                  title={v.name}
+                  description={v.description}
+                  selected={isPicked({ kind: "custom-ref", voiceId: v.id })}
+                  onChange={() => onPick({ kind: "custom-ref", voiceId: v.id })}
+                />
+              ))}
+            </RadioCardGroup>
+          </>
+        )}
+
+        {sharedOptions.length > 0 && (
+          <>
+            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>Shared with me</h3>
+            <RadioCardGroup>
+              {sharedOptions.map((v) => (
+                <RadioCard
+                  key={v.id}
+                  name={name}
+                  value={`shr:${v.id}`}
+                  title={v.name}
+                  description={v.description}
+                  selected={isPicked({ kind: "custom-ref", voiceId: v.id })}
+                  onChange={() => onPick({ kind: "custom-ref", voiceId: v.id })}
+                />
+              ))}
+            </RadioCardGroup>
+          </>
+        )}
+      </>
+    );
   }
 
   async function save() {
@@ -362,57 +493,88 @@ export function AuthorEditPage() {
           How the agent talks.{" "}
           <Link to={`/course/${courseId}/instructor/voices`}>Manage your voices →</Link>
         </p>
-        <h3 className="mono-label" style={{ margin: "0.3rem 0 0.4rem" }}>Library</h3>
-        <RadioCardGroup>
-          {libraryOptions.map((v) => (
-            <RadioCard
-              key={v.id}
-              name="voice"
-              value={`lib:${v.id}`}
-              title={v.name}
-              description={v.description}
-              selected={isPicked({ kind: "library", id: v.id })}
-              onChange={() => pickLibrary(v.id)}
-            />
-          ))}
-        </RadioCardGroup>
 
-        {ownedOptions.length > 0 && (
-          <>
-            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>My voices</h3>
-            <RadioCardGroup>
-              {ownedOptions.map((v) => (
-                <RadioCard
-                  key={v.id}
-                  name="voice"
-                  value={`own:${v.id}`}
-                  title={v.name}
-                  description={v.description}
-                  selected={isPicked({ kind: "custom-ref", voiceId: v.id })}
-                  onChange={() => pickCustom(v.id)}
-                />
-              ))}
-            </RadioCardGroup>
-          </>
+        <Checkbox
+          checked={draft.hasVariants}
+          onChange={(e) => update("hasVariants", e.target.checked)}
+          label="Hidden variants (A/B split)"
+          description="Split the class across two or more secret voices. Each student is randomly assigned one the first time they start — it sticks for all their conversations here. Students are never told a split exists; you see who got which in the results table. Everything else (outline, sources, model) is shared across arms."
+        />
+
+        {!draft.hasVariants && (
+          <div style={{ marginTop: "1rem" }}>
+            <VoicePicker
+              name="voice"
+              selection={draft.voice}
+              onPick={(sel) => update("voice", sel)}
+            />
+          </div>
         )}
 
-        {sharedOptions.length > 0 && (
-          <>
-            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>Shared with me</h3>
-            <RadioCardGroup>
-              {sharedOptions.map((v) => (
-                <RadioCard
-                  key={v.id}
-                  name="voice"
-                  value={`shr:${v.id}`}
-                  title={v.name}
-                  description={v.description}
-                  selected={isPicked({ kind: "custom-ref", voiceId: v.id })}
-                  onChange={() => pickCustom(v.id)}
-                />
-              ))}
-            </RadioCardGroup>
-          </>
+        {draft.hasVariants && (
+          <div style={{ marginTop: "1.25rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {draft.variants.map((arm, i) => (
+              <div
+                key={arm.id}
+                style={{
+                  border: "1px solid var(--border, #ddd)",
+                  borderRadius: "0.6rem",
+                  padding: "1rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <Badge tone="neutral">Arm {i + 1}</Badge>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={<TrashIcon size={16} />}
+                    disabled={draft.variants.length <= 2}
+                    onClick={() => removeVariant(i)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <Field
+                  label="Label (only you see this)"
+                  hint="A name for this arm in your results table, e.g. “argues for” / “argues against”."
+                >
+                  <Input
+                    type="text"
+                    value={arm.label}
+                    placeholder="e.g. argues for"
+                    onChange={(e) => updateVariant(i, { label: e.target.value })}
+                  />
+                </Field>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <span className="mono-label app-section__label">Voice for this arm</span>
+                  <VoicePicker
+                    name={`voice-${arm.id}`}
+                    selection={arm.voice}
+                    onPick={(sel) => updateVariant(i, { voice: sel })}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <div>
+              <Button
+                variant="subtle"
+                size="sm"
+                icon={<PlusIcon size={16} />}
+                onClick={addVariant}
+              >
+                Add variant
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 

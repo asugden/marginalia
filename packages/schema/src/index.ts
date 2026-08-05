@@ -58,6 +58,21 @@ export interface AgentRow {
 }
 
 /**
+ * v1.1 (migration 0017) — a student's sticky hidden-variant assignment for
+ * one agent. Written once, on the student's first start of a split agent;
+ * reused for every later conversation on that agent. `variant_id` is the
+ * AgentVariant.id from the JSON definition (no FK — arms live in a blob).
+ */
+export interface AgentVariantAssignmentRow {
+  id: string;
+  course_id: string;
+  agent_id: string;
+  user_id: string;
+  variant_id: string;
+  created_at: number;
+}
+
+/**
  * Instructor-authored voice (a bundled prompt fragment). Renamed from `agents`
  * in v0.4 — the v0.2 `agents` table held curated personas; v0.4 calls those
  * "voices" and uses "agent" for the top-level concept.

@@ -12,6 +12,26 @@ import type { VoiceRef } from "@marginalia/voices";
 import type { BackboneComponent } from "./types.js";
 
 /**
+ * v1.1 — one arm of a hidden A/B split. An agent with two or more
+ * `variants` randomly assigns each student a single arm the first time
+ * they start it; the assignment sticks for all their conversations on
+ * that agent. Students are never told which arm they got, or that a
+ * split exists — only the neutral clarityNote is shown.
+ *
+ * The `label` is instructor-only (shown in the results table, e.g.
+ * "argues FOR" / "argues AGAINST"); it never reaches a student. The
+ * `voice` is a normal VoiceRef, so authoring reuses the voice picker.
+ */
+export interface AgentVariant {
+  /** Stable arm key (e.g. "arm-a"). Persisted in the assignment table. */
+  id: string;
+  /** Instructor-only name for this arm. Never shown to students. */
+  label: string;
+  /** How this arm talks. Library reference or per-author custom-ref. */
+  voice: VoiceRef;
+}
+
+/**
  * v1.0 — the student-facing "clarity" line for an agent. Returns the
  * instructor's custom note when set, otherwise a default derived from
  * the agent's shape so the student always gets *some* framing about
@@ -59,8 +79,25 @@ export interface AgentDefinition {
   /** Bump on breaking changes; readers can migrate or refuse. */
   version: 2;
 
-  /** How the agent talks. Library reference or inline-authored. */
+  /**
+   * How the agent talks. Library reference or inline-authored.
+   *
+   * When `variants` is present (a hidden A/B split), this field is an
+   * unused fallback — each conversation's voice comes from the student's
+   * assigned arm, materialised into the snapshot at conversation start.
+   * It stays required so every AgentDefinition has a well-formed voice
+   * even before variants existed and for legacy readers.
+   */
   voice: VoiceRef;
+
+  /**
+   * v1.1 — hidden A/B variants. When present with length ≥ 2, the agent
+   * runs as a split: each student is randomly (balanced) assigned one arm
+   * on first start, and it sticks across all their conversations on this
+   * agent. The top-level `voice` is ignored in favour of the arm's voice.
+   * Students are told nothing; the instructor sees a per-arm results table.
+   */
+  variants?: AgentVariant[];
 
   /** Optional topic sequence; omit for free-form chat. */
   backbone?: BackboneComponent;

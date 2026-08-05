@@ -156,9 +156,23 @@ export function AuthorListPage() {
                       grounded
                     </Badge>
                   )}
+                  {a.hasVariants && (
+                    <Badge tone="warning" dot>
+                      hidden split
+                    </Badge>
+                  )}
                 </div>
               </div>
               <div className="app-list__meta">
+                {a.hasVariants && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    href={`/course/${courseId}/instructor/agents/${a.id}/variants`}
+                  >
+                    Results
+                  </Button>
+                )}
                 <Button
                   variant="subtle"
                   size="sm"

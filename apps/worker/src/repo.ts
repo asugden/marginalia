@@ -3,6 +3,7 @@
 
 import type {
   AgentRow,
+  AgentVariantAssignmentRow,
   AuditLogRow,
   CollectionRow,
   CollectionSourceKind,
@@ -531,6 +532,140 @@ export async function findAgentById(
     .prepare("SELECT * FROM agents WHERE id = ?")
     .bind(agentId)
     .first<AgentRow>();
+}
+
+// ── hidden variant assignments (v1.1) ──────────────────────────────────────
+
+/** The current sticky assignment for (agent, user), or null if none yet. */
+export async function findVariantAssignment(
+  db: D1Database,
+  agentId: string,
+  userId: string,
+): Promise<AgentVariantAssignmentRow | null> {
+  return db
+    .prepare(
+      "SELECT * FROM agent_variant_assignments WHERE agent_id = ? AND user_id = ?",
+    )
+    .bind(agentId, userId)
+    .first<AgentVariantAssignmentRow>();
+}
+
+/**
+ * Get this student's sticky arm for a split agent, assigning one on first
+ * call. Balanced: picks (uniformly at random) among the arms with the
+ * fewest current assignments, so groups stay even as students trickle in.
+ *
+ * `validVariantIds` is the arm-id set from the *current* definition. We only
+ * ever assign to one of these, so an arm removed from the definition after
+ * some students were assigned won't receive new students — but existing
+ * assignments to a since-removed arm are preserved (sticky), and the caller
+ * falls back to a surviving arm for their voice when that happens.
+ *
+ * Concurrency: two first-starts for the same student could race. The INSERT
+ * is guarded by the UNIQUE(agent_id, user_id) constraint with ON CONFLICT DO
+ * NOTHING; we then re-read, so both requests converge on whichever row won —
+ * a student can never end up double-assigned.
+ */
+export async function getOrAssignVariant(
+  db: D1Database,
+  params: {
+    courseId: string;
+    agentId: string;
+    userId: string;
+    validVariantIds: string[];
+  },
+): Promise<string> {
+  const { courseId, agentId, userId, validVariantIds } = params;
+  if (validVariantIds.length === 0) {
+    throw new Error("getOrAssignVariant called with no valid variant ids");
+  }
+
+  const existing = await findVariantAssignment(db, agentId, userId);
+  if (existing) return existing.variant_id;
+
+  // Balanced pick: tally current assignments per arm, choose among the
+  // least-filled valid arms. Arms with zero assignments don't appear in the
+  // GROUP BY, so seed every valid arm at 0 first.
+  const counts = new Map<string, number>(validVariantIds.map((v) => [v, 0]));
+  const { results } = await db
+    .prepare(
+      `SELECT variant_id, COUNT(*) AS n
+       FROM agent_variant_assignments
+       WHERE agent_id = ?
+       GROUP BY variant_id`,
+    )
+    .bind(agentId)
+    .all<{ variant_id: string; n: number }>();
+  for (const r of results ?? []) {
+    if (counts.has(r.variant_id)) counts.set(r.variant_id, r.n);
+  }
+  let min = Infinity;
+  for (const v of validVariantIds) min = Math.min(min, counts.get(v) ?? 0);
+  const leastFilled = validVariantIds.filter((v) => (counts.get(v) ?? 0) === min);
+  // leastFilled is non-empty (validVariantIds is non-empty and min is drawn
+  // from it), so the index is always in range.
+  const chosen = leastFilled[Math.floor(Math.random() * leastFilled.length)]!;
+
+  await db
+    .prepare(
+      `INSERT INTO agent_variant_assignments
+         (id, course_id, agent_id, user_id, variant_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (agent_id, user_id) DO NOTHING`,
+    )
+    .bind(id("varasg"), courseId, agentId, userId, chosen, now())
+    .run();
+
+  // Re-read: if a concurrent request won the insert, its variant is
+  // authoritative and ours was a no-op.
+  const settled = await findVariantAssignment(db, agentId, userId);
+  return settled?.variant_id ?? chosen;
+}
+
+/** One row of the instructor variant-results table. */
+export interface VariantResultEntry {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  variantId: string;
+  threadCount: number;
+}
+
+/**
+ * Per-student variant assignments for one agent, with how many conversations
+ * each student has started against it. Instructor-only; course-scoped.
+ * Students who were assigned but haven't chatted still appear (threadCount 0).
+ */
+export async function listVariantResults(
+  db: D1Database,
+  courseId: string,
+  agentId: string,
+): Promise<VariantResultEntry[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT a.user_id, u.email, u.display_name, a.variant_id,
+              (SELECT COUNT(*) FROM conversations c
+                 WHERE c.agent_id = a.agent_id AND c.user_id = a.user_id) AS thread_count
+       FROM agent_variant_assignments a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.agent_id = ? AND a.course_id = ?
+       ORDER BY a.variant_id, u.email`,
+    )
+    .bind(agentId, courseId)
+    .all<{
+      user_id: string;
+      email: string;
+      display_name: string | null;
+      variant_id: string;
+      thread_count: number;
+    }>();
+  return (results ?? []).map((r) => ({
+    userId: r.user_id,
+    email: r.email,
+    displayName: r.display_name,
+    variantId: r.variant_id,
+    threadCount: r.thread_count,
+  }));
 }
 
 /**

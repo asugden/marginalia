@@ -26,9 +26,10 @@ import {
   initialState,
   transition,
   type AgentDefinition,
+  type AgentVariant,
   type BackboneState,
 } from "@marginalia/backbone";
-import { LIBRARY } from "@marginalia/voices";
+import { LIBRARY, type VoiceRef } from "@marginalia/voices";
 import { parseCookies, SESSION_COOKIE } from "@marginalia/auth";
 import type { Env } from "./env.js";
 import { assertProdConfigured, authenticate, type Identity } from "./auth.js";
@@ -342,6 +343,15 @@ async function route(
     // v1.0 §4 — POST /api/agents/:id/duplicate-to { targetCourseId }
     if (req.method === "POST" && parts.length === 4 && sub === "duplicate-to") {
       return duplicateAgentToRoute(req, env, identity, tail!);
+    }
+    // v1.1 — GET /api/agents/:id/variants/results (instructor-only)
+    if (
+      req.method === "GET" &&
+      parts.length === 5 &&
+      sub === "variants" &&
+      parts[4] === "results"
+    ) {
+      return variantResultsRoute(req, env, url, identity, tail!);
     }
     if (req.method === "PUT" && parts.length === 3) {
       return updateAgentRoute(req, env, identity, tail!);
@@ -1036,6 +1046,10 @@ async function loadAgentsForCourse(
   ]);
   if (!enrollment) return { status: "forbidden" };
   const lastByAgent = new Map(lastConvs.map((c) => [c.agentId, c]));
+  // v1.1 — a hidden split stays hidden from students. Only instructors get
+  // the `hasVariants` flag (which drives the "split" badge + results link);
+  // for students it's always false so nothing hints at the experiment.
+  const isInstructor = isAuthor(enrollment.role);
   return {
     status: "ok",
     agents: rows.map((r) => {
@@ -1046,6 +1060,7 @@ async function loadAgentsForCourse(
         title: r.title,
         hasBackbone: !!def.backbone,
         hasCollection: !!def.collectionId,
+        hasVariants: isInstructor && !!def.variants && def.variants.length >= 2,
         voice: def.voice,
         updatedAt: r.updated_at,
         lastConversationId: last?.conversationId ?? null,
@@ -1061,6 +1076,7 @@ interface AgentSummaryShape {
   title: string;
   hasBackbone: boolean;
   hasCollection: boolean;
+  hasVariants: boolean;
   voice: AgentDefinition["voice"];
   updatedAt: number;
   lastConversationId: string | null;
@@ -1105,12 +1121,74 @@ async function getAgentRoute(
   const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
 
+  const definition = JSON.parse(row.definition) as AgentDefinition;
+  // v1.1 — a hidden split must stay hidden. The `variants` array carries
+  // instructor-only arm labels and which voice each arm uses; students
+  // fetch this definition in compose mode (ConversationPage) to preview the
+  // outline, so strip it for non-instructors. The student's own arm is
+  // never exposed here at all — it's chosen server-side at conversation
+  // start and only ever materialised into their private snapshot.
+  if (!isAuthor(resolved.enrollment.role)) {
+    delete definition.variants;
+  }
+
   return json({
     id: row.id,
     courseId: row.course_id,
     title: row.title,
-    definition: JSON.parse(row.definition) as AgentDefinition,
+    definition,
     updatedAt: row.updated_at,
+  });
+}
+
+/**
+ * v1.1 — GET /api/agents/:id/variants/results
+ *
+ * Instructor-only view of a hidden split: which arm each student was
+ * assigned, and how many conversations they've had on this agent. Returns
+ * the arm labels from the current definition so the table reads in the
+ * instructor's own words, plus rows for any orphaned assignments (a student
+ * on an arm since removed from the definition).
+ */
+async function variantResultsRoute(
+  _req: Request,
+  env: Env,
+  url: URL,
+  identity: Identity,
+  agentId: string,
+): Promise<Response> {
+  const courseIdParam = url.searchParams.get("courseId");
+  const row = courseIdParam
+    ? await repo.getAgent(env.DB, courseIdParam, agentId)
+    : await repo.findAgentById(env.DB, agentId);
+  if (!row) return error("Agent not found", 404);
+  const courseId = row.course_id;
+  const resolved = await resolveUser(env, identity, courseId);
+  if (!resolved) return error("Not enrolled in this course", 403);
+  if (!isAuthor(resolved.enrollment.role)) {
+    return error("Instructor only", 403);
+  }
+
+  const def = JSON.parse(row.definition) as AgentDefinition;
+  const arms = def.variants ?? [];
+  const labelById = new Map(arms.map((a) => [a.id, a.label]));
+
+  const rows = await repo.listVariantResults(env.DB, courseId, agentId);
+  return json({
+    agentId: row.id,
+    title: row.title,
+    // The arm set as it stands now, for column ordering / headers.
+    variants: arms.map((a) => ({ id: a.id, label: a.label })),
+    students: rows.map((r) => ({
+      userId: r.userId,
+      email: r.email,
+      displayName: r.displayName,
+      variantId: r.variantId,
+      // null label ⇒ the arm was removed from the definition after this
+      // student was assigned. The UI flags it as "(removed arm)".
+      variantLabel: labelById.get(r.variantId) ?? null,
+      threadCount: r.threadCount,
+    })),
   });
 }
 
@@ -1333,44 +1411,47 @@ async function listDuplicableAgentsRoute(
  * between tenants, violating the "filter by course_id, no exceptions"
  * invariant).
  */
-async function validateAgentDefinition(
+/**
+ * Validate a single VoiceRef (library / custom-ref / custom). Returns an
+ * error string or null. Shared by the agent's top-level voice and each
+ * hidden-variant arm's voice. `callerUserId` is required to check that a
+ * custom-ref is usable (owned or shared) by the saving instructor.
+ */
+async function validateVoiceRef(
   env: Env,
-  courseId: string,
-  def: AgentDefinition,
+  voice: VoiceRef | undefined,
   callerUserId: string | null,
 ): Promise<string | null> {
-  if (def.version !== 2) return "definition.version must be 2";
-  if (!def.voice ||
-      (def.voice.kind !== "library" &&
-       def.voice.kind !== "custom" &&
-       def.voice.kind !== "custom-ref")) {
-    return "definition.voice must be a library, custom-ref, or custom ref";
+  if (!voice ||
+      (voice.kind !== "library" &&
+       voice.kind !== "custom" &&
+       voice.kind !== "custom-ref")) {
+    return "voice must be a library, custom-ref, or custom ref";
   }
-  if (def.voice.kind === "library") {
-    const ref = def.voice;
-    if (!LIBRARY.some((v) => v.id === ref.id)) {
-      return `Unknown library voice: ${ref.id}`;
+  if (voice.kind === "library") {
+    if (!LIBRARY.some((v) => v.id === voice.id)) {
+      return `Unknown library voice: ${voice.id}`;
     }
-  } else if (def.voice.kind === "custom-ref") {
+  } else if (voice.kind === "custom-ref") {
     // v0.7 §1 — agents save by reference, not inline. The voice must
     // exist AND be usable by the saving instructor (owned or shared).
     if (!callerUserId) return "Sign in required to save a custom voice agent";
     const usable = await repo.findVoiceUsableByUser(
       env.DB,
-      def.voice.voiceId,
+      voice.voiceId,
       callerUserId,
     );
     if (!usable) {
       return "Voice not found, or not shared with you";
     }
-  } else if (def.voice.kind === "custom") {
+  } else if (voice.kind === "custom") {
     // Pre-v0.7 inline form. Still accepted so older agents keep saving
     // round-trip-clean; new editor saves use custom-ref. The inline `id`
     // is cosmetic — it's not used to resolve anything at turn time
     // (the inline definition wins via resolveVoice's switch on kind), so
     // collisions with library voice ids or real voices.id values are
     // harmless. resolveVoice does not look up custom-inline by id.
-    const inline = def.voice.definition;
+    const inline = voice.definition;
     if (
       !inline ||
       typeof inline.id !== "string" || !inline.id.trim() ||
@@ -1382,6 +1463,39 @@ async function validateAgentDefinition(
       return "Custom voice must include id, name, description, systemPromptFragment";
     }
   }
+  return null;
+}
+
+async function validateAgentDefinition(
+  env: Env,
+  courseId: string,
+  def: AgentDefinition,
+  callerUserId: string | null,
+): Promise<string | null> {
+  if (def.version !== 2) return "definition.version must be 2";
+  // The top-level voice is always validated: it's the fallback and every
+  // definition must carry a well-formed one even when variants are present.
+  const voiceErr = await validateVoiceRef(env, def.voice, callerUserId);
+  if (voiceErr) return `definition.${voiceErr}`;
+
+  // v1.1 — hidden A/B variants. Two or more arms, each with a unique
+  // non-empty id, an instructor label, and a valid voice.
+  if (def.variants !== undefined) {
+    const arms = def.variants;
+    if (!Array.isArray(arms) || arms.length < 2) {
+      return "definition.variants must have at least two arms";
+    }
+    const seen = new Set<string>();
+    for (const arm of arms) {
+      if (!arm.id?.trim()) return "every variant needs a non-empty id";
+      if (seen.has(arm.id)) return `Duplicate variant id: ${arm.id}`;
+      seen.add(arm.id);
+      if (!arm.label?.trim()) return `Variant ${arm.id} needs a label`;
+      const armErr = await validateVoiceRef(env, arm.voice, callerUserId);
+      if (armErr) return `Variant ${arm.id} ${armErr}`;
+    }
+  }
+
   if (def.model !== undefined && !ALLOWED_MODELS.has(def.model)) {
     return `Model ${def.model} is not in the allowed list`;
   }
@@ -2876,6 +2990,36 @@ async function startConversation(
   // this conversation; the agent's *next* conversation will materialise
   // fresh against the then-current fragment.
   const def = JSON.parse(agent.definition) as AgentDefinition;
+
+  // v1.1 — hidden A/B split. Before materialising the voice, pick this
+  // student's arm (sticky, assigned once, balanced across arms) and swap it
+  // in as `def.voice`. Everything downstream — materialisation, snapshot,
+  // turn execution — is arm-agnostic and just sees a single voice. The
+  // student is told nothing; `variants` never reaches the client.
+  if (def.variants && def.variants.length >= 2) {
+    const validIds = def.variants.map((a) => a.id);
+    const armId = await repo.getOrAssignVariant(env.DB, {
+      courseId,
+      agentId: agent.id,
+      userId: resolved.user.id,
+      validVariantIds: validIds,
+    });
+    // Sticky-through-edits: if the assigned arm was removed from the
+    // definition since assignment, fall back to the first surviving arm for
+    // this conversation's voice. The assignment row itself is untouched.
+    // `def.variants[0]` exists — length was checked >= 2 above.
+    const arm =
+      def.variants.find((a) => a.id === armId) ?? def.variants[0]!;
+    def.voice = arm.voice;
+  }
+  // Drop `variants` from the snapshot: a conversation runs against exactly
+  // one voice, and nothing student-facing should carry the arm set.
+  delete def.variants;
+
+  // v0.7 §1.2 — if the (now arm-resolved) voice is a `custom-ref`,
+  // materialise it into an inline `custom` here so the snapshot carries the
+  // prompt fragment, not a pointer. Future edits to the voice don't reach
+  // into this conversation.
   if (def.voice.kind === "custom-ref") {
     const v = await repo.findVoiceById(env.DB, def.voice.voiceId);
     if (!v) {
