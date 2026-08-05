@@ -15,6 +15,7 @@ import type {
   EnrollmentRow,
   MessageRow,
   MessageSourceRow,
+  TermSeason,
   UserRow,
   VoiceRow,
 } from "@marginalia/schema";
@@ -187,6 +188,20 @@ export interface UserEnrollmentRow {
    *  A real on/off toggle, default ON — when off, students don't see the
    *  writing tool at all. */
   provenanceEnabled: boolean;
+  /** Whether the Agents extension is enabled for this course (migration 0018).
+   *  A real on/off toggle, default ON — when off, the Agents tab disappears
+   *  from the instructor nav and agents disappear from the student view. */
+  agentsEnabled: boolean;
+  /** v1.2 (migration 0017) — the semester this course is taught in, or null
+   *  when unscheduled. Academic year is derived client-side from
+   *  (termSeason, termYear). */
+  termSeason: TermSeason | null;
+  termYear: number | null;
+  /** Active window, Unix ms at UTC day boundaries (null = open-ended). A course
+   *  is "current" when now is within [startDate, endDate] — see isCourseCurrent
+   *  in term.ts. Replaces the removed manual archived flag. */
+  startDate: number | null;
+  endDate: number | null;
 }
 export async function listEnrollmentsForUserEnriched(
   db: D1Database,
@@ -204,10 +219,12 @@ export async function listEnrollmentsForUserEnriched(
       // (opt-in, in-person only). See migration 0015.
       `SELECT e.course_id, c.name AS course_name, e.role,
               e.created_at AS joined_at,
+              c.term_season, c.term_year, c.start_date, c.end_date,
               COALESCE(s.show_attendance, 0)  AS show_attendance,
               COALESCE(s.show_collections, 1) AS show_collections,
               COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks,
-              COALESCE(s.provenance_enabled, 1) AS provenance_enabled
+              COALESCE(s.provenance_enabled, 1) AS provenance_enabled,
+              COALESCE(s.agents_enabled, 1) AS agents_enabled
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        LEFT JOIN course_settings s ON s.course_id = e.course_id
@@ -220,20 +237,30 @@ export async function listEnrollmentsForUserEnriched(
       course_name: string;
       role: EnrollmentRole;
       joined_at: number;
+      term_season: TermSeason | null;
+      term_year: number | null;
+      start_date: number | null;
+      end_date: number | null;
       show_attendance: number;
       show_collections: number;
       hide_provenance_marks: number;
       provenance_enabled: number;
+      agents_enabled: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
     courseName: r.course_name,
     role: r.role,
     joinedAt: r.joined_at,
+    termSeason: r.term_season,
+    termYear: r.term_year,
+    startDate: r.start_date,
+    endDate: r.end_date,
     showAttendance: r.show_attendance === 1,
     showCollections: r.show_collections === 1,
     hideProvenanceMarks: r.hide_provenance_marks === 1,
     provenanceEnabled: r.provenance_enabled === 1,
+    agentsEnabled: r.agents_enabled === 1,
   }));
 }
 
@@ -268,20 +295,21 @@ export async function markCourseFeatureShown(
 
 /** v1.1 — set a per-course module flag to an explicit on/off value. Unlike
  *  markCourseFeatureShown (one-way reveal), this is bidirectional so the
- *  course-admin toggles can turn Sources / Provenance / Attendance back off.
- *  Same single-round-trip upsert; the column allow-list keeps the interpolated
+ *  course-admin toggles can turn Agents / Provenance / Attendance back off.
+ *  (Library is no longer toggleable — see migration 0018.) Same
+ *  single-round-trip upsert; the column allow-list keeps the interpolated
  *  identifier safe. */
 export async function setCourseFeature(
   db: D1Database,
   courseId: string,
-  feature: "attendance" | "collections" | "provenance",
+  feature: "attendance" | "agents" | "provenance",
   enabled: boolean,
 ): Promise<void> {
   const column =
     feature === "attendance"
       ? "show_attendance"
-      : feature === "collections"
-        ? "show_collections"
+      : feature === "agents"
+        ? "agents_enabled"
         : "provenance_enabled";
   await db
     .prepare(
@@ -1672,21 +1700,84 @@ export async function listCoursesWithEnrollmentCounts(
 
 export async function createCourse(
   db: D1Database,
-  params: { orgId: string; name: string },
+  params: {
+    orgId: string;
+    name: string;
+    termSeason?: TermSeason | null;
+    termYear?: number | null;
+    startDate?: number | null;
+    endDate?: number | null;
+  },
 ): Promise<CourseRow> {
   const row: CourseRow = {
     id: id("course"),
     org_id: params.orgId,
     name: params.name,
     created_at: now(),
+    term_season: params.termSeason ?? null,
+    term_year: params.termYear ?? null,
+    start_date: params.startDate ?? null,
+    end_date: params.endDate ?? null,
   };
   await db
     .prepare(
-      `INSERT INTO courses (id, org_id, name, created_at) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO courses (id, org_id, name, created_at, term_season, term_year, start_date, end_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(row.id, row.org_id, row.name, row.created_at)
+    .bind(
+      row.id,
+      row.org_id,
+      row.name,
+      row.created_at,
+      row.term_season,
+      row.term_year,
+      row.start_date,
+      row.end_date,
+    )
     .run();
   return row;
+}
+
+/** Update a course's term and/or active window. Only the fields present in
+ *  `patch` are written — undefined leaves the column untouched; an explicit
+ *  null clears it. Values are validated by the caller (the route) before this
+ *  runs. */
+export async function updateCourse(
+  db: D1Database,
+  courseId: string,
+  patch: {
+    termSeason?: TermSeason | null;
+    termYear?: number | null;
+    startDate?: number | null;
+    endDate?: number | null;
+  },
+): Promise<CourseRow | null> {
+  const sets: string[] = [];
+  const binds: (string | number | null)[] = [];
+  if (patch.termSeason !== undefined) {
+    sets.push("term_season = ?");
+    binds.push(patch.termSeason);
+  }
+  if (patch.termYear !== undefined) {
+    sets.push("term_year = ?");
+    binds.push(patch.termYear);
+  }
+  if (patch.startDate !== undefined) {
+    sets.push("start_date = ?");
+    binds.push(patch.startDate);
+  }
+  if (patch.endDate !== undefined) {
+    sets.push("end_date = ?");
+    binds.push(patch.endDate);
+  }
+  if (sets.length > 0) {
+    binds.push(courseId);
+    await db
+      .prepare(`UPDATE courses SET ${sets.join(", ")} WHERE id = ?`)
+      .bind(...binds)
+      .run();
+  }
+  return findCourseById(db, courseId);
 }
 
 // ── join codes (v0.6 §4) ───────────────────────────────────────────────────

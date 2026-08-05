@@ -30,6 +30,12 @@
 @import "./css/OutlineRail.css";
 @import "./css/SegmentedControl.css";
 
+/* Layout primitives (page-composition building blocks; docs/style.md §8–9). */
+@import "./css/Section.css";
+@import "./css/PageHeader.css";
+@import "./css/Divider.css";
+@import "./css/StatTile.css";
+
 /* ==== Wordmark / header lockup ===================================== */
 .ds-lockup { display: inline-flex; align-items: center; gap: 0.6rem; }
 .ds-lockup__mark { width: 26px; height: auto; display: block; }

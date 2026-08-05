@@ -1,0 +1,35 @@
+/* ==== PageHeader — the page-title lockup (eyebrow → h1 → scope) ===== *
+ * The page title at the top of a staff/admin page: a display-weight <h1>
+ * with a mono eyebrow above and an optional one-line scope below, plus an
+ * optional right-aligned action cluster. This is the page title, not a
+ * section (docs/style.md §9 exception keeps its weight). Mirrors the old
+ * app-page__head / ds-staff-head geometry 1:1 so migrating pages don't
+ * shift. Class prefix `ds-`.
+ * ------------------------------------------------------------------ */
+
+.ds-page-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; margin-bottom: 1.75rem;
+}
+/* Lockup wraps the (optional) lead element + the eyebrow→title→scope block so
+   a leading avatar/icon centres against the whole lockup. With no lead it holds
+   a single child and is a no-op. */
+.ds-page-header__lockup { display: flex; align-items: center; gap: 0.9rem; min-width: 0; }
+.ds-page-header__lead { flex: none; }
+.ds-page-header__main { min-width: 0; }
+.ds-page-header .eyebrow { display: block; margin-bottom: 0.4rem; }
+.ds-page-header__title { font-size: 1.9rem; }
+.ds-page-header__scope {
+  color: var(--text-muted); font-size: var(--text-sm);
+  margin-top: 0.35rem; max-width: 56ch;
+}
+.ds-page-header__actions {
+  display: flex; gap: 0.5rem; align-items: center; flex: none;
+}
+
+@media (max-width: 680px) {
+  .ds-page-header { flex-direction: column; gap: 1rem; }
+  .ds-page-header__actions { width: 100%; }
+  .ds-page-header__actions > * { flex: 1; }
+  .ds-page-header__title { font-size: 1.6rem; }
+}

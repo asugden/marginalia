@@ -25,8 +25,11 @@ import {
   Field,
   IconButton,
   Input,
+  PageHeader,
   RadioCard,
   RadioCardGroup,
+  Section,
+  SubLabel,
   Textarea,
 } from "../components/index.js";
 import { CheckIcon, ChevronIcon, DragIcon, PlusIcon, TrashIcon } from "../icons.js";
@@ -305,34 +308,31 @@ export function AuthorEditPage() {
 
   return (
     <div className="app-page">
-      <div className="app-page__head">
-        <div>
-          <span className="eyebrow">Instructor · Guided agent</span>
-          <h1>{isNew ? "New agent" : draft.title || "Edit agent"}</h1>
-          <div className="app-page__scope">
-            Students see this agent on their home page. It leads them through
-            the outline below.
-          </div>
-        </div>
-        <div className="app-page__actions">
-          <Button variant="subtle" href={`/course/${courseId}/instructor/agents`}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            icon={<CheckIcon size={16} />}
-            onClick={save}
-            loading={saving}
-            disabled={saving}
-          >
-            {isNew ? "Create agent" : "Save changes"}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Instructor · Guided agent"
+        title={isNew ? "New agent" : draft.title || "Edit agent"}
+        scope="Students see this agent on their home page. It leads them through the outline below."
+        actions={
+          <>
+            <Button variant="subtle" href={`/course/${courseId}/instructor/agents`}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={<CheckIcon size={16} />}
+              onClick={save}
+              loading={saving}
+              disabled={saving}
+            >
+              {isNew ? "Create agent" : "Save changes"}
+            </Button>
+          </>
+        }
+      />
 
       {loadError && <p className="error">{loadError}</p>}
 
-      <div className="app-section app-row">
+      <Section className="app-row">
         <Field label="Agent title">
           <Input
             type="text"
@@ -340,9 +340,9 @@ export function AuthorEditPage() {
             onChange={(e) => update("title", e.target.value)}
           />
         </Field>
-      </div>
+      </Section>
 
-      <div className="app-section">
+      <Section>
         <Field
           label="What students see first (optional)"
           hint="A short note shown at the top of every conversation, so students know what this is and how it behaves. Leave blank to use the default. This is for clarity, not rules — the agent still works the way you configure it."
@@ -354,15 +354,20 @@ export function AuthorEditPage() {
             onChange={(e) => update("clarityNote", e.target.value)}
           />
         </Field>
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Voice</span>
-        <p className="muted small" style={{ marginTop: "-0.3rem", marginBottom: "0.7rem" }}>
-          How the agent talks.{" "}
-          <Link to={`/course/${courseId}/instructor/voices`}>Manage your voices →</Link>
-        </p>
-        <h3 className="mono-label" style={{ margin: "0.3rem 0 0.4rem" }}>Library</h3>
+      <Section
+        kicker="Voice"
+        description={
+          <>
+            How the agent talks.{" "}
+            <Link to={`/course/${courseId}/instructor/voices`}>
+              Manage your voices →
+            </Link>
+          </>
+        }
+      >
+        <SubLabel style={{ marginTop: 0 }}>Library</SubLabel>
         <RadioCardGroup>
           {libraryOptions.map((v) => (
             <RadioCard
@@ -379,7 +384,7 @@ export function AuthorEditPage() {
 
         {ownedOptions.length > 0 && (
           <>
-            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>My voices</h3>
+            <SubLabel>My voices</SubLabel>
             <RadioCardGroup>
               {ownedOptions.map((v) => (
                 <RadioCard
@@ -398,7 +403,7 @@ export function AuthorEditPage() {
 
         {sharedOptions.length > 0 && (
           <>
-            <h3 className="mono-label" style={{ margin: "1.25rem 0 0.4rem" }}>Shared with me</h3>
+            <SubLabel>Shared with me</SubLabel>
             <RadioCardGroup>
               {sharedOptions.map((v) => (
                 <RadioCard
@@ -414,22 +419,16 @@ export function AuthorEditPage() {
             </RadioCardGroup>
           </>
         )}
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "0.7rem",
-          }}
-        >
-          <span className="mono-label">Outline</span>
-          {draft.hasBackbone && (
+      <Section
+        kicker="Outline"
+        actions={
+          draft.hasBackbone ? (
             <Badge tone="neutral">State machine · enforced in code</Badge>
-          )}
-        </div>
+          ) : undefined
+        }
+      >
         <Checkbox
           checked={draft.hasBackbone}
           onChange={(e) => update("hasBackbone", e.target.checked)}
@@ -471,18 +470,9 @@ export function AuthorEditPage() {
             </Field>
 
             <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "0.7rem",
-                }}
-              >
-                <span className="mono-label">
-                  {draft.topics.length} topic{draft.topics.length === 1 ? "" : "s"}
-                </span>
-              </div>
+              <SubLabel>
+                {draft.topics.length} topic{draft.topics.length === 1 ? "" : "s"}
+              </SubLabel>
 
               {draft.topics.map((t, i) => {
                 const open = openTopic === i;
@@ -591,10 +581,9 @@ export function AuthorEditPage() {
             </div>
           </div>
         )}
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Sources</span>
+      <Section kicker="Sources">
         <Checkbox
           checked={draft.hasCollection}
           onChange={(e) => update("hasCollection", e.target.checked)}
@@ -616,7 +605,7 @@ export function AuthorEditPage() {
               </p>
             ) : (
               <>
-                <span className="mono-label app-section__label">Library</span>
+                <SubLabel style={{ marginTop: 0 }}>Library</SubLabel>
                 <RadioCardGroup>
                   {collections.map((c) => (
                     <RadioCard
@@ -637,10 +626,9 @@ export function AuthorEditPage() {
             )}
           </div>
         )}
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Model</span>
+      <Section kicker="Model">
         <RadioCardGroup inline>
           {MODEL_OPTIONS.map((m) => (
             <RadioCard
@@ -654,7 +642,7 @@ export function AuthorEditPage() {
             />
           ))}
         </RadioCardGroup>
-      </div>
+      </Section>
 
       {saveError && <p className="error">{saveError}</p>}
 

@@ -433,7 +433,7 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
           {agents.length === 0 ? (
             <p className="muted small">
               No agents yet. Visit{" "}
-              <a href={`/course/${courseId}/write/agents`}>My agents</a> to add one.
+              <a href={`/course/${courseId}/writing/agents`}>My agents</a> to add one.
             </p>
           ) : (
             <>

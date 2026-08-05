@@ -1,0 +1,68 @@
+/* ------------------------------------------------------------------ *
+ * Design-system gallery (/design) — layout for the standalone component
+ * gallery. Isolated: every class is `.dsg-` prefixed and used only by
+ * DesignGalleryPage, so nothing here touches a product screen. Generic
+ * tokens only (no institution name or colour literal); the gallery reads
+ * the live token layer + brand seam, so it renders blue in the neutral
+ * build and the overlay's accent in a branded build.
+ *
+ * The section headers here are the shared <Section> primitive (class
+ * `.ds-section`, styled in components/css/Section.css) — the CANONICAL
+ * section-header standard (docs/style.md §"Section headers & dividers").
+ * The gallery eats its own dog food; only its micro-labels (`.dsg-sub`)
+ * remain gallery-local chrome.
+ * ------------------------------------------------------------------ */
+
+.dsg { width: 100%; max-width: var(--shell-max); margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+
+.dsg-lede { color: var(--text-secondary); font-size: var(--text-md); line-height: var(--leading-normal); max-width: 60ch; margin: 0.5rem 0 0; }
+.dsg-note { color: var(--text-muted); font-size: var(--text-sm); line-height: var(--leading-normal); max-width: 68ch; margin: 0.75rem 0 0; }
+
+/* Space the top-level <Section>s apart on the gallery page (the primitive
+   itself only carries a bottom margin). */
+.dsg > .ds-section { margin-top: 2.75rem; }
+
+/* ---- Gallery-local micro-label (sub-headings within a specimen) ------ */
+.dsg-sub { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin: 1.5rem 0 0.75rem; }
+
+/* ---- Specimen surfaces --------------------------------------------- */
+.dsg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.dsg-stack { display: flex; flex-direction: column; gap: 0.9rem; }
+.dsg-specimen {
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
+  background: var(--surface); padding: 1.25rem;
+}
+.dsg-specimen--sunken { background: var(--surface-sunken); border-style: solid; border-color: var(--border); }
+
+/* ---- Token swatches ------------------------------------------------ */
+.dsg-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; }
+.dsg-swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
+.dsg-swatch__chip { height: 56px; border-bottom: 1px solid var(--border); }
+.dsg-swatch__meta { padding: 0.5rem 0.6rem; }
+.dsg-swatch__name { display: block; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-strong); }
+.dsg-swatch__desc { display: block; font-size: var(--text-2xs); color: var(--text-muted); margin-top: 0.15rem; }
+
+/* Type specimens */
+.dsg-type { display: flex; flex-direction: column; gap: 0.6rem; }
+.dsg-type__row { display: flex; align-items: baseline; gap: 1rem; border-bottom: 1px solid var(--border-faint); padding-bottom: 0.6rem; }
+.dsg-type__label { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); width: 6.5rem; flex: none; }
+.dsg-type__sample { color: var(--text-strong); line-height: var(--leading-snug); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* Spacing + radius specimens */
+.dsg-spaces { display: flex; flex-direction: column; gap: 0.5rem; }
+.dsg-space__row { display: flex; align-items: center; gap: 0.75rem; }
+.dsg-space__bar { height: 14px; background: var(--accent-wash); border: 1px solid var(--accent); border-radius: 2px; }
+.dsg-space__name { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
+.dsg-radii { display: flex; flex-wrap: wrap; gap: 1rem; }
+.dsg-radius { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.dsg-radius__box { width: 72px; height: 56px; background: var(--accent-wash); border: 1px solid var(--accent); }
+.dsg-radius__name { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
+.dsg-shadows { display: flex; flex-wrap: wrap; gap: 1.5rem; padding: 0.5rem 0; }
+.dsg-shadow { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.dsg-shadow__box { width: 96px; height: 64px; background: var(--surface); border-radius: var(--radius-md); }
+.dsg-shadow__name { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
+
+/* Icon grid */
+.dsg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.5rem; }
+.dsg-icon { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.75rem 0.4rem; border: 1px solid var(--border-faint); border-radius: var(--radius-sm); color: var(--text-secondary); }
+.dsg-icon__name { font-family: var(--font-mono); font-size: 0.625rem; color: var(--text-faint); }

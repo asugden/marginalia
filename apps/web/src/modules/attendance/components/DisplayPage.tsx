@@ -19,7 +19,13 @@ import {
   type QrToken,
   type SessionDTO,
 } from "../api.js";
-import { Badge, Button, Wordmark, useConfirm } from "../../../components/index.js";
+import {
+  Badge,
+  Button,
+  PageHeader,
+  Wordmark,
+  useConfirm,
+} from "../../../components/index.js";
 import { CheckIcon, DownloadIcon, FlagIcon } from "../../../icons.js";
 
 const TOKEN_POLL_MS = 5_000;
@@ -148,32 +154,32 @@ export function DisplayPage() {
         </Link>
         <span className="ds-staff-top__role">Attendance</span>
       </header>
-      <div className="ds-staff-page" style={{ maxWidth: "1080px" }}>
-        <div className="ds-staff-head">
-          <div>
-            <span className="eyebrow">Live session</span>
-            <h1>{session.label || "Attendance"}</h1>
-            <div className="ds-staff-head__scope">{session.sessionDate}</div>
-          </div>
-          <div className="ds-staff-actions">
-            <Button variant="ghost" size="sm" href={sessionsHref}>
-              All sessions
-            </Button>
-            <Button
-              variant="subtle"
-              size="sm"
-              href={exportCsvUrl(id)}
-              icon={<DownloadIcon size={16} />}
-            >
-              Export CSV
-            </Button>
-            {!session.closedAt && (
-              <Button variant="primary" size="sm" onClick={onClose}>
-                Close session
+      <div className="ds-staff-page">
+        <PageHeader
+          eyebrow="Live session"
+          title={session.label || "Attendance"}
+          scope={session.sessionDate}
+          actions={
+            <>
+              <Button variant="ghost" size="sm" href={sessionsHref}>
+                All sessions
               </Button>
-            )}
-          </div>
-        </div>
+              <Button
+                variant="subtle"
+                size="sm"
+                href={exportCsvUrl(id)}
+                icon={<DownloadIcon size={16} />}
+              >
+                Export CSV
+              </Button>
+              {!session.closedAt && (
+                <Button variant="primary" size="sm" onClick={onClose}>
+                  Close session
+                </Button>
+              )}
+            </>
+          }
+        />
 
         <p className="ds-att-display__lead">
           {session.closedAt ? (

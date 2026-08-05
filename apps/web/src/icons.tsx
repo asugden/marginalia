@@ -185,6 +185,43 @@ export function SparkleIcon(props: IconProps) {
   );
 }
 
+// The three course-module indicator icons are from Lucide (MIT), inlined to
+// match our Heroicons-style set (no icon-library dependency).
+
+// Library — Lucide "library-big" (two upright spines + a tilted book).
+export function LibraryIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect width="8" height="18" x="3" y="3" rx="1" />
+      <path d="M7 3v18" />
+      <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
+    </Icon>
+  );
+}
+
+// Provenance writing — Lucide "feather" (a quill).
+export function WritingIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z" />
+      <path d="M16 8 2 22" />
+      <path d="M17.5 15H9" />
+    </Icon>
+  );
+}
+
+// Attendance — Lucide "bell-check" (a bell with a checkmark).
+export function BellCheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+      <path d="m15 8 2 2 4-4" />
+      <path d="M16.8607 4.4824A6 6 0 0 0 6 8C6 12.499 4.589 13.956 3.262 15.326" />
+      <path d="M3.262 15.326A1 1 0 0 0 4 17H20A1 1 0 0 0 20.74 15.327C20.209 14.779 19.665 14.218 19.203 13.454" />
+    </Icon>
+  );
+}
+
 export function UserIcon(props: IconProps) {
   return (
     <Icon {...props}>

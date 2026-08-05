@@ -24,8 +24,8 @@ import {
   deleteAdminCourse,
   demoteAdmin,
   getMe,
-  listAdmins,
   listAdminCourses,
+  listAdmins,
   listAdminUsers,
   listAuditLog,
   listRoster,
@@ -37,7 +37,6 @@ import {
   type AuditEntry,
   type RosterEntry,
 } from "../client.js";
-import { relativeTime } from "../time.js";
 import {
   Avatar,
   Badge,
@@ -46,13 +45,16 @@ import {
   Field,
   IconButton,
   Input,
+  PageHeader,
   RoleSwitch,
+  Section,
   SegmentedControl,
   useConfirm,
   Wordmark,
 } from "../components/index.js";
 import { PlusIcon, SignOutIcon, TrashIcon } from "../icons.js";
 import { signOut } from "../session.js";
+import { relativeTime } from "../time.js";
 
 type Tab = "instructors" | "courses" | "admins" | "users" | "audit";
 
@@ -131,12 +133,7 @@ export function AdminPage() {
     return (
       <AdminShell isAdmin={false}>
         <div className="app-page">
-          <div className="app-page__head">
-            <div>
-              <span className="eyebrow">Admin</span>
-              <h1>No access</h1>
-            </div>
-          </div>
+          <PageHeader eyebrow="Admin" title="No access" />
           <p className="error">You don&rsquo;t have access to this page.</p>
         </div>
       </AdminShell>
@@ -146,19 +143,12 @@ export function AdminPage() {
   return (
     <AdminShell isAdmin>
       <div className="app-page">
-        <div className="app-page__head">
-          <div>
-            <span className="eyebrow">Instance</span>
-            <h1>Admin</h1>
-            <div className="app-page__scope">
-              Instance-wide controls: who teaches which course, who can
-              administer the platform, everyone who has signed in, and the audit
-              log. Instructors create and run their own courses — that lives on
-              the instructor dashboard, not here.
-            </div>
-          </div>
-        </div>
-        <div className="app-section">
+        <PageHeader
+          eyebrow="Instance"
+          title="Admin"
+          scope="Instance-wide controls: who teaches which course, who can administer the platform, everyone who has signed in, and the audit log. Instructors create and run their own courses — that lives on the instructor dashboard, not here."
+        />
+        <Section>
           <SegmentedControl
             value={tab}
             onChange={(v) => setTab(v as Tab)}
@@ -170,7 +160,7 @@ export function AdminPage() {
               { value: "audit", label: "Audit log" },
             ]}
           />
-        </div>
+        </Section>
         {tab === "instructors" && <InstructorsTab meUserId={meUserId} />}
         {tab === "courses" && <CoursesTab />}
         {tab === "admins" && <AdminsTab meUserId={meUserId} />}
@@ -255,14 +245,10 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
   const instructors = (roster ?? []).filter((r) => r.role === "instructor");
 
   return (
-    <div className="app-section">
-      <span className="mono-label app-section__label">Instructors</span>
-      <p className="muted small">
-        Add an instructor to a course by email — they must have signed in at
-        least once. This used to be buried inside each course&rsquo;s People
-        page; it lives here now so one screen owns who teaches what. Students
-        self-enroll with a join code and never appear here.
-      </p>
+    <Section
+      kicker="Instructors"
+      description="Add an instructor to a course by email — they must have signed in at least once. This used to be buried inside each course’s People page; it lives here now so one screen owns who teaches what. Students self-enroll with a join code and never appear here."
+    >
       {error && <p className="error">{error}</p>}
 
       <form
@@ -359,7 +345,7 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
         </div>
       )}
       {confirmDialog}
-    </div>
+    </Section>
   );
 }
 
@@ -416,8 +402,7 @@ function CoursesTab() {
   }
 
   return (
-    <div className="app-section">
-      <span className="mono-label app-section__label">Courses</span>
+    <Section kicker="Courses">
       {error && <p className="error">{error}</p>}
       <form
         onSubmit={onCreate}
@@ -441,7 +426,7 @@ function CoursesTab() {
           loading={busy}
           disabled={busy || !draft.trim()}
         >
-          Create course
+          Create Course
         </Button>
       </form>
       {courses === null ? (
@@ -476,7 +461,7 @@ function CoursesTab() {
         </div>
       )}
       {confirmDialog}
-    </div>
+    </Section>
   );
 }
 
@@ -534,14 +519,10 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
   }
 
   return (
-    <div className="app-section">
-      <span className="mono-label app-section__label">Admins</span>
-      <p className="muted small">
-        Admins can create / delete courses, promote other admins, and view every
-        user. Promote-by-email only works for users who have signed in at least
-        once. Revoke here or from the user&rsquo;s page; you can&rsquo;t revoke
-        your own admin.
-      </p>
+    <Section
+      kicker="Admins"
+      description="Admins can create / delete courses, promote other admins, and view every user. Promote-by-email only works for users who have signed in at least once. Revoke here or from the user’s page; you can’t revoke your own admin."
+    >
       {error && <p className="error">{error}</p>}
       <form
         onSubmit={onPromote}
@@ -615,7 +596,7 @@ function AdminsTab({ meUserId }: { meUserId: string | null }) {
         </div>
       )}
       {confirmDialog}
-    </div>
+    </Section>
   );
 }
 
@@ -630,8 +611,7 @@ function UsersTab() {
   }, []);
 
   return (
-    <div className="app-section">
-      <span className="mono-label app-section__label">Users</span>
+    <Section kicker="Users">
       {error && <p className="error">{error}</p>}
       {users === null ? (
         <p className="muted">Loading…</p>
@@ -669,7 +649,7 @@ function UsersTab() {
           ))}
         </div>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -684,8 +664,7 @@ function AuditTab() {
   }, []);
 
   return (
-    <div className="app-section">
-      <span className="mono-label app-section__label">Audit log</span>
+    <Section kicker="Audit log">
       {error && <p className="error">{error}</p>}
       {entries === null ? (
         <p className="muted">Loading…</p>
@@ -709,6 +688,6 @@ function AuditTab() {
           ))}
         </div>
       )}
-    </div>
+    </Section>
   );
 }

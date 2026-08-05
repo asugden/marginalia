@@ -22,6 +22,8 @@ import {
   Field,
   IconButton,
   Input,
+  PageHeader,
+  Section,
   SegmentedControl,
   Tag,
   Textarea,
@@ -184,21 +186,18 @@ export function CollectionDetailPage() {
 
   return (
     <div className="app-page">
-      <div className="app-page__head">
-        <div>
-          <span className="eyebrow">Instructor · Library</span>
-          <h1>{detail.collection.name}</h1>
-          <div className="app-page__scope">
-            {detail.collection.description ||
-              "The agent only argues from these documents, and cites them in line so students can check the source."}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Instructor · Library"
+        title={detail.collection.name}
+        scope={
+          detail.collection.description ||
+          "The agent only argues from these documents, and cites them in line so students can check the source."
+        }
+      />
 
       {error && <p className="error">{error}</p>}
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Add a source</span>
+      <Section kicker="Add a source">
         <SegmentedControl
           value={tab}
           onChange={(v) => setTab(v as Tab)}
@@ -294,26 +293,12 @@ export function CollectionDetailPage() {
 
           {busy && <p className="muted small">Indexing… this can take a moment.</p>}
         </div>
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "0.7rem",
-          }}
-        >
-          <span className="mono-label">
-            Library · {detail.sources.length} document
-            {detail.sources.length === 1 ? "" : "s"}
-          </span>
-          {totalChunks > 0 && (
-            <span className="mono-label">{totalChunks} chunks indexed</span>
-          )}
-        </div>
-
+      <Section
+        kicker={`Library · ${detail.sources.length} document${detail.sources.length === 1 ? "" : "s"}`}
+        meta={totalChunks > 0 ? `${totalChunks} chunks indexed` : undefined}
+      >
         {detail.sources.length === 0 ? (
           <p className="muted">No sources yet.</p>
         ) : (
@@ -372,7 +357,7 @@ export function CollectionDetailPage() {
             ))}
           </div>
         )}
-      </div>
+      </Section>
       {confirmDialog}
     </div>
   );

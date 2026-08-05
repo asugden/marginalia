@@ -29,6 +29,13 @@
   --sidebar-width:  17.5rem; /* 280px — conversation / nav sidebar */
   --header-height:  3.75rem; /* 60px */
 
+  /* ---- Controls ------------------------------------------------ */
+  /* Shared height for every single-line form control — text/number/date
+     inputs and selects alike — so they line up exactly regardless of type.
+     Applied with box-sizing: border-box; internal chrome (the native date
+     picker, the select chevron) sits inside this height. */
+  --control-h:  2.625rem;    /* 42px */
+
   /* ---- Container gutter ---------------------------------------- */
   --gutter: var(--space-6);
 }

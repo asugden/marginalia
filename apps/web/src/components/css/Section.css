@@ -1,0 +1,52 @@
+/* ==== Section — the canonical section header + hairline rule ======= *
+ * A short mono uppercase kicker (or an optional larger title tier) over a
+ * 1px var(--border) hairline rule, then the section body. The ONE section-
+ * header standard (docs/style.md §9): sections are wayfinding, the page
+ * <h1> carries the title. Replaces the drifted section-label / heading+desc
+ * / inline-<h3> / course-section-title treatments. A header-less Section is
+ * just the margin-bearing spacing block. Class prefix `ds-`; the kicker
+ * composes the global `.mono-label` utility.
+ * ------------------------------------------------------------------ */
+
+.ds-section { margin-bottom: var(--space-7); }
+.ds-section:last-child { margin-bottom: 0; }
+
+.ds-section__head {
+  /* center (not baseline): the header slots can hold controls — a search
+     field, a badge, a button — that must sit vertically centred against the
+     kicker, not baseline-aligned. */
+  display: flex; align-items: center; gap: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2); margin-bottom: var(--space-5);
+}
+.ds-section__kicker { white-space: nowrap; }
+
+/* The optional heavier title tier — a strong sans heading for content-heavy
+   sections (Settings). One divider, two header weights. */
+.ds-section__title {
+  font-size: var(--text-lg); color: var(--text-strong);
+  letter-spacing: -0.01em; line-height: var(--leading-snug); margin: 0;
+}
+
+/* Right-aligned header slots. `meta` is a quiet count/badge; `actions` holds
+   a control (search field, button). The first present one takes the auto
+   margin that pushes the cluster to the trailing edge. */
+.ds-section__meta {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: var(--text-2xs);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--text-faint); white-space: nowrap;
+}
+.ds-section__actions {
+  margin-left: auto; display: flex; align-items: center; gap: var(--space-2);
+}
+.ds-section__meta + .ds-section__actions { margin-left: var(--space-3); }
+
+/* Description sits under the rule. No max-width — the page owns the measure. */
+.ds-section__desc {
+  color: var(--text-muted); font-size: var(--text-sm);
+  line-height: var(--leading-normal); margin: 0 0 var(--space-4);
+}
+
+/* ---- SubLabel — a mono sub-heading inside a section (no rule) ------- */
+.ds-sublabel { margin: var(--space-5) 0 var(--space-3); }

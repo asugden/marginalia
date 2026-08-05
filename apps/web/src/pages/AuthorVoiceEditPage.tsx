@@ -40,6 +40,8 @@ import {
   Field,
   Input,
   Message,
+  PageHeader,
+  Section,
   Textarea,
   useConfirm,
 } from "../components/index.js";
@@ -271,33 +273,24 @@ export function AuthorVoiceEditPage() {
 
   return (
     <Shell>
-      <div className="app-page__head">
-        <div>
-          <span className="eyebrow">Instructor · Voice</span>
-          <h1>
-            {isNew ? "New voice" : isLibrary ? "Library voice" : draft.name || "Edit voice"}
-          </h1>
-          {isLibrary && (
-            <div className="app-page__scope">
-              Library voices are read-only. Use Customize to fork this into a new
-              voice you own — you can then edit, share, and use it the same way
-              as any of your own voices.
-            </div>
-          )}
-          {isReadOnly && !isLibrary && (
-            <div className="app-page__scope">
-              This voice is shared with you by another author. You can use it in
-              your agents, but you can&rsquo;t edit or delete it. Use Duplicate
-              to fork it into a new voice you own.
-            </div>
-          )}
-        </div>
-        <div className="app-page__actions">{actions}</div>
-      </div>
+      <PageHeader
+        eyebrow="Instructor · Voice"
+        title={
+          isNew ? "New voice" : isLibrary ? "Library voice" : draft.name || "Edit voice"
+        }
+        scope={
+          isLibrary
+            ? "Library voices are read-only. Use Customize to fork this into a new voice you own — you can then edit, share, and use it the same way as any of your own voices."
+            : isReadOnly
+              ? "This voice is shared with you by another author. You can use it in your agents, but you can’t edit or delete it. Use Duplicate to fork it into a new voice you own."
+              : undefined
+        }
+        actions={actions}
+      />
 
       {loadError && <p className="error">{loadError}</p>}
 
-      <div className="app-section app-row">
+      <Section className="app-row">
         <Field label="Name">
           <Input
             type="text"
@@ -315,9 +308,9 @@ export function AuthorVoiceEditPage() {
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           />
         </Field>
-      </div>
+      </Section>
 
-      <div className="app-section">
+      <Section>
         <Field
           label="System prompt fragment"
           hint="Describe persona, tone, and method. Keep topic content out — that lives in agent backbones."
@@ -333,14 +326,12 @@ export function AuthorVoiceEditPage() {
             }
           />
         </Field>
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Preview</span>
-        <p className="muted small">
-          One-turn preview against a fixed question. Lets you feel the voice
-          before saving an agent against it.
-        </p>
+      <Section
+        kicker="Preview"
+        description="One-turn preview against a fixed question. Lets you feel the voice before saving an agent against it."
+      >
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", marginTop: "0.5rem" }}>
           <div style={{ maxWidth: "18rem", flex: 1 }}>
             <Dropdown
@@ -370,18 +361,13 @@ export function AuthorVoiceEditPage() {
             </Message>
           </div>
         )}
-      </div>
+      </Section>
 
       {!isNew && isOwner && (
-        <div className="app-section">
-          <span className="mono-label app-section__label">Sharing</span>
-          <p className="muted small">
-            Share this voice with another author by email. They can use it in
-            their own agents but can&rsquo;t edit or delete it. You can revoke at
-            any time; revoking doesn&rsquo;t affect agents they&rsquo;ve already
-            saved against this voice (those keep working until the voice itself
-            is deleted).
-          </p>
+        <Section
+          kicker="Sharing"
+          description="Share this voice with another author by email. They can use it in their own agents but can’t edit or delete it. You can revoke at any time; revoking doesn’t affect agents they’ve already saved against this voice (those keep working until the voice itself is deleted)."
+        >
           {shareError && <p className="error">{shareError}</p>}
           <form
             onSubmit={onAddShare}
@@ -441,7 +427,7 @@ export function AuthorVoiceEditPage() {
               ))}
             </div>
           )}
-        </div>
+        </Section>
       )}
 
       {saveError && <p className="error">{saveError}</p>}

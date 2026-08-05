@@ -2,6 +2,7 @@
 // else is plain JSON.
 
 import type { AgentDefinition } from "@marginalia/backbone";
+import type { TermSeason } from "./course/term.js";
 
 /**
  * Build a fully-qualified URL for an API path. When the frontend is served
@@ -368,6 +369,21 @@ export interface MeEnrollment {
    *  A real on/off toggle, default ON. When off, the writing tool disappears
    *  from the student view entirely. */
   provenanceEnabled: boolean;
+  /** migration 0018 — whether the Agents extension is enabled for this course.
+   *  A real on/off toggle, default ON. When off, agents disappear from both
+   *  the instructor nav/dashboard and the student view. */
+  agentsEnabled: boolean;
+  /** v1.2 (migration 0017) — the semester this course is taught in, or null
+   *  when unscheduled. Academic year is derived from (termSeason, termYear)
+   *  via course/term.ts. */
+  termSeason: TermSeason | null;
+  termYear: number | null;
+  /** Active window, Unix ms at UTC day boundaries (null = open-ended). A course
+   *  is "current" when now is within [startDate, endDate] — see isCourseCurrent
+   *  in course/term.ts. Drives the header switcher's "Current Courses" list and
+   *  the picker's Current vs past split. */
+  startDate: number | null;
+  endDate: number | null;
 }
 export interface MeResponse {
   email: string;
@@ -877,12 +893,13 @@ export function revealCourseTab(
   );
 }
 
-/** v1.1 — toggle an optional course module on/off (bidirectional, unlike
- *  revealCourseTab). Sources and Provenance are real on/off toggles that
- *  default ON; Attendance is opt-in. Instructor-only on the server. */
+/** v1.1 — toggle an optional course extension on/off (bidirectional, unlike
+ *  revealCourseTab). Agents and Provenance are real on/off toggles that
+ *  default ON; Attendance is opt-in. (Library is no longer toggleable.)
+ *  Instructor-only on the server. */
 export function setCourseFeature(
   courseId: string,
-  feature: "attendance" | "collections" | "provenance",
+  feature: "attendance" | "agents" | "provenance",
   enabled: boolean,
 ) {
   return jsonFetch<{ ok: true }>(
@@ -931,15 +948,45 @@ export interface AuditEntry {
 // the new course's instructor). Distinct from createAdminCourse, which is the
 // admin console's bare course-row create. Returns the new course id so the SPA
 // can navigate straight into it.
-export function createCourse(name: string) {
+/** A course's term + active window, as accepted by create/update and returned
+ *  from update. Term season/year set the category; start/end (Unix ms, UTC day
+ *  boundaries, null = open-ended) set the active window. */
+export interface CoursePatch {
+  termSeason?: TermSeason | null;
+  termYear?: number | null;
+  startDate?: number | null;
+  endDate?: number | null;
+}
+
+export function createCourse(name: string, patch?: CoursePatch) {
   return jsonFetch<{
     id: string;
     name: string;
     createdAt: number;
+    termSeason: TermSeason | null;
+    termYear: number | null;
+    startDate: number | null;
+    endDate: number | null;
     joinCode: string | null;
   }>(`/api/courses`, {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...(patch ?? {}) }),
+  });
+}
+
+/** Update a course's term and/or active window. Instructor-gated on the server.
+ *  Only the keys present in `patch` are written; an explicit null clears a
+ *  field (e.g. `{ termSeason: null, termYear: null }` unschedules). */
+export function updateCourse(courseId: string, patch: CoursePatch) {
+  return jsonFetch<{
+    id: string;
+    termSeason: TermSeason | null;
+    termYear: number | null;
+    startDate: number | null;
+    endDate: number | null;
+  }>(`/api/courses/${encodeURIComponent(courseId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
   });
 }
 

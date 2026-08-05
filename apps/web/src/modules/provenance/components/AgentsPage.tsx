@@ -1,6 +1,6 @@
 // My-agents management page. Lists course defaults (read-only) + the
 // student's own agents (editable). Rendered as a body page inside StudentLayout
-// at /course/:courseId/write/agents — course id comes from useCourse().
+// at /course/:courseId/writing/agents — course id comes from useCourse().
 
 import { useEffect, useState } from "react";
 import { useCourse } from "../../../course/useCourse.js";
@@ -26,7 +26,7 @@ interface DraftState {
 
 export function AgentsPage() {
   const { courseId } = useCourse();
-  const writeBase = `/course/${courseId}/write`;
+  const writeBase = `/course/${courseId}/writing`;
 
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -3,8 +3,9 @@
 // you've authored in another course (v1.0 §4 copy-on-use model — the copy
 // is independent of the source).
 //
-// v1.0 Phase 2: the page header lives in CourseLayout. This component
-// renders only the body — list, modal, primary "New agent" action.
+// The component renders its own in-body page header (eyebrow + title +
+// scope) alongside the list, modal, and primary "New agent" action. The
+// course-level chrome (nav strip, course switcher) lives in CourseLayout.
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -16,7 +17,15 @@ import {
   type DuplicableAgentsGroup,
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
-import { Avatar, Badge, Button, IconButton, useConfirm } from "../components/index.js";
+import {
+  Avatar,
+  Badge,
+  Button,
+  IconButton,
+  PageHeader,
+  SubLabel,
+  useConfirm,
+} from "../components/index.js";
 import { PlusIcon, TrashIcon } from "../icons.js";
 
 export function AuthorListPage() {
@@ -99,31 +108,25 @@ export function AuthorListPage() {
 
   return (
     <div className="app-page">
-      <div className="app-page__head">
-        <div>
-          <span className="eyebrow">Instructor · Agents</span>
-          <h1>Agents</h1>
-          <div className="app-page__scope">
-            AI tutors your students can chat with — each carries a voice and,
-            optionally, an outline of topics or a library of sources.
-          </div>
-        </div>
-        <div className="app-page__actions">
-          <Button variant="ghost" href={`/course/${courseId}/instructor/voices`}>
-            Voices
-          </Button>
-          <Button variant="subtle" icon={<PlusIcon size={16} />} onClick={openPicker}>
-            From another course
-          </Button>
-          <Button
-            variant="primary"
-            icon={<PlusIcon size={16} />}
-            href={`/course/${courseId}/instructor/agents/new`}
-          >
-            New agent
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Instructor · Agents"
+        title="Agents"
+        scope="AI tutors your students can chat with — each carries a voice and, optionally, an outline of topics or a library of sources."
+        actions={
+          <>
+            <Button variant="subtle" icon={<PlusIcon size={16} />} onClick={openPicker}>
+              From another course
+            </Button>
+            <Button
+              variant="primary"
+              icon={<PlusIcon size={16} />}
+              href={`/course/${courseId}/instructor/agents/new`}
+            >
+              New agent
+            </Button>
+          </>
+        }
+      />
 
       {error && <p className="error">{error}</p>}
 
@@ -218,9 +221,9 @@ export function AuthorListPage() {
             ) : (
               otherCourseGroups.map((g) => (
                 <div key={g.courseId} style={{ marginTop: "1.25rem" }}>
-                  <h3 className="mono-label" style={{ marginBottom: "0.5rem" }}>
+                  <SubLabel style={{ margin: "0 0 0.5rem" }}>
                     {g.courseName}
-                  </h3>
+                  </SubLabel>
                   {g.agents.length === 0 ? (
                     <p className="muted small">No agents in this course.</p>
                   ) : (

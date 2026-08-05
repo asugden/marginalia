@@ -17,7 +17,7 @@
 // same enrollment check on every endpoint, so a malicious deep-link
 // still 403s at the API layer.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Link,
   Outlet,
@@ -28,8 +28,8 @@ import {
 import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import { TABS, tabForPathname, tabHref } from "../course/tabs.js";
-import { IconButton, RoleSwitch, Wordmark } from "../components/index.js";
-import { BackIcon, CheckIcon, ChevronIcon, PlusIcon, SignOutIcon } from "../icons.js";
+import { CourseSwitcher, IconButton, RoleSwitch, Wordmark } from "../components/index.js";
+import { SignOutIcon } from "../icons.js";
 import { signOut } from "../session.js";
 
 export function CourseLayout() {
@@ -39,25 +39,26 @@ export function CourseLayout() {
   const [value, setValue] = useState<CourseContextValue | null>(null);
   const [enrollments, setEnrollments] = useState<MeEnrollment[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   // Reset the resolved course context synchronously when the URL's `courseId`
   // changes. Without this, switching courses re-renders this layout with the
   // new param but keeps serving the *previous* course's context until the
-  // async /api/me fetch resolves — during that gap children (e.g. the index
-  // redirect in CourseDashboardPage) read the stale course and bounce back.
+  // async /api/me fetch resolves — during that gap children (e.g. the
+  // dashboard reading useCourse()) would flash the stale course's data.
   const [prevCourseId, setPrevCourseId] = useState(courseId);
   if (courseId !== prevCourseId) {
     setPrevCourseId(courseId);
     setValue(null);
   }
 
-  useEffect(() => {
-    if (!courseId) return;
-    const ctrl = new AbortController();
-    getMe(ctrl.signal)
-      .then((m) => {
-        if (ctrl.signal.aborted) return;
+  // Fetch /api/me, validate enrollment, and build the context value. Extracted
+  // so `refresh` (exposed on the context) can re-run it after a Settings edit.
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!courseId) return;
+      try {
+        const m = await getMe(signal);
+        if (signal?.aborted) return;
         const e = m.enrollments.find((x) => x.courseId === courseId);
         if (!e) {
           navigate("/", { replace: true });
@@ -72,16 +73,28 @@ export function CourseLayout() {
           showCollections: e.showCollections,
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
+          agentsEnabled: e.agentsEnabled,
+          termSeason: e.termSeason,
+          termYear: e.termYear,
+          startDate: e.startDate,
+          endDate: e.endDate,
           isAdmin: Boolean(m.isAdmin),
           actingAsStudent: Boolean(m.actingAsStudent),
+          refresh: () => load(),
         });
-      })
-      .catch((err) => {
-        if (ctrl.signal.aborted) return;
+      } catch (err) {
+        if (signal?.aborted) return;
         setError(err instanceof Error ? err.message : "Load failed");
-      });
+      }
+    },
+    [courseId, navigate],
+  );
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    load(ctrl.signal);
     return () => ctrl.abort();
-  }, [courseId, navigate]);
+  }, [load]);
 
   if (error) {
     return (
@@ -97,7 +110,6 @@ export function CourseLayout() {
   }
 
   const currentEnrollment = enrollments.find((e) => e.courseId === courseId);
-  const others = enrollments.filter((e) => e.courseId !== courseId);
   const currentTab = tabForPathname(location.pathname, courseId);
   const visibleTabs = TABS.filter((t) => t.visible(currentEnrollment));
 
@@ -119,81 +131,12 @@ export function CourseLayout() {
             </Link>
 
             {/* Course switcher — current course + jump / new / all courses. */}
-            <div className="app-course">
-              <button
-                type="button"
-                className="app-course__btn"
-                onClick={() => setSwitcherOpen((v) => !v)}
-                aria-haspopup="menu"
-                aria-expanded={switcherOpen}
-              >
-                <span className="app-course__name">{value.courseName}</span>
-                <ChevronIcon size={14} />
-              </button>
-              {switcherOpen && (
-                <div className="app-course__menu" role="menu">
-                  <button
-                    type="button"
-                    className="app-course__opt app-course__all"
-                    onClick={() => {
-                      setSwitcherOpen(false);
-                      navigate("/courses");
-                    }}
-                  >
-                    <BackIcon size={15} />
-                    <span className="app-course__main">
-                      <b>All courses</b>
-                      <span>Your courses</span>
-                    </span>
-                  </button>
-                  <div className="app-course__sep" />
-                  <button
-                    type="button"
-                    className="app-course__opt"
-                    onClick={() => setSwitcherOpen(false)}
-                  >
-                    <span className="app-course__main">
-                      <b>{value.courseName}</b>
-                      <span>This course</span>
-                    </span>
-                    <span className="app-course__tick">
-                      <CheckIcon size={16} />
-                    </span>
-                  </button>
-                  {others.map((e) => (
-                    <button
-                      key={e.courseId}
-                      type="button"
-                      className="app-course__opt"
-                      onClick={() => {
-                        setSwitcherOpen(false);
-                        navigate(`/course/${e.courseId}/instructor`);
-                      }}
-                    >
-                      <span className="app-course__main">
-                        <b>{e.courseName}</b>
-                        <span>{e.role}</span>
-                      </span>
-                    </button>
-                  ))}
-                  <div className="app-course__sep" />
-                  <button
-                    type="button"
-                    className="app-course__opt app-course__new"
-                    onClick={() => {
-                      setSwitcherOpen(false);
-                      navigate("/courses?new=1");
-                    }}
-                  >
-                    <PlusIcon size={16} />
-                    <span className="app-course__main">
-                      <b>New course…</b>
-                      <span>Blank or copy an existing one</span>
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <CourseSwitcher
+              courseId={courseId}
+              courseName={value.courseName}
+              enrollments={enrollments}
+              variant="instructor"
+            />
 
             {/* Nav pills, inline in the bar (DS .app-nav). */}
             <nav className="app-nav" aria-label="Course sections">

@@ -45,7 +45,13 @@ import {
   retrieve,
   type Retrieved,
 } from "./rag.js";
-import type { CollectionSourceKind, EnrollmentRole, VoiceRow } from "@marginalia/schema";
+import type {
+  CollectionSourceKind,
+  EnrollmentRole,
+  TermSeason,
+  VoiceRow,
+} from "@marginalia/schema";
+import { isTermSeason } from "@marginalia/schema";
 import { routeProvenance, routeProvenancePublic } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
 
@@ -408,6 +414,13 @@ async function route(
   // allowlist already decides who can be here at all.
   if (head === "courses" && req.method === "POST" && parts.length === 2) {
     return createCourseRoute(req, env, identity);
+  }
+
+  // PATCH /api/courses/:courseId — instructor sets the course's term / archives
+  // it. Guarded to the course's instructor inside the handler. parts.length===3
+  // uniquely matches the bare course resource (join-codes etc. are longer).
+  if (head === "courses" && req.method === "PATCH" && parts.length === 3) {
+    return updateCourseRoute(req, env, identity, tail!);
   }
 
   // /api/courses/:courseId/join-codes[/:code]
@@ -1496,17 +1509,17 @@ async function setFeatureRoute(
     return error("Instructor only", 403);
   }
   const body = (await req.json().catch(() => null)) as {
-    feature?: "attendance" | "collections" | "provenance";
+    feature?: "attendance" | "agents" | "provenance";
     enabled?: boolean;
   } | null;
   const feature = body?.feature;
   if (
     feature !== "attendance" &&
-    feature !== "collections" &&
+    feature !== "agents" &&
     feature !== "provenance"
   ) {
     return error(
-      "feature must be 'attendance', 'collections', or 'provenance'",
+      "feature must be 'attendance', 'agents', or 'provenance'",
       400,
     );
   }
@@ -1544,11 +1557,29 @@ async function createCourseRoute(
     userId = user.id;
   }
 
-  const body = (await req.json().catch(() => null)) as { name?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    name?: string;
+    termSeason?: unknown;
+    termYear?: unknown;
+    startDate?: unknown;
+    endDate?: unknown;
+  } | null;
   const name = body?.name?.trim();
   if (!name) return error("name is required", 400);
 
-  const course = await repo.createCourse(env.DB, { orgId: DEFAULT_ORG, name });
+  const term = parseTermInput(body?.termSeason, body?.termYear);
+  if (term instanceof Response) return term;
+  const dates = parseDateInput(body?.startDate, body?.endDate);
+  if (dates instanceof Response) return dates;
+
+  const course = await repo.createCourse(env.DB, {
+    orgId: DEFAULT_ORG,
+    name,
+    termSeason: term.termSeason,
+    termYear: term.termYear,
+    startDate: dates.startDate,
+    endDate: dates.endDate,
+  });
   await repo.createEnrollment(env.DB, {
     courseId: course.id,
     userId,
@@ -1586,10 +1617,116 @@ async function createCourseRoute(
       id: course.id,
       name: course.name,
       createdAt: course.created_at,
+      termSeason: course.term_season,
+      termYear: course.term_year,
+      startDate: course.start_date,
+      endDate: course.end_date,
       joinCode,
     },
     201,
   );
+}
+
+/** Validate the (season, year) pair from a request body. Both absent → an
+ *  unscheduled course (nulls). A season requires a plausible year and vice
+ *  versa — half a term is rejected. Returns an error Response on bad input. */
+function parseTermInput(
+  seasonRaw: unknown,
+  yearRaw: unknown,
+): { termSeason: TermSeason | null; termYear: number | null } | Response {
+  const hasSeason = seasonRaw !== undefined && seasonRaw !== null;
+  const hasYear = yearRaw !== undefined && yearRaw !== null;
+  if (!hasSeason && !hasYear) return { termSeason: null, termYear: null };
+  if (hasSeason !== hasYear) {
+    return error("termSeason and termYear must be set together", 400);
+  }
+  if (!isTermSeason(seasonRaw)) {
+    return error("termSeason must be spring, summer, or fall", 400);
+  }
+  const year = typeof yearRaw === "number" ? yearRaw : Number(yearRaw);
+  if (!Number.isInteger(year) || year < 1900 || year > 3000) {
+    return error("termYear must be a plausible calendar year", 400);
+  }
+  return { termSeason: seasonRaw, termYear: year };
+}
+
+/** Validate the (start, end) active window from a request body. Each bound is a
+ *  Unix-ms integer or null (open-ended); they may be set independently, but if
+ *  both are present start must not be after end. Returns an error Response on
+ *  bad input. */
+function parseDateInput(
+  startRaw: unknown,
+  endRaw: unknown,
+): { startDate: number | null; endDate: number | null } | Response {
+  const one = (v: unknown, label: string): number | null | Response => {
+    if (v === undefined || v === null) return null;
+    if (typeof v !== "number" || !Number.isFinite(v) || !Number.isInteger(v)) {
+      return error(`${label} must be a Unix-ms integer or null`, 400);
+    }
+    return v;
+  };
+  const startDate = one(startRaw, "startDate");
+  if (startDate instanceof Response) return startDate;
+  const endDate = one(endRaw, "endDate");
+  if (endDate instanceof Response) return endDate;
+  if (startDate != null && endDate != null && startDate > endDate) {
+    return error("startDate must not be after endDate", 400);
+  }
+  return { startDate, endDate };
+}
+
+/** PATCH /api/courses/:id — instructor-on-course sets the term and/or the
+ *  active window. Term keys and date keys are independent partial updates. */
+async function updateCourseRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  courseId: string,
+): Promise<Response> {
+  const gate = await requireInstructor(env, identity, courseId);
+  if (gate instanceof Response) return gate;
+
+  const body = (await req.json().catch(() => null)) as {
+    termSeason?: unknown;
+    termYear?: unknown;
+    startDate?: unknown;
+    endDate?: unknown;
+  } | null;
+  if (!body) return error("body is required", 400);
+
+  const patch: {
+    termSeason?: TermSeason | null;
+    termYear?: number | null;
+    startDate?: number | null;
+    endDate?: number | null;
+  } = {};
+
+  // Term is set/cleared as a pair when either key is present.
+  if ("termSeason" in body || "termYear" in body) {
+    const term = parseTermInput(body.termSeason, body.termYear);
+    if (term instanceof Response) return term;
+    patch.termSeason = term.termSeason;
+    patch.termYear = term.termYear;
+  }
+  // Dates: each bound updated independently when its key is present. Validate
+  // ordering against the incoming pair (both keys are sent together by the UI).
+  if ("startDate" in body || "endDate" in body) {
+    const dates = parseDateInput(body.startDate, body.endDate);
+    if (dates instanceof Response) return dates;
+    if ("startDate" in body) patch.startDate = dates.startDate;
+    if ("endDate" in body) patch.endDate = dates.endDate;
+  }
+
+  const course = await repo.updateCourse(env.DB, courseId, patch);
+  if (!course) return error("Course not found", 404);
+  return json({
+    id: course.id,
+    name: course.name,
+    termSeason: course.term_season,
+    termYear: course.term_year,
+    startDate: course.start_date,
+    endDate: course.end_date,
+  });
 }
 
 async function createCollectionRoute(
