@@ -16,11 +16,12 @@ brand:
   # Browser tab title and (by default) the <h1> on the home page.
   page_title: "Marginalia"
 
-  # Wordmark shown in the app header lockup. wordmark_accent_len controls how
-  # many leading characters are painted in the accent colour (the rest are ink),
-  # so a deploy can pick out a prefix of its name as the chroma. Default: the
-  # product name with no accent run.
+  # Wordmark shown in the app header lockup. The accent-coloured run is
+  # wordmark_accent_len characters starting at wordmark_accent_start (0-based,
+  # default 0), so a deploy can pick out a leading prefix OR a mid-word run of
+  # its name as the chroma. Default: the product name with no accent run.
   wordmark: "Marginalia"
+  # wordmark_accent_start: 0
   wordmark_accent_len: 0
 
   # Optional brand mark image shown at the left of the header lockup and as

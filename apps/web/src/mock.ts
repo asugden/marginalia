@@ -462,6 +462,11 @@ export async function getMe(): Promise<{
     showCollections: boolean;
     hideProvenanceMarks: boolean;
     provenanceEnabled: boolean;
+    agentsEnabled: boolean;
+    termSeason: "spring" | "summer" | "fall" | null;
+    termYear: number | null;
+    startDate: number | null;
+    endDate: number | null;
   }>;
 }> {
   return {
@@ -480,6 +485,11 @@ export async function getMe(): Promise<{
         showCollections: true,
         hideProvenanceMarks: false,
         provenanceEnabled: true,
+        agentsEnabled: true,
+        termSeason: "summer",
+        termYear: 2026,
+        startDate: Date.UTC(2026, 4, 18, 0, 0, 0, 0),
+        endDate: Date.UTC(2026, 7, 15, 23, 59, 59, 999),
       },
     ],
   };

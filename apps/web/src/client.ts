@@ -110,6 +110,8 @@ export const setCourseFeature = (impl as typeof real).setCourseFeature;
 // Instructor-facing course creation. Mock mode doesn't simulate it (the mock
 // has no mutable course set); calling it in mock mode throws.
 export const createCourse = (impl as typeof real).createCourse;
+// v1.2 — instructor sets a course's term + active window (start/end dates).
+export const updateCourse = (impl as typeof real).updateCourse;
 // v0.6 §5 — admin console. Mock mode doesn't simulate these (the mock has no
 // per-org admin set or audit log).
 export const listAdminCourses = (impl as typeof real).listAdminCourses;

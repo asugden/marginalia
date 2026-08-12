@@ -70,10 +70,10 @@ export function EditorPage() {
   const { id, courseId: courseParam } = useParams<{ id: string; courseId: string }>();
   // The editor is a standalone full-screen surface (its own prov-shell chrome,
   // not nested under StudentLayout), so it resolves its own course from the
-  // /course/:courseId/write/:id URL rather than useCourse().
+  // /course/:courseId/writing/:id URL rather than useCourse().
   const { active, actingAsStudent } = useActiveCourse(courseParam ?? null);
   const courseId = active?.courseId ?? null;
-  const writeBase = `/course/${courseParam}/write`;
+  const writeBase = `/course/${courseParam}/writing`;
   // "Preview as student" — the instructor wants to see this course exactly as a
   // student does, hidden marks and all. There are two ways it turns on:
   //   1. The session-scoped act-as-student downgrade (RoleSwitch / "Preview as
@@ -90,6 +90,7 @@ export function EditorPage() {
   // get the student experience. So this is only true when genuinely authoring.
   const isInstructor = active?.role === "instructor" && !previewing;
   const provenanceEnabled = active?.provenanceEnabled ?? true;
+  const agentsEnabled = active?.agentsEnabled ?? true;
 
   // "Hide marks from students" — the persisted course setting (display-only;
   // recording is unaffected). Seeded from /api/me; an instructor flips it with
@@ -376,6 +377,7 @@ export function EditorPage() {
             <StudentModuleNav
               courseId={courseParam}
               provenanceEnabled={provenanceEnabled}
+              agentsEnabled={agentsEnabled}
               activeModule="writing"
             />
             <div className="app-topbar__spacer" />

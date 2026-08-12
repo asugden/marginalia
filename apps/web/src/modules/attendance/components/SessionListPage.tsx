@@ -6,9 +6,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { exportCsvUrl, listSessions, openSession, type SessionDTO } from "../api.js";
-import { Badge, Button, Checkbox, Field, Input } from "../../../components/index.js";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  PageHeader,
+} from "../../../components/index.js";
 import { DownloadIcon, PlusIcon } from "../../../icons.js";
+import { exportCsvUrl, listSessions, openSession, type SessionDTO } from "../api.js";
 
 const DEFAULT_RADIUS = 75;
 
@@ -62,20 +69,14 @@ export function SessionListPage() {
 
   return (
     <div className="ds-staff-page">
-      <div className="ds-staff-head">
-        <div>
-          <span className="eyebrow">Attendance</span>
-          <h1>Sessions</h1>
-          <div className="ds-staff-head__scope">
-            Open a session and project the QR code; students scan it from their
-            phones to check in. The code rotates every few seconds, so a
-            screenshot won&rsquo;t travel.
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Attendance"
+        title="Sessions"
+        scope="Open a session and project the QR code; students scan it from their phones to check in. The code rotates every few seconds, so a screenshot won’t travel."
+      />
 
       <section className="ds-att-open">
-        <h2>Open a new session</h2>
+        <h2>Open a New Session</h2>
         <Field label="Label (optional)" htmlFor="att-label">
           <Input
             id="att-label"

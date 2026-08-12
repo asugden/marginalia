@@ -5,8 +5,9 @@
 // `visible(flags)` decides whether the tab shows in the strip. Pages
 // remain reachable by URL even when their tab is hidden — `visible` is a
 // dashboard-affordance hint, not an access gate (the worker authorizes
-// every endpoint independently). Agents / Provenance / Roster always
-// show; Attendance / Sources lazy-reveal once the course has used them.
+// every endpoint independently). Dashboard / Library / Voices / Roster /
+// Settings always show; Agents / Attendance / Provenance are optional
+// extensions toggled from Settings (Agents defaults on).
 
 // Tab visibility only depends on the lazy-reveal flags + (implicitly) role,
 // not the whole MeEnrollment DTO. Keep the predicate's input to just those
@@ -14,7 +15,7 @@
 // doesn't force every visible()-caller to supply them.
 export interface TabVisibilityFlags {
   showAttendance?: boolean;
-  showCollections?: boolean;
+  agentsEnabled?: boolean;
 }
 
 export interface TabSpec {
@@ -29,7 +30,7 @@ export interface TabSpec {
   /** When set, the tab links to a *student-scoped* surface instead of the
    *  staff base — i.e. /course/:courseId/<href> rather than
    *  /course/:courseId/instructor/<slug>. Provenance uses this: the writing
-   *  tool is one surface under the student root (/course/:id/write); the
+   *  tool is one surface under the student root (/course/:id/writing); the
    *  instructor opens the same page and gets instructor-mode chrome (the
    *  marks toggle) from their role in context, rather than a separate staff
    *  copy. */
@@ -41,17 +42,27 @@ export interface TabSpec {
   /** Lazy-reveal feature key. Present on tabs that stay hidden until the
    *  course turns them on. The dashboard's "Add a tool" affordance and
    *  the worker's reveal-tab endpoint both key off this. Absent on
-   *  always-visible tabs (Agents, Provenance, Roster). */
+   *  always-visible tabs (Library, Voices, Roster). */
   revealFeature?: "attendance" | "collections";
 }
 
 export const TABS: TabSpec[] = [
   {
+    slug: "dashboard",
+    label: "Dashboard",
+    description:
+      "The course at a glance — its term, key totals, the join code, and quick actions into every tool.",
+    visible: () => true,
+  },
+  {
     slug: "agents",
     label: "Agents",
     description:
       "AI helpers students can talk to. Each one carries its own voice and, optionally, an outline of topics or a set of sources.",
-    visible: () => true,
+    // Agents is an optional extension, default ON. Absent flag reads as on
+    // (COALESCE default 1 in listEnrollmentsForUserEnriched), so only an
+    // explicit instructor toggle-off hides it.
+    visible: (e) => e?.agentsEnabled ?? true,
   },
   {
     slug: "voices",
@@ -66,7 +77,7 @@ export const TABS: TabSpec[] = [
   // instructor view — assignment setup, a class roster of submissions, the
   // marks/origin review — still needs to be designed and built before it earns
   // a tab here. Students still reach the writing tool from their home page's
-  // writing zone (/course/:id/write); this only removes the *instructor* tab.
+  // writing zone (/course/:id/writing); this only removes the *instructor* tab.
   // TODO(provenance-instructor): design + build the instructor provenance
   // surface, then re-add a tab (studentHref: "write" or a dedicated staff slug).
   {
@@ -74,10 +85,10 @@ export const TABS: TabSpec[] = [
     label: "Library",
     description:
       "Document libraries you can attach to an agent. The agent answers from the sources you choose and cites them in line.",
-    // v1.1 — Sources is a real optional module (default on). Absent flag reads
-    // as on (see the COALESCE default in listEnrollmentsForUserEnriched), so
-    // only an explicit instructor toggle-off hides it.
-    visible: (e) => e?.showCollections ?? true,
+    // Library is a core surface — always visible, not toggleable. (The
+    // show_collections column is retained and reads on by default, but there
+    // is no longer an instructor toggle to turn it off.)
+    visible: () => true,
   },
   {
     slug: "roster",
@@ -93,6 +104,13 @@ export const TABS: TabSpec[] = [
       "QR check-in for in-person classes. Each session shows a rotating code on a projector; students scan from their phones.",
     visible: (e) => !!e?.showAttendance,
     revealFeature: "attendance",
+  },
+  {
+    slug: "settings",
+    label: "Settings",
+    description:
+      "Course stats, the term and the dates it runs, and which extensions (Agents, Writing, Attendance) are turned on.",
+    visible: () => true,
   },
 ];
 

@@ -26,3 +26,7 @@
 @import "./css/screens/attendance.css";
 @import "./css/screens/provenance.css";
 @import "./css/screens/nav-chrome.css";
+/* Standalone /design component gallery (isolated .dsg- classes; not a product
+   screen). Demonstrates the token layer + every ds- component + the canonical
+   section-header standard. */
+@import "./css/screens/design.css";

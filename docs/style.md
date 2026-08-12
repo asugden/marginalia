@@ -28,19 +28,22 @@ a defined space, take your time."
 
 - **Page background**: brand-tinted (`--bg`) with the fractured-logo
   watermark visible.
-- **Content sits inside a white card** (`.card` or `.card.wide`) with
-  the 12 px radius and soft shadow. The card is doing real work — it
-  frames the workspace so the student knows where their attention
-  belongs.
+- **Content sits in a centred reading column** (~800 px,
+  `.ds-home__inner` / `.app-home__inner`) on the watermarked page, inside
+  the shared 1100 px frame (§8). The `Card` primitive (`.ds-card`) frames
+  the individual workspace elements — agent rows, the module panels — so
+  the student knows where their attention belongs. The narrower column is
+  a legibility measure, not a second page width (§8).
 - **Typographic emphasis**: serif display headings (`--font-display`)
   carry weight. Generous spacing. Body type at the existing 0.98 rem
   rhythm.
 - **Brand red is the *primary action* colour** and appears once per
-  region (Start, Continue, Send). `.link-button.subtle` is the
+  region (Start, Continue, Send). The `subtle` Button variant is the
   secondary affordance — outline + red text on white.
-- **Pages currently in this register**: HomePage, JoinPage,
-  ConversationPage (suppresses watermark on purpose; still student
-  register), History.
+- **Pages currently in this register**: the student home
+  (`StudentLayout` → `StudentAgentsPage`), `JoinPage`, `ConversationPage`
+  (suppresses the watermark on purpose; still student register), and the
+  provenance writing surfaces.
 
 ### Staff register
 
@@ -63,21 +66,29 @@ chrome."
   exists today) is *demoted to neutral* in the staff register —
   staff pages have too many secondary buttons for red outlines to
   read as anything but noise.
-- **Pages currently in this register**: AuthorListPage,
-  AuthorEditPage, RosterPage, AdminPage, CollectionsListPage,
-  CollectionDetailPage, the new `/users/:id` UserDetailPage.
+- **Pages currently in this register**: `InstructorDashboardPage`,
+  `CourseSettingsPage`, the agent + voice authoring pages
+  (`AuthorListPage`, `AuthorEditPage`, `AuthorVoicesPage`,
+  `AuthorVoiceEditPage`), `RosterPage`, `CollectionsListPage`,
+  `CollectionDetailPage`, `AdminPage`, the `/users/:id` `UserDetailPage`,
+  `CoursePickerPage`, and the attendance screens.
 
 ### How a page declares its register
 
-Add a top-level class to the page root:
+Both registers share the fixed `.app` shell (a locked viewport whose
+inner `.app__body` is the only thing that scrolls). The register is set
+by the topbar modifier and the body container the page mounts:
 
-- Student: existing classes (`.hero`, `.page`) — no change needed.
-- Staff: `.page.staff` (new), which sets `.no-watermark` and the
-  staff-register defaults below.
+- **Student**: `.app-topbar--student` over a centred reading column
+  (`.ds-home__inner` / `.app-home__inner`) on the watermarked page.
+- **Staff**: `.app-topbar--instructor` (or `--admin`) over a full-width
+  `.app-page` (newer module screens use the equivalent `.ds-staff-page`);
+  the watermark is suppressed.
 
-The reason for a single explicit hook (rather than per-component
-choices) is so that a new staff page picks up the right defaults by
-typing one class name. Nobody has to remember six rules.
+A new staff page mounts `<PageHeader>` + `<Section>`s inside `.app-page`
+and inherits the frame, header, and divider standards without
+re-deciding them — one component per concern instead of six remembered
+rules. See §8 (frame) and §9 (headers).
 
 ---
 
@@ -216,12 +227,103 @@ prematurely adopted the card constraint is harder.
 
 ## 7. What this document is not
 
-- **Not a component library spec.** No props, no Storybook. The
-  rules are deliberately about colour, register, and layout — the
-  things that go wrong without a written rule. Component-level
-  details stay in code.
+- **Not a component library spec.** No prop tables here. The rules
+  are deliberately about colour, register, and layout — the things
+  that go wrong without a written rule. For a live, rendered
+  reference of every token and component, open the **`/design`
+  gallery** (see §10); component-level detail stays in code.
 - **Not a brand guide.** The default palette is brand-neutral; a
   per-deploy theme.yaml replaces the colour values without changing
   the rules in this file. See [theming.md](theming.md).
 - **Not a list of every UI fix.** This file is the rule that
   specific polish items get checked against.
+
+---
+
+## 8. Layout: the standard page frame
+
+Every page shares **one** content frame so a page's body sits flush
+with the nav strip above it, never inset.
+
+- **`--shell-max` is the single width token: `1100px`.** The topbar
+  inner (`.app-topbar__inner`) and every standard page container
+  (`.app-page`, `.ds-staff-page`) resolve their `max-width` to it.
+  Both use the same `1.5rem` horizontal gutter, so the nav strip and
+  the content below it share one left/right edge.
+- **Below the frame width, containers go fluid** — `width: 100%` with
+  the `1.5rem` gutter — down to the phone. There is no separate
+  "narrow" width; the frame just shrinks.
+- **Do not hardcode a page width.** A new page uses `.app-page` (or
+  `.ds-staff-page`) and inherits `--shell-max`. If you're typing a
+  `max-width: NNNpx` on a page container, stop — point it at
+  `var(--shell-max)`.
+- **Reading measures are an inner exception, not a page width.** The
+  chat thread (`--measure-chat`) and long-form prose keep a narrower
+  *reading column centred inside* the 1100px frame — line length is a
+  legibility constraint, distinct from the page frame. The student
+  home/history are centred reading columns for the same reason. This
+  is deliberate: widen the *frame*, not the *reading measure*.
+- **Settled: the student topbar is the full 1100px frame while the
+  student home content is the ~800px reading column.** That mismatch is
+  intentional (frame vs. measure, above), not a bug to "fix" by widening
+  the column or narrowing the bar. Two implementation twins still exist
+  behind this — the `.app-home__inner` / `.ds-home__inner` reading
+  columns and the `.app-topbar` / transitional `.ds-topbar` bars — whose
+  collapse into one class each is a tracked follow-up (they touch the
+  standalone-scrolling redirect/public pages), not a rule change here.
+
+The rule exists because width drift is the most common polish bug:
+before this, headers were 1100 and content 880/1020, so page bodies
+looked indented from their own nav. One token removes the whole class
+of mismatch.
+
+## 9. Section headers and dividers
+
+One canonical section header, one divider, both owned by shared
+components so pages *compose* them instead of re-deciding. Before this
+there were ~six heading styles and three divider treatments across
+pages; that variety is the thing to delete, not preserve. The header,
+divider, page-title lockup, and stat tile now live as the `<Section>`,
+`<Divider>`, `<PageHeader>`, and `<StatTile>` primitives (barrelled from
+`components/index.ts`, shown in the `/design` gallery).
+
+- **Section header = a mono kicker over a hairline rule.** A short
+  uppercase mono label (the `mono-label` face) sits above a
+  `1px solid var(--border)` rule that spans the section. It reads as a
+  quiet label, not a competing heading — sections are wayfinding, the
+  page `<h1>` carries the title. This is the shared **`<Section>`**
+  primitive's `kicker` prop; it renders identically in the gallery and
+  on product screens.
+- **One controlled second tier: `<Section title="…">`.** Content-heavy
+  pages (Settings) may use a heavier sans heading in place of the mono
+  kicker — but over the *same* hairline rule. One divider, two header
+  weights. Reach for `title` only when a section is dense enough that a
+  2xs kicker under-serves it; default to `kicker` everywhere else.
+- **Sub-headings inside a section use `<SubLabel>`** — a mono label with
+  no rule — so content can be grouped within a section without stacking
+  a second rule.
+- **Dividers use one hairline: `1px solid var(--border)`** (the
+  `<Divider>` primitive, or the rule `<Section>` draws under its
+  header). Not `--border-strong` (reserved for emphasized edges like the
+  header action divider) and not `--border-faint` (reserved for list-row
+  bottoms). A section separator is the plain `--border` hairline —
+  placed under a section header, not a free-floating `<hr>`.
+- **The page header lockup is the one exception with a stronger
+  hierarchy:** the eyebrow → `<h1>` → scope line at the top of a page,
+  the shared **`<PageHeader>`** primitive. That's the page title, not a
+  section; it keeps its serif/display weight. Everything *below* it is
+  sections.
+
+## 10. The `/design` gallery
+
+`/design` is a standalone, course-agnostic route (unlinked from any
+nav) that renders the live token layer and every shared component on
+one page, straight from `components/index.ts`. It reads the same tokens
+and brand seam the app ships, so it themes with the active build — the
+neutral default renders the editorial-blue accent; a branded deploy
+re-tints it — and it never touches course data.
+
+Use it to review or tweak the system in isolation, then apply the
+change to the app. It's the living companion to this document: the
+rules live here, the rendered specimens live there. Adding a new
+shared component? Add it to the gallery in the same change.

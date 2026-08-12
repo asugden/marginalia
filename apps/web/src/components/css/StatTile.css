@@ -1,0 +1,29 @@
+/* ==== StatTile / StatGrid — dashboard & settings stat tiles ======== *
+ * A responsive grid of stat cards: a big mono figure over a mono uppercase
+ * caption. `__n em` accents a figure with the brand colour. Mirrors the old
+ * stat-tile geometry 1:1 so migrating pages don't shift. Class prefix `ds-`.
+ * ------------------------------------------------------------------ */
+
+.ds-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem; margin-bottom: var(--space-7);
+}
+.ds-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 1.1rem 1.2rem; box-shadow: var(--shadow-xs);
+}
+.ds-stat__n {
+  font-family: var(--font-mono); font-weight: 700; font-size: 2rem;
+  color: var(--text-strong); letter-spacing: -0.02em; line-height: 1;
+}
+.ds-stat__n em { font-style: normal; color: var(--accent); }
+.ds-stat__label {
+  display: block; margin-top: 0.5rem; font-family: var(--font-mono);
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+@media (max-width: 680px) {
+  .ds-stats { grid-template-columns: 1fr 1fr; }
+  .ds-stat__n { font-size: 1.6rem; }
+}

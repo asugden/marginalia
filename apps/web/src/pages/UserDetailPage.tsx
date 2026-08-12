@@ -27,7 +27,9 @@ import {
   Button,
   Dropdown,
   IconButton,
+  PageHeader,
   RoleSwitch,
+  Section,
   useConfirm,
   Wordmark,
 } from "../components/index.js";
@@ -200,31 +202,30 @@ export function UserDetailPage() {
 
   return (
     <Shell>
-      <div className="app-page__head">
-        <div style={{ display: "flex", gap: "0.9rem", alignItems: "center" }}>
-          <Avatar name={u.displayName || u.email} size="lg" />
-          <div>
-            <span className="eyebrow">User</span>
-            <h1 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              {u.displayName || u.email}
-              {u.isAdmin && <Badge tone="brand">admin</Badge>}
-            </h1>
-            <div className="app-page__scope">
-              {u.email}
-              {" · "}
-              {u.lastSeenAt
-                ? `last seen ${relativeTime(u.lastSeenAt)}`
-                : "never signed in"}
-              {u.externalProvider ? ` · via ${u.externalProvider}` : ""}
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        lead={<Avatar name={u.displayName || u.email} size="lg" />}
+        eyebrow="User"
+        title={
+          <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {u.displayName || u.email}
+            {u.isAdmin && <Badge tone="brand">admin</Badge>}
+          </span>
+        }
+        scope={
+          <>
+            {u.email}
+            {" · "}
+            {u.lastSeenAt
+              ? `last seen ${relativeTime(u.lastSeenAt)}`
+              : "never signed in"}
+            {u.externalProvider ? ` · via ${u.externalProvider}` : ""}
+          </>
+        }
+      />
 
       {error && <p className="error">{error}</p>}
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Instance admin</span>
+      <Section kicker="Instance admin">
         <div
           style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
         >
@@ -254,10 +255,9 @@ export function UserDetailPage() {
             </>
           )}
         </div>
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Courses</span>
+      <Section kicker="Courses">
         {detail.enrollments.length === 0 ? (
           <p className="muted">Not enrolled in any course.</p>
         ) : (
@@ -303,10 +303,9 @@ export function UserDetailPage() {
             ))}
           </div>
         )}
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Recent activity</span>
+      <Section kicker="Recent activity">
         {detail.audit.length === 0 ? (
           <p className="muted">No audit entries.</p>
         ) : (
@@ -333,7 +332,7 @@ export function UserDetailPage() {
             })}
           </div>
         )}
-      </div>
+      </Section>
       {confirmDialog}
     </Shell>
   );

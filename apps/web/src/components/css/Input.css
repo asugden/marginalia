@@ -22,6 +22,25 @@
     background-color var(--dur-2) var(--ease-out);
 }
 
+/* Single-line inputs share one fixed height with selects (--control-h) so a
+   text, number, and date field all line up. box-sizing: border-box (above)
+   keeps padding inside that height. The textarea opts out — it grows. */
+.ds-input {
+  height: var(--control-h);
+}
+
+/* Normalize native date / time controls. WebKit renders their internal
+   datetime-edit + picker indicator with extra padding that would otherwise
+   make them taller than a text field; the fixed height + these resets keep
+   every input type identical. */
+.ds-input::-webkit-datetime-edit {
+  padding: 0;
+}
+.ds-input::-webkit-calendar-picker-indicator {
+  margin: 0 0 0 0.25rem;
+  padding: 0;
+}
+
 .ds-input::placeholder,
 .ds-textarea::placeholder {
   color: var(--text-faint);

@@ -1,6 +1,10 @@
 // Row types mirroring migrations/0001_init.sql. Hand-kept in sync with the
 // SQL — when a migration changes a table, update the matching interface here.
 
+// Course term helpers (season / academic year / archival). See term.ts.
+export * from "./term.js";
+import type { TermSeason } from "./term.js";
+
 // v0.6 dropped `ta` — see migration 0004. Any code still narrowing on `ta`
 // is dead and should be removed alongside the migration deploy.
 export type EnrollmentRole = "student" | "instructor";
@@ -34,6 +38,19 @@ export interface CourseRow {
   org_id: string;
   name: string;
   created_at: number;
+  /** v1.2 (migration 0017) — the semester this course is taught in, or NULL
+   *  for an unscheduled course. The academic year is derived from
+   *  (term_season, term_year), never stored — see term.ts. */
+  term_season: TermSeason | null;
+  /** Calendar year of `term_season` (2026 = Fall 2026). NULL when unscheduled. */
+  term_year: number | null;
+  /** Active window as Unix ms at UTC day boundaries (start = start-of-day,
+   *  end = inclusive end-of-day). A course is "current" when now is within
+   *  [start_date, end_date]; a NULL bound is open-ended. This is the sole
+   *  source of truth for active vs past — there is no manual archived flag.
+   *  See isCourseCurrent() in term.ts. */
+  start_date: number | null;
+  end_date: number | null;
 }
 
 export interface EnrollmentRow {

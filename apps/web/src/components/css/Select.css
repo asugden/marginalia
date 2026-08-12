@@ -6,12 +6,16 @@
 
 .ds-select-wrap { position: relative; display: inline-flex; width: 100%; }
 
+/* Matches .ds-input exactly — same height (--control-h), padding rhythm,
+   border, radius, and line-height — so a select lines up with text/number/date
+   fields on the same row. Only the right padding differs, to clear the chevron. */
 .ds-select {
   appearance: none; -webkit-appearance: none; width: 100%; box-sizing: border-box;
+  height: var(--control-h);
   font-family: var(--font-sans); font-size: var(--text-base); color: var(--text-strong);
   background: var(--surface); border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm); padding: 0.5rem 2.2rem 0.5rem 0.7rem;
-  cursor: pointer; line-height: 1.4;
+  border-radius: var(--radius-sm); padding: 0.55rem 2.2rem 0.55rem 0.7rem;
+  cursor: pointer; line-height: 1.5;
   transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
 

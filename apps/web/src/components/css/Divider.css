@@ -1,0 +1,11 @@
+/* ==== Divider — the one hairline rule ============================== *
+ * A 1px var(--border) separator. Section owns its own header rule, so this
+ * is for standalone zone separators only. `--border-strong` (emphasized
+ * edges) and `--border-faint` (list-row bottoms) are reserved elsewhere.
+ * Class prefix `ds-`.
+ * ------------------------------------------------------------------ */
+
+.ds-divider { border: 0; border-top: 1px solid var(--border); height: 0; }
+.ds-divider--sm { margin: var(--space-4) 0; }
+.ds-divider--md { margin: var(--space-6) 0; }
+.ds-divider--lg { margin: var(--space-8) 0; }

@@ -23,11 +23,12 @@
 // deep-link by a non-enrolled user still 403s at the API layer; the redirect
 // here is best-effort UX.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { getMe } from "../client.js";
+import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import {
+  CourseSwitcher,
   IconButton,
   PreviewBanner,
   RoleSwitch,
@@ -41,21 +42,26 @@ export function StudentLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [value, setValue] = useState<CourseContextValue | null>(null);
+  const [enrollments, setEnrollments] = useState<MeEnrollment[]>([]);
   const [identity, setIdentity] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!courseId) return;
-    const ctrl = new AbortController();
-    getMe(ctrl.signal)
-      .then((m) => {
-        if (ctrl.signal.aborted) return;
+  // Fetch /api/me, validate enrollment, and build the context value. Extracted
+  // so `refresh` (exposed on the context) can re-run it; the student side rarely
+  // needs it, but the shared context contract requires it.
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!courseId) return;
+      try {
+        const m = await getMe(signal);
+        if (signal?.aborted) return;
         if (m.email) setIdentity(m.email.split("@")[0] ?? null);
         const e = m.enrollments.find((x) => x.courseId === courseId);
         if (!e) {
           navigate("/", { replace: true });
           return;
         }
+        setEnrollments(m.enrollments);
         setValue({
           courseId: e.courseId,
           courseName: e.courseName,
@@ -64,16 +70,28 @@ export function StudentLayout() {
           showCollections: e.showCollections,
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
+          agentsEnabled: e.agentsEnabled,
+          termSeason: e.termSeason,
+          termYear: e.termYear,
+          startDate: e.startDate,
+          endDate: e.endDate,
           isAdmin: Boolean(m.isAdmin),
           actingAsStudent: Boolean(m.actingAsStudent),
+          refresh: () => load(),
         });
-      })
-      .catch((err) => {
-        if (ctrl.signal.aborted) return;
+      } catch (err) {
+        if (signal?.aborted) return;
         setError(err instanceof Error ? err.message : "Load failed");
-      });
+      }
+    },
+    [courseId, navigate],
+  );
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    load(ctrl.signal);
     return () => ctrl.abort();
-  }, [courseId, navigate]);
+  }, [load]);
 
   if (error) {
     return (
@@ -95,20 +113,25 @@ export function StudentLayout() {
   // when the downgrade is active.
   const previewing = value.role === "instructor" || value.actingAsStudent;
 
-  // The module nav highlights the active panel only on the course home (the
-  // scroll-stack it targets). On a focused sub-screen (a conversation) a click
-  // first returns home, then scrolls — so the nav does the job the per-screen
-  // back buttons used to.
-  const onHome = location.pathname === home || location.pathname === `${home}/`;
+  // v1.2 — the modules are real routes now, so the active nav item comes from
+  // the path's first segment, not a `#hash`. The bare course root (pre-redirect)
+  // and /dashboard both read as Dashboard; a conversation (/chat) highlights
+  // Agents, matching where the student came from.
+  const seg = location.pathname
+    .slice(home.length)
+    .replace(/^\//, "")
+    .split("/")[0];
   // Inside an agent conversation the header takes the same register as the
-  // provenance editor: full width, no sign-out / identity chrome, and the
-  // "Agents" module marked active (rendered accent/red by the brand).
-  const inAgent = location.pathname.startsWith(`${home}/chat`);
-  const activeModule = onHome
-    ? (location.hash.replace(/^#/, "") || "agents")
-    : inAgent
-      ? "agents"
-      : null;
+  // provenance editor: full width, no sign-out / identity chrome.
+  const inAgent = seg === "chat";
+  const activeModule =
+    seg === "" || seg === "dashboard"
+      ? "dashboard"
+      : seg === "agents" || seg === "chat"
+        ? "agents"
+        : seg === "writing"
+          ? "writing"
+          : null;
 
   return (
     <CourseContext.Provider value={value}>
@@ -122,14 +145,24 @@ export function StudentLayout() {
           }
         >
           <div className="app-topbar__inner">
-            {/* Lockup + module nav (the course's enabled modules). A click
-                navigates to the course home with a `#module` hash; the home
-                scrolls the matching panel into view. This replaces every
-                per-screen back button. */}
+            {/* Lockup + course switcher + module nav. The switcher (between the
+                lockup and the menu items) lets a student with multiple courses
+                jump between them or reach "All courses" — the affordance the
+                student shell previously lacked. Each module item navigates to
+                its own route (Dashboard / Agents / Writing). */}
             <StudentModuleNav
               courseId={courseId}
               provenanceEnabled={value.provenanceEnabled}
+              agentsEnabled={value.agentsEnabled}
               activeModule={activeModule}
+              switcher={
+                <CourseSwitcher
+                  courseId={courseId}
+                  courseName={value.courseName}
+                  enrollments={enrollments}
+                  variant="student"
+                />
+              }
             />
 
             <div className="app-topbar__spacer" />

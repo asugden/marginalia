@@ -19,7 +19,7 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
-import { Avatar, Badge, Button } from "../components/index.js";
+import { Avatar, Badge, Button, PageHeader, Section } from "../components/index.js";
 import { PlusIcon } from "../icons.js";
 
 export function AuthorVoicesPage() {
@@ -61,37 +61,27 @@ export function AuthorVoicesPage() {
 
   return (
     <div className="app-page">
-      <div className="app-page__head">
-          <div>
-            <span className="eyebrow">Instructor · Voices</span>
-            <h1>Voices</h1>
-            <div className="app-page__scope">
-              A voice is a persona — tone, style, pedagogy — that an agent
-              speaks in. Voices are yours: editing one updates every new
-              conversation against agents that use it. In-progress
-              conversations keep the original.
-            </div>
-          </div>
-          <div className="app-page__actions">
-            <Button
-              variant="primary"
-              icon={<PlusIcon size={16} />}
-              href={`${voicesBase}/new`}
-            >
-              New voice
-            </Button>
-          </div>
-        </div>
+      <PageHeader
+        eyebrow="Instructor · Voices"
+        title="Voices"
+        scope="A voice is a persona — tone, style, pedagogy — that an agent speaks in. Voices are yours: editing one updates every new conversation against agents that use it. In-progress conversations keep the original."
+        actions={
+          <Button
+            variant="primary"
+            icon={<PlusIcon size={16} />}
+            href={`${voicesBase}/new`}
+          >
+            New voice
+          </Button>
+        }
+      />
 
         {error && <p className="error">{error}</p>}
 
-        <div className="app-section">
-          <span className="mono-label app-section__label">Default voices</span>
-          <p className="muted small">
-            Built-in personas every course starts with — including the Socratic
-            default. They&rsquo;re read-only; Customize forks one into a new
-            voice you own and can edit.
-          </p>
+        <Section
+          kicker="Default voices"
+          description="Built-in personas every course starts with — including the Socratic default. They’re read-only; Customize forks one into a new voice you own and can edit."
+        >
           {library === null ? (
             <p className="muted">Loading…</p>
           ) : library.length === 0 ? (
@@ -122,10 +112,9 @@ export function AuthorVoicesPage() {
               ))}
             </div>
           )}
-        </div>
+        </Section>
 
-        <div className="app-section">
-          <span className="mono-label app-section__label">My voices</span>
+        <Section kicker="My voices">
           {owned === null ? (
             <p className="muted">Loading…</p>
           ) : owned.length === 0 ? (
@@ -165,12 +154,9 @@ export function AuthorVoicesPage() {
               ))}
             </div>
           )}
-        </div>
+        </Section>
 
-        <div className="app-section">
-          <span className="mono-label app-section__label">
-            Shared with me
-          </span>
+        <Section kicker="Shared with me">
           {shared === null ? (
             <p className="muted">Loading…</p>
           ) : shared.length === 0 ? (
@@ -212,7 +198,7 @@ export function AuthorVoicesPage() {
               ))}
             </div>
           )}
-        </div>
+        </Section>
     </div>
   );
 }

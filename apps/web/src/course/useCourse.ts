@@ -12,6 +12,7 @@
 
 import { createContext, useContext } from "react";
 import type { MeEnrollment } from "../api.js";
+import type { TermSeason } from "./term.js";
 
 export interface CourseContextValue {
   courseId: string;
@@ -19,6 +20,13 @@ export interface CourseContextValue {
   role: MeEnrollment["role"];
   showAttendance: boolean;
   showCollections: boolean;
+  /** v1.2 — the semester + active window this course is scheduled in, or null
+   *  when unscheduled/open-ended. Read by the instructor dashboard header and
+   *  the Settings term editor so they don't need a separate fetch. */
+  termSeason: TermSeason | null;
+  termYear: number | null;
+  startDate: number | null;
+  endDate: number | null;
   /** Whether students see provenance origin colouring. Instructors always
    *  see marks; the provenance editor reads this to seed its instructor-only
    *  "hide marks from students" toggle. Carried on the context (not the
@@ -28,6 +36,10 @@ export interface CourseContextValue {
   /** v1.1 — whether the provenance writing module is on for this course. When
    *  false, the student view drops the Writing module (nav + home panel). */
   provenanceEnabled: boolean;
+  /** migration 0018 — whether the Agents extension is on for this course. When
+   *  false, the Agents tab drops from the instructor nav/dashboard and agents
+   *  drop from the student view (nav + home panel). Default ON. */
+  agentsEnabled: boolean;
   /** Instance-wide admin flag (from /api/me). Orthogonal to course role —
    *  feeds the topbar RoleSwitch so it can offer the Admin segment. */
   isAdmin: boolean;
@@ -36,6 +48,10 @@ export interface CourseContextValue {
    *  match a real student), so the RoleSwitch reads this flag to keep offering
    *  the way back to Instructor. */
   actingAsStudent: boolean;
+  /** Re-fetch `/api/me` and rebuild this context. Called after a Settings edit
+   *  (module toggle / term change) so the nav and dashboard reflect it without
+   *  a full page reload. */
+  refresh: () => Promise<void>;
 }
 
 export const CourseContext = createContext<CourseContextValue | null>(null);
