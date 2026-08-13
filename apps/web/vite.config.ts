@@ -11,8 +11,8 @@ export default defineConfig({
     // on the worker, not in the SPA. Without this, navigating to
     // /auth/login falls through to the React Router and 404s.
     proxy: {
-      "/api": "http://localhost:8788",
-      "/auth": "http://localhost:8788",
+      "/api": "http://localhost:8787",
+      "/auth": "http://localhost:8787",
     },
   },
 });
