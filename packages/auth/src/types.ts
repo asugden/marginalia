@@ -33,6 +33,16 @@ export interface AuthState {
   nonce: string;
   returnTo: string;
   codeVerifier: string;
+  /**
+   * Set when this login is the one-shot retry of a callback whose state
+   * cookie had gone missing. It rides the signed state (not the query
+   * string) because the `redirect_uri` is registered with the IdP by exact
+   * match and must not be varied, and because being inside the HMAC means a
+   * client can neither forge nor strip it. The callback refuses to retry a
+   * login already carrying this, which is what bounds the recovery to a
+   * single attempt. Absent on a normal first login.
+   */
+  retried?: boolean;
 }
 
 /**

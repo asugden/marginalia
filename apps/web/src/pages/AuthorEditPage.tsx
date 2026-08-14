@@ -79,11 +79,23 @@ const newVariant = (label: string): DraftVariant => ({
   voice: { kind: "library", id: "socratic" },
 });
 
+/**
+ * Fallback model picker, used only when the API doesn't publish a list.
+ *
+ * KNOWN LIMITATION: valid model ids are a property of whichever provider the
+ * deployment is pointed at — a gateway rewrites them into its own namespace,
+ * so no hardcoded list is correct everywhere. The worker publishes the real
+ * list via LLM_MODELS (see modelChoices()); the provenance voice editor
+ * already reads it from its API response and this editor should too.
+ *
+ * Until then, "Default" (empty id) is the only entry guaranteed correct on
+ * every deployment: it stores no override at all. Offering vendor-native ids
+ * here is what let an agent persist an id the gateway then refused — the
+ * worker now degrades such an id to DEFAULT_MODEL at request time (see
+ * servableModel() in apps/worker/src/llm.ts) rather than failing the turn.
+ */
 const MODEL_OPTIONS: Array<{ id: string; label: string; note?: string }> = [
   { id: "", label: "Default" },
-  { id: "claude-haiku-4-5-20251001", label: "Haiku", note: "cheap" },
-  { id: "claude-sonnet-4-6", label: "Sonnet" },
-  { id: "claude-opus-4-7", label: "Opus", note: "premium" },
 ];
 
 const newTopic = (): DraftTopic => ({

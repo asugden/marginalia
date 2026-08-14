@@ -49,12 +49,50 @@ function providerConfig(env: Env): ProviderConfig {
 
 /**
  * Provider for institution-funded requests. `model` is the caller's resolved
- * choice (typically a per-agent override falling back to DEFAULT_MODEL) and is
- * passed through opaquely — the configured endpoint is the authority on which
- * ids are valid, not this code.
+ * choice — typically an agent's stored `definition.model`.
+ *
+ * A stored id is only valid relative to the endpoint that was configured when
+ * an author picked it. Repointing the deployment (vendor-direct → gateway, or
+ * one gateway to another) silently invalidates every id already persisted on
+ * an agent, because those rows are not rewritten by the config change. The
+ * request then fails at the provider with an opaque 403/404 and the student
+ * sees a dead agent — a config change in one place breaking content authored
+ * in another.
+ *
+ * So an unrecognised id degrades to the deployment default instead of being
+ * forwarded. Authors keep a working agent through a migration, and the warning
+ * gives an operator the thread to pull to fix the stored value. Ids are only
+ * checked when the deployment actually publishes a list (LLM_MODELS): with no
+ * list there is nothing to validate against, and passing the id through
+ * unchanged preserves the documented "endpoint is the authority" behaviour.
  */
 export function providerFor(env: Env, model?: string): LLMProvider {
-  return instanceProvider(providerConfig(env), model);
+  return instanceProvider(providerConfig(env), servableModel(env, model));
+}
+
+/**
+ * Map a requested model id onto one this deployment can actually serve,
+ * falling back to DEFAULT_MODEL when it can't. Returns the input untouched
+ * when there is no configured list to check against.
+ */
+function servableModel(env: Env, model?: string): string | undefined {
+  if (!model) return model;
+  const choices = modelChoices(env);
+  if (choices.length === 0) return model; // nothing to validate against
+  if (choices.some((m) => m.id === model)) return model;
+  // Both configured defaults are servable by definition — they're what an
+  // unset agent/voice already runs on. A deployment may legitimately point
+  // PROVENANCE_DEFAULT_MODEL at a cheap model it deliberately keeps out of
+  // the author-facing picker, so neither default is required to appear in
+  // LLM_MODELS and neither may be rewritten.
+  if (model === env.DEFAULT_MODEL) return model;
+  if (model === env.PROVENANCE_DEFAULT_MODEL) return model;
+  console.warn(
+    `Model "${model}" is not servable by this deployment; ` +
+      `falling back to DEFAULT_MODEL. An agent likely stores an id from a ` +
+      `previously-configured provider.`,
+  );
+  return env.DEFAULT_MODEL;
 }
 
 /**
