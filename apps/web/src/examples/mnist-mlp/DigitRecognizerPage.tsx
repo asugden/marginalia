@@ -11,9 +11,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wordmark } from "../../components/index.js";
-import { loadNet, forward, predict, type Net, type Activations, type RawWeights } from "./net.js";
-import { NetworkView } from "./NetworkView.js";
 import "./digit-recognizer.css";
+import {
+  forward,
+  loadNet,
+  predict,
+  type Activations,
+  type Net,
+  type RawWeights,
+} from "./net.js";
+import { NetworkView } from "./NetworkView.js";
 
 // The weights ship in /public so they're served as a plain static asset by the
 // same host as the SPA. Fetched once on mount.
@@ -64,14 +71,17 @@ export function DigitRecognizerPage() {
   // setTimeout fallback: rAF callbacks can be paused for a backgrounded tab,
   // and inference must still run when the tab regains focus / in headless
   // contexts. Whichever fires first clears the flag; the other no-ops.
-  const handleDraw = useCallback((input: Float32Array) => {
-    pending.current = input;
-    if (scheduled.current) return;
-    scheduled.current = true;
-    const run = () => runPending();
-    requestAnimationFrame(run);
-    setTimeout(run, 32);
-  }, [runPending]);
+  const handleDraw = useCallback(
+    (input: Float32Array) => {
+      pending.current = input;
+      if (scheduled.current) return;
+      scheduled.current = true;
+      const run = () => runPending();
+      requestAnimationFrame(run);
+      setTimeout(run, 32);
+    },
+    [runPending],
+  );
 
   const predicted = activations ? predict(activations) : -1;
   const anyInk = useMemo(
@@ -93,7 +103,11 @@ export function DigitRecognizerPage() {
           left with a back link to the gallery. */}
       <header className="app-topbar app-topbar--wide">
         <div className="app-topbar__inner">
-          <Link to="/examples" className="app-lockup-link" aria-label="Examples">
+          <Link
+            to="/examples"
+            className="app-lockup-link"
+            aria-label="Examples"
+          >
             <Wordmark size="sm" />
           </Link>
           <span className="mnist-crumb">Examples</span>
@@ -108,114 +122,131 @@ export function DigitRecognizerPage() {
             <p className="eyebrow">Interactive example</p>
             <h1>Digit recognizer</h1>
             <p className="mnist-lede">
-              Draw a digit right onto the grid at the top of the network — that
-              grid is the model’s input layer. A small neural network, trained on
-              tens of thousands of handwritten digits, reads what you drew and
-              guesses which digit it is. Every circle is a neuron; every line is a
-              connection. Watch the signal flow down to a guess at the bottom.
+              Draw a digit on the grid at the top of the network. The top of the
+              network is the model's input layer. All of the pixels are values
+              between 0 and 1, which then connect to every neuron in Hidden
+              layer 1 (a dense network). This custom neural network was trained
+              on tens of thousands of handwritten digits (MNIST), and predicts
+              which digit it is with 97% accuracy. Every entry in Hidden 1 and
+              Hidden 2 is a neuron; every line is a connection. Watch the signal
+              flow down to a guess at the bottom.
             </p>
           </div>
 
-      {loadError && (
-        <p className="mnist-error">Couldn’t load the network ({loadError}).</p>
-      )}
-
-      <div className="mnist-layout">
-        {/* Left: prediction + controls. Drawing happens on the network's own
-            input grid to the right (with the Clear control docked beside it). */}
-        <aside className="mnist-controls">
-          <div className="mnist-readout" aria-live="polite">
-            {!anyInk ? (
-              <p className="mnist-readout__empty">
-                Draw a digit on the grid at the top of the network to see a
-                prediction.
-              </p>
-            ) : (
-              <>
-                <div className="mnist-guess">
-                  <span className="mnist-guess__label">Best guess</span>
-                  <span className="mnist-guess__value">
-                    {predicted >= 0 && net ? net.labels[predicted] : "—"}
-                  </span>
-                </div>
-                <ul className="mnist-bars">
-                  {ranking.slice(0, 4).map((r) => (
-                    <li key={r.i}>
-                      <span className="mnist-bars__name">{r.label}</span>
-                      <span className="mnist-bars__track">
-                        <span className="mnist-bars__fill" style={{ width: `${Math.round(r.p * 100)}%` }} />
-                      </span>
-                      <span className="mnist-bars__pct">{Math.round(r.p * 100)}%</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-
-          <div className="mnist-slider">
-            <label htmlFor="edge-threshold">
-              Connection detail
-              <span className="mnist-slider__hint">weak links hidden ↔ shown</span>
-            </label>
-            <input
-              id="edge-threshold"
-              type="range" min={0} max={1} step={0.01}
-              value={edgeThreshold}
-              onChange={(e) => setEdgeThreshold(parseFloat(e.target.value))}
-            />
-          </div>
-
-          <div className="mnist-legend">
-            <div className="mnist-legend__row">
-              <span className="mnist-legend__swatch mnist-legend__swatch--pos" />
-              positive weight
-              <span className="mnist-legend__swatch mnist-legend__swatch--neg" />
-              negative weight
-            </div>
-            <div className="mnist-legend__row">
-              <span className="mnist-legend__grad" />
-              neuron value: low → high
-            </div>
-          </div>
-        </aside>
-
-        {/* Right: the network. The Clear control is docked at the top-right,
-            beside the input grid it acts on. */}
-        <div className="mnist-canvas">
-          <div className="mnist-canvas__bar">
-            <span className="mnist-canvas__hint">Draw on the input grid ↓</span>
-            <button
-              type="button"
-              className="mnist-clear"
-              onClick={() => { setClearSignal((n) => n + 1); }}
-            >
-              Clear
-            </button>
-          </div>
-          {net ? (
-            <NetworkView
-              net={net}
-              activations={activations}
-              edgeThreshold={edgeThreshold}
-              predicted={predicted}
-              onInput={handleDraw}
-              clearSignal={clearSignal}
-            />
-          ) : (
-            !loadError && <div className="mnist-loading">Loading network…</div>
+          {loadError && (
+            <p className="mnist-error">
+              Couldn't load the network ({loadError}).
+            </p>
           )}
-        </div>
-      </div>
+
+          <div className="mnist-layout">
+            {/* Left: prediction + controls. Drawing happens on the network's own
+            input grid to the right (with the Clear control docked beside it). */}
+            <aside className="mnist-controls">
+              <div className="mnist-readout" aria-live="polite">
+                {!anyInk ? (
+                  <p className="mnist-readout__empty">
+                    Draw a digit on the grid at the top of the network to see a
+                    prediction.
+                  </p>
+                ) : (
+                  <>
+                    <div className="mnist-guess">
+                      <span className="mnist-guess__label">Best guess</span>
+                      <span className="mnist-guess__value">
+                        {predicted >= 0 && net ? net.labels[predicted] : "—"}
+                      </span>
+                    </div>
+                    <ul className="mnist-bars">
+                      {ranking.slice(0, 4).map((r) => (
+                        <li key={r.i}>
+                          <span className="mnist-bars__name">{r.label}</span>
+                          <span className="mnist-bars__track">
+                            <span
+                              className="mnist-bars__fill"
+                              style={{ width: `${Math.round(r.p * 100)}%` }}
+                            />
+                          </span>
+                          <span className="mnist-bars__pct">
+                            {Math.round(r.p * 100)}%
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+
+              <div className="mnist-slider">
+                <label htmlFor="edge-threshold">
+                  Connection detail
+                  <span className="mnist-slider__hint">
+                    weak links hidden ↔ shown
+                  </span>
+                </label>
+                <input
+                  id="edge-threshold"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={edgeThreshold}
+                  onChange={(e) => setEdgeThreshold(parseFloat(e.target.value))}
+                />
+              </div>
+
+              <div className="mnist-legend">
+                <div className="mnist-legend__row">
+                  <span className="mnist-legend__swatch mnist-legend__swatch--pos" />
+                  positive weight
+                  <span className="mnist-legend__swatch mnist-legend__swatch--neg" />
+                  negative weight
+                </div>
+                <div className="mnist-legend__row">
+                  <span className="mnist-legend__grad" />
+                  neuron value: low → high
+                </div>
+              </div>
+            </aside>
+
+            {/* Right: the network. The Clear control is docked at the top-right,
+            beside the input grid it acts on. */}
+            <div className="mnist-canvas">
+              <div className="mnist-canvas__bar">
+                <span className="mnist-canvas__hint">
+                  Draw on the input grid ↓
+                </span>
+                <button
+                  type="button"
+                  className="mnist-clear"
+                  onClick={() => {
+                    setClearSignal((n) => n + 1);
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+              {net ? (
+                <NetworkView
+                  net={net}
+                  activations={activations}
+                  edgeThreshold={edgeThreshold}
+                  predicted={predicted}
+                  onInput={handleDraw}
+                  clearSignal={clearSignal}
+                />
+              ) : (
+                !loadError && (
+                  <div className="mnist-loading">Loading network…</div>
+                )
+              )}
+            </div>
+          </div>
 
           <footer className="mnist-foot">
             <p>
-              This is a fully-connected network (a “multilayer perceptron”) with
-              two hidden layers of 25 neurons. It classifies about 97% of
-              handwritten digits correctly — so it will sometimes be wrong,
-              especially on messy or unusual writing. That honesty is the point:
-              nothing here is faked, the guess is a live computation from what you
-              drew.
+              This is a fully-connected network (otherwise known as a
+              "multilayer perceptron") with two hidden layers of 25 neurons.
             </p>
           </footer>
         </div>

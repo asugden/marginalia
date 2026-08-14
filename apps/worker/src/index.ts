@@ -16,8 +16,9 @@
 //   GET  /api/conversations/:id             - fetch transcript + state
 //   POST /api/conversations/:id/messages    - send a student turn, stream the reply
 
-import { AnthropicProvider, ProviderError } from "@marginalia/providers";
+import { ProviderError } from "@marginalia/providers";
 import type { LLMProvider, Message as LLMMessage } from "@marginalia/providers";
+import { llmConfigured, modelChoices, providerFor } from "./llm.js";
 import {
   buildPrompt,
   clarityNoteFor,
@@ -53,7 +54,7 @@ import type {
   VoiceRow,
 } from "@marginalia/schema";
 import { isTermSeason } from "@marginalia/schema";
-import { routeProvenance, routeProvenancePublic } from "./modules/provenance/routes.js";
+import { routeProvenance } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
 
 // v0.1 single-tenant default. Phase 2 derives org from the authenticated email.
@@ -63,12 +64,21 @@ const DEFAULT_ORG = "default";
  * Whitelisted model ids. An agent's `definition.model` must be one of these —
  * instructors don't get to type free-form model strings into a JSON editor
  * and quietly upgrade themselves to the most expensive tier.
+ *
+ * Driven by the LLM_MODELS deployment var, because valid ids depend entirely on
+ * which provider the instance is pointed at: a gateway rewrites model ids into
+ * its own namespace, so no hardcoded list can be correct for every deployment.
+ * DEFAULT_MODEL is always permitted — it's the value used when an agent names
+ * no model, so rejecting it would be incoherent.
+ *
+ * When LLM_MODELS is unset, only DEFAULT_MODEL is allowed. That fails closed:
+ * a misconfigured instance restricts choice rather than opening it up.
  */
-const ALLOWED_MODELS: ReadonlySet<string> = new Set([
-  "claude-haiku-4-5-20251001",
-  "claude-sonnet-4-6",
-  "claude-opus-4-7",
-]);
+function allowedModels(env: Env): ReadonlySet<string> {
+  const ids = modelChoices(env).map((m) => m.id);
+  if (env.DEFAULT_MODEL) ids.push(env.DEFAULT_MODEL);
+  return new Set(ids);
+}
 
 /** Hard ceiling on a single student message. Cheap to enforce; bounds embed/LLM cost. */
 const MAX_MESSAGE_CHARS = 8_000;
@@ -186,16 +196,14 @@ export default {
       return applyCors(error("Not found", 404), origin);
     }
 
-    // Provenance public submission view — the ONE unauthenticated API in
-    // the provenance module. A shared link must work without sign-in, so
-    // this carve-out runs before the authenticate() gate below. It reads
-    // only frozen, owner-minted snapshots by unguessable token.
-    if (url.pathname.startsWith("/api/provenance/public/")) {
-      const parts = url.pathname.split("/").filter(Boolean);
-      const res = await routeProvenancePublic(req, env, parts);
-      if (res) return applyCors(res, origin);
-      return applyCors(error("Not found", 404), origin);
-    }
+    // NOTE: /api/provenance/public/* used to be carved out here as the one
+    // unauthenticated API in the module, so a share link worked without
+    // sign-in. It no longer is: the frozen render is an integrity artifact, and
+    // an unauthenticated viewer let a student check their own draft against the
+    // origin coloring and iterate until it looked clean. Those routes now fall
+    // through to the authenticate() gate and are instructor-gated per-course
+    // inside the module (see requireSubmissionInstructor). The path kept its
+    // "public" segment so old links resolve rather than 404.
 
     const identity = await authenticate(req, env);
     if (!identity) return applyCors(error("Unauthorized", 401), origin);
@@ -803,13 +811,10 @@ async function previewVoiceRoute(
     ? body.promptKey
     : "derivative";
   const question = PREVIEW_PROMPTS[promptKey]!;
-  if (!env.ANTHROPIC_API_KEY) {
+  if (!llmConfigured(env)) {
     return error("LLM provider not configured", 500);
   }
-  const provider: LLMProvider = new AnthropicProvider({
-    apiKey: env.ANTHROPIC_API_KEY,
-    model: env.DEFAULT_MODEL,
-  });
+  const provider: LLMProvider = providerFor(env);
   try {
     const reply = await provider.chat(
       [{ role: "user", content: question }],
@@ -1509,7 +1514,7 @@ async function validateAgentDefinition(
     }
   }
 
-  if (def.model !== undefined && !ALLOWED_MODELS.has(def.model)) {
+  if (def.model !== undefined && !allowedModels(env).has(def.model)) {
     return `Model ${def.model} is not in the allowed list`;
   }
   if (def.backbone) {
@@ -3445,10 +3450,7 @@ async function generateConversationTitle(
     return;
   }
   try {
-    const provider: LLMProvider = new AnthropicProvider({
-      apiKey: env.ANTHROPIC_API_KEY,
-      model: def.model ?? env.DEFAULT_MODEL,
-    });
+    const provider: LLMProvider = providerFor(env, def.model);
     if (!provider.titleModel) return; // provider opted out of incidental work
     const titleModel = provider.titleModel();
 
@@ -3616,10 +3618,7 @@ function streamTurn(params: {
 
   const prompt = buildPrompt(def, state);
 
-  const provider: LLMProvider = new AnthropicProvider({
-    apiKey: env.ANTHROPIC_API_KEY,
-    model: def.model ?? env.DEFAULT_MODEL,
-  });
+  const provider: LLMProvider = providerFor(env, def.model);
 
   const abort = new AbortController();
   const encoder = new TextEncoder();

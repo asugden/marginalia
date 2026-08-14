@@ -2729,26 +2729,43 @@ body.prov-dragging * {
 .prov-modal-actions-spacer { flex: 1; }
 
 /* ── Provenance submissions (slice 6) ──────────────────────────────────── */
-.prov-share-list-note { margin-top: 1rem; }
-.prov-share-list {
+.prov-share-list-note { margin-top: 0.5rem; }
+
+/* In-place confirmation after submitting — replaces the old
+   "copied link to clipboard" feedback, which no longer applies. */
+.prov-submit-ok {
+  margin: 0.8rem 0 0;
+  font-size: 0.88rem;
+  color: var(--status-success-fg);
+}
+
+/* Submission history. Students resubmit repeatedly against a deadline, so the
+   exact time of each prior version is the point of this list. */
+.prov-submit-history { margin-top: 1.35rem; }
+.prov-submit-list {
   list-style: none;
   padding: 0;
-  margin: 1rem 0 0;
+  margin: 0.5rem 0 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.15rem;
 }
-.prov-share-list li {
+.prov-submit-list li {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-faint);
 }
-.prov-share-url {
-  flex: 1;
-  font-size: 0.82rem;
-  font-family: var(--font-sans);
-  color: var(--ink-soft);
+.prov-submit-list li:last-child { border-bottom: 0; }
+.prov-submit-list li.is-revoked { opacity: 0.55; }
+.prov-submit-when {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  font-size: 0.9rem;
+  flex: none;
 }
+.prov-submit-ago { margin-right: auto; }
 
 /* Public viewer — clean reading surface, no app chrome. */
 .prov-public {
@@ -2772,11 +2789,19 @@ body:has(.prov-public)::before { display: none; }
   letter-spacing: -0.01em;
   margin: 0 0 0.25rem;
 }
+/* Legend in the snapshot viewer. Carries the mono/micro treatment explicitly:
+   in the editor the identical markup inherits it from .prov-editor-counts, so
+   without this the viewer's legend rendered at body size in the sans face —
+   noticeably bigger and heavier than the same legend while writing. */
 .prov-public-legend {
   display: inline-flex;
   gap: 0.85rem;
   align-items: center;
   padding-top: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
 }
 .prov-public-doc { margin-bottom: 2.5rem; }
 .prov-public-render {
@@ -2785,19 +2810,131 @@ body:has(.prov-public)::before { display: none; }
   white-space: pre-wrap;
   word-wrap: break-word;
 }
-.prov-public-render [data-origin="llm"] {
-  background: rgba(255, 214, 64, 0.34);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 rgba(255, 214, 64, 0.55);
-}
+/* Origin marks in the frozen snapshot. These MUST use the same status tokens as
+   the legend swatches (.prov-legend-swatch) and the live editor
+   (.prov-editor-surface [data-origin]) — one origin, one color, everywhere:
+     pasted → warning/amber · llm ("unknown") → info/blue · edited → success/green
+   They were previously hardcoded RGBA that had llm as yellow and pasted as red,
+   so the snapshot contradicted its own legend. Don't reintroduce literals here;
+   a branded deploy re-tints the tokens and hardcoded values wouldn't follow. */
+.prov-public-render [data-origin] { border-radius: 2px; }
 .prov-public-render [data-origin="pasted"] {
-  background: rgba(238, 90, 90, 0.18);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 rgba(238, 90, 90, 0.4);
+  background: var(--status-warning-bg);
+  box-shadow: 0 1px 0 var(--status-warning-fg);
+}
+.prov-public-render [data-origin="llm"] {
+  background: var(--status-info-bg);
+  box-shadow: 0 1px 0 var(--status-info-fg);
 }
 .prov-public-render [data-origin="edited"] {
-  background: rgba(74, 184, 116, 0.16);
-  border-radius: 2px;
+  background: var(--status-success-bg);
+  box-shadow: 0 1px 0 var(--status-success-fg);
+}
+/* Substantial clipboard-derived regions (slice 8).
+ *
+ * The plan called for a rule in the LEFT MARGIN here. That isn't achievable
+ * on these elements: origin runs are inline spans inside flowing prose, so a
+ * border-left draws a stray vertical tick mid-sentence wherever the run
+ * happens to start, and says nothing at all once the run wraps across lines.
+ * A real margin rule would mean restructuring the render into block-level
+ * regions, which would fight the run-length model the snapshot is built on.
+ *
+ * Instead the region gets a slightly heavier underline than a short run of the
+ * same origin — same visual language, more weight, no new color — and the
+ * paste list below carries the actual detail. That list was always the primary
+ * surface for this; it is the one that doesn't degrade when a student
+ * rearranges their paragraphs. */
+.prov-public-render .prov-has-history {
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* ── Paste list + document history (slice 8) ─────────────────────────────
+   Both surfaces are deliberately quiet: body type, no status colors, no
+   badges. They report what happened; the reader decides what it means. */
+.prov-public-pastes,
+.prov-public-history {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  margin-bottom: 2rem;
+}
+.prov-public-note { max-width: 62ch; line-height: 1.6; }
+.prov-paste-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.prov-paste-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 0.75rem 0.9rem;
+}
+.prov-paste-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+.prov-paste-when {
+  font: 600 var(--text-xs) / 1.4 var(--font-mono);
+  color: var(--ink-soft);
+}
+.prov-paste-sample {
+  margin: 0;
+  padding-left: 0.75rem;
+  /* The one place the amber token earns a rule: this text is, definitionally,
+     clipboard content — the thing the paste list exists to show. */
+  border-left: 2px solid var(--status-warning-fg);
+  font: var(--text-sm) / 1.6 var(--font-sans);
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 9rem;
+  overflow-y: auto;
+}
+.prov-public-history-summary {
+  cursor: pointer;
+  font: 700 0.78rem var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.prov-public-history-summary .muted { text-transform: none; letter-spacing: 0; }
+.prov-public-history-body { padding-top: 1rem; }
+.prov-history-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0 0 1rem;
+}
+.prov-history-facts dt {
+  font: var(--text-2xs) / 1.4 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+.prov-history-facts dd {
+  margin: 0;
+  font: var(--text-sm) / 1.5 var(--font-sans);
+  color: var(--ink);
+}
+.prov-history-notes {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  max-width: 62ch;
+}
+.prov-history-notes li {
+  font: var(--text-sm) / 1.6 var(--font-sans);
+  color: var(--ink-soft);
+  margin-bottom: 0.4rem;
 }
 
 .prov-public-chat {

@@ -252,8 +252,15 @@ export type ProvenanceEventKind =
   | "delete"
   | "paste"
   | "llm_insert"
-  | "replace"; // slice 7: spellcheck/autocorrect/Grammarly word replacement
+  | "replace" // slice 7: spellcheck/autocorrect/Grammarly word replacement
+  | "move"; // slice 8: cut/copy + paste within the same document
 export type ProvenanceOrigin = "human" | "llm" | "pasted" | "edited";
+
+/** One run of identical origins — compact transport for a character range. */
+export interface ProvenanceOriginRun {
+  origin: ProvenanceOrigin;
+  length: number;
+}
 
 export interface ProvenanceEventRow {
   id: string;
@@ -296,6 +303,13 @@ export interface ProvenanceAgentRow {
   owner_user_id: string | null;
   name: string;
   system_prompt: string;
+  /**
+   * Optional per-voice model override. Opaque provider model id; NULL means the
+   * worker's configured provenance default applies. Validated against the
+   * deployment's model list, never against a hardcoded set — valid ids depend
+   * on which provider the instance points at.
+   */
+  model: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -309,6 +323,12 @@ export interface ProvenanceConversationRow {
   agent_id: string | null;
   agent_name_snapshot: string;
   agent_prompt_snapshot: string;
+  /**
+   * Model captured at conversation start, so the transcript stays attributable
+   * after the voice is edited or deleted. NULL means no explicit choice was in
+   * effect — the configured provenance default applied.
+   */
+  agent_model_snapshot: string | null;
   title: string | null;
   created_at: number;
   updated_at: number;

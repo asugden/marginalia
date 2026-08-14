@@ -43,6 +43,19 @@ export const EXAMPLES: ExampleSpec[] = [
       })),
     ),
   },
+  {
+    slug: "cnn-digit-recognizer",
+    title: "Digit recognizer — convolutional",
+    blurb:
+      "The same drawing, read by a convolutional network. Watch 3×3 kernels slide over the image into feature maps — and click a kernel to see the convolution arithmetic step by step.",
+    tags: ["neural networks", "CNN", "convolution", "interactive"],
+    glyph: "🔲",
+    Page: lazy(() =>
+      import("./mnist-cnn/CNNDigitRecognizerPage.js").then((m) => ({
+        default: m.CNNDigitRecognizerPage,
+      })),
+    ),
+  },
 ];
 
 export function findExample(slug: string): ExampleSpec | undefined {

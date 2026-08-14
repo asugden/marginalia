@@ -49,6 +49,8 @@ const ProvenanceAgentsPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.AgentsPage })));
 const ProvenancePublicPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.PublicSubmissionPage })));
+const ProvenanceSubmissionsPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.SubmissionsPage })));
 // Examples — standalone, public, unauthenticated interactive teaching pages.
 // See apps/web/src/examples/registry.ts. Each example's page is lazy-loaded
 // from the registry; the index page lists them.
@@ -203,6 +205,8 @@ const router = createBrowserRouter([
       { path: "collections", element: lz(<CollectionsListPage />) },
       { path: "collections/:id", element: lz(<CollectionDetailPage />) },
       { path: "roster", element: lz(<RosterPage />) },
+      // Instructor-side provenance: the course-wide list of student checkpoints.
+      { path: "submissions", element: lz(<ProvenanceSubmissionsPage />) },
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
     ],

@@ -30,13 +30,14 @@
 // Submissions (slice 6 — authed)
 //   POST   /api/provenance/documents/:id/submissions               mint a share token
 //   GET    /api/provenance/documents/:id/submissions?courseId=     list this doc's tokens
+//   GET    /api/provenance/submissions?courseId=                   course-wide — INSTRUCTOR ONLY
 //   DELETE /api/provenance/submissions/:token                      revoke
 //
 // Course settings (hide-marks toggle)
 //   GET    /api/provenance/settings?courseId=                       read display settings
 //   PATCH  /api/provenance/settings                                 set (instructor only)
 //
-// Public (slice 6 — UNAUTHENTICATED, mounted before authenticate() in index.ts)
+// Share-token views (slice 6 — INSTRUCTOR-ONLY; "public" is a legacy path name)
 //   GET    /api/provenance/public/submissions/:token               frozen colored render
 //   GET    /api/provenance/public/submissions/:token/conversations chat drill-down
 
@@ -56,6 +57,7 @@ import {
   getSettingsRoute,
   listAgentsRoute,
   listConversationsRoute,
+  listCourseSubmissionsRoute,
   listDocumentsRoute,
   listEventsRoute,
   listMessagesRoute,
@@ -106,8 +108,20 @@ export async function routeProvenance(
     }
   }
 
+  // Course-wide submission list (instructor-only). Distinct from the
+  // per-document, owner-scoped list under /documents/:id/submissions.
+  if (head === "submissions" && parts.length === 3) {
+    if (req.method === "GET") return listCourseSubmissionsRoute(env, identity, url);
+  }
+
   if (head === "submissions" && tail && parts.length === 4) {
     if (req.method === "DELETE") return revokeSubmissionRoute(env, identity, tail);
+  }
+
+  // Share-token views. Authenticated + instructor-gated (the "public" segment
+  // is a historical path name); see routeSubmissionViews below.
+  if (head === "public") {
+    return routeSubmissionViews(req, env, identity, parts);
   }
 
   if (head === "settings" && parts.length === 3) {
@@ -146,16 +160,21 @@ export async function routeProvenance(
 }
 
 /**
- * Unauthenticated public router for shared submissions. Mounted in
- * index.ts *before* the authenticate() gate. Only GET reads of frozen,
- * owner-minted snapshots by unguessable token — no writes, no auth.
+ * Share-token reads. The `/public/` path segment is a **historical name** — these
+ * routes are no longer unauthenticated. They are dispatched from the authed
+ * router above (see `head === "public"`) and each handler requires an instructor
+ * enrollment in the submission's course; see `requireSubmissionInstructor`.
+ *
+ * The path is kept so previously-shared links resolve to a real endpoint (and
+ * get a sign-in prompt / "no longer available") rather than a bare 404.
  *
  *   GET /api/provenance/public/submissions/:token
  *   GET /api/provenance/public/submissions/:token/conversations
  */
-export async function routeProvenancePublic(
+async function routeSubmissionViews(
   req: Request,
   env: Env,
+  identity: Identity,
   parts: string[], // ["api", "provenance", "public", ...]
 ): Promise<Response | null> {
   if (req.method !== "GET") return null;
@@ -164,10 +183,10 @@ export async function routeProvenancePublic(
   const token = parts[4];
   if (!token) return null;
   if (parts.length === 5) {
-    return publicSubmissionRoute(env, token);
+    return publicSubmissionRoute(env, identity, token);
   }
   if (parts.length === 6 && parts[5] === "conversations") {
-    return publicSubmissionConversationsRoute(env, token);
+    return publicSubmissionConversationsRoute(env, identity, token);
   }
   return null;
 }

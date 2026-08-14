@@ -156,6 +156,7 @@
 .mnist-clear:hover { background: var(--surface-hover); border-color: var(--accent); color: var(--accent); }
 .mnist-net { display: block; }
 .mnist-net__labels text { fill: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.mnist-net__caption { fill: var(--text-secondary); }
 .mnist-loading { color: var(--text-muted); text-align: center; padding: 4rem 0; }
 
 .mnist-foot {

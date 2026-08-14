@@ -16,6 +16,8 @@
 export interface TabVisibilityFlags {
   showAttendance?: boolean;
   agentsEnabled?: boolean;
+  /** Writing (provenance) module. Drives the Submissions tab. */
+  provenanceEnabled?: boolean;
 }
 
 export interface TabSpec {
@@ -71,15 +73,19 @@ export const TABS: TabSpec[] = [
       "The personas your agents speak in — tone, style, and pedagogy. Voices are yours and reusable across every course you teach.",
     visible: () => true,
   },
-  // Provenance is intentionally absent from the instructor nav for now. The
-  // Claude Design system did not include an instructor-side provenance surface
-  // (only the student writing tool + the per-document editor exist). An
-  // instructor view — assignment setup, a class roster of submissions, the
-  // marks/origin review — still needs to be designed and built before it earns
-  // a tab here. Students still reach the writing tool from their home page's
-  // writing zone (/course/:id/writing); this only removes the *instructor* tab.
-  // TODO(provenance-instructor): design + build the instructor provenance
-  // surface, then re-add a tab (studentHref: "write" or a dedicated staff slug).
+  {
+    slug: "submissions",
+    label: "Submissions",
+    description:
+      "Writing checkpoints students have shared. Each one is a frozen snapshot showing where every word came from.",
+    // Only meaningful when the Writing module is on. Absent flag reads as on,
+    // matching the COALESCE default the enrollment query applies.
+    visible: (e) => e?.provenanceEnabled ?? true,
+  },
+  // Note: there is still no instructor tab for *authoring* provenance
+  // assignments — no assignment setup or prompt configuration surface exists.
+  // Submissions above is review-only. Students reach the writing tool itself
+  // from their course home (/course/:id/writing).
   {
     slug: "collections",
     label: "Library",

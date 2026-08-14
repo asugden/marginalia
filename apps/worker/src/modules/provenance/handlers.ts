@@ -5,13 +5,24 @@
 // own documents.
 
 import {
-  AnthropicProvider,
   ProviderError,
   type LLMProvider,
   type Message as LLMMessage,
 } from "@marginalia/providers";
+import {
+  llmConfigured,
+  modelChoices,
+  provenanceDefaultModel,
+  provenanceModelAllowed,
+  providerFor,
+  providerForUserKey,
+} from "../../llm.js";
 import { findLibraryVoice } from "@marginalia/voices";
-import type { ProvenanceAgentRow } from "@marginalia/schema";
+import type {
+  ProvenanceAgentRow,
+  ProvenanceOriginRun,
+  ProvenanceSubmissionRow,
+} from "@marginalia/schema";
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import * as repo from "./repo.js";
@@ -35,6 +46,9 @@ function builtinAgentRow(agentId: string, courseId: string): ProvenanceAgentRow 
     owner_user_id: null,
     name: voice.name,
     system_prompt: voice.systemPromptFragment,
+    // Built-in voices carry no model of their own — there's no row to hold a
+    // choice — so they resolve to the configured provenance default.
+    model: null,
     created_at: ts,
     updated_at: ts,
   };
@@ -62,6 +76,35 @@ const MAX_EVENT_TEXT_CHARS = 50_000; // a single paste / llm_insert hard cap
 const MAX_AGENT_NAME = 120;
 const MAX_CONVERSATION_TITLE = 120;
 const MAX_AGENT_PROMPT = 12_000;
+
+/**
+ * Validate a requested model for a provenance voice.
+ *
+ * Returns `undefined` when the caller didn't ask for one (leave the field
+ * alone), `null` to clear the override back to the configured default, the id
+ * itself when allowed, or an error Response.
+ *
+ * Two rules, both about cost: only instructors may choose a model, and the id
+ * must be in the deployment's configured list. Students' voices therefore run
+ * on the configured provenance default.
+ */
+function resolveModelChoice(
+  env: Env,
+  requested: string | null | undefined,
+  role: string,
+): string | null | undefined | Response {
+  if (requested === undefined) return undefined;
+  if (role !== "instructor") {
+    return error("Only instructors can choose the model", 403);
+  }
+  if (requested === null) return null;
+  const id = requested.trim();
+  if (!id) return null; // empty string reads as "clear the override"
+  if (!provenanceModelAllowed(env, id)) {
+    return error(`Model ${id} is not in the allowed list`, 400);
+  }
+  return id;
+}
 const MAX_USER_MESSAGE_CHARS = 8_000;
 const MAX_CHAT_HISTORY_TURNS = 20;
 const MAX_CHAT_HISTORY_CHARS = 32_000;
@@ -71,6 +114,7 @@ const VALID_KINDS: ReadonlySet<ProvenanceEventKind> = new Set([
   "paste",
   "llm_insert",
   "replace",
+  "move",
 ]);
 const VALID_ORIGINS: ReadonlySet<ProvenanceOrigin> = new Set([
   "human",
@@ -78,6 +122,8 @@ const VALID_ORIGINS: ReadonlySet<ProvenanceOrigin> = new Set([
   "pasted",
   "edited",
 ]);
+/** Cap on origin runs per event — a run per character would be pathological. */
+const MAX_ORIGIN_RUNS = 2_000;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -309,6 +355,52 @@ export async function appendEventsRoute(
       }
       timingBlob = raw.timingBlob;
     }
+    // Origin runs riding along with a delete (what was removed) or a move
+    // (what to restore). Validated the same way as any other client input —
+    // the mint-time verifier re-derives moves independently, but a malformed
+    // blob should be a 400 here rather than a surprise during replay.
+    const parseRuns = (
+      value: unknown,
+      field: string,
+    ): ProvenanceOriginRun[] | undefined | Response => {
+      if (value === undefined || value === null) return undefined;
+      if (!Array.isArray(value)) {
+        return error(`events[${i}]: ${field} must be an array`, 400);
+      }
+      if (value.length > MAX_ORIGIN_RUNS) {
+        return error(`events[${i}]: ${field} has too many runs`, 413);
+      }
+      const runs: ProvenanceOriginRun[] = [];
+      for (const r of value) {
+        const run = r as Record<string, unknown> | null;
+        if (!run || typeof run !== "object") {
+          return error(`events[${i}]: ${field} entries must be objects`, 400);
+        }
+        if (
+          typeof run.origin !== "string" ||
+          !VALID_ORIGINS.has(run.origin as ProvenanceOrigin)
+        ) {
+          return error(`events[${i}]: ${field} has an invalid origin`, 400);
+        }
+        if (
+          typeof run.length !== "number" ||
+          !Number.isInteger(run.length) ||
+          run.length <= 0
+        ) {
+          return error(`events[${i}]: ${field} lengths must be positive`, 400);
+        }
+        runs.push({
+          origin: run.origin as ProvenanceOrigin,
+          length: run.length,
+        });
+      }
+      return runs;
+    };
+    const removedOrigins = parseRuns(raw.removedOrigins, "removedOrigins");
+    if (removedOrigins instanceof Response) return removedOrigins;
+    const restoredOrigins = parseRuns(raw.restoredOrigins, "restoredOrigins");
+    if (restoredOrigins instanceof Response) return restoredOrigins;
+
     events.push({
       clientSeq,
       kind: kind as ProvenanceEventKind,
@@ -318,6 +410,8 @@ export async function appendEventsRoute(
       origin,
       sourceMessageId,
       timingBlob,
+      removedOrigins,
+      restoredOrigins,
     });
   }
 
@@ -447,7 +541,15 @@ export async function listAgentsRoute(
   const enrollmentError = await requireEnrollment(env, userId, courseId);
   if (enrollmentError) return enrollmentError;
   const rows = await repo.listAgentsForUser(env.DB, courseId, userId);
-  return json({ agents: rows.map((r) => toAgentSummary(r, userId)) });
+  // `models` drives the author-side model picker: the deployment's configured
+  // choices, plus which one applies when none is chosen. Empty when the
+  // deployment configured no list, in which case the UI shows no picker and
+  // every voice runs on `defaultModel`.
+  return json({
+    agents: rows.map((r) => toAgentSummary(r, userId)),
+    models: modelChoices(env),
+    defaultModel: provenanceDefaultModel(env) ?? null,
+  });
 }
 
 export async function getAgentRoute(
@@ -484,6 +586,8 @@ export async function createAgentRoute(
     systemPrompt?: string;
     /** Set true to create a course-default agent (instructor only). */
     courseDefault?: boolean;
+    /** Opaque provider model id. Instructor only; see the check below. */
+    model?: string | null;
   } | null;
   if (!body?.courseId || !body.name || !body.systemPrompt) {
     return error("courseId, name, systemPrompt required", 400);
@@ -501,11 +605,18 @@ export async function createAgentRoute(
   if (wantsDefault && enrollment.role !== "instructor") {
     return error("Only instructors can create course-default agents", 403);
   }
+  // Model selection is instructor-only, and validated against the deployment's
+  // configured list: it decides what the institution is billed for, so it isn't
+  // something a student can raise on a personal voice. A student's request is
+  // rejected rather than silently ignored, so the UI can't imply it took effect.
+  const model = resolveModelChoice(env, body.model, enrollment.role);
+  if (model instanceof Response) return model;
   const row = await repo.createAgent(env.DB, {
     courseId: body.courseId,
     ownerUserId: wantsDefault ? null : userId,
     name,
     systemPrompt,
+    model,
   });
   return json({ agent: toAgentDTO(row) }, 201);
 }
@@ -522,6 +633,8 @@ export async function updateAgentRoute(
     courseId?: string;
     name?: string;
     systemPrompt?: string;
+    /** Opaque provider model id; null clears the override. Instructor only. */
+    model?: string | null;
   } | null;
   if (!body?.courseId) return error("courseId required", 400);
   const enrollment = await loadEnrollment(env, userId, body.courseId);
@@ -534,7 +647,11 @@ export async function updateAgentRoute(
   } else if (existing.owner_user_id !== userId) {
     return error("Agent not found", 404);
   }
-  const patch: { name?: string; systemPrompt?: string } = {};
+  const patch: { name?: string; systemPrompt?: string; model?: string | null } =
+    {};
+  const model = resolveModelChoice(env, body.model, enrollment.role);
+  if (model instanceof Response) return model;
+  if (model !== undefined) patch.model = model;
   if (body.name !== undefined) {
     const trimmed = body.name.trim().slice(0, MAX_AGENT_NAME);
     if (!trimmed) return error("name cannot be empty", 400);
@@ -746,19 +863,27 @@ export async function sendMessageRoute(
   // KV, or any log line. If absent, fall back to the institution key.
   // We don't echo the key in any error, and we don't `console.log` the
   // request object anywhere in this path.
+  // A user-supplied key goes DIRECT to the vendor, never through a configured
+  // gateway: gateway credentials are issued and looked up by the gateway itself,
+  // so a user's own vendor key would fail to authenticate there — and routing it
+  // through would bill the institution for usage the user meant to self-fund.
+  // The institution path, by contrast, uses whatever provider is configured.
   const byoKey = readByoKey(req);
-  const apiKey = byoKey ?? env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  if (!byoKey && !llmConfigured(env)) {
     return error(
       "No LLM key available. Add your own key, or ask your instructor to configure one.",
       400,
     );
   }
 
-  const provider: LLMProvider = new AnthropicProvider({
-    apiKey,
-    model: env.DEFAULT_MODEL,
-  });
+  // Model comes from the conversation's snapshot (set from the voice at start),
+  // falling back to the configured provenance default when the voice named
+  // none. A bring-your-own key ignores it: that path talks straight to the
+  // vendor, where a gateway-namespaced id doesn't exist.
+  const model = conv.agent_model_snapshot ?? provenanceDefaultModel(env);
+  const provider: LLMProvider = byoKey
+    ? providerForUserKey(byoKey)
+    : providerFor(env, model);
 
   const seedTitleIfMissing = conv.title === null;
   const encoder = new TextEncoder();
@@ -952,6 +1077,98 @@ export async function listSubmissionsRoute(
   });
 }
 
+/**
+ * GET /submissions?courseId= — every submission checkpoint in the course.
+ * **Instructor-only**, and the one place that crosses the owner boundary: all
+ * other document/submission reads are scoped to the caller's own rows.
+ *
+ * Returns one entry per checkpoint with the student's identity, the document it
+ * came from, and a per-origin character summary computed from the frozen render.
+ * The render itself is NOT included — the list would balloon with full essay
+ * text, and the detail view at /s/:token already serves it.
+ */
+export async function listCourseSubmissionsRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const enrollment = await loadEnrollment(env, userId, courseId);
+  if (enrollment instanceof Response) return enrollment;
+  if (enrollment.role !== "instructor") {
+    return error("Instructors only", 403);
+  }
+  const rows = await repo.listSubmissionsForCourse(env.DB, courseId);
+  return json({
+    submissions: rows.map((r) => ({
+      token: r.token,
+      documentId: r.document_id,
+      title: r.title_snapshot,
+      createdAt: r.created_at,
+      revokedAt: r.revoked_at,
+      studentEmail: r.student_email,
+      studentName: r.student_name,
+      origins: summarizeOrigins(r.render_json),
+    })),
+  });
+}
+
+/**
+ * Per-origin character counts from a frozen render, for the instructor list.
+ * A malformed or empty render yields all-zero counts rather than throwing — one
+ * bad row must not blank the whole course listing.
+ *
+ * `pasteCount` rides along because it is legible on its own — students are
+ * asked not to paste, so "3 pastes" is a fact rather than an inference.
+ * Survival percentages deliberately stay OFF the triage list: a figure like
+ * "62% near-match" without the source passage beside it invites a conclusion
+ * before the instructor has looked at anything.
+ */
+function summarizeOrigins(renderJson: string): {
+  total: number;
+  human: number;
+  llm: number;
+  pasted: number;
+  edited: number;
+  pasteCount: number;
+} {
+  const out = {
+    total: 0,
+    human: 0,
+    llm: 0,
+    pasted: 0,
+    edited: 0,
+    pasteCount: 0,
+  };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(renderJson);
+  } catch {
+    return out;
+  }
+  const pastes = (parsed as { pastes?: unknown }).pastes;
+  if (Array.isArray(pastes)) out.pasteCount = pastes.length;
+  const runs = (parsed as { runs?: unknown }).runs;
+  if (!Array.isArray(runs)) return out;
+  for (const run of runs) {
+    const { origin, length } = run as { origin?: unknown; length?: unknown };
+    if (typeof length !== "number" || !Number.isFinite(length) || length <= 0) continue;
+    out.total += length;
+    if (
+      origin === "human" ||
+      origin === "llm" ||
+      origin === "pasted" ||
+      origin === "edited"
+    ) {
+      out[origin] += length;
+    }
+  }
+  return out;
+}
+
 /** DELETE /submissions/:token — revoke. Owner-only, instructors only.
  *  Student-created links are permanent (see listSubmissionsRoute), so a student
  *  is refused here even for their own link — the client hides the button but the
@@ -975,15 +1192,51 @@ export async function revokeSubmissionRoute(
   return json({ ok: true });
 }
 
-// ── Public (unauthenticated) ────────────────────────────────────────────
+// ── Shared submission views (instructor-only) ───────────────────────────
 
-/** GET /public/submissions/:token — the frozen colored render. No auth. */
-export async function publicSubmissionRoute(
+/**
+ * Gate for a share token. Originally these two routes were unauthenticated so a
+ * link could be handed to anyone; they are now **instructor-only**, because the
+ * frozen render is an integrity artifact and origin classification is known to
+ * be incomplete (slow-retyping laundering, generic select-and-retype). A student
+ * who can open the render learns exactly which spans were attributed to the LLM and can
+ * iterate against it until the page looks clean — the link becomes a bypass
+ * oracle. Restricting the view keeps the audit trail useful to the person doing
+ * the assessing without handing students a checker.
+ *
+ * Requires: a signed-in caller with an `instructor` enrollment in the course the
+ * submission belongs to. Every other caller — including the student who minted
+ * the link and instructors of other courses — gets the same 404 as a bad token,
+ * so a token's existence isn't confirmable by probing.
+ */
+async function requireSubmissionInstructor(
   env: Env,
+  identity: Identity,
   token: string,
-): Promise<Response> {
+): Promise<ProvenanceSubmissionRow | Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
   const row = await repo.getActiveSubmission(env.DB, token);
   if (!row) return error("This link is no longer available", 404);
+  const enrollment = await loadEnrollment(env, userId, row.course_id);
+  // Deliberately 404, not 403: a 403 would tell a probing student the token is
+  // real, and the whole point is to remove the oracle.
+  if (enrollment instanceof Response) return error("This link is no longer available", 404);
+  if (enrollment.role !== "instructor") {
+    return error("This link is no longer available", 404);
+  }
+  return row;
+}
+
+/** GET /public/submissions/:token — the frozen colored render. Instructor-only
+ *  despite the legacy path name. */
+export async function publicSubmissionRoute(
+  env: Env,
+  identity: Identity,
+  token: string,
+): Promise<Response> {
+  const row = await requireSubmissionInstructor(env, identity, token);
+  if (row instanceof Response) return row;
   let render: unknown = { text: "", runs: [] };
   try {
     render = JSON.parse(row.render_json);
@@ -997,14 +1250,15 @@ export async function publicSubmissionRoute(
   });
 }
 
-/** GET /public/submissions/:token/conversations — light drill-down into
- *  the chat history behind a shared document. No auth. */
+/** GET /submissions/:token/conversations — drill-down into the chat history
+ *  behind a shared document. Instructor-only, same gate as the render. */
 export async function publicSubmissionConversationsRoute(
   env: Env,
+  identity: Identity,
   token: string,
 ): Promise<Response> {
-  const row = await repo.getActiveSubmission(env.DB, token);
-  if (!row) return error("This link is no longer available", 404);
+  const row = await requireSubmissionInstructor(env, identity, token);
+  if (row instanceof Response) return row;
   const convs = await repo.listConversationsForDocumentPublic(env.DB, row.document_id);
   const out = [];
   for (const c of convs) {

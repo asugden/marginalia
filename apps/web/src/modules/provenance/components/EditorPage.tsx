@@ -102,15 +102,16 @@ export function EditorPage() {
     setHideMarksSetting(active?.hideProvenanceMarks ?? false);
   }, [active?.hideProvenanceMarks]);
   const [savingHideMarks, setSavingHideMarks] = useState(false);
-  // What THIS editor renders follows the setting directly, for everyone. There
-  // is no separate "instructors always see coloring" carve-out: that made the
-  // toggle appear to do nothing in the instructor's own view and contradicted
-  // "act as student" (which is supposed to be a genuine student view). Now:
+  // Coloring is **never** shown to a student while they write. Watching your own
+  // prose get color-coded in real time is a surveillance experience, and it
+  // pushes students to write for the marks rather than for the assignment — so
+  // the student surface has no coloring and no control over it. Recording is
+  // untouched, and the submission render (slice 6) is computed server-side from
+  // the event log, so instructor review and the public viewer still show origins.
   //   • Instructor, "Marks shown"  → coloring on (authoring/review view).
-  //   • Instructor, "Marks hidden" → coloring off — the instructor sees exactly
-  //     what students will see, so the toggle gives immediate feedback.
-  //   • Student / acting-as-student → follows the setting; no toggle to change it.
-  const hideMarksForEditor = hideMarksSetting;
+  //   • Instructor, "Marks hidden" → coloring off — a way to read the draft plain.
+  //   • Student / acting-as-student → never colored, whatever the setting says.
+  const hideMarksForEditor = hideMarksSetting || !isInstructor;
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
@@ -298,6 +299,8 @@ export function EditorPage() {
       };
       if (ev.text) outbound.text = ev.text;
       if (ev.origin) outbound.origin = ev.origin;
+      if (ev.removedOrigins) outbound.removedOrigins = ev.removedOrigins;
+      if (ev.restoredOrigins) outbound.restoredOrigins = ev.restoredOrigins;
       if (ev.timingGapsMs && ev.timingGapsMs.length > 0) {
         outbound.timingBlob = JSON.stringify({ gapsMs: ev.timingGapsMs });
       }
@@ -405,9 +408,10 @@ export function EditorPage() {
           placeholder="Untitled"
         />
         <SaveStatus state={saveState} />
-        {/* The marks toggle is an authoring control. `isInstructor` is already
-            false while previewing as a student, so it's hidden there (the whole
-            point of preview is to see what students see, not to set it). */}
+        {/* The marks toggle is an instructor-only view control — it changes what
+            THIS reader sees, not what students see (students are never shown
+            coloring). `isInstructor` is already false while previewing as a
+            student, so it's hidden there, which is the point of preview. */}
         {isInstructor && (
           <button
             type="button"
@@ -415,14 +419,17 @@ export function EditorPage() {
             onClick={onToggleHideMarks}
             disabled={savingHideMarks}
             aria-pressed={!hideMarksSetting}
-            title="Controls whether students see origin coloring while they write. Recording is unaffected."
+            title="Show or hide origin coloring in your own view. Students never see coloring while writing, and recording is unaffected either way."
           >
             <span className="prov-toggle__sw" />
             {hideMarksSetting ? "Marks hidden" : "Marks shown"}
           </button>
         )}
+        {/* "Submit", not "Share": the snapshot goes to the course's instructors
+            and to nobody else, so share framing sent students looking for a link
+            to hand out that they can't use. */}
         <Button variant="subtle" size="sm" icon={<ShareIcon size={16} />} onClick={() => setShareOpen(true)}>
-          Share
+          Submit
         </Button>
         {/* Chat settings (currently the bring-your-own-key control). Only shown
             while the chat pane is open, since that's the only thing it affects.

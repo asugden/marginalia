@@ -42,6 +42,27 @@ Rendered as **SVG** (crisp at any zoom, exportable), kept smooth by
 thresholding edges and memoizing the static geometry so a redraw only
 recolors nodes and swaps the visible edge set.
 
+**Hover to explain (one path at a time).** Hovering an output tile dims
+the whole network and traces one legible story through it (see
+`tracePath` in `NetworkView.tsx`). "Contribution" of an edge a→b is
+`weight(a,b) × activation(a)` — how much a actually pushed b on *this*
+input, not just the wired weight.
+- Hover the **winning** tile → a positive **2 → 1 → 1** tree: the two
+  input pixels, one hidden-1 neuron, and one hidden-2 neuron that pushed
+  the win up the most. Bottoms out at two outlined pixels.
+- Hover a **wrong** tile → a wider negative subgraph (up to 2 hidden-2,
+  up to 4 hidden-1, 2 pixels). It's deliberately wider because it isn't
+  obvious that a negative hidden-2→output edge can be explained by
+  upstream contributions of *either* sign; the red/blue mix on the
+  hidden-1→hidden-2 edges makes that visible. Pixels are chosen by weight
+  magnitude (one is typically inked, one blank — presence and absence
+  both matter).
+
+While a path is shown, hovering any of its highlighted edges pops a
+tooltip with that connection's **weight**, the source's **activation**,
+and their product (**contribution = weight × activation**) — the same
+quantity the trace ranks edges by.
+
 ## Architecture
 
 - `net.ts` — the model type, the input `normalize()` step, and a

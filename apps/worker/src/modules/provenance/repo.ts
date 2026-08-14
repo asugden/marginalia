@@ -8,6 +8,7 @@ import type {
   ProvenanceDocumentRow,
   ProvenanceEventRow,
   ProvenanceMessageRow,
+  ProvenanceOriginRun,
   ProvenanceSubmissionRow,
 } from "@marginalia/schema";
 import type { InboundEvent } from "./types.js";
@@ -134,6 +135,50 @@ export async function updateDocument(
 }
 
 /**
+ * Per-event JSON sidecar stored in the `timing_blob` column.
+ *
+ * That column has always held opaque JSON (slice 2 wrote `{gapsMs:[...]}`);
+ * slice 8 adds origin runs for deletes and moves alongside it rather than
+ * taking a migration for two rarely-read fields. Old rows parse fine — a blob
+ * with only `gapsMs` simply yields no runs.
+ */
+export interface EventSidecar {
+  gapsMs?: number[];
+  /** Origins the removed range carried (delete). */
+  removedOrigins?: ProvenanceOriginRun[];
+  /** Origins the client asks to restore for a move; re-derived at mint. */
+  restoredOrigins?: ProvenanceOriginRun[];
+}
+
+function encodeSidecar(e: InboundEvent): string | null {
+  // timingBlob arrives as pre-serialized JSON from the client ({gapsMs}).
+  let base: EventSidecar = {};
+  if (e.timingBlob) {
+    try {
+      const parsed = JSON.parse(e.timingBlob) as EventSidecar;
+      if (parsed && typeof parsed === "object") base = parsed;
+    } catch {
+      // Unparseable timing data is not worth failing an append over; the
+      // event itself still carries the provenance that matters.
+    }
+  }
+  if (e.removedOrigins?.length) base.removedOrigins = e.removedOrigins;
+  if (e.restoredOrigins?.length) base.restoredOrigins = e.restoredOrigins;
+  return Object.keys(base).length > 0 ? JSON.stringify(base) : null;
+}
+
+/** Parse a row's sidecar. Never throws — a corrupt blob reads as empty. */
+export function decodeSidecar(blob: string | null): EventSidecar {
+  if (!blob) return {};
+  try {
+    const parsed = JSON.parse(blob) as EventSidecar;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Append a batch of events. Drops any event whose client_seq has
  * already been recorded for this document (idempotent retry safety).
  * Returns the number of newly-inserted rows + the new max client_seq.
@@ -174,7 +219,7 @@ export async function appendEvents(
       e.text ?? null,
       e.origin ?? null,
       e.sourceMessageId ?? null,
-      e.timingBlob ?? null,
+      encodeSidecar(e),
       e.clientSeq,
       now,
     ),
@@ -288,6 +333,8 @@ export async function createAgent(
     ownerUserId: string | null;
     name: string;
     systemPrompt: string;
+    /** Opaque provider model id, or null to use the configured default. */
+    model?: string | null;
   },
 ): Promise<ProvenanceAgentRow> {
   const now = Date.now();
@@ -295,8 +342,8 @@ export async function createAgent(
   await db
     .prepare(
       `INSERT INTO provenance_agents
-         (id, course_id, owner_user_id, name, system_prompt, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (id, course_id, owner_user_id, name, system_prompt, model, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -304,6 +351,7 @@ export async function createAgent(
       params.ownerUserId,
       params.name,
       params.systemPrompt,
+      params.model ?? null,
       now,
       now,
     )
@@ -320,7 +368,7 @@ export async function updateAgent(
   db: D1Database,
   courseId: string,
   agentId: string,
-  patch: { name?: string; systemPrompt?: string },
+  patch: { name?: string; systemPrompt?: string; model?: string | null },
 ): Promise<ProvenanceAgentRow | null> {
   const sets: string[] = [];
   const binds: unknown[] = [];
@@ -331,6 +379,12 @@ export async function updateAgent(
   if (patch.systemPrompt !== undefined) {
     sets.push("system_prompt = ?");
     binds.push(patch.systemPrompt);
+  }
+  // An explicit null clears the override, returning this voice to the
+  // configured default — distinct from omitting the field, which leaves it be.
+  if (patch.model !== undefined) {
+    sets.push("model = ?");
+    binds.push(patch.model);
   }
   if (sets.length === 0) return getAgent(db, courseId, agentId);
   sets.push("updated_at = ?");
@@ -415,9 +469,9 @@ export async function createConversation(
     .prepare(
       `INSERT INTO provenance_conversations
          (id, document_id, course_id, user_id, agent_id,
-          agent_name_snapshot, agent_prompt_snapshot,
+          agent_name_snapshot, agent_prompt_snapshot, agent_model_snapshot,
           title, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     )
     .bind(
       id,
@@ -427,6 +481,9 @@ export async function createConversation(
       params.agent.id,
       params.agent.name,
       params.agent.system_prompt,
+      // NULL when the voice names no model: the configured default applies, and
+      // stays applicable if that default is later changed.
+      params.agent.model ?? null,
       now,
       now,
     )
@@ -659,6 +716,47 @@ export async function listSubmissionsForDocument(
     )
     .bind(documentId, userId)
     .all<ProvenanceSubmissionRow>();
+  return results ?? [];
+}
+
+export interface CourseSubmissionRow {
+  token: string;
+  document_id: string;
+  title_snapshot: string;
+  created_at: number;
+  revoked_at: number | null;
+  render_json: string;
+  user_id: string;
+  student_email: string;
+  student_name: string | null;
+}
+
+/**
+ * Every submission checkpoint in a course, newest first — the instructor's
+ * course-wide view. Unlike `listSubmissionsForDocument` (owner-scoped, for the
+ * share modal) this deliberately crosses the owner boundary, so the caller MUST
+ * have verified an instructor enrollment in `courseId` first.
+ *
+ * `render_json` is selected so the caller can report per-origin totals without a
+ * second query per row; the list endpoint summarizes it and does not ship the
+ * full render to the client.
+ */
+export async function listSubmissionsForCourse(
+  db: D1Database,
+  courseId: string,
+): Promise<CourseSubmissionRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.token, s.document_id, s.title_snapshot, s.created_at,
+              s.revoked_at, s.render_json, s.user_id,
+              u.email AS student_email, u.display_name AS student_name
+         FROM provenance_submissions s
+         JOIN users u ON u.id = s.user_id
+        WHERE s.course_id = ?
+        ORDER BY s.created_at DESC`,
+    )
+    .bind(courseId)
+    .all<CourseSubmissionRow>();
   return results ?? [];
 }
 

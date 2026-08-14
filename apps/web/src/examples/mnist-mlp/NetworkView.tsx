@@ -29,7 +29,7 @@
 // 1-bit). The buffer is emitted via onInput; the parent runs the forward pass
 // and feeds the resulting activations back in.
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { Net, Activations } from "./net.js";
 
 export interface NetworkViewProps {
@@ -60,6 +60,12 @@ const Y_H1 = 380; // gap 230 from input
 const Y_H2 = 488; // gap 108 (~60% of the old 180)
 const Y_OUT = 596; // gap 108
 const H = 672;
+
+// Hidden-layer neurons are heavily-rounded squares. Row spacing is ~28.5px
+// (684px across 24 gaps), so a 25px node leaves ~3.5px between neighbours; rx 9
+// takes them most of the way to a circle while keeping a hint of the square.
+const HNODE = 25;
+const HNODE_RX = 9;
 
 interface Geo {
   input: { cx: number; cy: number; s: number }[]; // square cells
@@ -141,21 +147,184 @@ function shade(v: number): string {
   return `rgb(${g},${g},${g})`;
 }
 
-// Positive weight -> red, negative -> blue. Both OPACITY and LINE WIDTH scale
-// with |weight| relative to the layer max, so a strong connection reads as a
-// bolder, more saturated line and a weak one as a faint hairline — magnitude is
-// encoded twice (colour intensity + thickness), which reads more clearly than
-// colour alone. A gentle gamma lifts mid-strength edges into visibility; width
-// uses a softer gamma so the thickness cue stays subtle rather than shouting.
+// Positive weight -> red, negative -> blue. LINE WIDTH scales LINEARLY with
+// |weight| relative to the layer max, so thickness reads as a direct stand-in
+// for weight magnitude — a strong connection is visibly fatter than a weak one.
+// It's clamped to [WIDTH_MIN, WIDTH_CAP] so the thinnest stay visible and the
+// fattest don't dominate; the slope is tuned so the average width across the
+// drawn (thresholded) edges stays about where it was. Opacity keeps its gentle
+// gamma so faint edges remain legible.
+const WIDTH_MIN = 0.5;
+const WIDTH_CAP = 5.5;
 function edgeStroke(w: number, abs: number, max: number): { color: string; opacity: number; width: number } {
-  const r = abs / max;
+  const r = abs / max; // 0..1
   const tOpacity = Math.pow(r, 0.6);
-  const tWidth = Math.pow(r, 0.8);
   return {
     color: w >= 0 ? "#d1344b" : "#2f6fd0",
     opacity: 0.1 + 0.8 * tOpacity,
-    width: 0.5 + 2.6 * tWidth,
+    width: Math.min(WIDTH_CAP, WIDTH_MIN + 4.0 * r),
   };
+}
+
+// ── Path tracing (hover an output tile to explain it) ───────────────────────
+//
+// A traced path is a small set of edges + the nodes/pixels they touch, used to
+// tell one legible story about a single output. Two flavours:
+//
+//  • Hover the WINNING tile -> a "why it fired" path, all POSITIVE contribution:
+//    the one hidden2 neuron contributing most positively to the win, the one
+//    hidden1 neuron contributing most positively to that, and the two input
+//    pixels contributing most positively to that. A clean 2 -> 1 -> 1 tree that
+//    bottoms out at two pixels.
+//
+//  • Hover a WRONG tile -> a "what pushed against it" subgraph, NEGATIVE at the
+//    output edge. It's deliberately a little wider (up to 2 hidden2, up to 4
+//    hidden1, 2 pixels) because it is not intuitive that a negative
+//    hidden2->output can be explained by upstream contributions of either sign;
+//    showing a few routes makes that comprehensible. Pixels are chosen by
+//    weight magnitude (one is typically inked, one blank — presence and absence
+//    both matter).
+//
+// "Contribution" of an edge a->b is weight(a,b) * activation(a): how much source
+// a actually pushed b on THIS input, not just how strong the wired weight is.
+export interface PathEdge {
+  ax: number; ay: number; bx: number; by: number;
+  positive: boolean;
+  /** The wired weight of this connection. */
+  weight: number;
+  /** The source neuron/pixel's activation on this input. */
+  srcActivation: number;
+  /** weight * source activation — how much it actually pushed on this input. */
+  contribution: number;
+  /** Human labels for the two endpoints, for the tooltip. */
+  from: string;
+  to: string;
+}
+export interface TracedPath {
+  kind: "positive" | "negative";
+  out: number; // the hovered output index
+  edges: PathEdge[];
+  h2: Set<number>;
+  h1: Set<number>;
+  px: Set<number>;
+}
+
+// W is [rows x cols], row i = destination neuron i, col j = source j. Returns
+// the source index j maximizing sign*(W[i,j]*srcAct[j]); ignore is a set of
+// already-used sources to skip. dir=+1 wants the most positive contribution,
+// dir=-1 the most negative.
+function bestSource(
+  W: Float32Array, cols: number, dstRow: number,
+  srcAct: Float32Array, dir: number, ignore?: Set<number>,
+): number {
+  let best = -1, bestVal = -Infinity;
+  const base = dstRow * cols;
+  for (let j = 0; j < cols; j++) {
+    if (ignore?.has(j)) continue;
+    const contrib = dir * (W[base + j]! * srcAct[j]!);
+    if (contrib > bestVal) { bestVal = contrib; best = j; }
+  }
+  return best;
+}
+
+// Top-k source indices by dir*(W*srcAct), descending.
+function topSources(
+  W: Float32Array, cols: number, dstRow: number,
+  srcAct: Float32Array, dir: number, k: number,
+): number[] {
+  const scored: { j: number; v: number }[] = [];
+  const base = dstRow * cols;
+  for (let j = 0; j < cols; j++) scored.push({ j, v: dir * (W[base + j]! * srcAct[j]!) });
+  scored.sort((a, b) => b.v - a.v);
+  return scored.slice(0, k).map((s) => s.j);
+}
+
+// Label a pixel index as "pixel (col,row)" in the 20x20 grid.
+function pxLabel(p: number): string {
+  return `pixel (${p % GRID},${Math.floor(p / GRID)})`;
+}
+
+function tracePath(
+  net: Net, geo: Geo, a: Activations, out: number, isWin: boolean,
+): TracedPath {
+  const edges: TracedPath["edges"] = [];
+  const h2 = new Set<number>(), h1 = new Set<number>(), px = new Set<number>();
+
+  // Record one path edge with its geometry, weight, and contribution
+  // (weight x source activation) for the tooltip.
+  //   W:      the weight matrix [dstCount x srcCount]
+  //   srcAct: source-layer activations
+  //   A/B:    geometry rows for source / destination
+  //   ai/bi:  source / destination indices
+  //   from/to: human labels for the tooltip
+  const edge = (
+    W: Float32Array, srcCount: number, srcAct: Float32Array,
+    A: { cx: number; cy: number }[], ai: number,
+    B: { cx: number; cy: number }[], bi: number,
+    from: string, to: string,
+  ) => {
+    const weight = W[bi * srcCount + ai]!;
+    const srcActivation = srcAct[ai]!;
+    const contribution = weight * srcActivation;
+    edges.push({
+      ax: A[ai]!.cx, ay: A[ai]!.cy, bx: B[bi]!.cx, by: B[bi]!.cy,
+      positive: weight >= 0, weight, srcActivation, contribution, from, to,
+    });
+  };
+
+  if (isWin) {
+    // Positive 2 -> 1 -> 1 tree.
+    const h2i = bestSource(net.W3, net.H2, out, a.h2, +1);
+    edge(net.W3, net.H2, a.h2, geo.h2, h2i, geo.out, out, `hidden2[${h2i}]`, `“${net.labels[out]}”`);
+    h2.add(h2i);
+    const h1i = bestSource(net.W2, net.H1, h2i, a.h1, +1);
+    edge(net.W2, net.H1, a.h1, geo.h1, h1i, geo.h2, h2i, `hidden1[${h1i}]`, `hidden2[${h2i}]`);
+    h1.add(h1i);
+    // Two input pixels with the most positive contribution into that h1 neuron.
+    const pxs = topSources(net.W1, net.IN, h1i, a.input, +1, 2);
+    for (const p of pxs) {
+      edge(net.W1, net.IN, a.input, geo.input, p, geo.h1, h1i, pxLabel(p), `hidden1[${h1i}]`);
+      px.add(p);
+    }
+    return { kind: "positive", out, edges, h2, h1, px };
+  }
+
+  // Negative subgraph. Up to 2 hidden2 neurons contributing most negatively to
+  // the wrong tile; for each, up to 2 hidden1 neurons by |W2*a| (either sign, so
+  // both reinforcing and cancelling routes can show); then 2 pixels overall by
+  // |W1| magnitude into the collected hidden1 neurons.
+  const h2s = topSources(net.W3, net.H2, out, a.h2, -1, 2);
+  for (const h2i of h2s) {
+    edge(net.W3, net.H2, a.h2, geo.h2, h2i, geo.out, out, `hidden2[${h2i}]`, `“${net.labels[out]}”`);
+    h2.add(h2i);
+    // Rank hidden1 by absolute contribution so a strong cancelling (positive)
+    // route is visible next to the negative one.
+    const scored: { j: number; v: number }[] = [];
+    for (let j = 0; j < net.H1; j++) {
+      const c = net.W2[h2i * net.H1 + j]! * a.h1[j]!;
+      scored.push({ j, v: Math.abs(c) });
+    }
+    scored.sort((x, y) => y.v - x.v);
+    for (const { j: h1i } of scored.slice(0, 2)) {
+      edge(net.W2, net.H1, a.h1, geo.h1, h1i, geo.h2, h2i, `hidden1[${h1i}]`, `hidden2[${h2i}]`);
+      h1.add(h1i);
+    }
+  }
+  // Two pixels overall, by |W1 weight| into any collected hidden1 neuron.
+  const pxScore = new Map<number, { v: number; h1i: number }>();
+  for (const h1i of h1) {
+    for (let p = 0; p < net.IN; p++) {
+      const w = Math.abs(net.W1[h1i * net.IN + p]!);
+      const prev = pxScore.get(p);
+      if (!prev || w > prev.v) pxScore.set(p, { v: w, h1i });
+    }
+  }
+  const topPx = [...pxScore.entries()].sort((a2, b2) => b2[1].v - a2[1].v).slice(0, 2);
+  for (const [p, { h1i }] of topPx) {
+    edge(net.W1, net.IN, a.input, geo.input, p, geo.h1, h1i, pxLabel(p), `hidden1[${h1i}]`);
+    px.add(p);
+  }
+  return { kind: "negative", out, edges, h2, h1, px };
 }
 
 export function NetworkView({
@@ -254,6 +423,29 @@ export function NetworkView({
   const n1 = norm(activations?.h1);
   const n2 = norm(activations?.h2);
 
+  // Hover-to-explain: which output tile is hovered (or null). Tracing a path
+  // needs activations; hovering with an empty canvas does nothing.
+  const [hoveredOut, setHoveredOut] = useState<number | null>(null);
+  const path = useMemo<TracedPath | null>(() => {
+    if (hoveredOut == null || !activations) return null;
+    // Only trace when there's actually a drawing to explain.
+    let any = false;
+    for (const v of activations.raw) if (v > 0.02) { any = true; break; }
+    if (!any) return null;
+    return tracePath(net, geo, activations, hoveredOut, hoveredOut === predicted);
+  }, [hoveredOut, activations, net, geo, predicted]);
+  const pathActive = path != null;
+
+  // Which path edge is hovered (index into path.edges), for the weight tooltip.
+  const [hoveredEdge, setHoveredEdge] = useState<number | null>(null);
+  // Reset the edge tooltip whenever the traced path changes.
+  const pathKey = path ? `${path.kind}:${path.out}` : null;
+  const prevPathKey = useRef(pathKey);
+  if (pathKey !== prevPathKey.current) {
+    prevPathKey.current = pathKey;
+    if (hoveredEdge !== null) setHoveredEdge(null);
+  }
+
   // Which edges to draw: those with abs >= threshold * layerMax. Slider is
   // inverted so 0 = show none-but-strongest handful, 1 = show more. We clamp to
   // a hard cap on drawn lines for the dense first layer to protect smoothness.
@@ -305,10 +497,43 @@ export function NetworkView({
         <text x={10} y={Y_OUT} dominantBaseline="middle">output</text>
       </g>
 
-      {/* Edges first, so nodes sit on top. Draw deepest layer first. */}
-      <g strokeLinecap="round">{renderEdges(drawn1, geo.max1, "e1")}</g>
-      <g strokeLinecap="round">{renderEdges(drawn2, geo.max2, "e2")}</g>
-      <g strokeLinecap="round">{renderEdges(drawn3, geo.max3, "e3")}</g>
+      {/* Edges first, so nodes sit on top. Draw deepest layer first. When a
+          hover path is active, dim the whole base network so the traced path
+          reads clearly on top. */}
+      <g strokeLinecap="round" opacity={pathActive ? 0.12 : 1}>
+        {renderEdges(drawn1, geo.max1, "e1")}
+        {renderEdges(drawn2, geo.max2, "e2")}
+        {renderEdges(drawn3, geo.max3, "e3")}
+      </g>
+
+      {/* Highlight layer: the traced path, drawn thick with a soft glow. Red for
+          a positive edge, blue for negative — same vocabulary as the weights.
+          Each edge carries a wide invisible hit-line so hovering it is easy and
+          shows a weight tooltip. */}
+      {path && (
+        <g strokeLinecap="round" className="mnist-net__path">
+          {path.edges.map((e, i) => {
+            const color = e.positive ? "#d1344b" : "#2f6fd0";
+            const on = hoveredEdge === i;
+            return (
+              <g key={`pe-${i}`}>
+                {/* glow underlay */}
+                <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
+                  stroke={color} strokeOpacity={on ? 0.4 : 0.25} strokeWidth={on ? 9 : 7} />
+                <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
+                  stroke={color} strokeOpacity={0.95} strokeWidth={on ? 3.4 : 2.4} />
+                {/* wide invisible hover target */}
+                <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
+                  stroke="transparent" strokeWidth={16}
+                  style={{ cursor: "help" }}
+                  onPointerEnter={() => setHoveredEdge(i)}
+                  onPointerLeave={() => setHoveredEdge((cur) => (cur === i ? null : cur))}
+                />
+              </g>
+            );
+          })}
+        </g>
+      )}
 
       {/* Input grid — this is also the drawing surface. Cells shade from the
           RAW drawing, so your marks stay fixed exactly where you drew them.
@@ -319,6 +544,7 @@ export function NetworkView({
       <g>
         {geo.input.map((c, i) => {
           const v = activations ? activations.raw[i]! : 0;
+          const onPath = path?.px.has(i);
           return (
             <rect
               key={`in-${i}`}
@@ -326,6 +552,22 @@ export function NetworkView({
               width={c.s} height={c.s}
               fill={shade(v)}
               stroke="#e7e2da" strokeWidth={0.5}
+              // Keep path pixels at full strength; dim the rest while a path is
+              // shown so the outlined pixels stand out.
+              opacity={pathActive && !onPath ? 0.35 : 1}
+            />
+          );
+        })}
+        {/* Outline the traced pixels (drawn after all cells so the outline is
+            never overpainted by a neighbour). */}
+        {path && [...path.px].map((i) => {
+          const c = geo.input[i]!;
+          return (
+            <rect
+              key={`pxo-${i}`}
+              x={c.cx - c.s / 2 - 1} y={c.cy - c.s / 2 - 1}
+              width={c.s + 2} height={c.s + 2}
+              fill="none" stroke="#111" strokeWidth={2}
             />
           );
         })}
@@ -348,31 +590,51 @@ export function NetworkView({
         />
       </g>
 
-      {/* Hidden 1. */}
+      {/* Hidden 1. Heavily-rounded squares (mostly circular but still a touch
+          rectangular), sized to leave ~3px between neighbours. Path nodes grow
+          a little and get a dark accent ring; others dim. */}
       <g>
-        {geo.h1.map((p, i) => (
-          <circle
-            key={`h1-${i}`} cx={p.cx} cy={p.cy} r={9}
-            fill={shade(activations ? activations.h1[i]! / n1.m : 0)}
-            stroke="#c9c2b8" strokeWidth={1}
-          />
-        ))}
+        {geo.h1.map((p, i) => {
+          const onPath = path?.h1.has(i);
+          const S = onPath ? HNODE + 4 : HNODE;
+          return (
+            <rect
+              key={`h1-${i}`}
+              x={p.cx - S / 2} y={p.cy - S / 2} width={S} height={S}
+              rx={HNODE_RX} ry={HNODE_RX}
+              fill={shade(activations ? activations.h1[i]! / n1.m : 0)}
+              stroke={onPath ? "#111" : "#888888"} strokeWidth={onPath ? 3 : 2}
+              opacity={pathActive && !onPath ? 0.3 : 1}
+            />
+          );
+        })}
       </g>
       {/* Hidden 2. */}
       <g>
-        {geo.h2.map((p, i) => (
-          <circle
-            key={`h2-${i}`} cx={p.cx} cy={p.cy} r={9}
-            fill={shade(activations ? activations.h2[i]! / n2.m : 0)}
-            stroke="#c9c2b8" strokeWidth={1}
-          />
-        ))}
+        {geo.h2.map((p, i) => {
+          const onPath = path?.h2.has(i);
+          const S = onPath ? HNODE + 4 : HNODE;
+          return (
+            <rect
+              key={`h2-${i}`}
+              x={p.cx - S / 2} y={p.cy - S / 2} width={S} height={S}
+              rx={HNODE_RX} ry={HNODE_RX}
+              fill={shade(activations ? activations.h2[i]! / n2.m : 0)}
+              stroke={onPath ? "#111" : "#888888"} strokeWidth={onPath ? 3 : 2}
+              opacity={pathActive && !onPath ? 0.3 : 1}
+            />
+          );
+        })}
       </g>
       {/* Output — bigger rounded-square tiles with the digit set INSIDE in the
           theme monospace face, so they read as labelled keys. The winner is
           filled with the accent and ringed; the digit flips to a light glyph so
           it stays legible on the dark fill. Others shade white->black by their
-          probability, with the glyph auto-contrasting. */}
+          probability, with the glyph auto-contrasting.
+
+          Hovering a tile traces an explanatory path (see tracePath): the
+          winner explains why it fired; a wrong tile shows what pushed against
+          it. Only meaningful once something is drawn. */}
       <g>
         {geo.out.map((p, i) => {
           const v = activations ? activations.output[i]! : 0;
@@ -380,17 +642,25 @@ export function NetworkView({
           const win = i === predicted && v > 0;
           const S = 40; // tile size
           const long = label.length > 2;
+          const hovered = hoveredOut === i;
           // Glyph colour: light on the accent-filled winner or a dark
           // background; dark otherwise.
           const glyph = win ? "#fff" : v > 0.55 ? "#fff" : "var(--text-strong, #1c1917)";
+          const dimTile = pathActive && !hovered;
           return (
-            <g key={`out-${i}`}>
+            <g
+              key={`out-${i}`}
+              style={{ cursor: "pointer" }}
+              opacity={dimTile ? 0.4 : 1}
+              onPointerEnter={() => setHoveredOut(i)}
+              onPointerLeave={() => setHoveredOut((cur) => (cur === i ? null : cur))}
+            >
               <rect
                 x={p.cx - S / 2} y={p.cy - S / 2}
                 width={S} height={S} rx={10} ry={10}
                 fill={win ? "var(--accent, #2b62a8)" : shade(v)}
-                stroke={win ? "var(--accent, #2b62a8)" : "#c9c2b8"}
-                strokeWidth={win ? 3 : 1.25}
+                stroke={hovered ? "#111" : win ? "var(--accent, #2b62a8)" : "#c9c2b8"}
+                strokeWidth={hovered ? 3.5 : win ? 3.5 : 2.25}
               />
               <text
                 x={p.cx} y={p.cy}
@@ -406,6 +676,71 @@ export function NetworkView({
           );
         })}
       </g>
+
+      {/* One-line caption for the active path, so the trace is self-explaining. */}
+      {path && (
+        <text
+          className="mnist-net__caption"
+          x={W / 2} y={H - 6}
+          textAnchor="middle"
+          fontFamily="var(--font-mono, monospace)"
+          fontSize={12}
+        >
+          {path.kind === "positive"
+            ? `why “${net.labels[path.out]}” fired: the pixels & neurons pushing it up`
+            : `“${net.labels[path.out]}” lost: neurons & pixels pushing against it`}
+        </text>
+      )}
+
+      {/* Weight tooltip for the hovered path edge. Rendered last so it sits on
+          top of everything. Positioned at the edge midpoint, nudged up, and
+          clamped inside the viewBox. */}
+      {path && hoveredEdge != null && path.edges[hoveredEdge] && (() => {
+        const e = path.edges[hoveredEdge]!;
+        const mx = (e.ax + e.bx) / 2;
+        const my = (e.ay + e.by) / 2;
+        // Show the contribution as an explicit formula (weight × activation)
+        // so a large contribution next to a small weight reads as sensible —
+        // it's the source neuron's activation doing the scaling.
+        const lines = [
+          `${e.from} → ${e.to}`,
+          `weight       ${fmtSigned(e.weight)}`,
+          `activation   ${fmtSigned(e.srcActivation)}`,
+          `contribution ${fmtSigned(e.contribution)}  = w×a`,
+        ];
+        const charW = 7.2, padX = 10, padY = 8, lineH = 15;
+        const boxW = Math.max(...lines.map((l) => l.length)) * charW + padX * 2;
+        const boxH = lines.length * lineH + padY * 2 - 3;
+        // Prefer above the midpoint; clamp horizontally into the viewBox.
+        let bx = mx - boxW / 2;
+        bx = Math.max(6, Math.min(W - boxW - 6, bx));
+        let by = my - boxH - 14;
+        if (by < 4) by = my + 14; // flip below if no room above
+        const accent = e.positive ? "#d1344b" : "#2f6fd0";
+        return (
+          <g className="mnist-net__tip" pointerEvents="none">
+            <rect x={bx} y={by} width={boxW} height={boxH} rx={7} ry={7}
+              fill="#1c1917" stroke={accent} strokeWidth={1.5} opacity={0.97} />
+            {lines.map((l, i) => (
+              <text
+                key={i}
+                x={bx + padX} y={by + padY + 11 + i * lineH}
+                fontFamily="var(--font-mono, monospace)" fontSize={11}
+                fill={i === 0 ? "#fff" : "#e7e2da"}
+                fontWeight={i === 0 ? 700 : 400}
+              >
+                {l}
+              </text>
+            ))}
+          </g>
+        );
+      })()}
     </svg>
   );
+}
+
+// Format a number with an explicit + / - sign and 2 decimals, for tooltips.
+function fmtSigned(v: number): string {
+  const s = v >= 0 ? "+" : "−";
+  return `${s}${Math.abs(v).toFixed(2)}`;
 }

@@ -1,0 +1,31 @@
+-- Per-voice model selection for provenance chat.
+--
+-- A provenance "voice" is a prompt/persona: a name plus a system prompt that
+-- sets how the assistant talks about a document. (The table is named
+-- provenance_agents for historical reasons; the rows are voices. An "agent"
+-- elsewhere in this codebase means a structured conversation type with a topic
+-- sequence and turn budgets, which is a different thing entirely.)
+--
+-- Until now a voice only chose how the assistant talked, and every turn ran on
+-- the deployment's DEFAULT_MODEL. This adds an optional model override so the
+-- author can also choose what runs underneath — typically to hold routine
+-- document Q&A on a cheap model while reserving an expensive tier for work that
+-- needs it.
+--
+-- NULL means "no explicit choice": the worker falls back to its configured
+-- provenance default rather than to DEFAULT_MODEL, giving provenance chat a
+-- cheap floor independent of the rest of the instance. The built-in voices
+-- (synthesized "builtin:<voice>" ids, which have no database row at all)
+-- resolve to that same floor.
+--
+-- The value is an opaque provider model id, deliberately NOT constrained here:
+-- valid ids depend on which provider the instance is configured against, and a
+-- gateway rewrites them into its own namespace. Validation happens in the
+-- worker against the deployment's configured model list.
+ALTER TABLE provenance_agents ADD COLUMN model TEXT;
+
+-- Snapshot the model onto the conversation, mirroring agent_name_snapshot and
+-- agent_prompt_snapshot: deleting a voice nulls the FK but must leave the
+-- session intelligible, including which model produced the replies. NULL here
+-- means the same thing as on the voice — the configured default applied.
+ALTER TABLE provenance_conversations ADD COLUMN agent_model_snapshot TEXT;
