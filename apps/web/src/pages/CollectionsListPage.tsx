@@ -12,7 +12,14 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { relativeTime } from "../time.js";
-import { Badge, Button, Field, Input } from "../components/index.js";
+import {
+  Badge,
+  Button,
+  Field,
+  Input,
+  PageHeader,
+  Section,
+} from "../components/index.js";
 import { BookIcon, PlusIcon } from "../icons.js";
 
 export function CollectionsListPage() {
@@ -58,21 +65,15 @@ export function CollectionsListPage() {
 
   return (
     <div className="app-page">
-      <div className="app-page__head">
-        <div>
-          <span className="eyebrow">Instructor · Library</span>
-          <h1>Libraries</h1>
-          <div className="app-page__scope">
-            A library is a set of documents you attach to an agent. The agent
-            answers from these sources and cites them in line.
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Instructor · Library"
+        title="Libraries"
+        scope="A library is a set of documents you attach to an agent. The agent answers from these sources and cites them in line."
+      />
 
       {error && <p className="error">{error}</p>}
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">New library</span>
+      <Section kicker="New library">
         <div className="app-row">
           <Field label="Name">
             <Input
@@ -101,10 +102,9 @@ export function CollectionsListPage() {
             </Button>
           </div>
         </div>
-      </div>
+      </Section>
 
-      <div className="app-section">
-        <span className="mono-label app-section__label">Your libraries</span>
+      <Section kicker="Your libraries">
         {collections === null ? (
           <p className="muted">Loading…</p>
         ) : collections.length === 0 ? (
@@ -135,7 +135,7 @@ export function CollectionsListPage() {
             ))}
           </div>
         )}
-      </div>
+      </Section>
     </div>
   );
 }

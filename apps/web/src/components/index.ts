@@ -16,6 +16,7 @@ export { Wordmark } from "./core/Wordmark.js";
 export { RoleSwitch } from "./RoleSwitch.js";
 export { PreviewBanner } from "./PreviewBanner.js";
 export { StudentModuleNav, studentModules } from "./StudentModuleNav.js";
+export { CourseSwitcher } from "./CourseSwitcher.js";
 
 export { ChatComposer } from "./chat/ChatComposer.js";
 export { Message, ThinkingDots } from "./chat/Message.js";
@@ -30,3 +31,11 @@ export { RadioCard, RadioCardGroup } from "./forms/RadioCard.js";
 
 export { OutlineRail } from "./navigation/OutlineRail.js";
 export { SegmentedControl } from "./navigation/SegmentedControl.js";
+
+// Layout primitives — the shared page-composition building blocks (docs/style.md
+// §8–9): the page-title lockup, the canonical section header, the one hairline,
+// and the stat tiles. Pages compose these instead of hand-rolling class strings.
+export { Section, SubLabel } from "./layout/Section.js";
+export { PageHeader } from "./layout/PageHeader.js";
+export { Divider } from "./layout/Divider.js";
+export { StatTile, StatGrid } from "./layout/StatTile.js";

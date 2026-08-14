@@ -105,8 +105,15 @@ export type ProvenanceEventKind =
   | "delete"
   | "paste"
   | "llm_insert"
-  | "replace";
+  | "replace"
+  | "move";
 export type ProvenanceOrigin = "human" | "llm" | "pasted" | "edited";
+
+/** One run of identical origins (compact transport for a range). */
+export interface OriginRunDTO {
+  origin: ProvenanceOrigin;
+  length: number;
+}
 
 export interface OutboundEvent {
   clientSeq: number;
@@ -117,6 +124,10 @@ export interface OutboundEvent {
   origin?: ProvenanceOrigin;
   sourceMessageId?: string;
   timingBlob?: string;
+  /** Origins carried by a deleted range (delete). */
+  removedOrigins?: OriginRunDTO[];
+  /** Origins to restore for text moved within the document (move). */
+  restoredOrigins?: OriginRunDTO[];
 }
 
 export async function postEvents(
@@ -437,7 +448,39 @@ function dispatch(frame: string, cb: SendMessageCallbacks) {
 
 export type RenderOrigin = "human" | "llm" | "pasted" | "edited";
 export interface RenderRun { origin: RenderOrigin; length: number }
-export interface ProvenanceRenderDTO { text: string; runs: RenderRun[] }
+/** One clipboard import, with how much of it survives in the final text. */
+export interface PasteRecordDTO {
+  seq: number;
+  at: number;
+  sample: string;
+  length: number;
+  /** 0..1 — still present as literal text. */
+  verbatim: number;
+  /** 0..1 — survives reworded rather than literal. */
+  nearMatch: number;
+}
+
+/** Descriptive facts about the event log. Never a verdict — see the README. */
+export interface ProvenanceAuditDTO {
+  sessions: number;
+  spanMs: number;
+  activeMs: number;
+  longestGapMs: number;
+  finalSessionShare: number;
+  lengthDrift: number;
+  fastBursts: number;
+  orderingAnomalies: number;
+  unverifiedMoves: number;
+}
+
+export interface ProvenanceRenderDTO {
+  /** Render schema version. Absent on snapshots frozen before slice 8. */
+  v?: number;
+  text: string;
+  runs: RenderRun[];
+  pastes?: PasteRecordDTO[];
+  audit?: ProvenanceAuditDTO;
+}
 
 export interface SubmissionSummary {
   token: string;
@@ -481,6 +524,45 @@ export async function listSubmissions(
   return body.submissions;
 }
 
+/** One submission checkpoint anywhere in the course, for the instructor list. */
+export interface CourseSubmissionSummary {
+  token: string;
+  documentId: string;
+  title: string;
+  createdAt: number;
+  revokedAt: number | null;
+  studentEmail: string;
+  studentName: string | null;
+  origins: {
+    total: number;
+    human: number;
+    llm: number;
+    pasted: number;
+    edited: number;
+    /**
+     * Number of clipboard imports. Shown on its own because students are asked
+     * not to paste, so the count is a fact rather than an inference. Survival
+     * percentages stay off this list — they need their source text beside them.
+     */
+    pasteCount: number;
+  };
+}
+
+/** Every submission checkpoint in the course, newest first. Instructor-only;
+ *  the worker returns 403 for anyone else. */
+export async function listCourseSubmissions(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<CourseSubmissionSummary[]> {
+  const res = await fetch(
+    apiUrl(`/api/provenance/submissions?courseId=${encodeURIComponent(courseId)}`),
+    { ...fetchInit, signal },
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const body = (await res.json()) as { submissions: CourseSubmissionSummary[] };
+  return body.submissions;
+}
+
 export async function revokeSubmission(token: string): Promise<void> {
   const res = await fetch(
     apiUrl(`/api/provenance/submissions/${encodeURIComponent(token)}`),
@@ -489,22 +571,32 @@ export async function revokeSubmission(token: string): Promise<void> {
   if (!res.ok) throw new Error(await readError(res));
 }
 
-// Public reads — no credentials, no auth redirect. A plain fetch so a
-// signed-out instructor opening a shared link just works.
+// Share-token reads. Instructor-only despite the legacy "public" path segment —
+// they send credentials and 401 when there's no session.
 export interface PublicSubmissionDTO {
   title: string;
   createdAt: number;
   render: ProvenanceRenderDTO;
 }
 
+/** Sentinel thrown by getPublicSubmission on a 401, so the viewer can tell
+ *  "you need to sign in" apart from "this link isn't available to you". */
+export const SUBMISSION_SIGN_IN_REQUIRED = "sign-in-required";
+
 export async function getPublicSubmission(
   token: string,
   signal?: AbortSignal,
 ): Promise<PublicSubmissionDTO> {
+  // Sends credentials: these endpoints are instructor-gated now, despite the
+  // legacy "public" path segment. Without the session cookie even an instructor
+  // reads as anonymous on the cross-origin deploy.
   const res = await fetch(
     apiUrl(`/api/provenance/public/submissions/${encodeURIComponent(token)}`),
-    { signal },
+    { ...fetchInit, signal },
   );
+  // 401 is distinguishable so the viewer can prompt sign-in instead of showing a
+  // dead "unavailable" card to an instructor who simply has no session yet.
+  if (res.status === 401) throw new Error(SUBMISSION_SIGN_IN_REQUIRED);
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as PublicSubmissionDTO;
 }
@@ -522,7 +614,7 @@ export async function getPublicSubmissionConversations(
 ): Promise<PublicConversationDTO[]> {
   const res = await fetch(
     apiUrl(`/api/provenance/public/submissions/${encodeURIComponent(token)}/conversations`),
-    { signal },
+    { ...fetchInit, signal },
   );
   if (!res.ok) throw new Error(await readError(res));
   const body = (await res.json()) as { conversations: PublicConversationDTO[] };

@@ -14,8 +14,63 @@ export interface Env {
    * available if a route ever needs to read an asset programmatically.
    */
   ASSETS: Fetcher;
-  ANTHROPIC_API_KEY: string;
+  /**
+   * Anthropic-direct key. Used for the bring-your-own-key fallback and when
+   * LLM_PROVIDER is "anthropic". May be unset on deployments that route all
+   * institution-funded traffic through an OpenAI-compatible endpoint.
+   */
+  ANTHROPIC_API_KEY?: string;
+  /**
+   * Which provider adapter serves institution-funded requests:
+   * "anthropic" (default) or "openai-compatible".
+   */
+  LLM_PROVIDER?: string;
+  /**
+   * Endpoint root for LLM_PROVIDER="openai-compatible" — an OpenAI-compatible
+   * gateway or self-hosted runtime. With or without a trailing "/v1".
+   */
+  LLM_BASE_URL?: string;
+  /**
+   * Credential for LLM_PROVIDER="openai-compatible".
+   *
+   * Deployments whose institution mandates a different secret name can set
+   * LLM_API_KEY_VAR to that name and the worker will read the credential from
+   * there instead — so a local naming convention never has to be reflected in
+   * this (brand-neutral) codebase.
+   */
+  LLM_API_KEY?: string;
+  /**
+   * Optional indirection: the name of the env var actually holding the
+   * OpenAI-compatible credential, when it isn't LLM_API_KEY. The var it names
+   * must be set as a Worker secret like any other credential.
+   */
+  LLM_API_KEY_VAR?: string;
+  /**
+   * Default model id, in whichever namespace the configured provider uses.
+   * Gateways commonly rewrite ids, so treat this as an opaque string.
+   */
   DEFAULT_MODEL: string;
+  /**
+   * Cheapest model id for incidental work (conversation-title generation).
+   * Unset disables that work rather than paying the chat model's rate for it.
+   */
+  TITLE_MODEL?: string;
+  /**
+   * Default model for provenance chat, used when a voice names none (including
+   * the built-in voices, which have no database row to hold a choice).
+   *
+   * Separate from DEFAULT_MODEL so document Q&A can sit on a cheap floor while
+   * the rest of the instance runs on a stronger model. Falls back to
+   * DEFAULT_MODEL when unset.
+   */
+  PROVENANCE_DEFAULT_MODEL?: string;
+  /**
+   * Models instructors may assign to an agent, as JSON:
+   *   [{"id":"<provider model id>","label":"Human-facing name"}]
+   * Advisory: the worker passes ids through opaquely and the provider endpoint
+   * remains the authority on what is actually servable.
+   */
+  LLM_MODELS?: string;
   /** Workers AI embedding model id, e.g. "@cf/baai/bge-base-en-v1.5". */
   EMBEDDING_MODEL: string;
   /** "dev" unlocks the local-only auth bypass; any other value (or absent) hard-disables it. */

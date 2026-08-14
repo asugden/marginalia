@@ -1,0 +1,38 @@
+/* CNN example — additions on top of the shared digit-recognizer.css chrome. */
+
+.cnn-scanbox {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.cnn-scanbox__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.cnn-scanbox__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.cnn-scanbox .mnist-clear { align-self: flex-start; }
+
+/* "Show wiring" toggle, on state — a soft purple to match the Sankey bands. */
+.mnist-clear--on {
+  background: rgba(124, 92, 196, 0.14);
+  border-color: rgba(124, 92, 196, 0.7);
+  color: #6a4fb0;
+}
+.mnist-clear--on:hover {
+  background: rgba(124, 92, 196, 0.2);
+  border-color: rgba(124, 92, 196, 0.9);
+  color: #5a3f9c;
+}

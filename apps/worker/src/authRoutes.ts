@@ -178,8 +178,12 @@ async function handleLogin(
   const returnTo = safeReturnTo(url.searchParams.get("return_to"));
   const { verifier, challenge } = await newPkcePair();
   const nonce = newNonce();
+  // ?retry=1 is set only by handleCallback when it restarts a login whose
+  // state cookie had vanished. Folding it into the signed state carries it
+  // through the IdP round-trip so the callback can refuse to retry twice.
+  const retried = url.searchParams.get("retry") === "1";
   const signed = await signState(
-    { nonce, returnTo, codeVerifier: verifier },
+    { nonce, returnTo, codeVerifier: verifier, ...(retried && { retried }) },
     env.SESSION_SIGNING_KEY,
   );
   const authUrl = await provider.authorizationUrl({
@@ -225,6 +229,41 @@ async function handleCallback(
   const cookies = parseCookies(req.headers.get("cookie"));
   const stateCookie = cookies[OIDC_STATE_COOKIE];
   if (!stateCookie || stateCookie !== stateParam) {
+    // Two very different situations reach this branch, and only one is an
+    // attack:
+    //
+    //   * Cookie ABSENT — benign and recoverable. The 10-minute state
+    //     lifetime lapsed on a slow consent screen, the user had the login
+    //     page open in two tabs, or some other flow clobbered the cookie.
+    //     Nothing is being forged; the login simply went stale. Dead-ending
+    //     a student on a raw JSON error here is the bug we're fixing.
+    //
+    //   * Cookie PRESENT but DIFFERENT — this is the CSRF signature (a
+    //     forged `state` alongside a real session's cookie). Never retry it;
+    //     an automatic re-login would hand the attacker the retry loop.
+    //
+    // The absent case restarts the dance ONCE. The one-shot marker rides
+    // inside the signed state (AuthState.retried), so a login that already
+    // is a retry can't be retried again — a persistently broken cookie jar
+    // (third-party cookies fully blocked, say) surfaces the error instead of
+    // bouncing the browser forever.
+    //
+    // The returning state is signature-verified BEFORE anything on it is
+    // trusted: an unsigned or forged blob yields null, which both denies the
+    // retry and falls returnTo back to "/", so this path can neither be
+    // used to smuggle a redirect target nor to reset someone's retry budget.
+    const stale = env.SESSION_SIGNING_KEY
+      ? await verifyState(stateParam, env.SESSION_SIGNING_KEY)
+      : null;
+    if (!stateCookie && stale && !stale.retried) {
+      const dest = safeReturnTo(stale.returnTo);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `/auth/login?retry=1&return_to=${encodeURIComponent(dest)}`,
+        },
+      });
+    }
     return json({ error: "Invalid state cookie" }, 400);
   }
   const state = await verifyState(stateParam, env.SESSION_SIGNING_KEY);

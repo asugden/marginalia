@@ -13,6 +13,17 @@
 //   6. (slice 7) Re-stamps re-typed text as origin="llm" when it exactly
 //      matches a remembered LLM contribution >= MIN_REVERSION_LENGTH chars,
 //      so suggested wording isn't laundered into "human" by retyping it.
+//   7. (slice 8) Records what a delete removed — the text and the origins it
+//      carried — so the server can replay the log losslessly.
+//   8. (slice 8) Recognises a paste of text recently cut or copied from this
+//      same document as a `move`, restoring the origins it already had.
+//      Rearranging your own paragraphs is writing, not importing.
+//
+// Note the division of labour with the server: this file assigns origins as a
+// *live* best guess so the editor can repaint immediately, but the frozen
+// render an instructor sees is recomputed from the event log at mint time
+// (worker render.ts). Anything that must not be forgeable — retype detection,
+// move verification — is derived there, not here.
 //
 // The trick: ProseMirror gives us a clean stream of transactions and the
 // transform that produced each one. We walk the transform's ReplaceSteps
@@ -28,6 +39,7 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { ReplaceStep, ReplaceAroundStep } from "@tiptap/pm/transform";
+import type { Node as PMNode, MarkType } from "@tiptap/pm/model";
 import type { Origin } from "./OriginMark.js";
 
 export type TrackedEventKind =
@@ -35,7 +47,11 @@ export type TrackedEventKind =
   | "delete"
   | "paste"
   | "llm_insert"
-  | "replace";
+  | "replace"
+  // slice 8: a paste of text taken from this same document (cut+paste or
+  // copy+paste). Carries the origins the text had at its source, so moving a
+  // paragraph doesn't relabel it as imported.
+  | "move";
 
 // Reversion: when a student re-types text that exactly matches a chunk of a
 // past LLM contribution this long (or longer), we flip the typed run's origin
@@ -54,6 +70,26 @@ export interface TrackedEvent {
   sourceMessageId?: string;
   /** Per-keystroke gap timings (insert only). ms between adjacent keystrokes. */
   timingGapsMs?: number[];
+  /**
+   * Run-length-encoded origins of the removed range (delete only). Lets the
+   * server replay losslessly and lets a later paste of this text restore the
+   * origins it carried (slice 8 Part 3, "move"). Deleted text is retained
+   * server-side but is never rendered to an instructor — see the module README.
+   */
+  removedOrigins?: OriginRun[];
+  /**
+   * Origins to restore for a `move` — the runs the text carried where it was
+   * cut or copied from. The server re-derives this independently rather than
+   * trusting it (see handlers `verifyMove`); we send it so the editor can
+   * repaint immediately without waiting for a round trip.
+   */
+  restoredOrigins?: OriginRun[];
+}
+
+/** One run of identical origins, for compact transport of a removed range. */
+export interface OriginRun {
+  origin: Origin;
+  length: number;
 }
 
 interface NextOpHint {
@@ -105,6 +141,91 @@ declare module "@tiptap/core" {
  *  space so re-typed text that differs only in spacing still matches. */
 function normalizeForMatch(s: string): string {
   return s.replace(/\s+/g, " ");
+}
+
+// ── Internal clipboard (slice 8 Part 3) ──────────────────────────────────
+//
+// Moving a paragraph is ordinary writing and must not read as importing one.
+// We remember text recently cut or copied *from this document*, with the
+// origins it carried, and restore those origins if it is pasted back.
+//
+// The window is deliberately short: it covers the real interaction (cut,
+// scroll, paste) and little else. A longer window would start absorbing
+// genuine outside pastes that happen to resemble deleted text.
+const CLIP_TTL_MS = 30_000;
+const CLIP_MAX = 8;
+/** Below this length, matching is coincidence-prone and not worth it. */
+const MIN_MOVE_LENGTH = 12;
+
+interface ClipEntry {
+  /** Whitespace-normalized, for tolerant matching. */
+  norm: string;
+  origins: OriginRun[];
+  at: number;
+}
+
+/** Module-scoped so cut/copy handlers and appendTransaction share one buffer. */
+const clipboard: ClipEntry[] = [];
+
+function rememberCut(text: string, origins: OriginRun[]): void {
+  const norm = normalizeForMatch(text).trim();
+  if (norm.length < MIN_MOVE_LENGTH) return;
+  const now = performance.now();
+  // Replace any existing entry for the same text, then bound the buffer.
+  const dupe = clipboard.findIndex((c) => c.norm === norm);
+  if (dupe >= 0) clipboard.splice(dupe, 1);
+  clipboard.push({ norm, origins, at: now });
+  while (clipboard.length > CLIP_MAX) clipboard.shift();
+}
+
+/** Origins for `text` if it was recently cut/copied from this document. */
+function lookupCut(text: string): OriginRun[] | null {
+  const norm = normalizeForMatch(text).trim();
+  if (norm.length < MIN_MOVE_LENGTH) return null;
+  const now = performance.now();
+  for (let i = clipboard.length - 1; i >= 0; i--) {
+    const c = clipboard[i]!;
+    if (now - c.at > CLIP_TTL_MS) continue;
+    if (c.norm === norm) return c.origins;
+  }
+  return null;
+}
+
+/**
+ * Read the per-character origins of [from, to) in `doc` as compact runs.
+ * Used to record what a delete removed, so that (a) the server can replay
+ * losslessly and (b) re-pasting the text can restore its original origins
+ * instead of flattening it to "pasted".
+ *
+ * Walks text nodes only; the run lengths therefore line up with the same
+ * `textBetween` projection used for the event's `text`.
+ */
+function originRunsIn(
+  doc: PMNode,
+  from: number,
+  to: number,
+  originMarkType: MarkType | undefined,
+): OriginRun[] {
+  const runs: OriginRun[] = [];
+  const push = (origin: Origin, length: number) => {
+    if (length <= 0) return;
+    const last = runs[runs.length - 1];
+    if (last && last.origin === origin) last.length += length;
+    else runs.push({ origin, length });
+  };
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText) return true;
+    // Clip to the requested range — the first/last node may straddle it.
+    const start = Math.max(pos, from);
+    const end = Math.min(pos + node.nodeSize, to);
+    if (end <= start) return true;
+    const mark = originMarkType
+      ? node.marks.find((m) => m.type === originMarkType)
+      : undefined;
+    push((mark?.attrs.origin as Origin) ?? "human", end - start);
+    return true;
+  });
+  return runs;
 }
 
 /** Add a contribution to the reversion index (normalized, deduped,
@@ -227,7 +348,7 @@ export const ProvenanceTracker = Extension.create<
     // that typing out remembered LLM wording by hand — which never triggers the
     // per-event reversion check, since each keystroke is under the min length —
     // is still caught once enough matching characters have accrued. Reset on any
-    // non-adjacent or non-human edit. Closes TODO(reversion-slow-typing).
+    // non-adjacent or non-human edit.
     let humanRun: { text: string; from: number; to: number } | null = null;
     // Caret position at the end of the current "rewriting LLM text" run. While
     // an insert is contiguous with this (insertedFrom === llmEditRun), keep
@@ -244,14 +365,9 @@ export const ProvenanceTracker = Extension.create<
     // Match on normalized whitespace; require MIN_REVERSION_LENGTH so short
     // common words ("the model") don't get swept up.
     //
-    // TODO(reversion-slow-typing): this matches at event granularity, so it
-    // catches bulk re-insertion (paste→edit, IME, autocomplete) but NOT a
-    // student retyping LLM text slowly character-by-character — each 1-char
-    // insert falls under MIN_REVERSION_LENGTH and never matches. Slow manual
-    // retyping is a plausibly common laundering path; revisit with a rolling
-    // window over recent human inserts (accumulate adjacent single-char
-    // inserts, match the trailing buffer against the index, restamp the run
-    // retroactively). Skipped for v1.
+    // This matches at event granularity, catching bulk re-insertion
+    // (paste→edit, IME, autocomplete). Slow character-by-character retyping is
+    // handled separately by the rolling `humanRun` window below.
     const isLlmReversion = (text: string): boolean => {
       const norm = normalizeForMatch(text);
       if (norm.trim().length < MIN_REVERSION_LENGTH) return false;
@@ -295,6 +411,41 @@ export const ProvenanceTracker = Extension.create<
 
         props: {
           handleDOMEvents: {
+            // Copy (not cut) removes nothing, so no delete event fires and the
+            // buffer would never learn about it. Record the selection here so
+            // duplicating your own sentence elsewhere in your own document is
+            // recognised as internal too. A cut also fires this, harmlessly:
+            // it records the same text the delete branch will record.
+            copy: (view) => {
+              const { from, to } = view.state.selection;
+              if (to > from) {
+                rememberCut(
+                  view.state.doc.textBetween(from, to, "\n", "\n"),
+                  originRunsIn(
+                    view.state.doc,
+                    from,
+                    to,
+                    view.state.schema.marks.origin,
+                  ),
+                );
+              }
+              return false;
+            },
+            cut: (view) => {
+              const { from, to } = view.state.selection;
+              if (to > from) {
+                rememberCut(
+                  view.state.doc.textBetween(from, to, "\n", "\n"),
+                  originRunsIn(
+                    view.state.doc,
+                    from,
+                    to,
+                    view.state.schema.marks.origin,
+                  ),
+                );
+              }
+              return false;
+            },
             beforeinput: (view, ev) => {
               const e = ev as InputEvent;
               if (e.inputType === "insertText") {
@@ -413,11 +564,31 @@ export const ProvenanceTracker = Extension.create<
               }
 
               if (removedLen > 0) {
+                // Capture what was removed, and the origins it carried, from
+                // the pre-step doc. The schema has always specified this
+                // (migration 0010: "deleted text for delete"); until slice 8
+                // the client sent "" and replay was lossy.
+                const removedText = preStepDoc.textBetween(
+                  step.from,
+                  step.to,
+                  "\n",
+                  "\n",
+                );
+                const removedOrigins = originRunsIn(
+                  preStepDoc,
+                  step.from,
+                  step.to,
+                  originMarkType,
+                );
+                // Remember it briefly so an immediately-following paste of the
+                // same text is recognised as a move rather than an import.
+                rememberCut(removedText, removedOrigins);
                 events.push({
                   kind: "delete",
                   offset: step.from,
                   length: removedLen,
-                  text: "",
+                  text: removedText,
+                  removedOrigins,
                 });
                 // A pure deletion breaks the contiguous typed/edited runs. (A
                 // replace — removedLen>0 AND sliceSize>0 — is handled in the
@@ -451,6 +622,26 @@ export const ProvenanceTracker = Extension.create<
                 // tracker below can distinguish it from a genuine clipboard
                 // paste (which also ends up origin="pasted").
                 let isLlmEdit = false;
+                // Set when this paste is text moved within this document; the
+                // marking step below repaints it run-by-run instead of flat.
+                let restoredOrigins: OriginRun[] | null = null;
+
+                // Move: a paste of text recently cut or copied *from this
+                // document*. Rearranging your own paragraphs is ordinary
+                // writing, so the text keeps the origins it already had rather
+                // than being relabelled as imported. Checked before the LLM
+                // branches below so moving an LLM block preserves its "llm"
+                // marks instead of being re-derived as a rewrite.
+                if (kind === "paste") {
+                  const restored = lookupCut(insertedText);
+                  if (restored) {
+                    kind = "move";
+                    restoredOrigins = restored;
+                    // Flat fallback for the event's own `origin` column; the
+                    // per-run detail rides along in restoredOrigins.
+                    origin = restored.length === 1 ? restored[0]!.origin : "human";
+                  }
+                }
 
                 // Reversion: a plain insert that reproduces remembered LLM
                 // wording verbatim (e.g. copy the reply out of chat and paste
@@ -484,11 +675,41 @@ export const ProvenanceTracker = Extension.create<
                 }
 
                 if (originMarkType) {
-                  markTr = markTr.addMark(
-                    insertedFrom,
-                    insertedTo,
-                    originMarkType.create({ origin, sourceMessageId }),
-                  );
+                  if (restoredOrigins) {
+                    // Repaint the moved text run by run so a paragraph that
+                    // mixed typed and LLM prose keeps that structure. Runs were
+                    // measured on the source text; clamp to the inserted range
+                    // in case the paste normalized whitespace slightly.
+                    let at = insertedFrom;
+                    for (const run of restoredOrigins) {
+                      const end = Math.min(at + run.length, insertedTo);
+                      if (end <= at) break;
+                      markTr = markTr.addMark(
+                        at,
+                        end,
+                        originMarkType.create({
+                          origin: run.origin,
+                          sourceMessageId: null,
+                        }),
+                      );
+                      at = end;
+                    }
+                    // Any tail left over by a length mismatch keeps the
+                    // conservative flat origin rather than going unmarked.
+                    if (at < insertedTo) {
+                      markTr = markTr.addMark(
+                        at,
+                        insertedTo,
+                        originMarkType.create({ origin, sourceMessageId: null }),
+                      );
+                    }
+                  } else {
+                    markTr = markTr.addMark(
+                      insertedFrom,
+                      insertedTo,
+                      originMarkType.create({ origin, sourceMessageId }),
+                    );
+                  }
                   didMark = true;
                 }
 
@@ -500,6 +721,7 @@ export const ProvenanceTracker = Extension.create<
                   origin,
                 };
                 if (sourceMessageId) event.sourceMessageId = sourceMessageId;
+                if (restoredOrigins) event.restoredOrigins = restoredOrigins;
                 if (kind === "insert" && keystroke && keystroke.gaps.length > 0) {
                   event.timingGapsMs = keystroke.gaps.slice();
                 }

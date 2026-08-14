@@ -282,8 +282,24 @@ export function ConversationPage() {
             ]);
           } else {
             setMessages((m) => {
+              // `assistantOpened` is a local in the send closure, but the
+              // messages array is React state that other code can replace
+              // out from under a stream in flight — the load effect calls
+              // setMessages(c.messages) wholesale, and an aborted-but-still-
+              // settling fetch can land between two deltas. When that happens
+              // the tail is no longer the assistant bubble this stream opened
+              // (or the array is empty outright), and blindly patching
+              // `next.length - 1` throws on undefined and takes the whole
+              // route down with an error boundary.
+              //
+              // Appending a fresh assistant bubble instead keeps the stream
+              // renderable: worst case the reply is split across two bubbles,
+              // which is strictly better than losing the page.
+              const last = m[m.length - 1];
+              if (!last || last.role !== "assistant") {
+                return [...m, { role: "assistant", content: ev.text }];
+              }
               const next = [...m];
-              const last = next[next.length - 1]!;
               next[next.length - 1] = {
                 ...last,
                 content: last.content + ev.text,

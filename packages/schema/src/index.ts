@@ -1,6 +1,10 @@
 // Row types mirroring migrations/0001_init.sql. Hand-kept in sync with the
 // SQL — when a migration changes a table, update the matching interface here.
 
+// Course term helpers (season / academic year / archival). See term.ts.
+export * from "./term.js";
+import type { TermSeason } from "./term.js";
+
 // v0.6 dropped `ta` — see migration 0004. Any code still narrowing on `ta`
 // is dead and should be removed alongside the migration deploy.
 export type EnrollmentRole = "student" | "instructor";
@@ -34,6 +38,19 @@ export interface CourseRow {
   org_id: string;
   name: string;
   created_at: number;
+  /** v1.2 (migration 0017) — the semester this course is taught in, or NULL
+   *  for an unscheduled course. The academic year is derived from
+   *  (term_season, term_year), never stored — see term.ts. */
+  term_season: TermSeason | null;
+  /** Calendar year of `term_season` (2026 = Fall 2026). NULL when unscheduled. */
+  term_year: number | null;
+  /** Active window as Unix ms at UTC day boundaries (start = start-of-day,
+   *  end = inclusive end-of-day). A course is "current" when now is within
+   *  [start_date, end_date]; a NULL bound is open-ended. This is the sole
+   *  source of truth for active vs past — there is no manual archived flag.
+   *  See isCourseCurrent() in term.ts. */
+  start_date: number | null;
+  end_date: number | null;
 }
 
 export interface EnrollmentRow {
@@ -55,6 +72,21 @@ export interface AgentRow {
   definition: string;
   created_at: number;
   updated_at: number;
+}
+
+/**
+ * v1.1 (migration 0017) — a student's sticky hidden-variant assignment for
+ * one agent. Written once, on the student's first start of a split agent;
+ * reused for every later conversation on that agent. `variant_id` is the
+ * AgentVariant.id from the JSON definition (no FK — arms live in a blob).
+ */
+export interface AgentVariantAssignmentRow {
+  id: string;
+  course_id: string;
+  agent_id: string;
+  user_id: string;
+  variant_id: string;
+  created_at: number;
 }
 
 /**
@@ -220,8 +252,15 @@ export type ProvenanceEventKind =
   | "delete"
   | "paste"
   | "llm_insert"
-  | "replace"; // slice 7: spellcheck/autocorrect/Grammarly word replacement
+  | "replace" // slice 7: spellcheck/autocorrect/Grammarly word replacement
+  | "move"; // slice 8: cut/copy + paste within the same document
 export type ProvenanceOrigin = "human" | "llm" | "pasted" | "edited";
+
+/** One run of identical origins — compact transport for a character range. */
+export interface ProvenanceOriginRun {
+  origin: ProvenanceOrigin;
+  length: number;
+}
 
 export interface ProvenanceEventRow {
   id: string;
@@ -264,6 +303,13 @@ export interface ProvenanceAgentRow {
   owner_user_id: string | null;
   name: string;
   system_prompt: string;
+  /**
+   * Optional per-voice model override. Opaque provider model id; NULL means the
+   * worker's configured provenance default applies. Validated against the
+   * deployment's model list, never against a hardcoded set — valid ids depend
+   * on which provider the instance points at.
+   */
+  model: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -277,6 +323,12 @@ export interface ProvenanceConversationRow {
   agent_id: string | null;
   agent_name_snapshot: string;
   agent_prompt_snapshot: string;
+  /**
+   * Model captured at conversation start, so the transcript stays attributable
+   * after the voice is edited or deleted. NULL means no explicit choice was in
+   * effect — the configured provenance default applied.
+   */
+  agent_model_snapshot: string | null;
   title: string | null;
   created_at: number;
   updated_at: number;

@@ -119,11 +119,10 @@
 }
 
 /* ---- Page frame ---- */
-.ds-staff-page { flex: 1; width: 100%; max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
-.ds-staff-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
-.ds-staff-head h1 { font-size: 1.9rem; }
-.ds-staff-head .eyebrow { display: block; margin-bottom: 0.4rem; }
-.ds-staff-head__scope { color: var(--text-muted); font-size: var(--text-sm); margin-top: 0.3rem; max-width: 60ch; }
+.ds-staff-page { flex: 1; width: 100%; max-width: var(--shell-max); margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+/* The staff page-head lockup (.ds-staff-head*) was retired — the attendance
+   screens now use the shared <PageHeader> primitive. `.ds-staff-actions` is
+   kept: the provenance agents screen still uses it for a topbar action row. */
 .ds-staff-actions { display: flex; gap: 0.5rem; align-items: center; flex: none; }
 
 .ds-staff-section { margin-bottom: 2rem; }

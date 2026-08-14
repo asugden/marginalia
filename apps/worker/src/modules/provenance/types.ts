@@ -12,6 +12,7 @@ import type {
   ProvenanceMessageRole,
   ProvenanceMessageRow,
   ProvenanceOrigin,
+  ProvenanceOriginRun,
 } from "@marginalia/schema";
 
 export type {
@@ -23,6 +24,7 @@ export type {
   ProvenanceMessageRole,
   ProvenanceMessageRow,
   ProvenanceOrigin,
+  ProvenanceOriginRun,
 };
 
 /**
@@ -39,6 +41,10 @@ export interface InboundEvent {
   origin?: ProvenanceOrigin;
   sourceMessageId?: string;
   timingBlob?: string;
+  /** Origins the removed range carried (delete). Slice 8 Part 0. */
+  removedOrigins?: ProvenanceOriginRun[];
+  /** Origins to restore for text moved within the document (move). */
+  restoredOrigins?: ProvenanceOriginRun[];
 }
 
 export interface OutboundEvent {
@@ -122,6 +128,11 @@ export interface AgentDTO {
   ownerUserId: string | null;
   name: string;
   systemPrompt: string;
+  /**
+   * Provider model id, or null when no explicit choice is set (the configured
+   * provenance default applies). Only instructors can change it.
+   */
+  model: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -159,6 +170,7 @@ export function toAgentDTO(row: ProvenanceAgentRow): AgentDTO {
     ownerUserId: row.owner_user_id,
     name: row.name,
     systemPrompt: row.system_prompt,
+    model: row.model,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

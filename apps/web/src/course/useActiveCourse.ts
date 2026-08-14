@@ -1,6 +1,6 @@
 // Course resolution for surfaces that need a course id but resolve it
 // themselves rather than from a layout. The provenance editor (a standalone
-// full-screen route at /course/:courseId/write/:id) is the remaining user: it
+// full-screen route at /course/:courseId/writing/:id) is the remaining user: it
 // passes its URL :courseId in as `preferCourseId` so the hook resolves to that
 // course directly.
 //

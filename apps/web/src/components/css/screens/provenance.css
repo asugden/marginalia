@@ -42,3 +42,41 @@
 /* (Save-status pill and divider grip are defined in styles.css; the grip
    there is now kit-faithful — 4px × 34px pill, accent on hover/drag — so no
    override is needed here.) */
+
+/* ── Instructor Submissions page ─────────────────────────────────────────
+   The page uses the standard staff primitives (.app-page / PageHeader /
+   Section / .app-list), so only the origin bar is defined here — there is no
+   design-system equivalent for a proportional provenance meter. Segment colors
+   reuse the editor/viewer status tokens so the bar reads the same as a
+   snapshot's legend. */
+.prov-subs__row { cursor: default; }
+/* Collapsed prior snapshots — quieter than the document row they hang under. */
+.prov-subs__row.is-earlier { background: var(--surface-sunken); }
+.prov-subs__row.is-earlier .app-list__sub { padding-left: 0.9rem; }
+/* Inline "N earlier" disclosure inside the row's sub-line. */
+.prov-subs__more {
+  appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; color: var(--text-secondary); text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prov-subs__more:hover { color: var(--text-strong); }
+
+.prov-subs__origins {
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  width: 13rem; max-width: 40vw;
+}
+.prov-subs__bar {
+  display: flex; flex: 1; height: 8px; min-width: 4rem;
+  border-radius: var(--radius-pill); overflow: hidden;
+  background: var(--surface-sunken);
+}
+/* Solid tint fills at full strength — the same treatment as the design-system
+   kind chips (.ds-tag--markdown / --text / --url), which fill with `-tint` and
+   reserve the `-ink` for text only. Deliberately NOT the legend swatch recipe
+   (pale tint + 2px dark inset): that inset reads as a black line along an 8px
+   bar. And not the `-600` mid hues either — too dark against the page. */
+.prov-subs__seg { display: block; height: 100%; }
+.prov-subs__seg.legend-human  { background: var(--sand-300); }
+.prov-subs__seg.legend-pasted { background: var(--amber-tint); }
+.prov-subs__seg.legend-llm    { background: var(--blue-tint); }
+.prov-subs__seg.legend-edited { background: var(--green-tint); }

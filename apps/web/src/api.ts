@@ -2,6 +2,7 @@
 // else is plain JSON.
 
 import type { AgentDefinition } from "@marginalia/backbone";
+import type { TermSeason } from "./course/term.js";
 
 /**
  * Build a fully-qualified URL for an API path. When the frontend is served
@@ -73,6 +74,8 @@ export interface AgentSummary {
   title: string;
   hasBackbone: boolean;
   hasCollection: boolean;
+  /** v1.1 — true only for instructors on agents with a hidden A/B split. */
+  hasVariants: boolean;
   voice: AgentDefinition["voice"];
   updatedAt: number;
   /** Most recent conversation this user has against this agent (§13). */
@@ -245,7 +248,25 @@ export type TurnEvent =
     }
   | { type: "error"; message: string };
 
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
+/** Options for jsonFetch beyond the standard RequestInit. */
+interface JsonFetchOpts {
+  /**
+   * Suppress the automatic redirect-to-sign-in on 401 and let the caller
+   * handle it. Set this on any endpoint whose page renders its OWN sign-in
+   * affordance: otherwise the automatic navigation and a user click on that
+   * affordance both hit /auth/login, each minting a fresh OIDC state cookie.
+   * The second Set-Cookie overwrites the first while the browser follows the
+   * first request's Google URL, so the returning `state` no longer matches
+   * the cookie and the callback rejects it with "Invalid state cookie".
+   */
+  noAuthRedirect?: boolean;
+}
+
+async function jsonFetch<T>(
+  url: string,
+  init?: RequestInit,
+  opts?: JsonFetchOpts,
+): Promise<T> {
   const res = await fetch(apiUrl(url), {
     ...fetchInit,
     ...init,
@@ -257,6 +278,12 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
     // so the post-callback redirect lands them where they were. This
     // covers (a) the cold first-time-visitor case, (b) the post-logout
     // case, and (c) sessions that expired in the background.
+    //
+    // Callers that own their sign-in UX opt out via noAuthRedirect and get
+    // a plain "Unauthorized" to branch on instead.
+    if (opts?.noAuthRedirect) {
+      throw new Error("Unauthorized");
+    }
     redirectToLogin();
     // Surface a "redirecting" error to unblock any awaiting caller; the
     // page is about to navigate away regardless, so callers that catch
@@ -368,6 +395,21 @@ export interface MeEnrollment {
    *  A real on/off toggle, default ON. When off, the writing tool disappears
    *  from the student view entirely. */
   provenanceEnabled: boolean;
+  /** migration 0018 — whether the Agents extension is enabled for this course.
+   *  A real on/off toggle, default ON. When off, agents disappear from both
+   *  the instructor nav/dashboard and the student view. */
+  agentsEnabled: boolean;
+  /** v1.2 (migration 0017) — the semester this course is taught in, or null
+   *  when unscheduled. Academic year is derived from (termSeason, termYear)
+   *  via course/term.ts. */
+  termSeason: TermSeason | null;
+  termYear: number | null;
+  /** Active window, Unix ms at UTC day boundaries (null = open-ended). A course
+   *  is "current" when now is within [startDate, endDate] — see isCourseCurrent
+   *  in course/term.ts. Drives the header switcher's "Current Courses" list and
+   *  the picker's Current vs past split. */
+  startDate: number | null;
+  endDate: number | null;
 }
 export interface MeResponse {
   email: string;
@@ -607,6 +649,28 @@ export function getAgent(courseId: string, agentId: string) {
 }
 export function getAgentById(agentId: string) {
   return jsonFetch<AgentDetail>(`/api/agents/${agentId}`);
+}
+
+// v1.1 — hidden-variant results (instructor-only).
+export interface VariantResultStudent {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  variantId: string;
+  /** null ⇒ arm was removed from the definition after this student was assigned. */
+  variantLabel: string | null;
+  threadCount: number;
+}
+export interface VariantResults {
+  agentId: string;
+  title: string;
+  variants: Array<{ id: string; label: string }>;
+  students: VariantResultStudent[];
+}
+export function getVariantResults(courseId: string, agentId: string) {
+  return jsonFetch<VariantResults>(
+    `/api/agents/${agentId}/variants/results?courseId=${encodeURIComponent(courseId)}`,
+  );
 }
 
 export function createAgent(
@@ -857,12 +921,21 @@ export async function revokeJoinCode(
 
 /** Claim a join code as the signed-in user. Returns the course just joined.
  *  Idempotent on re-use by the same user. */
+/**
+ * Claim a join code. Opts out of the automatic 401 bounce: the join page
+ * renders its own "Sign in and try again" button, and letting both fire
+ * races two /auth/login hits against each other — see JsonFetchOpts.
+ */
 export function claimJoinCode(code: string) {
   return jsonFetch<{
     courseId: string;
     role: EnrollmentRole;
     alreadyEnrolled: boolean;
-  }>(`/api/join/${encodeURIComponent(code)}`, { method: "POST" });
+  }>(
+    `/api/join/${encodeURIComponent(code)}`,
+    { method: "POST" },
+    { noAuthRedirect: true },
+  );
 }
 
 /** v1.0 §6 — reveal a lazy-reveal feature tab (attendance / collections)
@@ -877,12 +950,13 @@ export function revealCourseTab(
   );
 }
 
-/** v1.1 — toggle an optional course module on/off (bidirectional, unlike
- *  revealCourseTab). Sources and Provenance are real on/off toggles that
- *  default ON; Attendance is opt-in. Instructor-only on the server. */
+/** v1.1 — toggle an optional course extension on/off (bidirectional, unlike
+ *  revealCourseTab). Agents and Provenance are real on/off toggles that
+ *  default ON; Attendance is opt-in. (Library is no longer toggleable.)
+ *  Instructor-only on the server. */
 export function setCourseFeature(
   courseId: string,
-  feature: "attendance" | "collections" | "provenance",
+  feature: "attendance" | "agents" | "provenance",
   enabled: boolean,
 ) {
   return jsonFetch<{ ok: true }>(
@@ -931,15 +1005,45 @@ export interface AuditEntry {
 // the new course's instructor). Distinct from createAdminCourse, which is the
 // admin console's bare course-row create. Returns the new course id so the SPA
 // can navigate straight into it.
-export function createCourse(name: string) {
+/** A course's term + active window, as accepted by create/update and returned
+ *  from update. Term season/year set the category; start/end (Unix ms, UTC day
+ *  boundaries, null = open-ended) set the active window. */
+export interface CoursePatch {
+  termSeason?: TermSeason | null;
+  termYear?: number | null;
+  startDate?: number | null;
+  endDate?: number | null;
+}
+
+export function createCourse(name: string, patch?: CoursePatch) {
   return jsonFetch<{
     id: string;
     name: string;
     createdAt: number;
+    termSeason: TermSeason | null;
+    termYear: number | null;
+    startDate: number | null;
+    endDate: number | null;
     joinCode: string | null;
   }>(`/api/courses`, {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...(patch ?? {}) }),
+  });
+}
+
+/** Update a course's term and/or active window. Instructor-gated on the server.
+ *  Only the keys present in `patch` are written; an explicit null clears a
+ *  field (e.g. `{ termSeason: null, termYear: null }` unschedules). */
+export function updateCourse(courseId: string, patch: CoursePatch) {
+  return jsonFetch<{
+    id: string;
+    termSeason: TermSeason | null;
+    termYear: number | null;
+    startDate: number | null;
+    endDate: number | null;
+  }>(`/api/courses/${encodeURIComponent(courseId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
   });
 }
 

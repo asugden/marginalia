@@ -24,7 +24,11 @@ interface BrandConfig {
   page_title?: string;
   /** Header-lockup wordmark text (defaults to page_title). */
   wordmark?: string;
-  /** How many leading wordmark characters are painted in the accent colour. */
+  /** 0-based offset where the accent-coloured run of the wordmark begins
+   *  (default 0 = the start, i.e. a leading prefix). */
+  wordmark_accent_start?: number;
+  /** How many wordmark characters (from accent_start) are painted in the
+   *  accent colour. 0 = none. */
   wordmark_accent_len?: number;
   /** Optional brand mark image (header lockup + agent avatar); null = none. */
   mark_url?: string | null;
@@ -100,6 +104,7 @@ export function themePlugin(): Plugin {
             b.footer_text ?? "Marginalia · open source under Apache 2.0"
           ),
           "import.meta.env.BRAND_WORDMARK": JSON.stringify(b.wordmark ?? title),
+          "import.meta.env.BRAND_WORDMARK_ACCENT_START": JSON.stringify(b.wordmark_accent_start ?? 0),
           "import.meta.env.BRAND_WORDMARK_ACCENT_LEN": JSON.stringify(b.wordmark_accent_len ?? 0),
           "import.meta.env.BRAND_MARK_URL": JSON.stringify(b.mark_url ?? ""),
         },

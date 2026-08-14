@@ -40,6 +40,8 @@ export type {
   VoiceShareEntry,
   VoiceSummary,
   SharedVoiceSummary,
+  VariantResults,
+  VariantResultStudent,
 } from "./api.js";
 
 const useMock = import.meta.env.VITE_MOCK_API === "true";
@@ -74,6 +76,9 @@ export const getAgent = impl.getAgent;
 // v1.0 §7.1 — compose mode (/new/:agentId) doesn't know the course;
 // the worker infers it from the agent row.
 export const getAgentById = (impl as typeof real).getAgentById;
+// v1.1 — hidden-variant results. Instructor-only; mock mode doesn't
+// implement it (no per-user assignment ledger in the mock model).
+export const getVariantResults = (impl as typeof real).getVariantResults;
 export const createAgent = impl.createAgent;
 export const updateAgent = impl.updateAgent;
 export const deleteAgent = impl.deleteAgent;
@@ -105,6 +110,8 @@ export const setCourseFeature = (impl as typeof real).setCourseFeature;
 // Instructor-facing course creation. Mock mode doesn't simulate it (the mock
 // has no mutable course set); calling it in mock mode throws.
 export const createCourse = (impl as typeof real).createCourse;
+// v1.2 — instructor sets a course's term + active window (start/end dates).
+export const updateCourse = (impl as typeof real).updateCourse;
 // v0.6 §5 — admin console. Mock mode doesn't simulate these (the mock has no
 // per-org admin set or audit log).
 export const listAdminCourses = (impl as typeof real).listAdminCourses;

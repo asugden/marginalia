@@ -36,6 +36,10 @@ Every field is optional — anything you omit keeps the default in
 | Field | Type | Default | Controls |
 |---|---|---|---|
 | `page_title` | string | `"Marginalia"` | Browser tab title and (by default) the home-page H1. Also exposed to React as `import.meta.env.BRAND_PAGE_TITLE`. |
+| `wordmark` | string | (same as `page_title`) | Header-lockup text. |
+| `wordmark_accent_start` | number | `0` | 0-based offset where the accent-coloured run of the wordmark begins. `0` = a leading prefix; a higher value accents a **mid-word** run. |
+| `wordmark_accent_len` | number | `0` | How many wordmark characters (from `wordmark_accent_start`) are painted in the accent. `0` = none. |
+| `mark_url` | path or `null` | `null` | Brand mark image at the left of the lockup (and the agent avatar). Path under `/branding/`. |
 | `primary` | hex colour | `#2b62a8` | The brand accent. Drives primary buttons, focus rings, link colour, the user-message bubble, the wordmark accent. White text must read on it. **Re-tints the whole accent scale** (see below). |
 | `primary_dark` | hex colour | `#1c4474` | Hover/active shade of the accent. Aim ~10–15% darker than `primary`. Also feeds the derived scale. |
 | `font_sans` | font-family string | `"Hanken Grotesk", …` | Body + UI + headings. Pasted verbatim as a CSS `font-family` value — quote names with spaces and include fallbacks. |

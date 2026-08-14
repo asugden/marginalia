@@ -31,7 +31,7 @@ export function RootRedirect() {
   const initial = (() => {
     const boot = readBootstrap();
     if (boot?.kind === "agents") {
-      return { kind: "to", path: `/course/${boot.courseId}` } as const;
+      return { kind: "to", path: `/course/${boot.courseId}/dashboard` } as const;
     }
     if (boot?.kind === "picker") {
       return { kind: "to", path: "/courses" } as const;
@@ -59,7 +59,7 @@ export function RootRedirect() {
             path:
               only.role === "instructor"
                 ? `/course/${only.courseId}/instructor`
-                : `/course/${only.courseId}`,
+                : `/course/${only.courseId}/dashboard`,
           });
         } else if (m.isAdmin) {
           // A pure admin (no course enrollments) has nowhere to be *sent*

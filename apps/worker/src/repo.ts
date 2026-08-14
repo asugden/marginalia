@@ -3,6 +3,7 @@
 
 import type {
   AgentRow,
+  AgentVariantAssignmentRow,
   AuditLogRow,
   CollectionRow,
   CollectionSourceKind,
@@ -15,6 +16,7 @@ import type {
   EnrollmentRow,
   MessageRow,
   MessageSourceRow,
+  TermSeason,
   UserRow,
   VoiceRow,
 } from "@marginalia/schema";
@@ -187,6 +189,20 @@ export interface UserEnrollmentRow {
    *  A real on/off toggle, default ON — when off, students don't see the
    *  writing tool at all. */
   provenanceEnabled: boolean;
+  /** Whether the Agents extension is enabled for this course (migration 0018).
+   *  A real on/off toggle, default ON — when off, the Agents tab disappears
+   *  from the instructor nav and agents disappear from the student view. */
+  agentsEnabled: boolean;
+  /** v1.2 (migration 0017) — the semester this course is taught in, or null
+   *  when unscheduled. Academic year is derived client-side from
+   *  (termSeason, termYear). */
+  termSeason: TermSeason | null;
+  termYear: number | null;
+  /** Active window, Unix ms at UTC day boundaries (null = open-ended). A course
+   *  is "current" when now is within [startDate, endDate] — see isCourseCurrent
+   *  in term.ts. Replaces the removed manual archived flag. */
+  startDate: number | null;
+  endDate: number | null;
 }
 export async function listEnrollmentsForUserEnriched(
   db: D1Database,
@@ -204,10 +220,12 @@ export async function listEnrollmentsForUserEnriched(
       // (opt-in, in-person only). See migration 0015.
       `SELECT e.course_id, c.name AS course_name, e.role,
               e.created_at AS joined_at,
+              c.term_season, c.term_year, c.start_date, c.end_date,
               COALESCE(s.show_attendance, 0)  AS show_attendance,
               COALESCE(s.show_collections, 1) AS show_collections,
               COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks,
-              COALESCE(s.provenance_enabled, 1) AS provenance_enabled
+              COALESCE(s.provenance_enabled, 1) AS provenance_enabled,
+              COALESCE(s.agents_enabled, 1) AS agents_enabled
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        LEFT JOIN course_settings s ON s.course_id = e.course_id
@@ -220,20 +238,30 @@ export async function listEnrollmentsForUserEnriched(
       course_name: string;
       role: EnrollmentRole;
       joined_at: number;
+      term_season: TermSeason | null;
+      term_year: number | null;
+      start_date: number | null;
+      end_date: number | null;
       show_attendance: number;
       show_collections: number;
       hide_provenance_marks: number;
       provenance_enabled: number;
+      agents_enabled: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
     courseName: r.course_name,
     role: r.role,
     joinedAt: r.joined_at,
+    termSeason: r.term_season,
+    termYear: r.term_year,
+    startDate: r.start_date,
+    endDate: r.end_date,
     showAttendance: r.show_attendance === 1,
     showCollections: r.show_collections === 1,
     hideProvenanceMarks: r.hide_provenance_marks === 1,
     provenanceEnabled: r.provenance_enabled === 1,
+    agentsEnabled: r.agents_enabled === 1,
   }));
 }
 
@@ -268,20 +296,21 @@ export async function markCourseFeatureShown(
 
 /** v1.1 — set a per-course module flag to an explicit on/off value. Unlike
  *  markCourseFeatureShown (one-way reveal), this is bidirectional so the
- *  course-admin toggles can turn Sources / Provenance / Attendance back off.
- *  Same single-round-trip upsert; the column allow-list keeps the interpolated
+ *  course-admin toggles can turn Agents / Provenance / Attendance back off.
+ *  (Library is no longer toggleable — see migration 0018.) Same
+ *  single-round-trip upsert; the column allow-list keeps the interpolated
  *  identifier safe. */
 export async function setCourseFeature(
   db: D1Database,
   courseId: string,
-  feature: "attendance" | "collections" | "provenance",
+  feature: "attendance" | "agents" | "provenance",
   enabled: boolean,
 ): Promise<void> {
   const column =
     feature === "attendance"
       ? "show_attendance"
-      : feature === "collections"
-        ? "show_collections"
+      : feature === "agents"
+        ? "agents_enabled"
         : "provenance_enabled";
   await db
     .prepare(
@@ -531,6 +560,140 @@ export async function findAgentById(
     .prepare("SELECT * FROM agents WHERE id = ?")
     .bind(agentId)
     .first<AgentRow>();
+}
+
+// ── hidden variant assignments (v1.1) ──────────────────────────────────────
+
+/** The current sticky assignment for (agent, user), or null if none yet. */
+export async function findVariantAssignment(
+  db: D1Database,
+  agentId: string,
+  userId: string,
+): Promise<AgentVariantAssignmentRow | null> {
+  return db
+    .prepare(
+      "SELECT * FROM agent_variant_assignments WHERE agent_id = ? AND user_id = ?",
+    )
+    .bind(agentId, userId)
+    .first<AgentVariantAssignmentRow>();
+}
+
+/**
+ * Get this student's sticky arm for a split agent, assigning one on first
+ * call. Balanced: picks (uniformly at random) among the arms with the
+ * fewest current assignments, so groups stay even as students trickle in.
+ *
+ * `validVariantIds` is the arm-id set from the *current* definition. We only
+ * ever assign to one of these, so an arm removed from the definition after
+ * some students were assigned won't receive new students — but existing
+ * assignments to a since-removed arm are preserved (sticky), and the caller
+ * falls back to a surviving arm for their voice when that happens.
+ *
+ * Concurrency: two first-starts for the same student could race. The INSERT
+ * is guarded by the UNIQUE(agent_id, user_id) constraint with ON CONFLICT DO
+ * NOTHING; we then re-read, so both requests converge on whichever row won —
+ * a student can never end up double-assigned.
+ */
+export async function getOrAssignVariant(
+  db: D1Database,
+  params: {
+    courseId: string;
+    agentId: string;
+    userId: string;
+    validVariantIds: string[];
+  },
+): Promise<string> {
+  const { courseId, agentId, userId, validVariantIds } = params;
+  if (validVariantIds.length === 0) {
+    throw new Error("getOrAssignVariant called with no valid variant ids");
+  }
+
+  const existing = await findVariantAssignment(db, agentId, userId);
+  if (existing) return existing.variant_id;
+
+  // Balanced pick: tally current assignments per arm, choose among the
+  // least-filled valid arms. Arms with zero assignments don't appear in the
+  // GROUP BY, so seed every valid arm at 0 first.
+  const counts = new Map<string, number>(validVariantIds.map((v) => [v, 0]));
+  const { results } = await db
+    .prepare(
+      `SELECT variant_id, COUNT(*) AS n
+       FROM agent_variant_assignments
+       WHERE agent_id = ?
+       GROUP BY variant_id`,
+    )
+    .bind(agentId)
+    .all<{ variant_id: string; n: number }>();
+  for (const r of results ?? []) {
+    if (counts.has(r.variant_id)) counts.set(r.variant_id, r.n);
+  }
+  let min = Infinity;
+  for (const v of validVariantIds) min = Math.min(min, counts.get(v) ?? 0);
+  const leastFilled = validVariantIds.filter((v) => (counts.get(v) ?? 0) === min);
+  // leastFilled is non-empty (validVariantIds is non-empty and min is drawn
+  // from it), so the index is always in range.
+  const chosen = leastFilled[Math.floor(Math.random() * leastFilled.length)]!;
+
+  await db
+    .prepare(
+      `INSERT INTO agent_variant_assignments
+         (id, course_id, agent_id, user_id, variant_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (agent_id, user_id) DO NOTHING`,
+    )
+    .bind(id("varasg"), courseId, agentId, userId, chosen, now())
+    .run();
+
+  // Re-read: if a concurrent request won the insert, its variant is
+  // authoritative and ours was a no-op.
+  const settled = await findVariantAssignment(db, agentId, userId);
+  return settled?.variant_id ?? chosen;
+}
+
+/** One row of the instructor variant-results table. */
+export interface VariantResultEntry {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  variantId: string;
+  threadCount: number;
+}
+
+/**
+ * Per-student variant assignments for one agent, with how many conversations
+ * each student has started against it. Instructor-only; course-scoped.
+ * Students who were assigned but haven't chatted still appear (threadCount 0).
+ */
+export async function listVariantResults(
+  db: D1Database,
+  courseId: string,
+  agentId: string,
+): Promise<VariantResultEntry[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT a.user_id, u.email, u.display_name, a.variant_id,
+              (SELECT COUNT(*) FROM conversations c
+                 WHERE c.agent_id = a.agent_id AND c.user_id = a.user_id) AS thread_count
+       FROM agent_variant_assignments a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.agent_id = ? AND a.course_id = ?
+       ORDER BY a.variant_id, u.email`,
+    )
+    .bind(agentId, courseId)
+    .all<{
+      user_id: string;
+      email: string;
+      display_name: string | null;
+      variant_id: string;
+      thread_count: number;
+    }>();
+  return (results ?? []).map((r) => ({
+    userId: r.user_id,
+    email: r.email,
+    displayName: r.display_name,
+    variantId: r.variant_id,
+    threadCount: r.thread_count,
+  }));
 }
 
 /**
@@ -1672,21 +1835,84 @@ export async function listCoursesWithEnrollmentCounts(
 
 export async function createCourse(
   db: D1Database,
-  params: { orgId: string; name: string },
+  params: {
+    orgId: string;
+    name: string;
+    termSeason?: TermSeason | null;
+    termYear?: number | null;
+    startDate?: number | null;
+    endDate?: number | null;
+  },
 ): Promise<CourseRow> {
   const row: CourseRow = {
     id: id("course"),
     org_id: params.orgId,
     name: params.name,
     created_at: now(),
+    term_season: params.termSeason ?? null,
+    term_year: params.termYear ?? null,
+    start_date: params.startDate ?? null,
+    end_date: params.endDate ?? null,
   };
   await db
     .prepare(
-      `INSERT INTO courses (id, org_id, name, created_at) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO courses (id, org_id, name, created_at, term_season, term_year, start_date, end_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(row.id, row.org_id, row.name, row.created_at)
+    .bind(
+      row.id,
+      row.org_id,
+      row.name,
+      row.created_at,
+      row.term_season,
+      row.term_year,
+      row.start_date,
+      row.end_date,
+    )
     .run();
   return row;
+}
+
+/** Update a course's term and/or active window. Only the fields present in
+ *  `patch` are written — undefined leaves the column untouched; an explicit
+ *  null clears it. Values are validated by the caller (the route) before this
+ *  runs. */
+export async function updateCourse(
+  db: D1Database,
+  courseId: string,
+  patch: {
+    termSeason?: TermSeason | null;
+    termYear?: number | null;
+    startDate?: number | null;
+    endDate?: number | null;
+  },
+): Promise<CourseRow | null> {
+  const sets: string[] = [];
+  const binds: (string | number | null)[] = [];
+  if (patch.termSeason !== undefined) {
+    sets.push("term_season = ?");
+    binds.push(patch.termSeason);
+  }
+  if (patch.termYear !== undefined) {
+    sets.push("term_year = ?");
+    binds.push(patch.termYear);
+  }
+  if (patch.startDate !== undefined) {
+    sets.push("start_date = ?");
+    binds.push(patch.startDate);
+  }
+  if (patch.endDate !== undefined) {
+    sets.push("end_date = ?");
+    binds.push(patch.endDate);
+  }
+  if (sets.length > 0) {
+    binds.push(courseId);
+    await db
+      .prepare(`UPDATE courses SET ${sets.join(", ")} WHERE id = ?`)
+      .bind(...binds)
+      .run();
+  }
+  return findCourseById(db, courseId);
 }
 
 // ── join codes (v0.6 §4) ───────────────────────────────────────────────────

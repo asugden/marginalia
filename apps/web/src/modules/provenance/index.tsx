@@ -6,3 +6,4 @@ export { DocumentListPage } from "./components/DocumentListPage.js";
 export { EditorPage } from "./components/EditorPage.js";
 export { AgentsPage } from "./components/AgentsPage.js";
 export { PublicSubmissionPage } from "./components/PublicSubmissionPage.js";
+export { SubmissionsPage } from "./components/SubmissionsPage.js";

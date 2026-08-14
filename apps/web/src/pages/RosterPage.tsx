@@ -31,6 +31,8 @@ import {
   Field,
   IconButton,
   Input,
+  PageHeader,
+  Section,
   useConfirm,
 } from "../components/index.js";
 import { PlusIcon, TrashIcon } from "../icons.js";
@@ -171,30 +173,19 @@ export function RosterPage() {
 
   return (
     <div className="app-page">
-      <div className="app-page__head">
-        <div>
-          <span className="eyebrow">Roster</span>
-          <h1>People</h1>
-          <div className="app-page__scope">
-            Students enrolled in this course. They add themselves with the join
-            code below — no manual invites. Instructors are managed in the Admin
-            console, not here.
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Roster"
+        title="People"
+        scope="Students enrolled in this course. They add themselves with the join code below — no manual invites. Instructors are managed in the Admin console, not here."
+      />
 
       {error && <p className="error">{error}</p>}
 
       {/* Join codes — the way students enroll. */}
-      <div className="app-section">
-        <span className="mono-label app-section__label">
-          Join code · share with students
-        </span>
-        <p className="muted small">
-          Share a code (or the join link) so students can self-enroll after
-          signing in. Codes only ever add students. Allowed email domains are
-          set instance-wide in ALLOWED_EMAIL_DOMAINS — see the operations docs.
-        </p>
+      <Section
+        kicker="Join code · share with students"
+        description="Share a code (or the join link) so students can self-enroll after signing in. Codes only ever add students. Allowed email domains are set instance-wide in ALLOWED_EMAIL_DOMAINS — see the operations docs."
+      >
         {codesError && <p className="error">{codesError}</p>}
         <div className="joincode">
           <div style={{ flex: 1, minWidth: "10rem" }}>
@@ -280,33 +271,21 @@ export function RosterPage() {
             })}
           </div>
         )}
-      </div>
+      </Section>
 
       {/* Enrolled students. */}
-      <div className="app-section">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.7rem",
-            gap: "1rem",
-          }}
-        >
-          <span className="mono-label">
-            Enrolled · {students.length} student
-            {students.length === 1 ? "" : "s"}
-          </span>
-          <div style={{ maxWidth: "16rem", flex: 1 }}>
-            <Input
-              type="search"
-              placeholder="Filter by email…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </div>
-
+      <Section
+        kicker={`Enrolled · ${students.length} student${students.length === 1 ? "" : "s"}`}
+        actions={
+          <Input
+            type="search"
+            placeholder="Filter by email…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ width: "16rem", maxWidth: "40vw" }}
+          />
+        }
+      >
         {roster === null ? (
           <p className="muted">Loading…</p>
         ) : filtered.length === 0 ? (
@@ -360,7 +339,7 @@ export function RosterPage() {
             })}
           </div>
         )}
-      </div>
+      </Section>
       {confirmDialog}
     </div>
   );

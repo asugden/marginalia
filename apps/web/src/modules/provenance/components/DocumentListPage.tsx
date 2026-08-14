@@ -1,5 +1,5 @@
 // List of the signed-in student's provenance documents in the course. Rendered
-// as a body page inside StudentLayout at /course/:courseId/write — course id /
+// as a body page inside StudentLayout at /course/:courseId/writing — course id /
 // role come from useCourse() (the shell validated enrollment), so there's no
 // separate course resolution or switcher here. The writing list IS the student
 // preview of provenance: an open place to start a new piece plus the saved
@@ -21,7 +21,7 @@ import { DocIcon, PlusIcon, TrashIcon } from "../../../icons.js";
 export function DocumentListPage() {
   const navigate = useNavigate();
   const { courseId } = useCourse();
-  const writeBase = `/course/${courseId}/write`;
+  const writeBase = `/course/${courseId}/writing`;
 
   const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);

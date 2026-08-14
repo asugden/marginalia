@@ -16,8 +16,9 @@
 //   GET  /api/conversations/:id             - fetch transcript + state
 //   POST /api/conversations/:id/messages    - send a student turn, stream the reply
 
-import { AnthropicProvider, ProviderError } from "@marginalia/providers";
+import { ProviderError } from "@marginalia/providers";
 import type { LLMProvider, Message as LLMMessage } from "@marginalia/providers";
+import { llmConfigured, modelChoices, providerFor } from "./llm.js";
 import {
   buildPrompt,
   clarityNoteFor,
@@ -26,9 +27,10 @@ import {
   initialState,
   transition,
   type AgentDefinition,
+  type AgentVariant,
   type BackboneState,
 } from "@marginalia/backbone";
-import { LIBRARY } from "@marginalia/voices";
+import { LIBRARY, type VoiceRef } from "@marginalia/voices";
 import { parseCookies, SESSION_COOKIE } from "@marginalia/auth";
 import type { Env } from "./env.js";
 import { assertProdConfigured, authenticate, type Identity } from "./auth.js";
@@ -45,8 +47,14 @@ import {
   retrieve,
   type Retrieved,
 } from "./rag.js";
-import type { CollectionSourceKind, EnrollmentRole, VoiceRow } from "@marginalia/schema";
-import { routeProvenance, routeProvenancePublic } from "./modules/provenance/routes.js";
+import type {
+  CollectionSourceKind,
+  EnrollmentRole,
+  TermSeason,
+  VoiceRow,
+} from "@marginalia/schema";
+import { isTermSeason } from "@marginalia/schema";
+import { routeProvenance } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
 
 // v0.1 single-tenant default. Phase 2 derives org from the authenticated email.
@@ -56,12 +64,21 @@ const DEFAULT_ORG = "default";
  * Whitelisted model ids. An agent's `definition.model` must be one of these —
  * instructors don't get to type free-form model strings into a JSON editor
  * and quietly upgrade themselves to the most expensive tier.
+ *
+ * Driven by the LLM_MODELS deployment var, because valid ids depend entirely on
+ * which provider the instance is pointed at: a gateway rewrites model ids into
+ * its own namespace, so no hardcoded list can be correct for every deployment.
+ * DEFAULT_MODEL is always permitted — it's the value used when an agent names
+ * no model, so rejecting it would be incoherent.
+ *
+ * When LLM_MODELS is unset, only DEFAULT_MODEL is allowed. That fails closed:
+ * a misconfigured instance restricts choice rather than opening it up.
  */
-const ALLOWED_MODELS: ReadonlySet<string> = new Set([
-  "claude-haiku-4-5-20251001",
-  "claude-sonnet-4-6",
-  "claude-opus-4-7",
-]);
+function allowedModels(env: Env): ReadonlySet<string> {
+  const ids = modelChoices(env).map((m) => m.id);
+  if (env.DEFAULT_MODEL) ids.push(env.DEFAULT_MODEL);
+  return new Set(ids);
+}
 
 /** Hard ceiling on a single student message. Cheap to enforce; bounds embed/LLM cost. */
 const MAX_MESSAGE_CHARS = 8_000;
@@ -179,16 +196,14 @@ export default {
       return applyCors(error("Not found", 404), origin);
     }
 
-    // Provenance public submission view — the ONE unauthenticated API in
-    // the provenance module. A shared link must work without sign-in, so
-    // this carve-out runs before the authenticate() gate below. It reads
-    // only frozen, owner-minted snapshots by unguessable token.
-    if (url.pathname.startsWith("/api/provenance/public/")) {
-      const parts = url.pathname.split("/").filter(Boolean);
-      const res = await routeProvenancePublic(req, env, parts);
-      if (res) return applyCors(res, origin);
-      return applyCors(error("Not found", 404), origin);
-    }
+    // NOTE: /api/provenance/public/* used to be carved out here as the one
+    // unauthenticated API in the module, so a share link worked without
+    // sign-in. It no longer is: the frozen render is an integrity artifact, and
+    // an unauthenticated viewer let a student check their own draft against the
+    // origin coloring and iterate until it looked clean. Those routes now fall
+    // through to the authenticate() gate and are instructor-gated per-course
+    // inside the module (see requireSubmissionInstructor). The path kept its
+    // "public" segment so old links resolve rather than 404.
 
     const identity = await authenticate(req, env);
     if (!identity) return applyCors(error("Unauthorized", 401), origin);
@@ -343,6 +358,15 @@ async function route(
     if (req.method === "POST" && parts.length === 4 && sub === "duplicate-to") {
       return duplicateAgentToRoute(req, env, identity, tail!);
     }
+    // v1.1 — GET /api/agents/:id/variants/results (instructor-only)
+    if (
+      req.method === "GET" &&
+      parts.length === 5 &&
+      sub === "variants" &&
+      parts[4] === "results"
+    ) {
+      return variantResultsRoute(req, env, url, identity, tail!);
+    }
     if (req.method === "PUT" && parts.length === 3) {
       return updateAgentRoute(req, env, identity, tail!);
     }
@@ -408,6 +432,13 @@ async function route(
   // allowlist already decides who can be here at all.
   if (head === "courses" && req.method === "POST" && parts.length === 2) {
     return createCourseRoute(req, env, identity);
+  }
+
+  // PATCH /api/courses/:courseId — instructor sets the course's term / archives
+  // it. Guarded to the course's instructor inside the handler. parts.length===3
+  // uniquely matches the bare course resource (join-codes etc. are longer).
+  if (head === "courses" && req.method === "PATCH" && parts.length === 3) {
+    return updateCourseRoute(req, env, identity, tail!);
   }
 
   // /api/courses/:courseId/join-codes[/:code]
@@ -780,13 +811,10 @@ async function previewVoiceRoute(
     ? body.promptKey
     : "derivative";
   const question = PREVIEW_PROMPTS[promptKey]!;
-  if (!env.ANTHROPIC_API_KEY) {
+  if (!llmConfigured(env)) {
     return error("LLM provider not configured", 500);
   }
-  const provider: LLMProvider = new AnthropicProvider({
-    apiKey: env.ANTHROPIC_API_KEY,
-    model: env.DEFAULT_MODEL,
-  });
+  const provider: LLMProvider = providerFor(env);
   try {
     const reply = await provider.chat(
       [{ role: "user", content: question }],
@@ -1036,6 +1064,10 @@ async function loadAgentsForCourse(
   ]);
   if (!enrollment) return { status: "forbidden" };
   const lastByAgent = new Map(lastConvs.map((c) => [c.agentId, c]));
+  // v1.1 — a hidden split stays hidden from students. Only instructors get
+  // the `hasVariants` flag (which drives the "split" badge + results link);
+  // for students it's always false so nothing hints at the experiment.
+  const isInstructor = isAuthor(enrollment.role);
   return {
     status: "ok",
     agents: rows.map((r) => {
@@ -1046,6 +1078,7 @@ async function loadAgentsForCourse(
         title: r.title,
         hasBackbone: !!def.backbone,
         hasCollection: !!def.collectionId,
+        hasVariants: isInstructor && !!def.variants && def.variants.length >= 2,
         voice: def.voice,
         updatedAt: r.updated_at,
         lastConversationId: last?.conversationId ?? null,
@@ -1061,6 +1094,7 @@ interface AgentSummaryShape {
   title: string;
   hasBackbone: boolean;
   hasCollection: boolean;
+  hasVariants: boolean;
   voice: AgentDefinition["voice"];
   updatedAt: number;
   lastConversationId: string | null;
@@ -1105,12 +1139,74 @@ async function getAgentRoute(
   const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
 
+  const definition = JSON.parse(row.definition) as AgentDefinition;
+  // v1.1 — a hidden split must stay hidden. The `variants` array carries
+  // instructor-only arm labels and which voice each arm uses; students
+  // fetch this definition in compose mode (ConversationPage) to preview the
+  // outline, so strip it for non-instructors. The student's own arm is
+  // never exposed here at all — it's chosen server-side at conversation
+  // start and only ever materialised into their private snapshot.
+  if (!isAuthor(resolved.enrollment.role)) {
+    delete definition.variants;
+  }
+
   return json({
     id: row.id,
     courseId: row.course_id,
     title: row.title,
-    definition: JSON.parse(row.definition) as AgentDefinition,
+    definition,
     updatedAt: row.updated_at,
+  });
+}
+
+/**
+ * v1.1 — GET /api/agents/:id/variants/results
+ *
+ * Instructor-only view of a hidden split: which arm each student was
+ * assigned, and how many conversations they've had on this agent. Returns
+ * the arm labels from the current definition so the table reads in the
+ * instructor's own words, plus rows for any orphaned assignments (a student
+ * on an arm since removed from the definition).
+ */
+async function variantResultsRoute(
+  _req: Request,
+  env: Env,
+  url: URL,
+  identity: Identity,
+  agentId: string,
+): Promise<Response> {
+  const courseIdParam = url.searchParams.get("courseId");
+  const row = courseIdParam
+    ? await repo.getAgent(env.DB, courseIdParam, agentId)
+    : await repo.findAgentById(env.DB, agentId);
+  if (!row) return error("Agent not found", 404);
+  const courseId = row.course_id;
+  const resolved = await resolveUser(env, identity, courseId);
+  if (!resolved) return error("Not enrolled in this course", 403);
+  if (!isAuthor(resolved.enrollment.role)) {
+    return error("Instructor only", 403);
+  }
+
+  const def = JSON.parse(row.definition) as AgentDefinition;
+  const arms = def.variants ?? [];
+  const labelById = new Map(arms.map((a) => [a.id, a.label]));
+
+  const rows = await repo.listVariantResults(env.DB, courseId, agentId);
+  return json({
+    agentId: row.id,
+    title: row.title,
+    // The arm set as it stands now, for column ordering / headers.
+    variants: arms.map((a) => ({ id: a.id, label: a.label })),
+    students: rows.map((r) => ({
+      userId: r.userId,
+      email: r.email,
+      displayName: r.displayName,
+      variantId: r.variantId,
+      // null label ⇒ the arm was removed from the definition after this
+      // student was assigned. The UI flags it as "(removed arm)".
+      variantLabel: labelById.get(r.variantId) ?? null,
+      threadCount: r.threadCount,
+    })),
   });
 }
 
@@ -1333,44 +1429,47 @@ async function listDuplicableAgentsRoute(
  * between tenants, violating the "filter by course_id, no exceptions"
  * invariant).
  */
-async function validateAgentDefinition(
+/**
+ * Validate a single VoiceRef (library / custom-ref / custom). Returns an
+ * error string or null. Shared by the agent's top-level voice and each
+ * hidden-variant arm's voice. `callerUserId` is required to check that a
+ * custom-ref is usable (owned or shared) by the saving instructor.
+ */
+async function validateVoiceRef(
   env: Env,
-  courseId: string,
-  def: AgentDefinition,
+  voice: VoiceRef | undefined,
   callerUserId: string | null,
 ): Promise<string | null> {
-  if (def.version !== 2) return "definition.version must be 2";
-  if (!def.voice ||
-      (def.voice.kind !== "library" &&
-       def.voice.kind !== "custom" &&
-       def.voice.kind !== "custom-ref")) {
-    return "definition.voice must be a library, custom-ref, or custom ref";
+  if (!voice ||
+      (voice.kind !== "library" &&
+       voice.kind !== "custom" &&
+       voice.kind !== "custom-ref")) {
+    return "voice must be a library, custom-ref, or custom ref";
   }
-  if (def.voice.kind === "library") {
-    const ref = def.voice;
-    if (!LIBRARY.some((v) => v.id === ref.id)) {
-      return `Unknown library voice: ${ref.id}`;
+  if (voice.kind === "library") {
+    if (!LIBRARY.some((v) => v.id === voice.id)) {
+      return `Unknown library voice: ${voice.id}`;
     }
-  } else if (def.voice.kind === "custom-ref") {
+  } else if (voice.kind === "custom-ref") {
     // v0.7 §1 — agents save by reference, not inline. The voice must
     // exist AND be usable by the saving instructor (owned or shared).
     if (!callerUserId) return "Sign in required to save a custom voice agent";
     const usable = await repo.findVoiceUsableByUser(
       env.DB,
-      def.voice.voiceId,
+      voice.voiceId,
       callerUserId,
     );
     if (!usable) {
       return "Voice not found, or not shared with you";
     }
-  } else if (def.voice.kind === "custom") {
+  } else if (voice.kind === "custom") {
     // Pre-v0.7 inline form. Still accepted so older agents keep saving
     // round-trip-clean; new editor saves use custom-ref. The inline `id`
     // is cosmetic — it's not used to resolve anything at turn time
     // (the inline definition wins via resolveVoice's switch on kind), so
     // collisions with library voice ids or real voices.id values are
     // harmless. resolveVoice does not look up custom-inline by id.
-    const inline = def.voice.definition;
+    const inline = voice.definition;
     if (
       !inline ||
       typeof inline.id !== "string" || !inline.id.trim() ||
@@ -1382,7 +1481,40 @@ async function validateAgentDefinition(
       return "Custom voice must include id, name, description, systemPromptFragment";
     }
   }
-  if (def.model !== undefined && !ALLOWED_MODELS.has(def.model)) {
+  return null;
+}
+
+async function validateAgentDefinition(
+  env: Env,
+  courseId: string,
+  def: AgentDefinition,
+  callerUserId: string | null,
+): Promise<string | null> {
+  if (def.version !== 2) return "definition.version must be 2";
+  // The top-level voice is always validated: it's the fallback and every
+  // definition must carry a well-formed one even when variants are present.
+  const voiceErr = await validateVoiceRef(env, def.voice, callerUserId);
+  if (voiceErr) return `definition.${voiceErr}`;
+
+  // v1.1 — hidden A/B variants. Two or more arms, each with a unique
+  // non-empty id, an instructor label, and a valid voice.
+  if (def.variants !== undefined) {
+    const arms = def.variants;
+    if (!Array.isArray(arms) || arms.length < 2) {
+      return "definition.variants must have at least two arms";
+    }
+    const seen = new Set<string>();
+    for (const arm of arms) {
+      if (!arm.id?.trim()) return "every variant needs a non-empty id";
+      if (seen.has(arm.id)) return `Duplicate variant id: ${arm.id}`;
+      seen.add(arm.id);
+      if (!arm.label?.trim()) return `Variant ${arm.id} needs a label`;
+      const armErr = await validateVoiceRef(env, arm.voice, callerUserId);
+      if (armErr) return `Variant ${arm.id} ${armErr}`;
+    }
+  }
+
+  if (def.model !== undefined && !allowedModels(env).has(def.model)) {
     return `Model ${def.model} is not in the allowed list`;
   }
   if (def.backbone) {
@@ -1496,17 +1628,17 @@ async function setFeatureRoute(
     return error("Instructor only", 403);
   }
   const body = (await req.json().catch(() => null)) as {
-    feature?: "attendance" | "collections" | "provenance";
+    feature?: "attendance" | "agents" | "provenance";
     enabled?: boolean;
   } | null;
   const feature = body?.feature;
   if (
     feature !== "attendance" &&
-    feature !== "collections" &&
+    feature !== "agents" &&
     feature !== "provenance"
   ) {
     return error(
-      "feature must be 'attendance', 'collections', or 'provenance'",
+      "feature must be 'attendance', 'agents', or 'provenance'",
       400,
     );
   }
@@ -1544,11 +1676,29 @@ async function createCourseRoute(
     userId = user.id;
   }
 
-  const body = (await req.json().catch(() => null)) as { name?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    name?: string;
+    termSeason?: unknown;
+    termYear?: unknown;
+    startDate?: unknown;
+    endDate?: unknown;
+  } | null;
   const name = body?.name?.trim();
   if (!name) return error("name is required", 400);
 
-  const course = await repo.createCourse(env.DB, { orgId: DEFAULT_ORG, name });
+  const term = parseTermInput(body?.termSeason, body?.termYear);
+  if (term instanceof Response) return term;
+  const dates = parseDateInput(body?.startDate, body?.endDate);
+  if (dates instanceof Response) return dates;
+
+  const course = await repo.createCourse(env.DB, {
+    orgId: DEFAULT_ORG,
+    name,
+    termSeason: term.termSeason,
+    termYear: term.termYear,
+    startDate: dates.startDate,
+    endDate: dates.endDate,
+  });
   await repo.createEnrollment(env.DB, {
     courseId: course.id,
     userId,
@@ -1586,10 +1736,116 @@ async function createCourseRoute(
       id: course.id,
       name: course.name,
       createdAt: course.created_at,
+      termSeason: course.term_season,
+      termYear: course.term_year,
+      startDate: course.start_date,
+      endDate: course.end_date,
       joinCode,
     },
     201,
   );
+}
+
+/** Validate the (season, year) pair from a request body. Both absent → an
+ *  unscheduled course (nulls). A season requires a plausible year and vice
+ *  versa — half a term is rejected. Returns an error Response on bad input. */
+function parseTermInput(
+  seasonRaw: unknown,
+  yearRaw: unknown,
+): { termSeason: TermSeason | null; termYear: number | null } | Response {
+  const hasSeason = seasonRaw !== undefined && seasonRaw !== null;
+  const hasYear = yearRaw !== undefined && yearRaw !== null;
+  if (!hasSeason && !hasYear) return { termSeason: null, termYear: null };
+  if (hasSeason !== hasYear) {
+    return error("termSeason and termYear must be set together", 400);
+  }
+  if (!isTermSeason(seasonRaw)) {
+    return error("termSeason must be spring, summer, or fall", 400);
+  }
+  const year = typeof yearRaw === "number" ? yearRaw : Number(yearRaw);
+  if (!Number.isInteger(year) || year < 1900 || year > 3000) {
+    return error("termYear must be a plausible calendar year", 400);
+  }
+  return { termSeason: seasonRaw, termYear: year };
+}
+
+/** Validate the (start, end) active window from a request body. Each bound is a
+ *  Unix-ms integer or null (open-ended); they may be set independently, but if
+ *  both are present start must not be after end. Returns an error Response on
+ *  bad input. */
+function parseDateInput(
+  startRaw: unknown,
+  endRaw: unknown,
+): { startDate: number | null; endDate: number | null } | Response {
+  const one = (v: unknown, label: string): number | null | Response => {
+    if (v === undefined || v === null) return null;
+    if (typeof v !== "number" || !Number.isFinite(v) || !Number.isInteger(v)) {
+      return error(`${label} must be a Unix-ms integer or null`, 400);
+    }
+    return v;
+  };
+  const startDate = one(startRaw, "startDate");
+  if (startDate instanceof Response) return startDate;
+  const endDate = one(endRaw, "endDate");
+  if (endDate instanceof Response) return endDate;
+  if (startDate != null && endDate != null && startDate > endDate) {
+    return error("startDate must not be after endDate", 400);
+  }
+  return { startDate, endDate };
+}
+
+/** PATCH /api/courses/:id — instructor-on-course sets the term and/or the
+ *  active window. Term keys and date keys are independent partial updates. */
+async function updateCourseRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  courseId: string,
+): Promise<Response> {
+  const gate = await requireInstructor(env, identity, courseId);
+  if (gate instanceof Response) return gate;
+
+  const body = (await req.json().catch(() => null)) as {
+    termSeason?: unknown;
+    termYear?: unknown;
+    startDate?: unknown;
+    endDate?: unknown;
+  } | null;
+  if (!body) return error("body is required", 400);
+
+  const patch: {
+    termSeason?: TermSeason | null;
+    termYear?: number | null;
+    startDate?: number | null;
+    endDate?: number | null;
+  } = {};
+
+  // Term is set/cleared as a pair when either key is present.
+  if ("termSeason" in body || "termYear" in body) {
+    const term = parseTermInput(body.termSeason, body.termYear);
+    if (term instanceof Response) return term;
+    patch.termSeason = term.termSeason;
+    patch.termYear = term.termYear;
+  }
+  // Dates: each bound updated independently when its key is present. Validate
+  // ordering against the incoming pair (both keys are sent together by the UI).
+  if ("startDate" in body || "endDate" in body) {
+    const dates = parseDateInput(body.startDate, body.endDate);
+    if (dates instanceof Response) return dates;
+    if ("startDate" in body) patch.startDate = dates.startDate;
+    if ("endDate" in body) patch.endDate = dates.endDate;
+  }
+
+  const course = await repo.updateCourse(env.DB, courseId, patch);
+  if (!course) return error("Course not found", 404);
+  return json({
+    id: course.id,
+    name: course.name,
+    termSeason: course.term_season,
+    termYear: course.term_year,
+    startDate: course.start_date,
+    endDate: course.end_date,
+  });
 }
 
 async function createCollectionRoute(
@@ -2876,6 +3132,36 @@ async function startConversation(
   // this conversation; the agent's *next* conversation will materialise
   // fresh against the then-current fragment.
   const def = JSON.parse(agent.definition) as AgentDefinition;
+
+  // v1.1 — hidden A/B split. Before materialising the voice, pick this
+  // student's arm (sticky, assigned once, balanced across arms) and swap it
+  // in as `def.voice`. Everything downstream — materialisation, snapshot,
+  // turn execution — is arm-agnostic and just sees a single voice. The
+  // student is told nothing; `variants` never reaches the client.
+  if (def.variants && def.variants.length >= 2) {
+    const validIds = def.variants.map((a) => a.id);
+    const armId = await repo.getOrAssignVariant(env.DB, {
+      courseId,
+      agentId: agent.id,
+      userId: resolved.user.id,
+      validVariantIds: validIds,
+    });
+    // Sticky-through-edits: if the assigned arm was removed from the
+    // definition since assignment, fall back to the first surviving arm for
+    // this conversation's voice. The assignment row itself is untouched.
+    // `def.variants[0]` exists — length was checked >= 2 above.
+    const arm =
+      def.variants.find((a) => a.id === armId) ?? def.variants[0]!;
+    def.voice = arm.voice;
+  }
+  // Drop `variants` from the snapshot: a conversation runs against exactly
+  // one voice, and nothing student-facing should carry the arm set.
+  delete def.variants;
+
+  // v0.7 §1.2 — if the (now arm-resolved) voice is a `custom-ref`,
+  // materialise it into an inline `custom` here so the snapshot carries the
+  // prompt fragment, not a pointer. Future edits to the voice don't reach
+  // into this conversation.
   if (def.voice.kind === "custom-ref") {
     const v = await repo.findVoiceById(env.DB, def.voice.voiceId);
     if (!v) {
@@ -3164,10 +3450,7 @@ async function generateConversationTitle(
     return;
   }
   try {
-    const provider: LLMProvider = new AnthropicProvider({
-      apiKey: env.ANTHROPIC_API_KEY,
-      model: def.model ?? env.DEFAULT_MODEL,
-    });
+    const provider: LLMProvider = providerFor(env, def.model);
     if (!provider.titleModel) return; // provider opted out of incidental work
     const titleModel = provider.titleModel();
 
@@ -3335,10 +3618,7 @@ function streamTurn(params: {
 
   const prompt = buildPrompt(def, state);
 
-  const provider: LLMProvider = new AnthropicProvider({
-    apiKey: env.ANTHROPIC_API_KEY,
-    model: def.model ?? env.DEFAULT_MODEL,
-  });
+  const provider: LLMProvider = providerFor(env, def.model);
 
   const abort = new AbortController();
   const encoder = new TextEncoder();
