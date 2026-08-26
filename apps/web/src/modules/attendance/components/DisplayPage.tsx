@@ -40,6 +40,7 @@ const FLAG_LABEL: Record<string, string> = {
   duplicate_device: "repeat device",
   duplicate_cookie: "repeat device",
   late: "late",
+  auto_enrolled: "new enrollment",
 };
 
 // Staff chrome wrapper. Defined at module scope, not inside DisplayPage — an
