@@ -37,6 +37,7 @@ const FLAG_BLURB: Record<CheckinFlag, string> = {
   duplicate_device: "This device already checked someone in today — your instructor may follow up.",
   duplicate_cookie: "This device already checked someone in today — your instructor may follow up.",
   late: "",
+  auto_enrolled: "",  // joining the course is a normal outcome, not an anomaly
 };
 
 // Each flag maps to a small pill badge. `null` means "don't surface it."
@@ -48,6 +49,7 @@ const FLAG_BADGE: Record<CheckinFlag, { label: string; tone: BadgeTone } | null>
   duplicate_cookie: { label: "Shared device", tone: "warning" },
   late: { label: "Late", tone: "info" },
   no_geofence: null,
+  auto_enrolled: null,
 };
 
 export function CheckInPage() {

@@ -61,9 +61,31 @@ Mounted by `apps/worker/src/index.ts` at `/api/attendance/*`. See
   - `POST /sessions/:id/close`
   - `GET /sessions/:id/qr-token` rotating token (poll every ~15s)
   - `GET /sessions/:id/export.csv` Canvas-friendly export
-- **Student** (signed-in + enrolled, any role):
+- **Student** (signed-in; enrolled on demand — see Enrollment):
   - `GET /check/:id/info` minimal session info
   - `POST /check/:id` submit (token + geo + fingerprint)
+
+## Enrollment
+
+Check-in **enrolls the student if they aren't already** (`role = 'student'`),
+rather than rejecting them. A valid rotating token is only obtainable from the
+QR the instructor is projecting in the room, so holding one is itself the
+evidence of belonging. The alternative — a 403 — strands exactly the student
+who most needs to get in: the one who missed the first meeting and shows up on
+the second.
+
+The check-in carries an `auto_enrolled` flag so the roster and CSV distinguish
+scan-joins from roster imports. An unwanted enrollment is removable from the
+roster view, which is the intended remedy — cheap to undo beats hard to enter.
+
+The token check happens **before** the enrollment, deliberately. Enrolling
+first would let an expired or forged token create an enrollment and then fail
+the check-in, leaving a phantom student on the roster.
+
+Note this makes the projected token the sole authorization for joining the
+course, unlike the join-code path (`claimJoinCode`), which additionally
+enforces `email_domain`, `expires_at`, `max_uses`, and `revoked_at`. Sign-in
+is still gated by `ALLOWED_EMAIL_DOMAINS`.
 
 ## CSV export
 

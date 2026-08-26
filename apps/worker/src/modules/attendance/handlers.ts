@@ -390,10 +390,6 @@ export async function submitCheckinRoute(
   if (!session) return errorResponse("Session not found", 404);
   if (session.closed_at) return errorResponse("This session is closed", 410);
 
-  // The student must be enrolled in the course (any role) to check in.
-  const role = await getEnrollmentRole(env, userId, session.course_id);
-  if (!role) return errorResponse("You are not enrolled in this course", 403);
-
   const body = (await req.json().catch(() => null)) as CheckinBody | null;
   if (!body || typeof body.token !== "string" || typeof body.fingerprint !== "string") {
     return errorResponse("Missing fields", 400);
@@ -401,6 +397,25 @@ export async function submitCheckinRoute(
   const now = Date.now();
   const tokenOk = await verifyToken(session.token_key_hex, sessionId, body.token, now);
   if (!tokenOk) return errorResponse("This check-in code has expired. Reload the page.", 403);
+
+  // Enroll-on-check-in. A valid token is only obtainable from the live QR the
+  // instructor is projecting, so holding one is itself evidence of being in the
+  // room; requiring a prior enrollment would strand any student who joins the
+  // course after the first meeting. Roll-forward, not a gate: the check-in is
+  // flagged `auto_enrolled` so the roster distinguishes scan-joins from roster
+  // imports, and an unwanted enrollment is removable from the roster view.
+  //
+  // Ordering matters — the token is verified *above* this point. Enrolling
+  // before verification would let an expired or forged token create an
+  // enrollment and then reject the check-in, leaving a phantom student.
+  const autoEnrolled = !(await getEnrollmentRole(env, userId, session.course_id));
+  if (autoEnrolled) {
+    await coreRepo.createEnrollment(env.DB, {
+      courseId: session.course_id,
+      userId,
+      role: "student",
+    });
+  }
 
   // Existing check-in? Idempotent: report success without re-inserting.
   const existing = await repo.getCheckin(env.DB, sessionId, userId);
@@ -423,6 +438,7 @@ export async function submitCheckinRoute(
 
   // Flags.
   const flags: CheckinFlag[] = [];
+  if (autoEnrolled) flags.push("auto_enrolled");
   const lat = typeof body.lat === "number" ? body.lat : null;
   const lon = typeof body.lon === "number" ? body.lon : null;
   const accuracyM = typeof body.accuracyM === "number" ? body.accuracyM : null;

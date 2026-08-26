@@ -11,7 +11,8 @@ export type CheckinFlag =
   | "no_location"
   | "duplicate_device"
   | "duplicate_cookie"
-  | "late";
+  | "late"
+  | "auto_enrolled";
 
 export interface SessionDTO {
   id: string;
