@@ -14,9 +14,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createConversation,
   deleteConversation,
+  isAuthError,
   listAgents,
   listConversations,
   listMessages,
+  redirectToLogin,
   streamChatTurn,
   updateConversation,
   type AgentSummary,
@@ -172,6 +174,7 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
+        if (isAuthError(e)) { redirectToLogin(); return; }
         setError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
@@ -197,6 +200,7 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
+        if (isAuthError(e)) { redirectToLogin(); return; }
         setError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
@@ -235,6 +239,7 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
         // Focus composer so the student can type right away.
         setTimeout(() => composerRef.current?.focus(), 0);
       } catch (e) {
+        if (isAuthError(e)) { redirectToLogin(); return; }
         setError(e instanceof Error ? e.message : "Could not start conversation");
       } finally {
         setBusy(false);
@@ -257,6 +262,7 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
       setConversations((cur) => (cur ?? []).filter((c) => c.id !== conv.id));
       if (active?.id === conv.id) setActive(null);
     } catch (e) {
+      if (isAuthError(e)) { redirectToLogin(); return; }
       setError(e instanceof Error ? e.message : "Delete failed");
     }
   }
@@ -281,6 +287,7 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
       (cur ?? []).map((c) => (c.id === id ? { ...c, title: next } : c)),
     );
     updateConversation(courseId, id, next).catch((e) => {
+      if (isAuthError(e)) { redirectToLogin(); return; }
       setError(e instanceof Error ? e.message : "Rename failed");
       listConversations(documentId, courseId)
         .then(setConversations)
@@ -331,6 +338,12 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
         } catch {
           /* non-fatal — next reload will pick it up */
         }
+      },
+      onAuthRequired: () => {
+        abortStreamRef.current = null;
+        setPendingAsst(null);
+        setMessages((cur) => cur.filter((m) => m.id !== optimisticUser.id));
+        redirectToLogin();
       },
       onError: (msg) => {
         abortStreamRef.current = null;

@@ -99,6 +99,15 @@ export interface Env {
    * domains on every join-code claim via ALLOWED_EMAIL_DOMAINS.
    */
   AUTH_GOOGLE_HD?: string;
+
+  /**
+   * "true" to always show Google's account chooser (`prompt=select_account`).
+   * Default (unset) skips it, so a browser with a single Google session signs
+   * in without an extra tap — worth it when sign-in happens inside a
+   * time-limited flow. Enable on shared/lab machines, where silently reusing
+   * the cached account is the greater risk.
+   */
+  AUTH_GOOGLE_FORCE_ACCOUNT_PICKER?: string;
   AUTH_OIDC_ISSUER?: string;
   AUTH_OIDC_CLIENT_ID?: string;
   AUTH_OIDC_CLIENT_SECRET?: string;

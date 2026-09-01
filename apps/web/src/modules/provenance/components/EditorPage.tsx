@@ -31,7 +31,9 @@ import { useActiveCourse } from "../../../course/useActiveCourse.js";
 import { GearIcon, KeyIcon, ShareIcon } from "../../../icons.js";
 import {
   getDocument,
+  isAuthError,
   postEvents,
+  redirectToLogin,
   setProvenanceHideMarks,
   updateDocument,
   type DocumentDTO,
@@ -165,6 +167,13 @@ export function EditorPage() {
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
+        // This route is standalone (not a StudentLayout child), so there is no
+        // sibling request to bounce a lapsed session for us — do it here or
+        // the student stares at the word "Unauthorized".
+        if (isAuthError(e)) {
+          redirectToLogin();
+          return;
+        }
         setLoadError(e instanceof Error ? e.message : "Load failed");
       });
     return () => ctrl.abort();
@@ -187,6 +196,10 @@ export function EditorPage() {
     } catch (e) {
       setSaveState("error");
       console.warn("Save failed:", e);
+      // A 401 means every subsequent save fails too. Silently leaving the
+      // student typing into a document that can no longer be saved loses
+      // their work; send them to sign in so the session is restored.
+      if (isAuthError(e)) redirectToLogin();
     }
   }, [id, courseId]);
 
@@ -214,6 +227,12 @@ export function EditorPage() {
         await postEvents(id, courseId, batch);
       } catch (e) {
         console.warn("Event flush failed:", e);
+        // Re-queueing against a lapsed session retries forever and never
+        // succeeds; sign in again instead of growing the buffer unboundedly.
+        if (isAuthError(e)) {
+          redirectToLogin();
+          return;
+        }
         eventBufRef.current = batch.concat(eventBufRef.current);
       }
     })();

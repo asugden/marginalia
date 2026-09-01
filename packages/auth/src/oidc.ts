@@ -201,26 +201,38 @@ export class OidcProvider implements AuthProvider {
 
 /**
  * Google-specific OIDC adapter. Same dance as the generic OidcProvider with
- * the issuer fixed and `prompt=select_account` so a user signed into
- * multiple Google accounts gets the picker instead of silently re-using
- * whichever the browser cached.
+ * the issuer fixed.
  *
  * Optional `hostedDomain` maps to Google's `hd` parameter, which restricts
  * the picker to one GSuite domain (e.g. "example.edu") for institutions
- * that want the IdP-side gate. `hd` is advisory — the IdP can be bypassed
- * — so we still verify the email domain in the worker on every callback
- * via ALLOWED_EMAIL_DOMAINS.
+ * that want the IdP-side gate. `hd` is advisory — a determined user can
+ * bypass it at the IdP — so treat it as a convenience, not a security
+ * boundary. (Note the worker does NOT currently re-check the email domain in
+ * the OIDC callback; `ALLOWED_EMAIL_DOMAINS` is enforced when a join code is
+ * claimed.)
+ *
+ * `forceAccountPicker` sets `prompt=select_account`. Off by default because
+ * it costs an extra interactive step on EVERY sign-in, even when the browser
+ * has exactly one Google session that would have been chosen anyway — which
+ * matters when sign-in sits inside a short-lived flow (scanning a
+ * time-limited code, say). Turn it on for shared or lab machines, where
+ * silently reusing whichever account the browser cached is the bigger
+ * hazard: someone with both a personal and a school account can otherwise be
+ * signed in as the wrong one without being asked.
  */
 export interface GoogleProviderOptions {
   clientId: string;
   clientSecret: string;
   /** Restrict the picker to a single GSuite domain. */
   hostedDomain?: string;
+  /** Always show Google's account chooser. Default false. */
+  forceAccountPicker?: boolean;
 }
 
 export class GoogleProvider extends OidcProvider {
   constructor(opts: GoogleProviderOptions) {
-    const authParams: Record<string, string> = { prompt: "select_account" };
+    const authParams: Record<string, string> = {};
+    if (opts.forceAccountPicker) authParams.prompt = "select_account";
     if (opts.hostedDomain) authParams.hd = opts.hostedDomain;
     super({
       id: "google",
