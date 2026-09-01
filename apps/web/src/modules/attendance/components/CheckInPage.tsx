@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
+  ApiError,
   deviceFingerprintString,
   getCheckInfo,
   submitCheckin,
@@ -75,9 +76,13 @@ export function CheckInPage() {
         }
       } catch (e) {
         if (cancelled) return;
-        const msg = String((e as Error).message);
-        if (msg.startsWith("401")) setStage({ kind: "needs-signin" });
-        else setStage({ kind: "error", message: msg });
+        // Branch on the status, not the message. The server's 401 body is
+        // `{error: "Unauthorized"}`, so the message has no "401" prefix.
+        if (e instanceof ApiError && e.status === 401) {
+          setStage({ kind: "needs-signin" });
+        } else {
+          setStage({ kind: "error", message: String((e as Error).message) });
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -102,7 +107,11 @@ export function CheckInPage() {
       });
       setStage({ kind: "done", flags: result.flags });
     } catch (e) {
-      setStage({ kind: "error", message: String((e as Error).message) });
+      if (e instanceof ApiError && e.status === 401) {
+        setStage({ kind: "needs-signin" });
+      } else {
+        setStage({ kind: "error", message: String((e as Error).message) });
+      }
     }
   }, [id, token]);
 
