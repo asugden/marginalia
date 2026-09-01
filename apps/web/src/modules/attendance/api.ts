@@ -63,20 +63,31 @@ export interface QrToken {
  * link.
  */
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** Stable machine-readable code from the server, when it sends one. */
+    readonly code?: string,
+  ) {
     super(message);
     this.name = "ApiError";
   }
 }
 
-async function readError(res: Response): Promise<string> {
+async function readError(res: Response): Promise<{ message: string; code?: string }> {
   try {
-    const body = (await res.json()) as { error?: string };
-    if (body.error) return body.error;
+    const body = (await res.json()) as { error?: string; code?: string };
+    if (body.error) return { message: body.error, code: body.code };
   } catch {
     /* fall through */
   }
-  return `${res.status} ${res.statusText}`;
+  return { message: `${res.status} ${res.statusText}` };
+}
+
+/** Build an ApiError from a non-ok response, preserving status and code. */
+async function apiError(res: Response): Promise<ApiError> {
+  const { message, code } = await readError(res);
+  return new ApiError(message, res.status, code);
 }
 
 export async function listSessions(courseId: string, signal?: AbortSignal): Promise<SessionDTO[]> {
@@ -84,7 +95,7 @@ export async function listSessions(courseId: string, signal?: AbortSignal): Prom
     apiUrl(`/api/attendance/sessions?courseId=${encodeURIComponent(courseId)}`),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { sessions: SessionDTO[] };
   return body.sessions;
 }
@@ -102,7 +113,7 @@ export async function openSession(params: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { session: SessionDTO };
   return body.session;
 }
@@ -115,7 +126,7 @@ export async function getSession(id: string, signal?: AbortSignal): Promise<{
     ...fetchInit,
     signal,
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as { session: SessionDTO; checkins: CheckinDTO[] };
 }
 
@@ -124,7 +135,7 @@ export async function closeSession(id: string): Promise<void> {
     ...fetchInit,
     method: "POST",
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
 }
 
 export async function getQrToken(id: string, signal?: AbortSignal): Promise<QrToken> {
@@ -132,7 +143,7 @@ export async function getQrToken(id: string, signal?: AbortSignal): Promise<QrTo
     ...fetchInit,
     signal,
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as QrToken;
 }
 
@@ -145,7 +156,7 @@ export async function getCheckInfo(id: string, signal?: AbortSignal): Promise<Ch
     ...fetchInit,
     signal,
   });
-  if (!res.ok) throw new ApiError(await readError(res), res.status);
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as CheckInfo;
 }
 
@@ -162,7 +173,7 @@ export async function submitCheckin(id: string, params: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
   });
-  if (!res.ok) throw new ApiError(await readError(res), res.status);
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as { ok: true; flags: CheckinFlag[]; alreadyCheckedIn?: boolean };
 }
 

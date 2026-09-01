@@ -27,6 +27,7 @@ type Stage =
   | { kind: "ready"; info: CheckInfo }
   | { kind: "submitting" }
   | { kind: "done"; flags: CheckinFlag[] }
+  | { kind: "expired" }
   | { kind: "error"; message: string };
 
 // Friendly, trust-framed copy shown under the badges. Not an accusation —
@@ -109,6 +110,8 @@ export function CheckInPage() {
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         setStage({ kind: "needs-signin" });
+      } else if (e instanceof ApiError && e.code === "token_expired") {
+        setStage({ kind: "expired" });
       } else {
         setStage({ kind: "error", message: String((e as Error).message) });
       }
@@ -135,6 +138,17 @@ export function CheckInPage() {
                 Sign in
               </Button>
             </div>
+          </>
+        )}
+
+        {stage.kind === "expired" && (
+          <>
+            <h1 className="ds-att-ci__course">Code expired</h1>
+            <p className="ds-att-ci__label">
+              Check-in codes refresh every few seconds. Please re-scan the QR
+              code on screen — you&rsquo;re already signed in, so it will be
+              quick.
+            </p>
           </>
         )}
 
