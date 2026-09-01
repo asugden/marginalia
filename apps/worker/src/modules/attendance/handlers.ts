@@ -396,7 +396,15 @@ export async function submitCheckinRoute(
   }
   const now = Date.now();
   const tokenOk = await verifyToken(session.token_key_hex, sessionId, body.token, now);
-  if (!tokenOk) return errorResponse("This check-in code has expired. Reload the page.", 403);
+  if (!tokenOk) {
+    // `code` is the contract the client branches on; the message is only for
+    // display. Re-scanning is the actual remedy — the token rides in the URL,
+    // so reloading the page just replays the same expired one.
+    return json(
+      { error: "This check-in code has expired. Please re-scan the QR code.", code: "token_expired" },
+      403,
+    );
+  }
 
   // Enroll-on-check-in. A valid token is only obtainable from the live QR the
   // instructor is projecting, so holding one is itself evidence of being in the
