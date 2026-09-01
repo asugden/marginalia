@@ -25,14 +25,61 @@ export interface DocumentDTO {
   updatedAt: number;
 }
 
-async function readError(res: Response): Promise<string> {
+/**
+ * Error carrying the HTTP status, so callers branch on the status code rather
+ * than on the message text. The worker's 401 body is `{error: "Unauthorized"}`,
+ * so a caller testing the message for "401" silently never matches — that
+ * exact mistake dead-ended every signed-out student on the attendance
+ * check-in. Message text is display copy; `status` and `code` are the contract.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** Stable machine-readable code from the server, when it sends one. */
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function readError(res: Response): Promise<{ message: string; code?: string }> {
   try {
-    const body = (await res.json()) as { error?: string };
-    if (body.error) return body.error;
+    const body = (await res.json()) as { error?: string; code?: string };
+    if (body.error) return { message: body.error, code: body.code };
   } catch {
     /* fall through */
   }
-  return `${res.status} ${res.statusText}`;
+  return { message: `${res.status} ${res.statusText}` };
+}
+
+/** Build an ApiError from a non-ok response, preserving status and code. */
+async function apiError(res: Response): Promise<ApiError> {
+  const { message, code } = await readError(res);
+  return new ApiError(message, res.status, code);
+}
+
+/** True when an error means "no valid session" — the caller should send the
+ *  user to sign in rather than render the message. */
+export function isAuthError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 401;
+}
+
+let redirectingToLogin = false;
+
+/**
+ * Send the user through sign-in, preserving where they were so the callback
+ * returns them here. Guarded so several concurrent 401s (the editor fires
+ * document loads, saves and event flushes independently) can't each kick off
+ * a navigation and race the OIDC state cookie.
+ */
+export function redirectToLogin(): void {
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  const here = window.location.pathname + window.location.search;
+  // /auth/login is outside the SPA, so this must be a full navigation.
+  window.location.href = `/auth/login?return_to=${encodeURIComponent(here)}`;
 }
 
 export async function listDocuments(
@@ -43,7 +90,7 @@ export async function listDocuments(
     apiUrl(`/api/provenance/documents?courseId=${encodeURIComponent(courseId)}`),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { documents: DocumentSummary[] };
   return body.documents;
 }
@@ -58,7 +105,7 @@ export async function createDocument(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ courseId, title }),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { document: DocumentDTO };
   return body.document;
 }
@@ -74,7 +121,7 @@ export async function getDocument(
     ),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { document: DocumentDTO };
   return body.document;
 }
@@ -95,7 +142,7 @@ export async function updateDocument(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { document: DocumentDTO };
   return body.document;
 }
@@ -144,7 +191,7 @@ export async function postEvents(
       body: JSON.stringify({ courseId, events }),
     },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as { inserted: number; maxClientSeq: number };
 }
 
@@ -155,7 +202,7 @@ export async function deleteDocument(courseId: string, id: string): Promise<void
     ),
     { ...fetchInit, method: "DELETE" },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
 }
 
 // ─── Chat (slice 3) ─────────────────────────────────────────────────────
@@ -199,7 +246,7 @@ export async function listAgents(courseId: string, signal?: AbortSignal): Promis
     apiUrl(`/api/provenance/agents?courseId=${encodeURIComponent(courseId)}`),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { agents: AgentSummary[] };
   return body.agents;
 }
@@ -211,7 +258,7 @@ export async function getAgent(courseId: string, id: string, signal?: AbortSigna
     ),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { agent: AgentDTO };
   return body.agent;
 }
@@ -228,7 +275,7 @@ export async function createAgent(params: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { agent: AgentDTO };
   return body.agent;
 }
@@ -244,7 +291,7 @@ export async function updateAgent(id: string, params: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { agent: AgentDTO };
   return body.agent;
 }
@@ -256,7 +303,7 @@ export async function deleteAgent(courseId: string, id: string): Promise<void> {
     ),
     { ...fetchInit, method: "DELETE" },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
 }
 
 export async function listConversations(
@@ -270,7 +317,7 @@ export async function listConversations(
     ),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { conversations: ConversationDTO[] };
   return body.conversations;
 }
@@ -289,7 +336,7 @@ export async function createConversation(
       body: JSON.stringify({ courseId, agentId }),
     },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { conversation: ConversationDTO };
   return body.conversation;
 }
@@ -308,7 +355,7 @@ export async function updateConversation(
       body: JSON.stringify({ courseId, title }),
     },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { conversation: ConversationDTO };
   return body.conversation;
 }
@@ -320,7 +367,7 @@ export async function deleteConversation(courseId: string, id: string): Promise<
     ),
     { ...fetchInit, method: "DELETE" },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
 }
 
 export async function listMessages(
@@ -334,7 +381,7 @@ export async function listMessages(
     ),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { messages: MessageDTO[] };
   return body.messages;
 }
@@ -344,6 +391,8 @@ export interface SendMessageCallbacks {
   onDelta: (text: string) => void;
   onDone?: (data: { assistantMessageId: string; title: string | null }) => void;
   onError?: (message: string) => void;
+  /** Session lapsed (401). Send the user to sign in; don't render a message. */
+  onAuthRequired?: () => void;
 }
 
 /**
@@ -381,7 +430,14 @@ export function streamChatTurn(
         },
       );
       if (!res.ok || !res.body) {
-        cb.onError?.(await readError(res));
+        // A 401 here means the session lapsed mid-conversation. Report it as
+        // an auth failure so the caller can send the student to sign in
+        // instead of printing "Unauthorized" into the transcript.
+        if (res.status === 401) {
+          cb.onAuthRequired?.();
+          return;
+        }
+        cb.onError?.((await readError(res)).message);
         return;
       }
       const reader = res.body.getReader();
@@ -504,7 +560,7 @@ export async function mintSubmission(
       body: JSON.stringify({ courseId }),
     },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as { token: string; createdAt: number };
 }
 
@@ -519,7 +575,7 @@ export async function listSubmissions(
     ),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { submissions: SubmissionSummary[] };
   return body.submissions;
 }
@@ -558,7 +614,7 @@ export async function listCourseSubmissions(
     apiUrl(`/api/provenance/submissions?courseId=${encodeURIComponent(courseId)}`),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { submissions: CourseSubmissionSummary[] };
   return body.submissions;
 }
@@ -568,7 +624,7 @@ export async function revokeSubmission(token: string): Promise<void> {
     apiUrl(`/api/provenance/submissions/${encodeURIComponent(token)}`),
     { ...fetchInit, method: "DELETE" },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
 }
 
 // Share-token reads. Instructor-only despite the legacy "public" path segment —
@@ -597,7 +653,7 @@ export async function getPublicSubmission(
   // 401 is distinguishable so the viewer can prompt sign-in instead of showing a
   // dead "unavailable" card to an instructor who simply has no session yet.
   if (res.status === 401) throw new Error(SUBMISSION_SIGN_IN_REQUIRED);
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as PublicSubmissionDTO;
 }
 
@@ -616,7 +672,7 @@ export async function getPublicSubmissionConversations(
     apiUrl(`/api/provenance/public/submissions/${encodeURIComponent(token)}/conversations`),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { conversations: PublicConversationDTO[] };
   return body.conversations;
 }
@@ -632,7 +688,7 @@ export async function getProvenanceSettings(
     apiUrl(`/api/provenance/settings?courseId=${encodeURIComponent(courseId)}`),
     { ...fetchInit, signal },
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as { hideProvenanceMarks: boolean };
 }
 
@@ -647,6 +703,6 @@ export async function setProvenanceHideMarks(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ courseId, hideProvenanceMarks: hide }),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw await apiError(res);
   return (await res.json()) as { hideProvenanceMarks: boolean };
 }

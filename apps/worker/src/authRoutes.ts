@@ -46,6 +46,7 @@ export function getAuthProvider(env: Env): AuthProvider | null {
       clientId: env.AUTH_GOOGLE_CLIENT_ID,
       clientSecret: env.AUTH_GOOGLE_CLIENT_SECRET,
       hostedDomain: env.AUTH_GOOGLE_HD,
+      forceAccountPicker: env.AUTH_GOOGLE_FORCE_ACCOUNT_PICKER === "true",
     });
   }
   if (which === "oidc") {
