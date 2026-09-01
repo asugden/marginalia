@@ -54,6 +54,21 @@ export interface QrToken {
   periodMs: number;
 }
 
+/**
+ * Error carrying the HTTP status, so callers can branch on the status code
+ * rather than pattern-matching the message. The server's 401 body is
+ * `{error: "Unauthorized"}`, so `readError` returns "Unauthorized" with no
+ * "401" prefix — a caller testing the string for "401" silently never
+ * matches, and a signed-out student sees a dead end instead of a sign-in
+ * link.
+ */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function readError(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { error?: string };
@@ -130,7 +145,7 @@ export async function getCheckInfo(id: string, signal?: AbortSignal): Promise<Ch
     ...fetchInit,
     signal,
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new ApiError(await readError(res), res.status);
   return (await res.json()) as CheckInfo;
 }
 
@@ -147,7 +162,7 @@ export async function submitCheckin(id: string, params: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new ApiError(await readError(res), res.status);
   return (await res.json()) as { ok: true; flags: CheckinFlag[]; alreadyCheckedIn?: boolean };
 }
 
