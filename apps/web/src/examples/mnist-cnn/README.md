@@ -1,4 +1,4 @@
-# Example: digit recognizer — convolutional (CNN)
+# Example: Convolutional Neural Network
 
 A sibling of the MLP `mnist-mlp` example, mounted at
 `/examples/cnn-digit-recognizer`. Same input grid, same chrome, same

@@ -1,0 +1,308 @@
+/* Decision-tree lesson. Page chrome comes from the shared digit-recognizer.css;
+   this file adds the step rail, the figure surfaces, and the tree/gain visuals.
+   The class colours are intrinsic to the visualization and stay literal. */
+
+.dt-page { max-width: 1240px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+.dt-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 1.75rem;
+  align-items: start;
+}
+@media (max-width: 940px) {
+  .dt-layout { grid-template-columns: 1fr; }
+  .dt-rail { position: static !important; }
+}
+
+/* ── Step rail ────────────────────────────────────────────────── */
+.dt-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  counter-reset: none;
+}
+.dt-rail__item {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  text-align: left;
+  border: 0;
+  border-left: 2px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+.dt-rail__item:hover { background: var(--surface-hover); color: var(--text-body); }
+.dt-rail__item.is-on {
+  border-left-color: var(--accent);
+  background: var(--accent-wash, var(--surface-sunken));
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.dt-rail__n {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  width: 1rem;
+  padding-top: 0.15rem;
+}
+.dt-rail__item.is-on .dt-rail__n { color: var(--accent); }
+
+/* ── Caption + figure ─────────────────────────────────────────── */
+.dt-main { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.dt-caption { max-width: 70ch; }
+.dt-caption__eyebrow {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+.dt-caption h2 { margin: 0 0 0.5rem; font-size: 1.45rem; }
+.dt-caption__body { font-size: var(--text-md, 1rem); line-height: 1.6; color: var(--text-secondary); }
+
+.dt-figure {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1rem 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-x: auto;
+}
+.dt-note { margin: 0; font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; }
+.dt-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; }
+.dt-panel { min-width: 0; }
+.dt-panel__title {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.dt-controls { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.dt-controls__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.dt-controls input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+.dt-chip {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: var(--radius-pill);
+  padding: 0.18rem 0.65rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+.dt-chip:hover { border-color: var(--accent); color: var(--accent); }
+.dt-chip.is-on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
+.dt-verdict { margin-left: auto; font-size: var(--text-sm); color: var(--text-body); }
+
+.dt-nav { display: flex; align-items: center; gap: 0.75rem; }
+.dt-nav .mnist-clear:disabled { opacity: 0.4; cursor: not-allowed; }
+.dt-nav__hint {
+  margin: 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.dt-photo { margin: 0; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.dt-photo img { width: 260px; border-radius: var(--radius-lg); display: block; }
+.dt-photo figcaption { font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; max-width: 34ch; }
+
+/* ── Tree diagram ─────────────────────────────────────────────── */
+.tree { display: block; overflow: visible; }
+/* Stroke colour and width come from TreeView (blue=no / red=yes, width by row
+   count), so only the shared bits live here. Compact thumbnails keep the flat
+   hairline: variable widths turn to mush at that scale. */
+.tree__edge { fill: none; stroke-linejoin: round; opacity: 0.85; }
+/* No `stroke`/`stroke-width` here: both come from the element (blue=no /
+   red=yes, width by row count) and a class selector would outrank the
+   presentation attribute. Compact thumbnails opt back into the flat hairline —
+   variable widths turn to mush at that scale. */
+.tree--compact .tree__edge { stroke: var(--border-strong) !important; stroke-width: 1.4 !important; }
+.tree__edge.is-dim { opacity: 0.25; }
+.tree__edge-label {
+  fill: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.tree__edge-label.is-dim { opacity: 0.3; }
+/* Scoped to the box itself (:first-of-type) so the class-mix bar segments
+   stacked inside the same <g> keep their own palette fill — a bare
+   `.tree__node rect` would repaint them --surface and the mix would vanish. */
+.tree__node > rect:first-of-type {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.2;
+}
+.tree__node--leaf > rect:first-of-type { fill: var(--surface-sunken); }
+.tree__node.is-on > rect:first-of-type { stroke: var(--accent); stroke-width: 2.2; }
+.tree__node.is-dim { opacity: 0.35; }
+.tree__node.is-pickable { cursor: pointer; }
+.tree__node.is-pickable:hover > rect:first-of-type { stroke: var(--accent); }
+.tree__question { fill: var(--text-strong); font-size: 11.5px; font-weight: 600; }
+.tree__leaf-name { fill: var(--text-strong); font-size: 12px; font-weight: 700; }
+.tree__meta { fill: var(--text-muted); font-family: var(--font-mono); font-size: 9px; }
+.tree__caption { fill: var(--text-faint); font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+.tree--compact .tree__node > rect:first-of-type { stroke-width: 0.8; }
+
+/* ── Gain chart ───────────────────────────────────────────────── */
+.gain { min-width: 0; }
+.gain__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
+.gain__title {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.gain__n { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); }
+.gain__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.22rem; }
+.gain__row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) 3.6rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.12rem 0.25rem;
+  border-radius: var(--radius-sm);
+}
+.gain__row.is-pickable { cursor: pointer; }
+.gain__row.is-pickable:hover { background: var(--surface-hover); }
+.gain__row.is-picked { outline: 1.5px solid var(--accent); }
+.gain__row.is-exhausted { opacity: 0.45; }
+.gain__name { font-size: var(--text-sm); color: var(--text-body); display: flex; align-items: baseline; gap: 0.3rem; }
+.gain__row.is-winner .gain__name { font-weight: 700; color: var(--text-strong); }
+.gain__tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-style: normal;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0 0.28rem;
+}
+.gain__track { height: 9px; background: var(--surface-sunken); border-radius: 999px; overflow: hidden; }
+.gain__fill { display: block; height: 100%; border-radius: 999px; transition: width 140ms ease; }
+.gain__val {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.gain__verdict { margin: 0.6rem 0 0; font-size: var(--text-sm); line-height: 1.5; color: var(--text-muted); }
+
+/* ── Threshold curve ──────────────────────────────────────────── */
+/* Dragging the curve is a pointer gesture, not a text gesture: without this the
+   browser starts selecting the surrounding caption the moment the pointer
+   leaves the SVG mid-drag. */
+.tcurve { user-select: none; -webkit-user-select: none; }
+.tcurve__svg { display: block; touch-action: none; cursor: ew-resize; max-width: 560px; }
+/* The split the curve is choosing, drawn above it and sharing its x-scale. */
+.tcurve__preview { display: block; max-width: 560px; overflow: visible; }
+.tcurve__axis { stroke: var(--border-strong); stroke-width: 1; }
+.tcurve__line { fill: none; stroke-width: 2; }
+.tcurve__peak { stroke-width: 1.2; stroke-dasharray: 4 3; opacity: 0.7; }
+.tcurve__cursor { stroke: var(--text-strong); stroke-width: 1.4; }
+.tcurve__knob { fill: var(--text-strong); stroke: var(--surface); stroke-width: 2; }
+.tcurve__label { fill: var(--text-faint); font-family: var(--font-mono); font-size: 9.5px; }
+
+/* ── Data table ───────────────────────────────────────────────── */
+.dtable { overflow-x: auto; }
+.dtable table { border-collapse: collapse; font-size: var(--text-xs); }
+.dtable th, .dtable td { padding: 0.22rem 0.5rem; text-align: center; white-space: nowrap; }
+.dtable thead th {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-strong);
+  font-weight: 400;
+}
+.dtable thead th em { font-style: normal; color: var(--text-faint); }
+.dtable thead th.is-noise { color: var(--text-faint); font-style: italic; }
+.dtable tbody th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-body);
+  font-size: var(--text-xs);
+}
+.dtable tbody tr:nth-child(even) { background: var(--surface-sunken); }
+.dtable tbody tr.is-on { outline: 1.5px solid var(--accent); }
+.dtable td.is-bin { font-family: var(--font-mono); color: var(--text-body); }
+.dtable td.is-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-body); }
+.dtable__target { text-align: left !important; }
+.dtable__chip {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  color: #fff;
+  padding: 0.02rem 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+/* ── Bagging figure ───────────────────────────────────────────── */
+.bag { display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+.bag-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.bag-grid { margin: 0; }
+.bag-grid__dots {
+  display: grid;
+  grid-template-columns: repeat(4, 18px);
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.bag-dot { width: 18px; height: 18px; border-radius: 50%; display: block; }
+.bag-grid figcaption {
+  margin-top: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.bag-grid figcaption em { font-style: normal; color: var(--text-faint); }
+.bag-arrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  border-left: 2px solid var(--border-strong);
+  padding-left: 0.6rem;
+}

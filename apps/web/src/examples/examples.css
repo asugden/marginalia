@@ -46,7 +46,6 @@
   transform: translateY(-2px);
   border-color: var(--accent);
 }
-.examples-card__glyph { font-size: 1.75rem; }
 .examples-card__title {
   font-family: var(--font-mono);
   font-size: var(--text-lg, 1.15rem);

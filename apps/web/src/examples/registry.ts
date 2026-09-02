@@ -23,8 +23,6 @@ export interface ExampleSpec {
   blurb: string;
   /** Short topic tags for the card. */
   tags: string[];
-  /** A tiny emoji/glyph for the card (kept dependency-free). */
-  glyph: string;
   /** Lazy-loaded page component, mounted at /examples/<slug>. */
   Page: LazyExoticComponent<ComponentType>;
 }
@@ -32,11 +30,10 @@ export interface ExampleSpec {
 export const EXAMPLES: ExampleSpec[] = [
   {
     slug: "digit-recognizer",
-    title: "Digit recognizer",
+    title: "Deep Neural Network",
     blurb:
       "Draw a digit and watch a real neural network classify it — every neuron and connection shown live as the signal flows from your drawing to a prediction.",
     tags: ["neural networks", "MNIST", "interactive"],
-    glyph: "✍️",
     Page: lazy(() =>
       import("./mnist-mlp/DigitRecognizerPage.js").then((m) => ({
         default: m.DigitRecognizerPage,
@@ -45,14 +42,61 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "cnn-digit-recognizer",
-    title: "Digit recognizer — convolutional",
+    title: "Convolutional Neural Network",
     blurb:
       "The same drawing, read by a convolutional network. Watch 3×3 kernels slide over the image into feature maps — and click a kernel to see the convolution arithmetic step by step.",
     tags: ["neural networks", "CNN", "convolution", "interactive"],
-    glyph: "🔲",
     Page: lazy(() =>
       import("./mnist-cnn/CNNDigitRecognizerPage.js").then((m) => ({
         default: m.CNNDigitRecognizerPage,
+      })),
+    ),
+  },
+  {
+    slug: "naive-bayes",
+    title: "Naive Bayes",
+    blurb:
+      "Drag a decision boundary through overlapping distributions, then let naive Bayes fit the same points. Two scores \u2014 yours and the model's \u2014 and the gap between them is the lesson.",
+    tags: ["classification", "naive Bayes", "probability", "interactive"],
+    Page: lazy(() =>
+      import("./naive-bayes/NaiveBayesPage.js").then((m) => ({
+        default: m.NaiveBayesPage,
+      })),
+    ),
+  },
+  {
+    slug: "decision-tree",
+    title: "Decision Tree Classifiers",
+    blurb:
+      "Twelve steps through the algorithm, each changing one thing. Score every candidate split, watch the winner change from branch to branch, and see where greedy growing goes wrong.",
+    tags: ["decision trees", "CART", "lesson", "interactive"],
+    Page: lazy(() =>
+      import("./decision-tree/DecisionTreePage.js").then((m) => ({
+        default: m.DecisionTreePage,
+      })),
+    ),
+  },
+  {
+    slug: "random-forest",
+    title: "Random Forest",
+    blurb:
+      "Reveal a forest one tree at a time. Watch where the trees agree and where they argue, dog by dog, and how the vote lands better than any single tree.",
+    tags: ["ensembles", "random forest", "bagging", "interactive"],
+    Page: lazy(() =>
+      import("./random-forest/RandomForestPage.js").then((m) => ({
+        default: m.RandomForestPage,
+      })),
+    ),
+  },
+  {
+    slug: "gradient-boosting",
+    title: "XGBoost",
+    blurb:
+      "The same trees stacked top to bottom instead of side by side. Each round is fitted to the last round's mistakes, so the order is the model \u2014 watch the residuals shrink, then watch it overfit.",
+    tags: ["ensembles", "boosting", "XGBoost", "interactive"],
+    Page: lazy(() =>
+      import("./xgboost/XGBoostPage.js").then((m) => ({
+        default: m.XGBoostPage,
       })),
     ),
   },

@@ -1,0 +1,283 @@
+/* Shared chrome for the two ensemble examples. The forest lays its trees out
+   horizontally and boosting stacks them vertically; everything else — the
+   scrubber, the figure surfaces, the knobs — is common between them. */
+
+.ens-page { max-width: 1180px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+/* ── Scrubber: the control that "plays" the model being built ─── */
+.ens-scrub {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 0.85rem 1.1rem;
+  margin: 1.5rem 0 1.25rem;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+}
+.ens-scrub__label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+  flex: none;
+}
+.ens-scrub__label b { font-size: 1.35rem; color: var(--accent); line-height: 1; min-width: 2ch; }
+.ens-scrub input[type="range"] { flex: 1; accent-color: var(--accent); }
+.ens-scrub__score {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.ens-scrub__score em {
+  font-style: normal;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+/* ── Figures ──────────────────────────────────────────────────── */
+.ens-figure {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 0.9rem 1.1rem 1.1rem;
+  margin-bottom: 1.25rem;
+  min-width: 0;
+  overflow-x: auto;
+}
+.ens-figure__title {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.ens-note {
+  margin: 0.75rem 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+/* The row zeroes its children's bottom margin so the two columns end level,
+   which means the row itself has to carry the gap to whatever follows. */
+.ens-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.ens-cols > .ens-figure { margin-bottom: 0; }
+@media (max-width: 780px) { .ens-cols { grid-template-columns: 1fr; } }
+
+/* ── Forest: the horizontal strip ─────────────────────────────── */
+.ens-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+.ens-thumb {
+  appearance: none;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  padding: 0.3rem 0.3rem 0.75rem;
+  cursor: pointer;
+  line-height: 0;
+}
+.ens-thumb:hover { border-color: var(--accent); }
+.ens-thumb.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.ens-thumb__n {
+  position: absolute;
+  left: 0.3rem;
+  bottom: 0.1rem;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-faint);
+  line-height: 1;
+}
+
+/* ── Boosting: the vertical stack ─────────────────────────────── */
+.ens-stack { display: flex; flex-direction: column; gap: 0.3rem; max-height: 460px; overflow-y: auto; }
+.ens-round {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.4rem;
+  border-left: 2px solid var(--border-strong);
+  background: var(--surface-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.ens-round__n {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.ens-round__err {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+.ens-round .tree { line-height: 0; }
+
+/* ── Votes ────────────────────────────────────────────────────── */
+.ens-votes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.ens-votes li { display: grid; grid-template-columns: 4.5rem 1fr 2rem; align-items: center; gap: 0.5rem; font-size: var(--text-sm); }
+.ens-votes__name { color: var(--text-body); }
+.ens-votes__track { height: 10px; background: var(--surface-sunken); border-radius: 999px; overflow: hidden; }
+.ens-votes__fill { display: block; height: 100%; border-radius: 999px; transition: width 120ms ease; }
+.ens-votes__n { text-align: right; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
+
+/* ── Knobs and proofs ─────────────────────────────────────────── */
+.ens-knobs { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.9rem; }
+.ens-knobs label {
+  display: grid;
+  grid-template-columns: 9.5rem 2.5rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.ens-knobs label b { color: var(--accent); font-size: var(--text-sm); }
+.ens-knobs input[type="range"] { width: 100%; accent-color: var(--accent); }
+.ens-knobs__check { display: flex !important; align-items: center; gap: 0.45rem; }
+.ens-knobs__check input { accent-color: var(--accent); }
+
+
+/* ── Charts ───────────────────────────────────────────────────── */
+.lchart { display: block; max-width: 520px; }
+.lchart__axis { stroke: var(--border-strong); stroke-width: 1; }
+.lchart__line { fill: none; stroke-width: 2; }
+.lchart__cursor { stroke: var(--text-faint); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.lchart__label { fill: var(--text-faint); font-family: var(--font-mono); font-size: 9.5px; }
+.lchart__tick { fill: var(--text-faint); font-family: var(--font-mono); font-size: 9px; }
+.lchart__legend-text { font-family: var(--font-mono); font-size: 9px; }
+
+.fitplot { display: block; max-width: 520px; }
+.fitplot__train { fill: var(--text-muted); opacity: 0.75; }
+.fitplot__test { fill: none; stroke: var(--text-faint); stroke-width: 1.2; }
+.fitplot__step { fill: none; stroke: #2f7d52; stroke-width: 2.2; }
+.fitplot__resid { stroke-width: 1.6; opacity: 0.7; }
+.fitplot__resid.is-pos { stroke: #2f6fd0; }
+.fitplot__resid.is-neg { stroke: #d1344b; }
+
+/* Thumbnails are scaled down by the box, not by the layout: the SVG keeps its
+   natural viewBox and CSS shrinks it, so 48 of them fit on a couple of rows. */
+.ens-thumb { width: 92px; }
+.ens-thumb .tree { width: 100%; height: auto; }
+.ens-round .tree { width: 190px; height: auto; max-height: 54px; justify-self: start; }
+.ens-figure__hint {
+  float: right;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+}
+
+
+/* Residual panel furniture. */
+.fitplot__restitle {
+  fill: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.fitplot__envelope { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 4; }
+.fitplot__envlabel { fill: var(--text-faint); font-family: var(--font-mono); font-size: 8.5px; }
+
+/* ── Dot strips: one dot per data row, same order in every strip ─ */
+.dotstrip { display: block; }
+.ens-rows { display: flex; flex-direction: column; gap: 2px; }
+.ens-rows__head {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.15rem 0.4rem;
+}
+.ens-rows__head + .ens-rows__head { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; margin-bottom: 0.3rem; }
+.ens-rows__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.ens-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+  text-align: left;
+  appearance: none;
+}
+.ens-row:hover { background: var(--surface-hover); }
+.ens-row.is-on { border-color: var(--accent); background: var(--accent-wash, var(--surface-sunken)); }
+.ens-row__n { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
+.ens-row.is-on .ens-row__n { color: var(--accent); font-weight: 700; }
+.ens-row__val {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+.ens-scroll { max-height: 430px; overflow-y: auto; }
+/* The full tree is legitimately wider than the page and scrolls sideways — but
+   it must do that inside its own container, or scrolling to read the tree drags
+   the dot strips out of view along with it. */
+.ens-detail {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.9rem;
+  overflow-x: auto;
+}
+.ens-key { list-style: none; display: flex; gap: 0.9rem; margin: 0.5rem 0 0; padding: 0 0 0 6.2rem; }
+.ens-key li { display: flex; align-items: center; gap: 0.3rem; font-size: var(--text-xs); color: var(--text-muted); }
+.ens-key__dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ens-rows__axis {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+/* The strip fills whatever width its grid cell gives it and reflows inside
+   that, so a panel never has to scroll sideways to show its dots. */
+.dotstrip__host { width: 100%; min-width: 0; }
+
+/* Dragging the scrubber must not start a text selection halfway down the page.
+   The class is put on <body> for the duration of the drag. */
+body.is-scrubbing, body.is-scrubbing * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+body.is-scrubbing { cursor: grabbing; }
