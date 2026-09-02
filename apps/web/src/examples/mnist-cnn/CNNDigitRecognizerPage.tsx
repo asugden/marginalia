@@ -92,7 +92,7 @@ export function CNNDigitRecognizerPage() {
         <div className="mnist-page">
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
-            <h1>Digit recognizer — convolutional</h1>
+            <h1>Convolutional Neural Network</h1>
             <p className="mnist-lede">
               The same drawing, read by a <b>convolutional</b> neural network.
               Instead of connecting every pixel to every neuron, a CNN slides

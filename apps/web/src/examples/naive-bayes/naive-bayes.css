@@ -1,0 +1,261 @@
+/* Distribution game — additions on top of the shared digit-recognizer.css page
+   chrome. The plot's own colours (the three class hues) are intrinsic to the
+   visualization and stay literal; everything else uses design tokens. */
+
+/* ── Scoreboard ───────────────────────────────────────────────── */
+.nb-scores {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem 0.75rem;
+}
+.nb-scores__head,
+.nb-scores__row {
+  display: grid;
+  grid-template-columns: 1fr 3.4rem 3.4rem;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.nb-scores__head {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+}
+.nb-scores--train-only .nb-scores__head,
+.nb-scores--train-only .nb-scores__row { grid-template-columns: 1fr 3.4rem; }
+.nb-scores__head span:not(:first-child) { text-align: right; }
+.nb-scores__row { padding: 0.28rem 0; }
+.nb-scores__name {
+  font-size: var(--text-sm);
+  color: var(--text-body);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.nb-scores__name::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.nb-scores__row--you .nb-scores__name::before { background: var(--accent); }
+.nb-scores__row--nb .nb-scores__name::before { background: #7c5cc4; }
+.nb-scores__row--bayes .nb-scores__name::before { background: var(--text-faint); }
+.nb-scores__val {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.nb-scores__val--muted { color: var(--text-muted); }
+.nb-scores__row--pending .nb-scores__name { color: var(--text-faint); }
+.nb-scores__hidden {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-sunken);
+  align-self: center;
+}
+.nb-scores__note {
+  margin: 0.55rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.nb-fit {
+  appearance: none;
+  width: 100%;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.nb-fit:hover { filter: brightness(1.08); }
+
+/* ── Segmented controls ───────────────────────────────────────── */
+.nb-modes { display: flex; flex-direction: column; gap: 0.4rem; }
+.nb-modes__label,
+.nb-field__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.nb-seg {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.nb-seg__btn {
+  appearance: none;
+  flex: 1;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 0.32rem 0.4rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.nb-seg__btn:last-child { border-right: 0; }
+.nb-seg__btn:hover { background: var(--surface-hover); color: var(--text-body); }
+.nb-seg__btn.is-on { background: var(--accent-wash, var(--surface-sunken)); color: var(--accent); }
+
+/* ── Your classifier ──────────────────────────────────────────── */
+.nb-rules,
+.nb-setup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.nb-rules__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.nb-rules__hint {
+  margin: 0.1rem 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.nb-rule-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+.nb-rule-chip__n {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+.nb-rule-chip__text { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.nb-rule-chip--fallback { color: var(--text-muted); }
+
+.nb-swatch {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: #fff;
+  padding: 0.05rem 0.5rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.5;
+}
+.nb-swatch:hover { filter: brightness(1.12); }
+.nb-mini {
+  appearance: none;
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 0.1rem 0.42rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+.nb-mini:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Data setup ───────────────────────────────────────────────── */
+.nb-field { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.nb-field .nb-seg { width: 7rem; }
+.nb-shapes { display: flex; gap: 0.3rem; }
+.nb-shape {
+  appearance: none;
+  flex: 1;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.2rem;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.nb-shape:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.nb-shape.is-on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
+.nb-shape.is-blocked { opacity: 0.4; cursor: not-allowed; text-decoration: line-through; }
+.nb-buttons { display: flex; gap: 0.4rem; }
+.nb-buttons .mnist-clear { flex: 1; }
+
+.nb-legend__dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* ── Plot ─────────────────────────────────────────────────────── */
+.nb-plot { display: block; touch-action: none; }
+.nb-plot__frame { fill: var(--surface-sunken); stroke: var(--border); }
+.nb-plot__grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
+.nb-plot__axis {
+  fill: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.nb-plot__points circle { stroke: var(--surface); stroke-width: 0.8; }
+/* Held-out points sit behind the sample: no outline, low opacity, so they read
+   as the distribution's shadow rather than as more points to fit. */
+.nb-plot__points--test circle { stroke: none; opacity: 0.28; }
+.nb-plot__ellipse { fill: none; }
+/* The true distribution is a filled fade with no outline — density, not a
+   contour line that could be mistaken for a decision boundary. */
+.nb-plot__ellipse--airy { stroke: none; pointer-events: none; }
+.nb-plot__ellipse--true { stroke-width: 1.6; stroke-dasharray: 5 4; opacity: 0.9; }
+.nb-plot__ellipse--fit { stroke-width: 1.6; opacity: 0.75; }
+.nb-plot__margins path { fill: none; stroke-width: 1.8; opacity: 0.9; }
+
+.nb-rule__line { stroke-width: 2.4; }
+.nb-rule__arrow { stroke-width: 1.6; opacity: 0.8; }
+.nb-rule__handle { stroke: var(--surface); stroke-width: 2; cursor: grab; }
+.nb-rule__handle:hover { stroke: var(--text-strong); }
+.nb-rule--active .nb-rule__handle { cursor: grabbing; }
+
+.nb-strip__truth { opacity: 0.16; }
+.nb-strip__fit { fill: none; stroke-width: 2; }
+.nb-cut__line { stroke: var(--text-strong); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.nb-cut__handle { fill: var(--text-strong); cursor: grab; }
+.nb-cut--active .nb-cut__handle { cursor: grabbing; }
+
+/* Held-out points: same hue, no outline, small — present but clearly not the
+   data you were fitting. */
+.nb-plot__test circle { opacity: 0.38; }

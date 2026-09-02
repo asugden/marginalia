@@ -20,8 +20,8 @@
 //    real thresholded red/blue lines (exactly like the MLP web).
 //  • conv/pool connections are LOCAL (a conv cell sees a 3x3 patch; a pool cell
 //    a 2x2 patch), so drawing them all would be noise. Instead they're revealed
-//    on hover: hovering a cell highlights its receptive field in the layer
-//    above.
+//    on hover: hovering a cell highlights its receptive field in EVERY layer
+//    above, traced back through the chain to the input pixels it came from.
 //
 // Clicking a conv-1 kernel arms the "scan": a 3x3 window over the INPUT grid
 // with a visual panel (image patch x kernel -> products -> one output neuron).
@@ -267,38 +267,87 @@ export function CNNNetworkView({
     return { d1, d2 };
   }, [net]);
 
-  // Receptive field of a hovered cell in the layer above.
-  const receptive = useMemo(() => {
-    if (!hover) return null;
-    if (hover.layer === "pool1") {
-      // pool1 cell (r,c) <- conv1 2x2 at (2r,2c)..(2r+1,2c+1)
-      const g = conv1Geo(hover.ch), a = cellRect(g, hover.r * 2, hover.c * 2), b = cellRect(g, hover.r * 2 + 1, hover.c * 2 + 1);
-      return { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
-    }
-    if (hover.layer === "pool2") {
-      const g = conv2Geo(hover.ch), a = cellRect(g, hover.r * 2, hover.c * 2), b = cellRect(g, hover.r * 2 + 1, hover.c * 2 + 1);
-      return { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
-    }
-    if (hover.layer === "conv1") {
-      // conv1 cell (r,c) <- input 3x3 at (r,c)..(r+2,c+2)
-      const a = cellRect(inputGeo, hover.r, hover.c), b = cellRect(inputGeo, hover.r + 2, hover.c + 2);
-      return { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
-    }
-    // conv2 is handled specially in the pool-1 render (it boxes ALL 8 channels,
-    // since a conv-2 filter reads a 3x3 across every pool-1 channel at once), so
-    // there's no single box to return here.
-    return null;
-  }, [hover, net]);
+  // Receptive field of a hovered cell, traced ALL THE WAY BACK to the input.
+  //
+  // Hovering one cell answers "which pixels did this actually come from?", so a
+  // single step back isn't enough — the chain is what's intuitive. We walk the
+  // hovered cell backwards layer by layer in CELL-RANGE space (inclusive
+  // r0..r1, c0..c1), because each step is an exact integer rule:
+  //   pool cell r  <- conv rows 2r .. 2r+1        (2x2 stride-2 window)
+  //   conv cell r  <- prev rows  r  .. r+2        (3x3 valid window)
+  // Composing ranges (not pixel rects) keeps it exact at every depth; we only
+  // convert to pixels at draw time.
+  //
+  // The one branch: conv2 reads a 3x3 across ALL eight pool-1 channels at once,
+  // so from conv2 back the trail covers every channel, not one. `chans` carries
+  // that — null means "this layer's box applies to every channel".
+  type Range = { r0: number; r1: number; c0: number; c1: number };
+  const poolBack = (v: Range): Range => ({ r0: v.r0 * 2, r1: v.r1 * 2 + 1, c0: v.c0 * 2, c1: v.c1 * 2 + 1 });
+  const convBack = (v: Range): Range => ({ r0: v.r0, r1: v.r1 + 2, c0: v.c0, c1: v.c1 + 2 });
 
-  // For a conv-2 hover, the 3x3 window boxed on any pool-1 channel `ch`. The
-  // window is at the same (r,c) in every channel — that's the depth-8 receptive
-  // field a conv-2 filter actually reads.
-  const conv2Window = (ch: number) => {
-    if (!hover || hover.layer !== "conv2") return null;
-    const g = pool1Geo(ch);
-    const a = cellRect(g, hover.r, hover.c), b = cellRect(g, hover.r + 2, hover.c + 2);
+  // The full backward trail for the current hover: one entry per upstream layer.
+  const trail = useMemo(() => {
+    if (!hover) return null;
+    const out: { layer: "input" | "conv1" | "pool1" | "conv2"; ch: number | null; range: Range }[] = [];
+    let v: Range = { r0: hover.r, r1: hover.r, c0: hover.c, c1: hover.c };
+    let ch: number | null = hover.ch;
+
+    // Walk back along the forward chain, starting one step above the hovered
+    // layer and continuing to the input. `stage` is where we currently are.
+    let stage: "pool2" | "conv2" | "pool1" | "conv1" = hover.layer;
+
+    if (stage === "pool2") {                   // pool2 -> conv2 (2x2)
+      v = poolBack(v);
+      out.push({ layer: "conv2", ch, range: v });
+      stage = "conv2";
+    }
+    if (stage === "conv2") {                   // conv2 -> pool1 (3x3, all 8 ch)
+      v = convBack(v);
+      ch = null;
+      out.push({ layer: "pool1", ch, range: v });
+      stage = "pool1";
+    }
+    if (stage === "pool1") {                   // pool1 -> conv1 (2x2)
+      v = poolBack(v);
+      out.push({ layer: "conv1", ch, range: v });
+      stage = "conv1";
+    }
+    // conv1 -> input (3x3). Every path ends here.
+    v = convBack(v);
+    out.push({ layer: "input", ch: null, range: v });
+    return out;
+  }, [hover]);
+
+  // Pixel rect for one trail entry on a given channel's map, or null if that
+  // entry doesn't apply to this channel. Clamped to the map so the deep,
+  // widened ranges (a pool-2 hover reaches a 12x12 patch of input) stay inside.
+  const trailBox = (
+    layer: "input" | "conv1" | "pool1" | "conv2", ch: number,
+  ): { x: number; y: number; w: number; h: number } | null => {
+    const e = trail?.find((t) => t.layer === layer);
+    if (!e) return null;
+    if (e.ch !== null && e.ch !== ch) return null;
+    const g = layer === "input" ? inputGeo
+      : layer === "conv1" ? conv1Geo(ch)
+      : layer === "pool1" ? pool1Geo(ch)
+      : conv2Geo(ch);
+    const r0 = Math.max(0, Math.min(g.rows - 1, e.range.r0));
+    const c0 = Math.max(0, Math.min(g.cols - 1, e.range.c0));
+    const r1 = Math.max(0, Math.min(g.rows - 1, e.range.r1));
+    const c1 = Math.max(0, Math.min(g.cols - 1, e.range.c1));
+    const a = cellRect(g, r0, c0), b = cellRect(g, r1, c1);
     return { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
   };
+
+  // The input-grid box is just the trail's last entry, in input pixel space.
+  const inputBox = useMemo(() => {
+    const e = trail?.find((t) => t.layer === "input");
+    if (!e) return null;
+    const r0 = Math.max(0, e.range.r0), c0 = Math.max(0, e.range.c0);
+    const r1 = Math.min(GRID - 1, e.range.r1), c1 = Math.min(GRID - 1, e.range.c1);
+    const a = cellRect(inputGeo, r0, c0), b = cellRect(inputGeo, r1, c1);
+    return { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
+  }, [trail, gx0, gy0]);
 
   // A transparent per-cell hover grid over a feature map (so we can catch which
   // cell the pointer is on without hit-testing thousands of colored rects).
@@ -389,9 +438,10 @@ export function CNNNetworkView({
           <rect x={gx0 + scan.c * cellS} y={gy0 + scan.r * cellS} width={cellS * 3} height={cellS * 3}
             fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2.5} pointerEvents="none" />
         )}
-        {/* Receptive-field highlight lands on the input when hovering conv1. */}
-        {receptive && hover?.layer === "conv1" && (
-          <rect x={receptive.x} y={receptive.y} width={receptive.w} height={receptive.h}
+        {/* Receptive field on the input — for a hover in ANY layer, since the
+            trail is walked all the way back. */}
+        {inputBox && (
+          <rect x={inputBox.x} y={inputBox.y} width={inputBox.w} height={inputBox.h}
             fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2.5} pointerEvents="none" />
         )}
       </g>
@@ -408,20 +458,29 @@ export function CNNNetworkView({
           patch.push(px); prod.push(px * w); sum += px * w;
         }
         const relu = Math.max(0, sum);
-        // Normalize products to [-1,1] for grayscale display (signed -> we map
-        // magnitude to darkness, sign is inherent in the value).
+        // Products are GRAYSCALE BY MAGNITUDE — only the kernel gets the red/blue
+        // treatment, so students read colour as "this is a weight" and nothing
+        // else. But a student still has to see which contributions are negative,
+        // so negatives get a blue OUTLINE rather than a blue fill: one channel
+        // (darkness) carries "how much", a separate channel (the ring) carries
+        // "which way". No new colour scale to learn.
         let pmax = 1e-6; for (const p of prod) pmax = Math.max(pmax, Math.abs(p));
         const px0 = gx0 + INPUT_BLOCK + 30, py0 = gy0 + 4;
         const cell = 26;
         const gridW = cell * 3;
-        const kX = px0, imgX = px0 + gridW + 40; // kernel left, image right (row 1)
+        const patchX = px0, kernX = px0 + gridW + 40; // image patch left, kernel right (row 1)
         const prodY = py0 + gridW + 46;          // products grid top (row 2)
-        // Output neuron sits to the RIGHT of the products grid (not below), so
-        // the panel stays short and doesn't overlap the network below.
-        const outX2 = imgX + (gridW - DENSE_NODE) / 2; // centered under the kernel column
+        // TWO neurons sit to the RIGHT of the products grid (not below), so the
+        // panel stays short and doesn't overlap the network below: the raw sum
+        // (which can be negative) and then the ReLU of it. Showing both is the
+        // point — ReLU is invisible if you only ever see the post-ReLU value.
         const outCY = prodY + gridW / 2;
+        const sumX = patchX + gridW + 30;              // after the -> arrow
+        const reluX = sumX + DENSE_NODE + 46;          // after the ReLU arrow
         const panelBottom = prodY + gridW + 22;
-        const panelW = imgX + gridW - px0 + 24;
+        // Wide enough for whichever row sticks out further: the kernel grid on
+        // row 1, or the ReLU neuron on row 2.
+        const panelW = Math.max(kernX + gridW, reluX + DENSE_NODE) - px0 + 24;
         const draw3 = (vals: number[], x: number, y: number, kind: "gray" | "weight") => (
           Array.from({ length: 9 }, (_, i) => {
             const r = Math.floor(i / 3), c = i % 3;
@@ -435,27 +494,49 @@ export function CNNNetworkView({
               fill="var(--surface,#fff)" stroke="var(--accent,#2b62a8)" strokeWidth={1.5} />
             <text x={px0 - 4} y={py0 + 4} fontSize={11} fill="var(--text-muted,#78716a)">kernel {f} · convolution</text>
             {/* row 1: image patch  ×  kernel */}
-            {draw3(patch, kX, py0 + 14, "gray")}
-            <rect x={kX} y={py0 + 14} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} />
-            <text x={kX + gridW + 20} y={py0 + 14 + gridW / 2} fontSize={20} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">×</text>
-            {draw3(net.k1.slice(f * 9, f * 9 + 9) as unknown as number[], imgX, py0 + 14, "weight")}
-            <rect x={imgX} y={py0 + 14} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} rx={3} />
-            <text x={kX + 4} y={py0 + 14 + gridW + 14} fontSize={9} fill="var(--text-faint,#a8a097)">image patch</text>
-            <text x={imgX + 4} y={py0 + 14 + gridW + 14} fontSize={9} fill="var(--text-faint,#a8a097)">kernel</text>
+            {draw3(patch, patchX, py0 + 14, "gray")}
+            <rect x={patchX} y={py0 + 14} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} />
+            <text x={patchX + gridW + 20} y={py0 + 14 + gridW / 2} fontSize={20} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">×</text>
+            {draw3(net.k1.slice(f * 9, f * 9 + 9) as unknown as number[], kernX, py0 + 14, "weight")}
+            <rect x={kernX} y={py0 + 14} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} rx={3} />
+            <text x={patchX + 4} y={py0 + 14 + gridW + 14} fontSize={9} fill="var(--text-faint,#a8a097)">image patch</text>
+            <text x={kernX + 4} y={py0 + 14 + gridW + 14} fontSize={9} fill="var(--text-faint,#a8a097)">kernel</text>
             {/* row 2: products (left)  ->  output neuron (right) */}
             <text x={px0 - 4} y={prodY - 8} fontSize={10} fill="var(--text-secondary,#57514a)">↓ multiply, cell by cell</text>
             {Array.from({ length: 9 }, (_, i) => {
               const r = Math.floor(i / 3), c = i % 3;
-              const x = kX + c * cell, y = prodY + r * cell;
-              return <rect key={i} x={x} y={y} width={cell} height={cell} fill={shade(Math.abs(prod[i]!) / pmax)} stroke="#e7e2da" strokeWidth={0.6} />;
+              const x = patchX + c * cell, y = prodY + r * cell;
+              const neg = prod[i]! < 0;
+              return (
+                <g key={i}>
+                  <rect x={x} y={y} width={cell} height={cell} fill={shade(Math.abs(prod[i]!) / pmax)} stroke="#e7e2da" strokeWidth={0.6} />
+                  {/* negative contribution: inset blue ring, drawn on top so it
+                      stays visible however dark the fill underneath is */}
+                  {neg && <rect x={x + 1.5} y={y + 1.5} width={cell - 3} height={cell - 3} fill="none" stroke="#2f6fd0" strokeWidth={2} />}
+                </g>
+              );
             })}
-            <rect x={kX} y={prodY} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} />
-            {/* arrow: sum + ReLU -> output neuron on the right */}
-            <text x={kX + gridW + 20} y={prodY + gridW / 2 - 5} fontSize={16} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">→</text>
-            <text x={kX + gridW + 20} y={prodY + gridW / 2 + 12} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">sum+ReLU</text>
-            <rect x={outX2} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
+            <rect x={patchX} y={prodY} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} />
+            {/* products -> sum -> ReLU, left to right */}
+            <text x={patchX + gridW + 15} y={outCY - 4} fontSize={15} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">→</text>
+            <text x={patchX + gridW + 15} y={outCY + 11} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">add</text>
+            {/* the raw sum: can be negative, so it uses the same magnitude-fill
+                + blue-ring convention as the product cells above */}
+            <rect x={sumX} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
+              fill={shade(Math.min(1, Math.abs(sum) / (pmax * 3 + 1e-6)))} stroke="#888888" strokeWidth={2} />
+            {sum < 0 && (
+              <rect x={sumX + 2} y={outCY - DENSE_NODE / 2 + 2} width={DENSE_NODE - 4} height={DENSE_NODE - 4}
+                rx={DENSE_RX - 2} ry={DENSE_RX - 2} fill="none" stroke="#2f6fd0" strokeWidth={2} />
+            )}
+            <text x={sumX + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 13} fontSize={10} textAnchor="middle" fill="var(--text-body,#3f3a34)">{sum.toFixed(2)}</text>
+            <text x={sumX + DENSE_NODE / 2} y={outCY - DENSE_NODE / 2 - 7} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">sum</text>
+            {/* ReLU step */}
+            <text x={sumX + DENSE_NODE + 23} y={outCY - 4} fontSize={15} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">→</text>
+            <text x={sumX + DENSE_NODE + 23} y={outCY + 11} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">ReLU</text>
+            <rect x={reluX} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
               fill={shade(Math.min(1, relu / (pmax * 3 + 1e-6)))} stroke="#888888" strokeWidth={2} />
-            <text x={outX2 + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 14} fontSize={11} textAnchor="middle" fill="var(--text-body,#3f3a34)">{relu.toFixed(2)}</text>
+            <text x={reluX + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 13} fontSize={10} textAnchor="middle" fill="var(--text-body,#3f3a34)">{relu.toFixed(2)}</text>
+            <text x={reluX + DENSE_NODE / 2} y={outCY - DENSE_NODE / 2 - 7} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">output</text>
           </g>
         );
       })()}
@@ -478,6 +559,9 @@ export function CNNNetworkView({
               {activations
                 ? <FeatureMap buf={activations.conv1} ch={f} h={net.c1} w={net.c1} x={g.x} y={g.y} size={MAP1} norm={n1[f]} dim={!!hover && !(hover.layer === "conv1" && hover.ch === f)} />
                 : <rect x={g.x} y={g.y} width={MAP1} height={MAP1} fill="#fff" stroke="#c9c2b8" />}
+              {(() => { const b = trailBox("conv1", f); return b && (
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
+              ); })()}
               {activations && hoverGrid("conv1", f, g)}
             </g>
           );
@@ -490,20 +574,19 @@ export function CNNNetworkView({
       <g>
         {colX.map((cx, f) => {
           const g = pool1Geo(f);
-          const c2win = conv2Window(f);
           // Dim pool-1 maps that aren't part of the current hover focus.
           const dimP1 = !!hover && hover.layer === "pool1" && hover.ch !== f;
           return (
             <g key={`p1-${f}`}>
-              {activations && <FeatureMap buf={activations.pool1} ch={f} h={net.p1} w={net.p1} x={g.x} y={g.y} size={MAPP1} norm={np1[f]} dim={dimP1} />}
-              {/* receptive field of a hovered pool1 cell lands here on conv1 */}
-              {receptive && hover?.layer === "pool1" && hover.ch === f && (
-                <rect x={receptive.x} y={receptive.y} width={receptive.w} height={receptive.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
-              )}
-              {/* depth-8 receptive field of a hovered conv-2 cell, on this map */}
-              {c2win && (
-                <rect x={c2win.x} y={c2win.y} width={c2win.w} height={c2win.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
-              )}
+              {activations
+                ? <FeatureMap buf={activations.pool1} ch={f} h={net.p1} w={net.p1} x={g.x} y={g.y} size={MAPP1} norm={np1[f]} dim={dimP1} />
+                : <rect x={g.x} y={g.y} width={MAPP1} height={MAPP1} fill="#fff" stroke="#c9c2b8" />}
+              {/* Trail box on pool 1. For a conv-2 (or deeper) hover this lands
+                  on EVERY channel — a conv-2 filter reads a 3x3 across all
+                  eight pool-1 maps at once. */}
+              {(() => { const b = trailBox("pool1", f); return b && (
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
+              ); })()}
               {activations && hoverGrid("pool1", f, g)}
             </g>
           );
@@ -531,7 +614,12 @@ export function CNNNetworkView({
                 })}
                 <rect x={kx} y={ky} width={KSW} height={KSW} fill="none" stroke="#888" strokeWidth={1.5} rx={4} />
               </g>
-              {activations && <FeatureMap buf={activations.conv2} ch={f} h={net.c2} w={net.c2} x={g.x} y={g.y} size={MAP2} norm={n2[f]} dim={!!hover && !(hover.layer === "conv2" && hover.ch === f)} />}
+              {activations
+                ? <FeatureMap buf={activations.conv2} ch={f} h={net.c2} w={net.c2} x={g.x} y={g.y} size={MAP2} norm={n2[f]} dim={!!hover && !(hover.layer === "conv2" && hover.ch === f)} />
+                : <rect x={g.x} y={g.y} width={MAP2} height={MAP2} fill="#fff" stroke="#c9c2b8" />}
+              {(() => { const b = trailBox("conv2", f); return b && (
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
+              ); })()}
               {activations && hoverGrid("conv2", f, g)}
             </g>
           );
@@ -544,10 +632,9 @@ export function CNNNetworkView({
           const g = pool2Geo(f);
           return (
             <g key={`p2-${f}`}>
-              {activations && <FeatureMap buf={activations.pool2} ch={f} h={net.p2} w={net.p2} x={g.x} y={g.y} size={MAPP2} norm={np2[f]} dim={!!hover && !(hover.layer === "pool2" && hover.ch === f)} />}
-              {receptive && hover?.layer === "pool2" && hover.ch === f && (
-                <rect x={receptive.x} y={receptive.y} width={receptive.w} height={receptive.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
-              )}
+              {activations
+                ? <FeatureMap buf={activations.pool2} ch={f} h={net.p2} w={net.p2} x={g.x} y={g.y} size={MAPP2} norm={np2[f]} dim={!!hover && !(hover.layer === "pool2" && hover.ch === f)} />
+                : <rect x={g.x} y={g.y} width={MAPP2} height={MAPP2} fill="#fff" stroke="#c9c2b8" />}
               {activations && hoverGrid("pool2", f, g)}
             </g>
           );

@@ -37,7 +37,6 @@ export function ExamplesIndexPage() {
             {EXAMPLES.map((ex) => (
               <li key={ex.slug}>
                 <Link to={`/examples/${ex.slug}`} className="examples-card">
-                  <span className="examples-card__glyph" aria-hidden>{ex.glyph}</span>
                   <span className="examples-card__title">{ex.title}</span>
                   <span className="examples-card__blurb">{ex.blurb}</span>
                   <span className="examples-card__tags">

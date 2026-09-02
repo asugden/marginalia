@@ -120,7 +120,7 @@ export function DigitRecognizerPage() {
           {/* Left-justified eyebrow -> heading lockup, DS style. */}
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
-            <h1>Digit recognizer</h1>
+            <h1>Deep Neural Network</h1>
             <p className="mnist-lede">
               Draw a digit on the grid at the top of the network. The top of the
               network is the model's input layer. All of the pixels are values

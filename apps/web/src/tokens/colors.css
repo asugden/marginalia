@@ -77,6 +77,14 @@
   --amber-600: #b5790e;  --amber-tint: #fbeed1;  --amber-ink: #7a4f06;
   --blue-600:  #2b62a8;  --blue-tint:  #e2ebf6;  --blue-ink:  #1c4474;
 
+  /* Two further hues, carried at full saturation for data marks (series
+   * colours, category fills) where the warm-biased trio above runs out of
+   * distinguishable steps. Same triple shape: -600 for marks, -tint for
+   * fills, -ink for text. The -ink variants are the base darkened to hold
+   * AA on paper and on their own tint. */
+  --purple-600: #847aee;  --purple-tint: #f0effd;  --purple-ink: #4d478a;
+  --salmon-600: #ed6a5a;  --salmon-tint: #fdedeb;  --salmon-ink: #893d34;
+
   /* ================================================================
    * Semantic aliases — consume these in components
    * ============================================================== */

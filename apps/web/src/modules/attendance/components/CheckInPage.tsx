@@ -10,6 +10,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { Badge, Button, Wordmark } from "../../../components/index.js";
+import { CheckIcon, PinIcon } from "../../../icons.js";
 import {
   ApiError,
   deviceFingerprintString,
@@ -18,8 +20,6 @@ import {
   type CheckInfo,
   type CheckinFlag,
 } from "../api.js";
-import { Badge, Button, Wordmark } from "../../../components/index.js";
-import { CheckIcon, PinIcon } from "../../../icons.js";
 
 type Stage =
   | { kind: "loading" }
@@ -33,18 +33,25 @@ type Stage =
 // Friendly, trust-framed copy shown under the badges. Not an accusation —
 // just a note so the student knows what their instructor might see.
 const FLAG_BLURB: Record<CheckinFlag, string> = {
-  outside_radius: "We couldn't tell you were inside the room — your instructor can sort it out with you.",
-  no_geofence: "",  // not informative for the student
-  no_location: "You didn't share your location — that's completely fine, we just noted it.",
-  duplicate_device: "This device already checked someone in today — your instructor may follow up.",
-  duplicate_cookie: "This device already checked someone in today — your instructor may follow up.",
+  outside_radius:
+    "We couldn't tell you were inside the room — your instructor can sort it out with you.",
+  no_geofence: "", // not informative for the student
+  no_location:
+    "You didn't share your location — that's completely fine, we just noted it.",
+  duplicate_device:
+    "This device already checked someone in today — your instructor may follow up.",
+  duplicate_cookie:
+    "This device already checked someone in today — your instructor may follow up.",
   late: "",
-  auto_enrolled: "",  // joining the course is a normal outcome, not an anomaly
+  auto_enrolled: "", // joining the course is a normal outcome, not an anomaly
 };
 
 // Each flag maps to a small pill badge. `null` means "don't surface it."
 type BadgeTone = "success" | "info" | "warning";
-const FLAG_BADGE: Record<CheckinFlag, { label: string; tone: BadgeTone } | null> = {
+const FLAG_BADGE: Record<
+  CheckinFlag,
+  { label: string; tone: BadgeTone } | null
+> = {
   no_location: { label: "No location", tone: "info" },
   outside_radius: { label: "Outside room", tone: "warning" },
   duplicate_device: { label: "Shared device", tone: "warning" },
@@ -86,7 +93,9 @@ export function CheckInPage() {
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const signInUrl = useMemo(() => {
@@ -145,9 +154,8 @@ export function CheckInPage() {
           <>
             <h1 className="ds-att-ci__course">Code expired</h1>
             <p className="ds-att-ci__label">
-              Check-in codes refresh every few seconds. Please re-scan the QR
-              code on screen — you&rsquo;re already signed in, so it will be
-              quick.
+              Check-in codes refresh every 30 - 90 seconds. Please re-scan the
+              QR code on screen now that you've logged in.
             </p>
           </>
         )}
@@ -234,7 +242,11 @@ function CheckedIn({ flags }: { flags: CheckinFlag[] }) {
       {blurbs.length > 0 && (
         <div style={{ marginTop: "1rem", textAlign: "left" }}>
           {blurbs.map((f) => (
-            <p key={f} className="ds-att-ci__label" style={{ marginBottom: "0.5rem" }}>
+            <p
+              key={f}
+              className="ds-att-ci__label"
+              style={{ marginBottom: "0.5rem" }}
+            >
               {FLAG_BLURB[f]}
             </p>
           ))}
@@ -248,7 +260,11 @@ function CheckedIn({ flags }: { flags: CheckinFlag[] }) {
   );
 }
 
-interface Geo { lat: number; lon: number; accuracy: number }
+interface Geo {
+  lat: number;
+  lon: number;
+  accuracy: number;
+}
 
 function readGeolocation(): Promise<Geo | null> {
   return new Promise((resolve) => {
@@ -263,7 +279,10 @@ function readGeolocation(): Promise<Geo | null> {
           accuracy: pos.coords.accuracy,
         });
       },
-      () => { clearTimeout(timeout); resolve(null); },
+      () => {
+        clearTimeout(timeout);
+        resolve(null);
+      },
       { enableHighAccuracy: true, timeout: 7_000, maximumAge: 0 },
     );
   });

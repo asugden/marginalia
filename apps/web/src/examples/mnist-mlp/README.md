@@ -1,4 +1,4 @@
-# Example: digit recognizer
+# Example: Deep Neural Network
 
 A standalone, static, interactive page that visualizes a real neural
 network classifying a hand-drawn digit in real time. Mounted at
