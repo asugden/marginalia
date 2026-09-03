@@ -197,6 +197,18 @@ export function TreeView({
               stroke={EDGE_BOTH}
               strokeWidth={compact ? undefined : wl + wr}
             />
+            {/* A cap over the junction where all three strokes meet. Their
+                square ends overlap raggedly there; one purple disc, sized to
+                the widest of the three, resolves it into a single joint. */}
+            {!compact && (
+              <circle
+                cx={x1}
+                cy={midY}
+                r={(wl + wr) / 2}
+                className={"tree__joint" + (bothDim ? " is-dim" : "")}
+                fill={EDGE_BOTH}
+              />
+            )}
           </Fragment>
         );
       })}

@@ -281,3 +281,8 @@ body.is-scrubbing, body.is-scrubbing * {
   -webkit-user-select: none !important;
 }
 body.is-scrubbing { cursor: grabbing; }
+
+/* The leading slot: a control that changes what the page is showing, kept in
+   the sticky bar so it is reachable from anywhere on the page. */
+.ens-scrub__leading { flex: none; display: flex; align-items: center; gap: 0.4rem; }
+.ens-scrub__leading .dt-controls { flex-wrap: nowrap; }

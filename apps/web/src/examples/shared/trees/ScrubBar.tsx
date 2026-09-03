@@ -1,11 +1,15 @@
 // The control both ensemble pages are driven from.
 //
-// One row: the scrubber filling the middle and the current scores at the right.
-// The bar is sticky, so it stays with you as you scroll down into the per-tree
-// detail — which is why there is no show/hide control here. The detail is
-// always on screen and the scrubber is always reachable.
+// One row: an optional control at the left-hand end, the scrubber filling the
+// middle, and the current scores at the right. The bar is sticky, so anything
+// in that leading slot stays reachable however far down the page you scroll —
+// which is why the choice of task lives there rather than buried in the
+// controls panel halfway down.
 
 export interface ScrubBarProps {
+  /** Rendered at the left-hand end, ahead of the counter. For a control that
+   *  changes what the whole page is showing, rather than one that tunes it. */
+  leading?: React.ReactNode;
   id: string;
   label: string;
   value: number;
@@ -34,6 +38,7 @@ function beginScrub() {
 }
 
 export function ScrubBar({
+  leading,
   id,
   label,
   value,
@@ -45,6 +50,7 @@ export function ScrubBar({
 }: ScrubBarProps) {
   return (
     <div className="ens-scrub">
+      {leading && <div className="ens-scrub__leading">{leading}</div>}
       <label className="ens-scrub__label" htmlFor={id}>
         {label}
         <b>{value}</b>
