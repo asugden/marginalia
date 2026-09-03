@@ -148,6 +148,8 @@
    variable widths turn to mush at that scale. */
 .tree--compact .tree__edge { stroke: var(--border-strong) !important; stroke-width: 1.4 !important; }
 .tree__edge.is-dim { opacity: 0.25; }
+.tree__joint { opacity: 0.85; }
+.tree__joint.is-dim { opacity: 0.25; }
 .tree__edge-label {
   fill: var(--text-faint);
   font-family: var(--font-mono);

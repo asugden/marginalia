@@ -225,6 +225,31 @@ export function RandomForestPage() {
           </div>
 
           <ScrubBar
+            leading={
+              <div className="dt-controls">
+                <span className="dt-controls__label">Task</span>
+                <button
+                  type="button"
+                  className={"dt-chip" + (!regression ? " is-on" : "")}
+                  onClick={() => {
+                    setRegression(false);
+                    setFocus(0);
+                  }}
+                >
+                  classify size (vote)
+                </button>
+                <button
+                  type="button"
+                  className={"dt-chip" + (regression ? " is-on" : "")}
+                  onClick={() => {
+                    setRegression(true);
+                    setFocus(0);
+                  }}
+                >
+                  predict weight (average)
+                </button>
+              </div>
+            }
             id="rf-trees"
             label="Trees"
             value={nShown}
@@ -237,9 +262,11 @@ export function RandomForestPage() {
                 : `train error ${Math.round(err * 100)}%`
             }
             secondary={
-              regression
-                ? `test ${oobErr.toFixed(2)} kg`
-                : `test error ${Math.round(oobErr * 100)}%`
+              !useBootstrap
+                ? "no test set"
+                : regression
+                  ? `test ${oobErr.toFixed(2)} kg`
+                  : `test error ${Math.round(oobErr * 100)}%`
             }
           />
 
@@ -336,20 +363,38 @@ export function RandomForestPage() {
                       regression ? h.score : 1 - h.score,
                     ),
                   },
-                  {
-                    label: "test",
-                    color: GAIN_BAR_WIN,
-                    dashed: true,
-                    values: history.map((h) =>
-                      regression ? h.oob : 1 - h.oob,
-                    ),
-                  },
+                  // Only meaningful with bagging on: without it no tree has
+                  // any rows it did not see, so there is nothing to score and
+                  // the series would plot a flat 100% error that is not a bad
+                  // score but an absent one.
+                  ...(useBootstrap
+                    ? [
+                        {
+                          label: "test",
+                          color: GAIN_BAR_WIN,
+                          dashed: true,
+                          values: history.map((h) =>
+                            regression ? h.oob : 1 - h.oob,
+                          ),
+                        },
+                      ]
+                    : []),
                 ]}
                 cursor={nShown}
                 xLabel="trees"
                 yLabel={regression ? "RMSE (kg)" : "error rate"}
                 zeroBased
               />
+              {!useBootstrap && (
+                <p className="ens-note">
+                  <b>Bagging is off, so there is no test line.</b> Every tree was
+                  grown on every dog, so no tree has any dogs it has not seen and
+                  there is nothing left to score it against. That is the second
+                  thing bagging buys, on top of the trees disagreeing usefully:
+                  it manufactures the test set out of thin air.
+                </p>
+              )}
+
               <p className="ens-note">
                 The dashed line is the <b>test</b> error. Each tree misses about
                 a third of the dogs when its resample is drawn, so every dog can
@@ -381,31 +426,8 @@ export function RandomForestPage() {
                     checked={useBootstrap}
                     onChange={(e) => setUseBootstrap(e.target.checked)}
                   />
-                  Resample the rows
+                  Bagging
                 </label>
-                <div className="dt-controls">
-                  <span className="dt-controls__label">Task</span>
-                  <button
-                    type="button"
-                    className={"dt-chip" + (!regression ? " is-on" : "")}
-                    onClick={() => {
-                      setRegression(false);
-                      setFocus(0);
-                    }}
-                  >
-                    classify size (vote)
-                  </button>
-                  <button
-                    type="button"
-                    className={"dt-chip" + (regression ? " is-on" : "")}
-                    onClick={() => {
-                      setRegression(true);
-                      setFocus(0);
-                    }}
-                  >
-                    predict weight (average)
-                  </button>
-                </div>
               </div>
 
               <p className="ens-note">

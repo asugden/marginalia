@@ -280,6 +280,9 @@ export function ThresholdCurve({
                 stroke={EDGE_BOTH}
                 strokeWidth={wl + wr}
               />
+              {/* Cap over the junction: the three strokes' square ends overlap
+                  raggedly there, and one purple disc resolves it into a joint. */}
+              <circle cx={x1} cy={midY} r={(wl + wr) / 2} fill={EDGE_BOTH} />
             </>
           );
         })()}
