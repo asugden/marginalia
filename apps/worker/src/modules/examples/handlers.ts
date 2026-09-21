@@ -15,6 +15,7 @@
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import * as repo from "./repo.js";
+import { syncExampleItems } from "../course-items/sync.js";
 import {
   rowToCourseExample,
   type CompletionRosterEntryDTO,
@@ -405,6 +406,9 @@ export async function putCourseExamplesRoute(
   }
 
   await repo.replaceCourseExamples(env.DB, courseId, items);
+  // The Assign list reads wrappers, not this table; reconcile them so every
+  // curated example is on the list with the dates set here.
+  await syncExampleItems(env.DB, courseId, items);
   const rows = await repo.listCourseExamples(env.DB, courseId);
   return json({ examples: rows.map(rowToCourseExample) });
 }
