@@ -58,6 +58,12 @@ export function transition(
   prev: BackboneState,
   rawReply: string,
 ): TransitionResult {
+  // Terminal, and deliberately idempotent: once the outline is finished the
+  // machine stops counting entirely. The conversation itself does NOT stop —
+  // a completed backbone continues as a free-form thread on the same row —
+  // so this path is taken on every subsequent turn. Returning `prev`
+  // unchanged is what keeps totalTurns, turnsOnTopic, and currentTopicIndex
+  // from drifting past the end of the outline during that continuation.
   if (prev.finished) {
     return { state: prev, kind: "finished" };
   }

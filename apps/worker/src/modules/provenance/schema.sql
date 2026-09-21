@@ -69,3 +69,31 @@ CREATE TABLE provenance_submissions (
 );
 CREATE INDEX idx_provenance_submissions_doc
   ON provenance_submissions(document_id);
+
+CREATE TABLE provenance_assignments (
+  id              TEXT PRIMARY KEY,
+  course_id       TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  instructions    TEXT NOT NULL DEFAULT '',
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  archived_at     INTEGER  -- set instead of deleting; keeps attached submissions readable
+);
+CREATE INDEX idx_provenance_assignments_course
+  ON provenance_assignments(course_id, created_at DESC);
+
+CREATE TABLE provenance_assignment_checkpoints (
+  id              TEXT PRIMARY KEY,
+  assignment_id   TEXT NOT NULL REFERENCES provenance_assignments(id) ON DELETE CASCADE,
+  ord             INTEGER NOT NULL,  -- display order, instructor-controlled
+  name            TEXT NOT NULL,
+  due_at          INTEGER  -- NULL = no deadline, so never late
+);
+CREATE INDEX idx_provenance_checkpoints_assignment
+  ON provenance_assignment_checkpoints(assignment_id, ord);
+
+-- provenance_submissions additionally carries (both nullable — an unattached
+-- submission is still valid, and lateness is computed at read time from
+-- checkpoint.due_at rather than stored):
+--   assignment_id  TEXT
+--   checkpoint_id  TEXT

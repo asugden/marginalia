@@ -23,11 +23,30 @@ export interface ExampleSpec {
   blurb: string;
   /** Short topic tags for the card. */
   tags: string[];
+  /**
+   * Overviews are maps rather than lessons: they mostly link onward to the
+   * other examples. The gallery groups them above the rest so a student
+   * arriving with no context lands on one first.
+   */
+  kind?: "overview";
   /** Lazy-loaded page component, mounted at /examples/<slug>. */
   Page: LazyExoticComponent<ComponentType>;
 }
 
 export const EXAMPLES: ExampleSpec[] = [
+  {
+    slug: "machine-learning",
+    title: "What Is Machine Learning",
+    kind: "overview",
+    blurb:
+      "The shape every problem here shares \u2014 data, features, model, labels, one spreadsheet \u2014 and the single line all the models sit on. Click into the line to reach the rest.",
+    tags: ["overview", "orientation", "model choice"],
+    Page: lazy(() =>
+      import("./overview/MachineLearningPage.js").then((m) => ({
+        default: m.MachineLearningPage,
+      })),
+    ),
+  },
   {
     slug: "digit-recognizer",
     title: "Deep Neural Network",
@@ -97,6 +116,90 @@ export const EXAMPLES: ExampleSpec[] = [
     Page: lazy(() =>
       import("./xgboost/XGBoostPage.js").then((m) => ({
         default: m.XGBoostPage,
+      })),
+    ),
+  },
+  {
+    slug: "softmax",
+    title: "Softmax",
+    blurb:
+      "Two operations \u2014 exponentiate, then divide \u2014 that turn any set of numbers into something that sums to 1. Drag the logits, break the naive version, and find the temperature knob hiding inside.",
+    tags: ["softmax", "probability", "temperature", "interactive"],
+    Page: lazy(() =>
+      import("./softmax/SoftmaxPage.js").then((m) => ({
+        default: m.SoftmaxPage,
+      })),
+    ),
+  },
+  {
+    slug: "attention",
+    title: "Attention",
+    blurb:
+      "How one word reads another. A sentence, the n \u00d7 n grid its vectors produce, and a softmax toggle on the grid itself \u2014 queries, keys, values, and the quadratic cost you can watch grow.",
+    tags: ["transformers", "attention", "Q/K/V", "interactive"],
+    Page: lazy(() =>
+      import("./attention/AttentionPage.js").then((m) => ({
+        default: m.AttentionPage,
+      })),
+    ),
+  },
+  {
+    slug: "transformers",
+    title: "Transformers",
+    blurb:
+      "The attention head as a finished part. Run several at once, add what they find back onto each word, pass every word through a memory where the facts live, stack it dozens of times \u2014 then decode the famous diagram box by box.",
+    tags: ["transformers", "multi-head attention", "feed-forward", "architecture", "interactive"],
+    Page: lazy(() =>
+      import("./transformers/TransformersPage.js").then((m) => ({
+        default: m.TransformersPage,
+      })),
+    ),
+  },
+  {
+    slug: "bert",
+    title: "BERT",
+    blurb:
+      "What happens when the transformer block is stacked and trained to fill in blanks: a word stops having one vector and gets one per sentence it appears in. Short, and built on the two examples before it.",
+    tags: ["transformers", "BERT", "contextual embeddings", "pre-training"],
+    Page: lazy(() =>
+      import("./bert/BertPage.js").then((m) => ({
+        default: m.BertPage,
+      })),
+    ),
+  },
+  {
+    slug: "word2vec",
+    title: "Word Embeddings",
+    blurb:
+      "Train a network on a task nobody cares about \u2014 guessing which words appear near which \u2014 then throw away the half that does the guessing. What is left is meaning as a list of numbers. Ends on the words the table never saw, and how spelling gets them back.",
+    tags: ["embeddings", "word2vec", "subword", "fastText", "NLP", "interactive"],
+    Page: lazy(() =>
+      import("./word2vec/Word2VecPage.js").then((m) => ({
+        default: m.Word2VecPage,
+      })),
+    ),
+  },
+  {
+    slug: "training",
+    title: "Training",
+    blurb:
+      "The only model here that arrives knowing nothing. Watch 6,500 parameters start as pure noise and become a network that reproduces a handwritten digit \u2014 trained live in your browser, one step at a time.",
+    tags: ["training", "gradient descent", "autoencoder", "interactive"],
+    Page: lazy(() =>
+      import("./training/TrainingPage.js").then((m) => ({
+        default: m.TrainingPage,
+      })),
+    ),
+  },
+  {
+    slug: "parameter-budget",
+    title: "Counting Parameters",
+    blurb:
+      "\u201c405 billion parameters\u201d is the unit everyone quotes and nobody derives. Drag the layers, watch the arithmetic, and find out why widening the middle costs so much more than widening the ends.",
+    tags: ["parameters", "architecture", "scale", "interactive"],
+    Page: lazy(() =>
+      import("./parameter-budget/ParameterBudgetPage.js").then((m) => ({
+        default: m.ParameterBudgetPage,
       })),
     ),
   },

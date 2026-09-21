@@ -33,6 +33,14 @@
 //   GET    /api/provenance/submissions?courseId=                   course-wide — INSTRUCTOR ONLY
 //   DELETE /api/provenance/submissions/:token                      revoke
 //
+// Assignments (writing assignments with N checkpoints)
+//   GET    /api/provenance/assignments?courseId=             list — any enrolled user
+//   POST   /api/provenance/assignments                       create — INSTRUCTOR ONLY
+//   GET    /api/provenance/assignments/:id?courseId=         fetch one — any enrolled user
+//   PATCH  /api/provenance/assignments/:id                   edit — INSTRUCTOR ONLY
+//   DELETE /api/provenance/assignments/:id?courseId=         delete — INSTRUCTOR ONLY
+//   GET    /api/provenance/assignments/:id/roster?courseId=  every student × checkpoint — INSTRUCTOR ONLY
+//
 // Course settings (hide-marks toggle)
 //   GET    /api/provenance/settings?courseId=                       read display settings
 //   PATCH  /api/provenance/settings                                 set (instructor only)
@@ -45,17 +53,22 @@ import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import {
   appendEventsRoute,
+  assignmentRosterRoute,
   createAgentRoute,
+  createAssignmentRoute,
   createConversationRoute,
   createDocumentRoute,
   createSubmissionRoute,
   deleteAgentRoute,
+  deleteAssignmentRoute,
   deleteConversationRoute,
   deleteDocumentRoute,
   getAgentRoute,
+  getAssignmentRoute,
   getDocumentRoute,
   getSettingsRoute,
   listAgentsRoute,
+  listAssignmentsRoute,
   listConversationsRoute,
   listCourseSubmissionsRoute,
   listDocumentsRoute,
@@ -67,6 +80,7 @@ import {
   revokeSubmissionRoute,
   sendMessageRoute,
   updateAgentRoute,
+  updateAssignmentRoute,
   updateConversationRoute,
   updateDocumentRoute,
   updateSettingsRoute,
@@ -122,6 +136,26 @@ export async function routeProvenance(
   // is a historical path name); see routeSubmissionViews below.
   if (head === "public") {
     return routeSubmissionViews(req, env, identity, parts);
+  }
+
+  // Assignments. The list + single fetch are readable by any enrolled user (a
+  // student needs them to choose what they're submitting to); every mutation
+  // and the roster are instructor-gated inside the handlers.
+  if (head === "assignments") {
+    if (req.method === "GET" && parts.length === 3) {
+      return listAssignmentsRoute(env, identity, url);
+    }
+    if (req.method === "POST" && parts.length === 3) {
+      return createAssignmentRoute(req, env, identity);
+    }
+    if (tail && parts.length === 4) {
+      if (req.method === "GET") return getAssignmentRoute(env, identity, url, tail);
+      if (req.method === "PATCH") return updateAssignmentRoute(req, env, identity, tail);
+      if (req.method === "DELETE") return deleteAssignmentRoute(env, identity, url, tail);
+    }
+    if (tail && parts.length === 5 && parts[4] === "roster") {
+      if (req.method === "GET") return assignmentRosterRoute(env, identity, url, tail);
+    }
   }
 
   if (head === "settings" && parts.length === 3) {

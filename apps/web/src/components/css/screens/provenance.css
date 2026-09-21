@@ -80,3 +80,70 @@
 .prov-subs__seg.legend-pasted { background: var(--amber-tint); }
 .prov-subs__seg.legend-llm    { background: var(--blue-tint); }
 .prov-subs__seg.legend-edited { background: var(--green-tint); }
+
+/* ── Assignments (instructor) ─────────────────────────────────────────── */
+
+.prov-asg__actions { display: inline-flex; gap: 0.4rem; align-items: center; }
+
+.prov-asg__editor {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding: var(--space-4); margin-bottom: var(--space-3);
+  background: var(--surface-sunken); border-radius: var(--radius-md);
+}
+.prov-asg__cps { display: flex; flex-direction: column; gap: 0.5rem; }
+/* Name grows, date sits at its natural width, controls stay put. Collapses to
+   a stack on narrow screens rather than squeezing the date input to unusable. */
+.prov-asg__cp {
+  display: grid; gap: 0.4rem; align-items: center;
+  grid-template-columns: minmax(6rem, 1fr) auto auto auto auto;
+}
+@media (max-width: 40rem) {
+  .prov-asg__cp { grid-template-columns: 1fr 1fr; }
+}
+.prov-asg__editor-actions { display: flex; gap: 0.5rem; }
+
+/* ── Assignment roster grid ───────────────────────────────────────────── */
+
+/* The grid scrolls in its own box: a course with several checkpoints is wider
+   than the page, and the page body must never scroll sideways. */
+.prov-roster__scroll { overflow-x: auto; }
+.prov-roster { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.prov-roster th, .prov-roster td {
+  text-align: left; padding: 0.5rem 0.75rem; vertical-align: top;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.prov-roster thead th { white-space: nowrap; }
+.prov-roster__cp-name, .prov-roster__cp-due,
+.prov-roster__who, .prov-roster__email { display: block; }
+.prov-roster tbody th { font-weight: 500; }
+/* Empty cells recede rather than alarm: an unsubmitted checkpoint is a fact to
+   read, not a flag to react to. No red, no fill — see the module README's
+   "no false positives" rule. */
+.prov-roster td.is-empty { color: var(--text-muted); }
+.prov-roster__miss { white-space: nowrap; }
+.prov-roster__hit { white-space: nowrap; }
+/* LATE is set in the mono face so it reads as a recorded fact next to the
+   timestamp it qualifies, not as an alert. Warning ink, never a red fill. */
+.prov-roster__late {
+  font-family: var(--font-mono); font-size: 0.75em; letter-spacing: 0.04em;
+  color: var(--status-warning-ink);
+}
+
+/* Assignment picker in the submit modal. Absent entirely when the course has
+   no assignments — the modal is then unchanged from before they existed. */
+.prov-submit-target {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  margin-bottom: var(--space-3);
+}
+.prov-submit-instructions { white-space: pre-wrap; }
+/* The late notice is informational, not a warning to be dismissed: the
+   submission goes through either way. Warning ink on a tinted ground, no
+   border, no icon — loud enough to be read before the button, quiet enough
+   not to read as a refusal. */
+.prov-submit-late {
+  margin: 0; padding: 0.5rem 0.65rem;
+  font-size: 0.85rem; line-height: 1.4;
+  color: var(--status-warning-ink);
+  background: var(--status-warning-tint);
+  border-radius: var(--radius-sm);
+}

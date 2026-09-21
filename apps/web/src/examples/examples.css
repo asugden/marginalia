@@ -64,3 +64,21 @@
   border-radius: var(--radius-pill);
   padding: 0.15rem 0.55rem;
 }
+
+/* Overview cards sit above the gallery in their own grid: wider, accented, and
+   kickered, because they are maps of everything below rather than peers of it. */
+.examples-grid--overview {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  margin-bottom: 1.25rem;
+}
+.examples-card--overview {
+  border-color: var(--accent-wash-2);
+  background: var(--accent-wash);
+}
+.examples-card__kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-ink, var(--text-muted));
+}

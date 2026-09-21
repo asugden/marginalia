@@ -4,6 +4,8 @@
 
 import type {
   ProvenanceAgentRow,
+  ProvenanceAssignmentCheckpointRow,
+  ProvenanceAssignmentRow,
   ProvenanceConversationRow,
   ProvenanceDocumentRow,
   ProvenanceEventRow,
@@ -729,6 +731,12 @@ export interface CourseSubmissionRow {
   user_id: string;
   student_email: string;
   student_name: string | null;
+  /** Assignment context, all null when the submission is unattached. */
+  assignment_id: string | null;
+  assignment_title: string | null;
+  checkpoint_id: string | null;
+  checkpoint_name: string | null;
+  checkpoint_due_at: number | null;
 }
 
 /**
@@ -740,6 +748,10 @@ export interface CourseSubmissionRow {
  * `render_json` is selected so the caller can report per-origin totals without a
  * second query per row; the list endpoint summarizes it and does not ship the
  * full render to the client.
+ *
+ * Assignment context comes in via LEFT JOINs so unattached submissions — every
+ * row predating assignments, plus anything submitted outside one — still list
+ * with null assignment fields rather than dropping out.
  */
 export async function listSubmissionsForCourse(
   db: D1Database,
@@ -749,9 +761,16 @@ export async function listSubmissionsForCourse(
     .prepare(
       `SELECT s.token, s.document_id, s.title_snapshot, s.created_at,
               s.revoked_at, s.render_json, s.user_id,
-              u.email AS student_email, u.display_name AS student_name
+              u.email AS student_email, u.display_name AS student_name,
+              s.assignment_id,
+              a.title  AS assignment_title,
+              s.checkpoint_id,
+              c.name   AS checkpoint_name,
+              c.due_at AS checkpoint_due_at
          FROM provenance_submissions s
          JOIN users u ON u.id = s.user_id
+         LEFT JOIN provenance_assignments a ON a.id = s.assignment_id
+         LEFT JOIN provenance_assignment_checkpoints c ON c.id = s.checkpoint_id
         WHERE s.course_id = ?
         ORDER BY s.created_at DESC`,
     )
@@ -831,5 +850,344 @@ export async function setHideProvenanceMarks(
              updated_at = excluded.updated_at`,
     )
     .bind(courseId, hide ? 1 : 0, Date.now())
+    .run();
+}
+
+// ── Assignments + checkpoints ───────────────────────────────────────────
+//
+// An assignment names a piece of writing; its checkpoints are the moments it
+// is due. Everything here is course-scoped, and checkpoints reach their course
+// only through their assignment — so every checkpoint query joins back up to
+// `provenance_assignments` rather than trusting an id from the wire.
+//
+// Lateness never appears in this file. It is `submitted_at > due_at`, computed
+// where the roster is rendered; a stored flag would survive the instructor
+// moving the deadline.
+
+const newAssignmentId = () => `pasg_${crypto.randomUUID()}`;
+const newCheckpointId = () => `pcp_${crypto.randomUUID()}`;
+
+/** A checkpoint as authored: name, order, optional deadline. */
+export interface CheckpointInput {
+  name: string;
+  /** Epoch ms, or null for "no deadline" — such a checkpoint is never late. */
+  dueAt: number | null;
+}
+
+export async function listAssignments(
+  db: D1Database,
+  courseId: string,
+  opts: { includeArchived: boolean },
+): Promise<ProvenanceAssignmentRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM provenance_assignments
+        WHERE course_id = ?
+          AND (? = 1 OR archived_at IS NULL)
+        ORDER BY created_at DESC`,
+    )
+    .bind(courseId, opts.includeArchived ? 1 : 0)
+    .all<ProvenanceAssignmentRow>();
+  return results ?? [];
+}
+
+export async function getAssignment(
+  db: D1Database,
+  courseId: string,
+  assignmentId: string,
+): Promise<ProvenanceAssignmentRow | null> {
+  return db
+    .prepare(
+      `SELECT * FROM provenance_assignments WHERE id = ? AND course_id = ?`,
+    )
+    .bind(assignmentId, courseId)
+    .first<ProvenanceAssignmentRow>();
+}
+
+/** Checkpoints for one assignment, in the instructor's chosen order. */
+export async function listCheckpoints(
+  db: D1Database,
+  assignmentId: string,
+): Promise<ProvenanceAssignmentCheckpointRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM provenance_assignment_checkpoints
+        WHERE assignment_id = ?
+        ORDER BY ord ASC`,
+    )
+    .bind(assignmentId)
+    .all<ProvenanceAssignmentCheckpointRow>();
+  return results ?? [];
+}
+
+/**
+ * Checkpoints for every assignment in a course, so the list view can render
+ * each assignment's deadlines without one query per row. Ordered so a caller
+ * can bucket by assignment_id and keep each bucket's `ord` sequence intact.
+ */
+export async function listCheckpointsForCourse(
+  db: D1Database,
+  courseId: string,
+): Promise<ProvenanceAssignmentCheckpointRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.* FROM provenance_assignment_checkpoints c
+         JOIN provenance_assignments a ON a.id = c.assignment_id
+        WHERE a.course_id = ?
+        ORDER BY c.assignment_id, c.ord ASC`,
+    )
+    .bind(courseId)
+    .all<ProvenanceAssignmentCheckpointRow>();
+  return results ?? [];
+}
+
+export async function createAssignment(
+  db: D1Database,
+  params: {
+    courseId: string;
+    title: string;
+    instructions: string;
+    checkpoints: CheckpointInput[];
+  },
+): Promise<ProvenanceAssignmentRow> {
+  const now = Date.now();
+  const id = newAssignmentId();
+  const stmts = [
+    db
+      .prepare(
+        `INSERT INTO provenance_assignments
+           (id, course_id, title, instructions, created_at, updated_at, archived_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .bind(id, params.courseId, params.title, params.instructions, now, now),
+    ...checkpointInserts(db, id, params.checkpoints),
+  ];
+  await db.batch(stmts);
+  const row = await db
+    .prepare(`SELECT * FROM provenance_assignments WHERE id = ?`)
+    .bind(id)
+    .first<ProvenanceAssignmentRow>();
+  if (!row) throw new Error("createAssignment: row not found after insert");
+  return row;
+}
+
+function checkpointInserts(
+  db: D1Database,
+  assignmentId: string,
+  checkpoints: CheckpointInput[],
+): D1PreparedStatement[] {
+  const stmt = db.prepare(
+    `INSERT INTO provenance_assignment_checkpoints
+       (id, assignment_id, ord, name, due_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  return checkpoints.map((c, i) =>
+    stmt.bind(newCheckpointId(), assignmentId, i, c.name, c.dueAt),
+  );
+}
+
+/**
+ * Update an assignment's fields and, when `checkpoints` is supplied, replace
+ * its checkpoint list wholesale.
+ *
+ * Replace-not-merge is deliberate: the editor sends the full ordered list, and
+ * reconciling adds/removes/reorders against stored ids would be a lot of
+ * machinery for a handful of rows. The cost is that editing a checkpoint mints
+ * a new id, so submissions already attached to the old one keep pointing at a
+ * row that no longer exists — which is why `checkpoint_id` carries no FK and
+ * the roster treats an unresolvable id as simply unattached. Omitting
+ * `checkpoints` leaves the existing ones alone, which is the path the
+ * title/instructions edit takes.
+ */
+export async function updateAssignment(
+  db: D1Database,
+  courseId: string,
+  assignmentId: string,
+  patch: {
+    title?: string;
+    instructions?: string;
+    archived?: boolean;
+    checkpoints?: CheckpointInput[];
+  },
+): Promise<ProvenanceAssignmentRow | null> {
+  const existing = await getAssignment(db, courseId, assignmentId);
+  if (!existing) return null;
+
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (patch.title !== undefined) {
+    sets.push("title = ?");
+    binds.push(patch.title);
+  }
+  if (patch.instructions !== undefined) {
+    sets.push("instructions = ?");
+    binds.push(patch.instructions);
+  }
+  if (patch.archived !== undefined) {
+    sets.push("archived_at = ?");
+    binds.push(patch.archived ? Date.now() : null);
+  }
+
+  const stmts: D1PreparedStatement[] = [];
+  if (sets.length > 0) {
+    sets.push("updated_at = ?");
+    binds.push(Date.now());
+    binds.push(assignmentId, courseId);
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE provenance_assignments
+              SET ${sets.join(", ")}
+            WHERE id = ? AND course_id = ?`,
+        )
+        .bind(...binds),
+    );
+  }
+  if (patch.checkpoints !== undefined) {
+    stmts.push(
+      db
+        .prepare(
+          `DELETE FROM provenance_assignment_checkpoints WHERE assignment_id = ?`,
+        )
+        .bind(assignmentId),
+      ...checkpointInserts(db, assignmentId, patch.checkpoints),
+    );
+  }
+  if (stmts.length > 0) await db.batch(stmts);
+  return getAssignment(db, courseId, assignmentId);
+}
+
+/**
+ * Delete an assignment and its checkpoints. Submissions attached to it survive
+ * — `assignment_id` carries no FK — and fall back to reading as unattached,
+ * so deleting an assignment never destroys a student's frozen snapshot.
+ */
+export async function deleteAssignment(
+  db: D1Database,
+  courseId: string,
+  assignmentId: string,
+): Promise<boolean> {
+  const res = await db
+    .prepare(`DELETE FROM provenance_assignments WHERE id = ? AND course_id = ?`)
+    .bind(assignmentId, courseId)
+    .run();
+  return (res.meta?.changes ?? 0) > 0;
+}
+
+/**
+ * Resolve a checkpoint together with the course it belongs to, so a handler can
+ * verify the (assignment, checkpoint, course) triple in one round trip rather
+ * than trusting the assignment id the client paired it with.
+ */
+export async function getCheckpointWithCourse(
+  db: D1Database,
+  checkpointId: string,
+): Promise<{ checkpoint: ProvenanceAssignmentCheckpointRow; courseId: string } | null> {
+  const row = await db
+    .prepare(
+      `SELECT c.*, a.course_id AS _course_id
+         FROM provenance_assignment_checkpoints c
+         JOIN provenance_assignments a ON a.id = c.assignment_id
+        WHERE c.id = ?`,
+    )
+    .bind(checkpointId)
+    .first<ProvenanceAssignmentCheckpointRow & { _course_id: string }>();
+  if (!row) return null;
+  const { _course_id, ...checkpoint } = row;
+  return { checkpoint, courseId: _course_id };
+}
+
+export interface AssignmentRosterRow {
+  user_id: string;
+  student_email: string;
+  student_name: string | null;
+  /** Null on the synthetic row a student with no submissions still produces. */
+  checkpoint_id: string | null;
+  token: string | null;
+  created_at: number | null;
+  revoked_at: number | null;
+  title_snapshot: string | null;
+}
+
+/**
+ * One row per (enrolled student × checkpoint they submitted to), plus a bare
+ * row for every student who submitted nothing.
+ *
+ * The LEFT JOIN from `enrollments` is the entire point of this query. The
+ * course-wide submissions list can only show what exists, so a student who
+ * never submitted is simply absent from it — and that is exactly the student an
+ * instructor opens this page to find. Driving from the roster instead means
+ * "submitted nothing" is a visible cell rather than an absence the reader has
+ * to notice.
+ *
+ * Only the latest submission per (student, checkpoint) survives: students
+ * resubmit repeatedly against a deadline, and the cell shows where they landed.
+ * Revoked submissions are excluded from that pick — an instructor who withdrew
+ * one should see the state behind it, not a dangling reference.
+ *
+ * Deliberately returns raw timestamps. Lateness is computed by the caller
+ * against the checkpoint's current `due_at`, never stored, so moving a deadline
+ * moves the flag with it.
+ */
+export async function listAssignmentRoster(
+  db: D1Database,
+  courseId: string,
+  assignmentId: string,
+): Promise<AssignmentRosterRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT e.user_id,
+              u.email        AS student_email,
+              u.display_name AS student_name,
+              s.checkpoint_id,
+              s.token,
+              s.created_at,
+              s.revoked_at,
+              s.title_snapshot
+         FROM enrollments e
+         JOIN users u ON u.id = e.user_id
+         LEFT JOIN provenance_submissions s
+                ON s.user_id = e.user_id
+               AND s.course_id = e.course_id
+               AND s.assignment_id = ?
+               AND s.revoked_at IS NULL
+               -- Latest per (student, checkpoint): no later live submission
+               -- from the same student to the same checkpoint exists.
+               AND NOT EXISTS (
+                     SELECT 1 FROM provenance_submissions s2
+                      WHERE s2.user_id = s.user_id
+                        AND s2.checkpoint_id = s.checkpoint_id
+                        AND s2.assignment_id = s.assignment_id
+                        AND s2.revoked_at IS NULL
+                        AND s2.created_at > s.created_at
+                   )
+        WHERE e.course_id = ?
+          AND e.role = 'student'
+        ORDER BY COALESCE(u.display_name, u.email) COLLATE NOCASE ASC`,
+    )
+    .bind(assignmentId, courseId)
+    .all<AssignmentRosterRow>();
+  return results ?? [];
+}
+
+/**
+ * Attach a submission to an assignment checkpoint. Called immediately after
+ * `createSubmission` rather than folded into it, so the unattached path — still
+ * the default, and the only one that existed before assignments — inserts
+ * exactly the columns it always did.
+ */
+export async function attachSubmission(
+  db: D1Database,
+  token: string,
+  assignmentId: string,
+  checkpointId: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE provenance_submissions
+          SET assignment_id = ?, checkpoint_id = ?
+        WHERE token = ?`,
+    )
+    .bind(assignmentId, checkpointId, token)
     .run();
 }

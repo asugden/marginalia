@@ -1,0 +1,325 @@
+/* Subword-embedding section — layout and figure styling only.
+   Surfaces and buttons come from the design system (<Card>, <Button>).
+   This section lives at the bottom of the word embeddings example; the rule
+   above it is the only visual seam, and it is deliberate — the reader has
+   finished one idea and is starting its sequel. */
+
+/* ── The section break ────────────────────────────────────────────── */
+.ft-section {
+  margin-top: 2.5rem;
+  padding-top: 2.25rem;
+  border-top: 2px solid var(--border);
+}
+.ft-section__head { margin-bottom: 1.75rem; }
+.ft-section__head .eyebrow { display: block; margin-bottom: 0.4rem; }
+.ft-section__title {
+  margin: 0 0 0.6rem;
+  font-size: var(--text-2xl, 1.6rem);
+  line-height: 1.2;
+  color: var(--text-strong);
+}
+.ft-section__lede {
+  font-size: var(--text-md, 1rem);
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 68ch;
+  margin: 0;
+}
+
+.ft-panel { margin-bottom: 1rem; }
+.ft-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.ft-sub {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.ft-sub code,
+.ft-break__why code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-sunken);
+  border-radius: 2px;
+  padding: 0.05rem 0.25rem;
+}
+.ft-note {
+  margin: 0.85rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+
+/* ── The input ────────────────────────────────────────────────────── */
+.ft-inputrow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+.ft-input {
+  width: 14rem;
+  padding: 0.5rem 0.7rem;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.ft-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring, 0 0 0 2px var(--accent));
+}
+.ft-status {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-pill);
+}
+.ft-status--in {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+.ft-status--out {
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-wash, #f7e9e9);
+}
+.ft-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+/* The wall: what each approach returns. */
+.ft-wall {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+@media (max-width: 700px) {
+  .ft-wall { grid-template-columns: 1fr; }
+}
+.ft-wall__col {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.ft-wall__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 0.4rem;
+}
+.ft-wall__answer {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+.ft-wall__answer--none { color: var(--text-faint); }
+.ft-wall__answer--ok { color: var(--accent-ink, var(--accent)); }
+
+/* ── The word, cut into pieces ────────────────────────────────────── */
+.ft-word {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-bottom: 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.ft-word__char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.2rem 0.1rem;
+  background: var(--surface-sunken);
+  border-radius: 2px;
+  color: var(--text-strong);
+}
+.ft-word__bracket { color: var(--accent); padding: 0 0.15rem; }
+
+.ft-grams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.ft-gram {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-body);
+  white-space: pre;
+}
+/* Pieces that pulled hardest carry the meaning — mark them. */
+.ft-gram--strong {
+  border-color: var(--accent);
+  background: var(--accent-wash, #f7e9e9);
+  color: var(--accent-ink, var(--accent));
+  font-weight: 700;
+}
+.ft-gram--unknown {
+  border-style: dashed;
+  color: var(--text-faint);
+  background: transparent;
+}
+.ft-gram__count {
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+.ft-gram--strong .ft-gram__count { color: var(--accent); }
+
+/* ── The result ───────────────────────────────────────────────────── */
+.ft-result__head {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 0.5rem;
+}
+.ft-neighbours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.ft-neighbour {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 8rem 1fr 3rem;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.ft-neighbour:hover { background: var(--surface-sunken); }
+.ft-neighbour__word {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+.ft-neighbour__bar {
+  height: 8px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.ft-neighbour__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+.ft-neighbour__score {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--text-strong);
+  text-align: right;
+}
+
+.ft-fidelity {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.ft-fidelity__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  max-width: 34ch;
+}
+.ft-fidelity__val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+.ft-fidelity__gloss {
+  font-size: var(--text-xs);
+  color: var(--text-body);
+  max-width: 30ch;
+}
+.ft-miss { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* The section's own honesty note — it makes a claim the page above does not,
+   so it is footnoted here rather than in the page footer. */
+.ft-foot {
+  margin: 1.5rem 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+
+/* ── Where it breaks ──────────────────────────────────────────────── */
+.ft-breaks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+@media (max-width: 800px) {
+  .ft-breaks { grid-template-columns: 1fr; }
+}
+.ft-break {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  text-align: left;
+  cursor: pointer;
+}
+.ft-break:hover:not(.ft-break--static) { border-color: var(--accent); }
+.ft-break--static { cursor: default; }
+.ft-break__word {
+  font-family: var(--font-mono);
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.ft-break__why {
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+}

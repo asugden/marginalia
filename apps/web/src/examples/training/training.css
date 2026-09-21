@@ -1,0 +1,193 @@
+/* Training example — layout and figure styling only.
+   Surfaces and buttons come from the design system (<Card>, <Button>).
+   The red/blue error image follows the gallery's sign convention. */
+
+.tr-panel { margin-bottom: 1rem; }
+.tr-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.tr-sub {
+  margin: 0 0 1.1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.tr-note {
+  margin: 0.85rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+.tr-pos { color: var(--accent); }
+.tr-neg { color: #4a6fa5; }
+
+/* ── Control bar ──────────────────────────────────────────────────── */
+.tr-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+}
+.tr-controls__buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.tr-controls__stats { display: flex; gap: 1.5rem; }
+.tr-stat { display: flex; flex-direction: column; gap: 0.05rem; }
+.tr-stat__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.tr-stat__val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--text-strong);
+}
+.tr-stat--hot .tr-stat__val { color: var(--accent); }
+
+/* ── Input / output / error ───────────────────────────────────────── */
+.tr-triptych {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.tr-arrow {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  color: var(--text-faint);
+}
+.tr-grid { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.tr-grid__svg {
+  display: block;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.tr-grid__cap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  text-align: center;
+}
+.tr-grid__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.tr-grid__sub {
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  max-width: 14ch;
+  line-height: 1.35;
+}
+
+.tr-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 1.1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.tr-picker__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-right: 0.3rem;
+}
+
+/* ── Loss curve ───────────────────────────────────────────────────── */
+.tr-curve {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  padding: 0.5rem;
+}
+.tr-curve--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+.tr-curve svg { display: block; width: 100%; height: auto; }
+.tr-curve__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tr-curve__axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.3rem 0.2rem 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+.tr-curve__axislabel { text-transform: uppercase; letter-spacing: 0.05em; }
+
+.tr-lr {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 18rem) 1fr;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+@media (max-width: 700px) {
+  .tr-lr { grid-template-columns: 1fr; }
+}
+.tr-lr label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+.tr-lr__val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  font-weight: 700;
+}
+.tr-lr input { width: 100%; }
+.tr-lr__hint { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ── Learned features ─────────────────────────────────────────────── */
+.tr-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 0.6rem;
+}
+.tr-features .tr-grid__svg { border-color: var(--border); }

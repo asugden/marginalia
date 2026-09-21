@@ -71,10 +71,21 @@ function buildContext(
   lastTransition: TransitionKind,
 ): string {
   if (state.finished) {
+    // The outline is done, but the conversation is not: the student can keep
+    // talking on the same thread. This branch therefore fires on EVERY turn
+    // after completion, not just the one that closed the last topic — so it
+    // must read as an open tutor with the outline behind it, not a farewell.
+    // (It used to say "give a brief wrap-up", which was correct exactly once
+    // and made every later turn sound like a goodbye.)
     return [
       "## Current state",
-      "All topics are complete. The backbone is finished.",
-      "Give the student a brief, encouraging wrap-up. Do not start new topics.",
+      `All ${bb.topics.length} topics in the outline are complete — the student has finished the guided sequence and earned credit for it.`,
+      "You are now in open follow-up mode on the same conversation. There is no current topic and no turn budget.",
+      "- Answer whatever the student raises, including questions unrelated to the outline.",
+      "- Go deeper on anything from the outline, or revisit an earlier topic, whenever asked.",
+      "- Do not restart the outline or re-teach topics from the top as if the conversation were fresh; the student has already worked through them and the full history is above.",
+      `- Do not emit \`${ADVANCE_MARKER}\`; there is nothing left to advance to.`,
+      "- Do not repeatedly congratulate the student or push them to leave. They know they are done; they are still here because they want more.",
     ].join("\n");
   }
 

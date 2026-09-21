@@ -197,6 +197,59 @@ eye**. Same fields, same order, same units on every submission; absolute
 figures ("3 pastes", "40-minute longest gap") over normalized ones, since a
 percentage silently encodes a comparison the tool has not earned.
 
+## Assignments
+
+An **assignment** is one piece of writing; its **checkpoints** are the moments
+it is due. "Draft due Monday, final due Wednesday" is ONE assignment with TWO
+checkpoints, not two assignments — the student keeps a single document across
+both, and how that document changed between them is the reading the whole
+module exists to support. Splitting it into two assignments would cut that
+history in half.
+
+Attachment is optional on both sides. `provenance_submissions.assignment_id`
+and `.checkpoint_id` are nullable, a student can still submit a document that
+belongs to no assignment, and every submission minted before assignments
+existed keeps working untouched. That nullability is the entire
+backward-compatibility story — there is no backfill and no default assignment.
+
+### Lateness
+
+`late = submitted_at > due_at`, computed **at read time, never stored**. A
+checkpoint with `due_at IS NULL` is never late.
+
+Storing the flag would freeze a judgment that a changed due date ought to
+update: an instructor who extends a deadline expects the roster to stop saying
+LATE, not to carry a stale verdict forward. Computing it on read makes moving
+the deadline the whole of the remedy.
+
+A late submission is **always accepted**. There is no cutoff anywhere in this
+module, matching the attendance module's posture — nothing is silently denied.
+The student sees a plain notice before they submit ("This is after the Sep 20
+deadline. You can still submit; it will be marked late.") so nobody is
+surprised by a label they had no way to anticipate.
+
+LATE is permissible under the no-false-positives rule above because it is a
+**bare fact** — a timestamp against a date the instructor themselves set — and
+not an inference about the student. That permission does not generalize. Do
+not add a miss count, a lateness streak, a per-student summary column, or
+anything else that aggregates these facts into something that reads as a
+verdict.
+
+### The roster
+
+`GET /assignments/:id/roster` drives from `enrollments`, LEFT JOINing to
+submissions, so **every enrolled student appears whether or not they submitted
+anything**. This is the point of the endpoint: the course-wide submissions list
+can only show what exists, so the student who submitted nothing is exactly the
+one it cannot show. Latest live submission per (student, checkpoint) wins the
+cell; revoked ones are skipped.
+
+Checkpoints are replaced wholesale on edit rather than reconciled by id, so
+re-authoring the list mints new ids. `checkpoint_id` therefore carries no FK,
+and a submission pointing at a checkpoint that no longer resolves is treated as
+unattached rather than being destroyed — as is one whose assignment was deleted
+outright.
+
 ## Privacy: what the log retains, and what an instructor sees
 
 Since slice 8, `delete` events store the removed text (migration `0010` always
@@ -238,6 +291,9 @@ See `schema.sql` for the authoritative shape. In brief:
 - `provenance_messages` — individual chat messages, with the
   `provenance_agents.id` and prompt hash captured at send time so
   later edits to the agent don't rewrite history.
+- `provenance_assignments` / `provenance_assignment_checkpoints` — the
+  writing an instructor has set, and the moments it is due. See
+  "Assignments" below.
 - `provenance_submissions` — generated share tokens. Row contains
   document id, a **frozen provenance render** (`render_json`: `{text,
   runs:[{origin,length}]}`) computed from `edit_events` at mint time,
@@ -276,6 +332,13 @@ GET    /conversations/:id/messages     fetch history
 POST   /documents/:id/submissions      mint a share token (freezes snapshot)
 GET    /submissions?courseId=          course-wide list — INSTRUCTOR ONLY
 DELETE /submissions/:token             revoke
+
+GET    /assignments?courseId=          list — any enrolled user (students pick from it)
+POST   /assignments                    create — INSTRUCTOR ONLY
+GET    /assignments/:id?courseId=      fetch one with its checkpoints
+PATCH  /assignments/:id                edit — INSTRUCTOR ONLY
+DELETE /assignments/:id?courseId=      delete — INSTRUCTOR ONLY
+GET    /assignments/:id/roster?courseId=  every student × checkpoint — INSTRUCTOR ONLY
 
 GET    /public/submissions/:token      read-only view — INSTRUCTOR ONLY
 GET    /public/submissions/:token/conversations  drill-down — INSTRUCTOR ONLY

@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider, useParams } from "react-router-dom";
 // RootRedirect (the `/` resolver) and the student DashboardPage + ConversationPage
 // stay eager — they're what a cold load hits. RootRedirect uses the inlined
 // bootstrap to bounce straight to /course/:id/dashboard with no Loading flash;
@@ -51,11 +51,34 @@ const ProvenancePublicPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.PublicSubmissionPage })));
 const ProvenanceSubmissionsPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.SubmissionsPage })));
+const ProvenanceAssignmentsPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.AssignmentsPage })));
+// The Assign band — one list of everything the course assigns, whatever kind.
+// Supersedes the writing+examples union ProvenanceAssignmentsPage rendered; that
+// page stays mounted as the writing authoring surface. See
+// apps/web/src/modules/course-items/README.md.
+const AssignPage = lazy(() =>
+  import("./modules/course-items/index.js").then((m) => ({ default: m.AssignPage })));
+const ProvenanceAssignmentRosterPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.AssignmentRosterPage })));
 // Examples — standalone, public, unauthenticated interactive teaching pages.
 // See apps/web/src/examples/registry.ts. Each example's page is lazy-loaded
 // from the registry; the index page lists them.
 const ExamplesIndexPage = lazy(() =>
   import("./examples/ExamplesIndexPage.js").then((m) => ({ default: m.ExamplesIndexPage })));
+// Course-attached examples — curation + the two usage surfaces. Distinct from
+// the public example pages above: these are course-scoped and authenticated,
+// while the examples themselves stay public and ungated. See
+// apps/web/src/modules/examples/README.md.
+const StudentExamplesPage = lazy(() =>
+  import("./modules/examples/index.js").then((m) => ({ default: m.StudentExamplesPage })));
+// Instructor-side curation + the two usage surfaces. Routed under the Assign
+// band (instructor/assign/examples), not as a tab of its own — an example is a
+// kind of assignment. See apps/web/src/course/tabs.ts.
+const InstructorExamplesPage = lazy(() =>
+  import("./modules/examples/index.js").then((m) => ({ default: m.InstructorExamplesPage })));
+const ExampleCourseStrip = lazy(() =>
+  import("./modules/examples/index.js").then((m) => ({ default: m.ExampleCourseStrip })));
 // Attendance module — see apps/web/src/modules/attendance/README.md.
 const AttendanceSessionListPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.SessionListPage })));
@@ -88,6 +111,36 @@ const LegacyCourseRedirect = lazy(() =>
 // loading state on top of this almost immediately.
 function lz(node: React.ReactNode) {
   return <Suspense fallback={<div className="page" />}>{node}</Suspense>;
+}
+
+/**
+ * Examples used to be their own instructor tab at instructor/examples. They are
+ * now a kind of assignment and live under the Assign band at
+ * instructor/assign/examples, so this shim bounces the old path. Built like
+ * LegacyWriteRedirect — the course is already in the URL, so the redirect just
+ * rewrites the tail. An absolute path rather than a relative `..`, because
+ * relative Navigate resolves against the route hierarchy rather than the URL,
+ * which is easy to get subtly wrong.
+ */
+function LegacyInstructorExamplesRedirect() {
+  const { courseId } = useParams<{ courseId: string }>();
+  return <Navigate to={`/course/${courseId}/instructor/assign/examples`} replace />;
+}
+
+/**
+ * The nav moved from nine flat tabs to three bands (Assign / Review / Build),
+ * and examples curation moved with it: instructor/assignments/examples →
+ * instructor/assign/examples. Instructors hold links to the old path, so it
+ * redirects rather than 404ing.
+ *
+ * Note this is the ONLY assignments/* path that moved. `instructor/assignments`
+ * itself and `instructor/assignments/:id` (the per-assignment roster) both stay
+ * exactly where they were — writing is still authored there, and the roster is
+ * the one view listing students who submitted nothing.
+ */
+function LegacyAssignmentsExamplesRedirect() {
+  const { courseId } = useParams<{ courseId: string }>();
+  return <Navigate to={`/course/${courseId}/instructor/assign/examples`} replace />;
 }
 
 const router = createBrowserRouter([
@@ -136,9 +189,28 @@ const router = createBrowserRouter([
   // index lists the registry; each example mounts at its own slug. These are
   // static SPA routes served by env.ASSETS with no /api dependency.
   { path: "/examples", element: lz(<ExamplesIndexPage />) },
+  // Subword embeddings (fastText) was its own example until it was folded into
+  // the bottom of word embeddings, where it belongs — it is the answer to a
+  // wall that example runs into, not a separate idea. Instructors linked the
+  // old slug into course material, so it lands on the section rather than
+  // 404ing. Keep this shim.
+  {
+    path: "/examples/fasttext",
+    element: <Navigate to="/examples/word2vec#subword" replace />,
+  },
   ...EXAMPLES.map((ex) => ({
     path: `/examples/${ex.slug}`,
-    element: lz(<ex.Page />),
+    // The course strip is mounted here rather than inside each example page,
+    // so every example — including ones added later — picks it up without
+    // having to know courses exist. It renders NOTHING unless the URL carries
+    // ?c=<courseId> and the viewer is enrolled in that course, so the page an
+    // anonymous visitor sees is unchanged.
+    element: lz(
+      <>
+        <ExampleCourseStrip slug={ex.slug} />
+        <ex.Page />
+      </>,
+    ),
   })),
 
   // ── Course-agnostic survivors ────────────────────────────────────────────
@@ -168,6 +240,7 @@ const router = createBrowserRouter([
       // Compose mode (v0.4 §14): chat surface for an agent with no row yet.
       // First send creates the row and replaces the URL with chat/:id.
       { path: "chat/new/:agentId", element: <ConversationPage /> },
+      { path: "examples", element: lz(<StudentExamplesPage />) },
       { path: "writing", element: lz(<ProvenanceDocumentListPage />) },
       { path: "writing/agents", element: lz(<ProvenanceAgentsPage />) },
       // v1.2 legacy: old /write* course-scoped paths → /writing*.
@@ -205,8 +278,31 @@ const router = createBrowserRouter([
       { path: "collections", element: lz(<CollectionsListPage />) },
       { path: "collections/:id", element: lz(<CollectionDetailPage />) },
       { path: "roster", element: lz(<RosterPage />) },
-      // Instructor-side provenance: the course-wide list of student checkpoints.
+      // Instructor-side provenance: the course-wide list of student checkpoints,
+      // and the assignments those checkpoints are submitted against. The roster
+      // is the per-assignment grid — the one view that lists students who have
+      // submitted nothing.
       { path: "submissions", element: lz(<ProvenanceSubmissionsPage />) },
+      // ── Assign band ──────────────────────────────────────────────────
+      // One list of every assignable kind, backed by `course_items`. A new
+      // content type appears here as a row, not as a new tab.
+      { path: "assign", element: lz(<AssignPage />) },
+      // Examples curation. A literal segment under `assign`; nothing dynamic
+      // is mounted beside it, so there is no collision to reason about.
+      { path: "assign/examples", element: lz(<InstructorExamplesPage />) },
+      // Writing authoring keeps its own surface and its own URL. The Assign
+      // list schedules writing; this is where an assignment's title,
+      // instructions, and checkpoints are actually written.
+      { path: "assignments", element: lz(<ProvenanceAssignmentsPage />) },
+      // The per-assignment roster — every student against every checkpoint,
+      // including the ones who submitted nothing. Unmoved: instructors link to
+      // these directly. It cannot collide with a literal sibling, since
+      // `assignments/examples` now redirects rather than rendering, and
+      // assignment ids are server-minted `pasg_<uuid>` and never client-chosen.
+      { path: "assignments/:assignmentId", element: lz(<ProvenanceAssignmentRosterPage />) },
+      // Kept so links made before the bands landed still resolve.
+      { path: "assignments/examples", element: <LegacyAssignmentsExamplesRedirect /> },
+      { path: "examples", element: <LegacyInstructorExamplesRedirect /> },
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
     ],
