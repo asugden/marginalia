@@ -55,6 +55,12 @@ function builtinAgentRow(agentId: string, courseId: string): ProvenanceAgentRow 
 }
 import { buildRender, plainTextFromDoc } from "./render.js";
 import {
+  ensureItem as ensureCourseItem,
+  removeItemForPayload as removeCourseItemForPayload,
+  renameItemForPayload as renameCourseItemForPayload,
+  setArchivedForPayload as setCourseItemArchived,
+} from "../course-items/sync.js";
+import {
   toAgentDTO,
   toAgentSummary,
   toAssignmentDTO,
@@ -1502,6 +1508,14 @@ export async function createAssignmentRoute(
     instructions,
     checkpoints,
   });
+  // Put it on the Assign list. Dateless: the checkpoints carry the deadlines,
+  // and the Assign row shows them inline from the payload.
+  await ensureCourseItem(env.DB, {
+    courseId: body.courseId,
+    kind: "writing",
+    payloadRef: row.id,
+    title: row.title,
+  });
   const saved = await repo.listCheckpoints(env.DB, row.id);
   return json(toAssignmentDTO(row, saved), 201);
 }
@@ -1549,6 +1563,8 @@ export async function updateAssignmentRoute(
     checkpoints = parsed;
   }
 
+  const before = await repo.getAssignment(env.DB, body.courseId, assignmentId);
+  if (!before) return error("Assignment not found", 404);
   const row = await repo.updateAssignment(env.DB, body.courseId, assignmentId, {
     title,
     instructions: body.instructions,
@@ -1556,6 +1572,22 @@ export async function updateAssignmentRoute(
     checkpoints,
   });
   if (!row) return error("Assignment not found", 404);
+  // Keep the Assign wrapper in step: follow a rename unless the instructor
+  // renamed the wrapper themselves, and mirror archive state, since archiving
+  // writing means "out of the students' picker" and the list should agree.
+  if (title !== undefined) {
+    await renameCourseItemForPayload(
+      env.DB,
+      body.courseId,
+      "writing",
+      assignmentId,
+      before.title,
+      title,
+    );
+  }
+  if (body.archived !== undefined) {
+    await setCourseItemArchived(env.DB, body.courseId, "writing", assignmentId, body.archived);
+  }
   const saved = await repo.listCheckpoints(env.DB, assignmentId);
   return json(toAssignmentDTO(row, saved));
 }
@@ -1576,6 +1608,7 @@ export async function deleteAssignmentRoute(
   if (gate) return gate;
   const deleted = await repo.deleteAssignment(env.DB, courseId, assignmentId);
   if (!deleted) return error("Assignment not found", 404);
+  await removeCourseItemForPayload(env.DB, courseId, "writing", assignmentId);
   return json({ ok: true });
 }
 

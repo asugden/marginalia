@@ -307,15 +307,22 @@ function ItemRow({
   // the registry check catches the front-end-only case.
   const missingExample = item.kind === "example" && !findExample(item.payloadRef);
   const dangling = item.dangling || missingExample;
+  // An example wrapper stores the slug as its title (the worker cannot see
+  // the registry); show the registry's title instead, falling back to the
+  // slug if the registry no longer knows it.
+  const title =
+    item.kind === "example" && !missingExample
+      ? findExample(item.payloadRef)?.title ?? item.title
+      : item.title;
 
   return (
     <div className="app-list__row prov-asg__row">
       <div className="app-list__main">
         <div className="app-list__title">
           {href && !dangling ? (
-            <Link to={href}>{item.title}</Link>
+            <Link to={href}>{title}</Link>
           ) : (
-            <span>{item.title}</span>
+            <span>{title}</span>
           )}{" "}
           <KindBadge kind={item.kind} />
           {item.kind === "agent" && !dangling && <AgentTraits item={item} />}

@@ -105,6 +105,28 @@ Class-wide state lives on the per-module rosters, which is where each kind's
 own rules already apply; a combined grid would put four different kinds of
 evidence side by side where they would read as equivalent.
 
+## Keeping wrappers in step
+
+The modules that own the payloads call `sync.ts` at the moments a payload
+changes, so the Assign list can never drift from what a course actually has:
+
+- **agents** — `ensureItem` on create and on copy-into-course,
+  `renameItemForPayload` on title change, `removeItemForPayload` on delete.
+- **writing** — `ensureItem` on create, `renameItemForPayload` and
+  `setArchivedForPayload` on edit, `removeItemForPayload` on delete.
+- **examples** — `syncExampleItems` after every save of the curated list:
+  creates wrappers for new slugs, deletes them for dropped slugs, and copies
+  dates and note from the curation row (the editor where those are set).
+
+Sync flows one way, payload → wrapper, and never touches a payload. A wrapper
+that already exists keeps its own scheduling; a rename flows through only
+while the wrapper still carries the payload's previous title, so a deliberate
+override on the Assign list survives. Example wrappers store the slug as their
+title and the Assign page resolves the display name from the registry.
+
+Migration 0023 is the one-time catch-up for writing and examples that existed
+before this sync did; 0022 did the same for agents.
+
 ## Payload resolution
 
 `payload_ref` is interpreted by `kind`:

@@ -60,6 +60,11 @@ import { routeProvenance } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
 import { routeExamples } from "./modules/examples/routes.js";
 import { routeCourseItems } from "./modules/course-items/routes.js";
+import {
+  ensureItem as ensureCourseItem,
+  removeItemForPayload as removeCourseItemForPayload,
+  renameItemForPayload as renameCourseItemForPayload,
+} from "./modules/course-items/sync.js";
 
 // v0.1 single-tenant default. Phase 2 derives org from the authenticated email.
 const DEFAULT_ORG = "default";
@@ -1265,6 +1270,14 @@ async function createAgentRoute(
     title: body.title,
     definition: JSON.stringify(body.definition),
   });
+  // A new agent appears on the Assign list as a dateless supplement, exactly
+  // as migration 0022 treated the agents that predated the wrapper.
+  await ensureCourseItem(env.DB, {
+    courseId: body.courseId,
+    kind: "agent",
+    payloadRef: row.id,
+    title: row.title,
+  });
   return json({ id: row.id }, 201);
 }
 
@@ -1297,6 +1310,16 @@ async function updateAgentRoute(
   );
   if (validation) return error(validation, 400);
 
+  // Keep the wrapper's title following the agent's, unless the instructor
+  // deliberately renamed the wrapper on the Assign list.
+  await renameCourseItemForPayload(
+    env.DB,
+    body.courseId,
+    "agent",
+    agentId,
+    existing.title,
+    body.title,
+  );
   await repo.updateAgent(env.DB, body.courseId, agentId, {
     title: body.title,
     definition: JSON.stringify(body.definition),
@@ -1331,6 +1354,7 @@ async function deleteAgentRoute(
   if (!existing) return error("Agent not found", 404);
 
   await repo.deleteAgentAndOrphanConversations(env.DB, courseId, agentId);
+  await removeCourseItemForPayload(env.DB, courseId, "agent", agentId);
   return new Response(null, { status: 204 });
 }
 
@@ -1399,6 +1423,12 @@ async function duplicateAgentToRoute(
     courseId: body.targetCourseId,
     title: source.title,
     definition: JSON.stringify(def),
+  });
+  await ensureCourseItem(env.DB, {
+    courseId: body.targetCourseId,
+    kind: "agent",
+    payloadRef: row.id,
+    title: row.title,
   });
   return json({ id: row.id, droppedCollection }, 201);
 }
