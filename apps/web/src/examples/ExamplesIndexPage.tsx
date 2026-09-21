@@ -9,6 +9,9 @@ import { EXAMPLES } from "./registry.js";
 import "./examples.css";
 
 export function ExamplesIndexPage() {
+  const overviews = EXAMPLES.filter((e) => e.kind === "overview");
+  const lessons = EXAMPLES.filter((e) => e.kind !== "overview");
+
   return (
     <div className="app">
       {/* DS topbar, matching the student shell: red mono wordmark, left. */}
@@ -33,8 +36,32 @@ export function ExamplesIndexPage() {
             </p>
           </div>
 
+          {/* Overviews first, and set apart. They are maps of the rest, so a
+              student arriving cold should land on one before a single lesson. */}
+          {overviews.length > 0 ? (
+            <ul className="examples-grid examples-grid--overview">
+              {overviews.map((ex) => (
+                <li key={ex.slug}>
+                  <Link
+                    to={`/examples/${ex.slug}`}
+                    className="examples-card examples-card--overview"
+                  >
+                    <span className="examples-card__kicker">Start here</span>
+                    <span className="examples-card__title">{ex.title}</span>
+                    <span className="examples-card__blurb">{ex.blurb}</span>
+                    <span className="examples-card__tags">
+                      {ex.tags.map((t) => (
+                        <span key={t} className="examples-card__tag">{t}</span>
+                      ))}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           <ul className="examples-grid">
-            {EXAMPLES.map((ex) => (
+            {lessons.map((ex) => (
               <li key={ex.slug}>
                 <Link to={`/examples/${ex.slug}`} className="examples-card">
                   <span className="examples-card__title">{ex.title}</span>

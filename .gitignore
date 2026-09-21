@@ -32,3 +32,6 @@ apps/worker/backup*.sql
 apps/worker/backups/
 *.sqlite3
 *.db
+
+# Offline embedding-distillation cache (multi-GB source vectors).
+apps/web/src/examples/shared/embeddings/train/.vectors-cache/

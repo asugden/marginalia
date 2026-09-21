@@ -1,0 +1,275 @@
+/* Parameter budget explorer — layout and figure styling only.
+   Surfaces and buttons come from the design system (<Card>, <Button>). */
+
+.pb-panel { margin-bottom: 1rem; }
+.pb-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.pb-sub {
+  margin: 0 0 1.1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.pb-note {
+  margin: 0.9rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+.pb-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Header with the running total ────────────────────────────────── */
+.pb-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.pb-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  text-align: right;
+}
+.pb-total__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.pb-total__val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  line-height: 1.05;
+  color: var(--accent);
+  font-weight: 700;
+}
+.pb-total__sub { font-size: var(--text-2xs); color: var(--text-muted); }
+
+/* ── The architecture figure ──────────────────────────────────────── */
+.pb-arch {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0 0;
+}
+.pb-layer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 5rem;
+}
+.pb-layer__bar {
+  display: flex;
+  align-items: flex-end;
+  width: 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.pb-layer__fill {
+  width: 100%;
+  background: var(--accent);
+  transition: height 120ms ease;
+}
+/* Input and output layers are fixed by the task; hidden ones are the choice. */
+.pb-layer__fill--end { background: var(--text-faint); }
+.pb-layer__slider { width: 5rem; }
+.pb-layer__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+}
+.pb-layer__n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.pb-layer__role {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.pb-archctl {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.pb-archctl__group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.pb-archctl__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-right: 0.2rem;
+}
+
+/* ── The arithmetic table ─────────────────────────────────────────── */
+.pb-table { overflow-x: auto; }
+.pb-table__head,
+.pb-table__row,
+.pb-table__foot {
+  display: grid;
+  grid-template-columns: 7rem minmax(10rem, 1fr) 5rem 7rem minmax(6rem, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+}
+.pb-table__head {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+}
+.pb-table__row { padding: 0.35rem 0; font-size: var(--text-sm); }
+.pb-table__conn {
+  font-family: var(--font-mono);
+  color: var(--text-body);
+}
+.pb-table__sub { color: var(--text-strong); font-weight: 700; }
+.pb-table__bar {
+  height: 10px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.pb-table__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transition: width 120ms ease;
+}
+.pb-table__foot {
+  margin-top: 0.45rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* ── Precision picker ─────────────────────────────────────────────── */
+.pb-precisions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+.pb-precision {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.pb-precision:hover { border-color: var(--accent); }
+.pb-precision--on {
+  border-color: var(--accent);
+  background: var(--accent-wash, var(--surface-sunken));
+}
+.pb-precision__name {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.pb-precision__size {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  color: var(--text-strong);
+  font-weight: 700;
+}
+.pb-precision--on .pb-precision__size { color: var(--accent); }
+.pb-precision__note {
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+/* ── The scale ladder ─────────────────────────────────────────────── */
+.pb-ladder { display: flex; flex-direction: column; gap: 0.35rem; }
+.pb-rung {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) 1fr 4rem 5rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+.pb-rung--current {
+  background: var(--accent-wash, var(--surface-sunken));
+  outline: 1px solid var(--accent);
+}
+.pb-rung__name {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.pb-rung--ours .pb-rung__name { color: var(--text-body); }
+.pb-rung--current .pb-rung__name { color: var(--text-strong); font-weight: 700; }
+.pb-rung__track {
+  height: 10px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.pb-rung__fill {
+  display: block;
+  height: 100%;
+  background: var(--text-faint);
+  border-radius: var(--radius-pill);
+}
+.pb-rung--ours .pb-rung__fill { background: var(--accent); }
+.pb-rung__params,
+.pb-rung__bytes {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  text-align: right;
+}
+.pb-rung__params { color: var(--text-strong); font-weight: 700; }
+.pb-rung__bytes { color: var(--text-faint); }

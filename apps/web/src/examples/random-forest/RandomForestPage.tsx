@@ -18,7 +18,7 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wordmark } from "../../components/index.js";
+import { Dropdown, Wordmark } from "../../components/index.js";
 import "../decision-tree/decision-tree.css";
 import "../mnist-mlp/digit-recognizer.css";
 import {
@@ -221,6 +221,11 @@ export function RandomForestPage() {
             <p className="mnist-lede">
               Drag the bar to add to the model. A random forest is a collection
               of individual decision trees that "vote" on the solution.
+              <br />
+              <br />
+              {regression
+                ? "The Random Forest model in this case is designed to predict the weight of dogs from a single feature-- their ear length."
+                : "The Random Forest model in this case is designed to predict the size of dogs (toy, medium, large) from features such as barks/hour, fluffiness, ear length, height."}
             </p>
           </div>
 
@@ -228,26 +233,18 @@ export function RandomForestPage() {
             leading={
               <div className="dt-controls">
                 <span className="dt-controls__label">Task</span>
-                <button
-                  type="button"
-                  className={"dt-chip" + (!regression ? " is-on" : "")}
-                  onClick={() => {
-                    setRegression(false);
+                <Dropdown
+                  ariaLabel="What the forest is predicting"
+                  value={regression ? "weight" : "size"}
+                  onChange={(v) => {
+                    setRegression(v === "weight");
                     setFocus(0);
                   }}
-                >
-                  classify size (vote)
-                </button>
-                <button
-                  type="button"
-                  className={"dt-chip" + (regression ? " is-on" : "")}
-                  onClick={() => {
-                    setRegression(true);
-                    setFocus(0);
-                  }}
-                >
-                  predict weight (average)
-                </button>
+                  options={[
+                    { value: "size", label: "classify size (vote)" },
+                    { value: "weight", label: "predict weight (average)" },
+                  ]}
+                />
               </div>
             }
             id="rf-trees"
@@ -387,11 +384,11 @@ export function RandomForestPage() {
               />
               {!useBootstrap && (
                 <p className="ens-note">
-                  <b>Bagging is off, so there is no test line.</b> Every tree was
-                  grown on every dog, so no tree has any dogs it has not seen and
-                  there is nothing left to score it against. That is the second
-                  thing bagging buys, on top of the trees disagreeing usefully:
-                  it manufactures the test set out of thin air.
+                  <b>Bagging is off, so there is no test line.</b> Every tree
+                  was grown on every dog, so no tree has any dogs it has not
+                  seen and there is nothing left to score it against. That is
+                  the second thing bagging buys, on top of the trees disagreeing
+                  usefully: it manufactures the test set out of thin air.
                 </p>
               )}
 

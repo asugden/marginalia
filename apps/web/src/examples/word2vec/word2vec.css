@@ -1,0 +1,891 @@
+/* Word-embedding example — layout and figure styling only.
+   Surfaces and buttons come from the design system (<Card>, <Button>).
+   The literal colours are the negative-weight blue and the two sense-tints in
+   the polysemy demo; the red/blue sign convention matches the digit
+   recognizer and the attention example. */
+
+.w2v-panel {
+  margin-bottom: 1rem;
+}
+.w2v-panel--dropped {
+  border-color: var(--accent);
+}
+
+.w2v-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.w2v-h3 {
+  margin: 0 0 0.5rem;
+  font-size: var(--text-md, 1rem);
+  color: var(--text-strong);
+}
+.w2v-sub {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.w2v-note {
+  margin: 0.8rem 0 0;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+.w2v-panelhead {
+  margin-bottom: 0.75rem;
+}
+.w2v-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+/* ── The sentence and its training pairs ──────────────────────────── */
+
+/* ── The network ──────────────────────────────────────────────────── */
+.w2v-netwrap {
+  overflow-x: auto;
+}
+/* The discard control sits in the heading row of the section below the figure
+   (see .w2v-forced__head). It is in normal flow rather than overlaid on the
+   figure, so it reflows instead of drifting when the figure scrolls
+   horizontally at narrow widths. */
+.w2v-netctl {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.w2v-netctl__hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  max-width: 28ch;
+  line-height: 1.4;
+}
+.w2v-net {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 640px;
+}
+.w2v-net__labels text {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.w2v-net__labels .w2v-net__sublabel {
+  fill: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 9px;
+}
+.w2v-net__edge {
+  stroke: var(--accent);
+}
+.w2v-net__edge--neg {
+  stroke: #4a6fa5;
+}
+.w2v-net__edges--dropped {
+  pointer-events: none;
+}
+.w2v-net__node {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.w2v-net__node--on {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+.w2v-net__node--hidden {
+  stroke: var(--border-strong);
+}
+.w2v-net__node--faded {
+  opacity: 0.25;
+}
+.w2v-net__word {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.w2v-net__word--on {
+  fill: var(--accent);
+  font-weight: 700;
+}
+.w2v-net__word--faded {
+  opacity: 0.3;
+}
+.w2v-net__bit {
+  fill: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  pointer-events: none;
+}
+.w2v-net__node--on + .w2v-net__word + .w2v-net__bit,
+.w2v-net__node--on ~ .w2v-net__bit {
+  fill: var(--on-accent, #fff);
+}
+.w2v-net__waistline {
+  stroke: var(--border-strong);
+  stroke-dasharray: 3 3;
+  stroke-width: 1;
+}
+.w2v-net__dropped {
+  fill: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.w2v-netcontrols {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+@media (max-width: 800px) {
+  .w2v-netcontrols {
+    grid-template-columns: 1fr;
+  }
+}
+.w2v-netcontrols__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-right: 0.2rem;
+}
+
+.w2v-forced {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.w2v-forced__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+/* The heading's own bottom margin would double up with the row's. */
+.w2v-forced__head .w2v-h3 {
+  margin-bottom: 0;
+}
+.w2v-forced p {
+  margin: 0 0 0.7rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-body);
+  max-width: 78ch;
+}
+.w2v-forced p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Discard the decoder ──────────────────────────────────────────── */
+.w2v-dropctl {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+/* ── Play: similarity, neighbours, analogies ──────────────────────── */
+.w2v-play {
+  padding-top: 0.9rem;
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.w2v-play:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.w2v-input input {
+  width: 8.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.w2v-input input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring, 0 0 0 2px var(--accent));
+  border-color: var(--accent);
+}
+.w2v-input input.w2v-input--miss {
+  border-color: var(--danger, #b3261e);
+  color: var(--danger, #b3261e);
+}
+
+.w2v-simrow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.w2v-simrow__vs {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+.w2v-simscore {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  min-width: 14rem;
+}
+.w2v-simscore__val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3rem;
+  color: var(--accent);
+  font-weight: 700;
+  min-width: 3.6rem;
+}
+.w2v-simscore__bar {
+  flex: 1;
+  height: 10px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.w2v-simscore__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transition: width 120ms ease;
+}
+.w2v-simscore__gloss {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.w2v-simscore__miss {
+  font-size: var(--text-sm);
+  color: var(--danger, #b3261e);
+}
+
+.w2v-proberow {
+  margin-bottom: 0.7rem;
+}
+.w2v-miss {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.w2v-neighbours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.w2v-neighbour {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto 7rem 1fr 3rem;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.w2v-neighbours--compact .w2v-neighbour {
+  cursor: default;
+}
+button.w2v-neighbour:hover {
+  background: var(--surface-sunken);
+}
+.w2v-neighbour__rank {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  width: 1rem;
+}
+.w2v-neighbour__word {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+.w2v-neighbour__bar {
+  height: 8px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.w2v-neighbour__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+.w2v-neighbour__score {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--text-strong);
+  text-align: right;
+}
+/* The first column is only present in the compact (analogy) list. */
+.w2v-neighbours:not(.w2v-neighbours--compact) .w2v-neighbour {
+  grid-template-columns: 7rem 1fr 3rem;
+}
+
+.w2v-analogy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.w2v-analogy__op {
+  font-family: var(--font-mono);
+  font-size: var(--text-md, 1rem);
+  color: var(--text-muted);
+}
+.w2v-analogy__result {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg, 1.15rem);
+  font-weight: 700;
+  color: var(--accent);
+  padding: 0.2rem 0.6rem;
+  background: var(--accent-wash, var(--surface-sunken));
+  border-radius: var(--radius-sm);
+}
+.w2v-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+
+/* ── Polysemy ─────────────────────────────────────────────────────── */
+.w2v-muddle__body {
+  display: grid;
+  grid-template-columns: 1fr minmax(12rem, 18rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .w2v-muddle__body {
+    grid-template-columns: 1fr;
+  }
+}
+.w2v-muddle__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 0.45rem;
+}
+.w2v-muddle__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.w2v-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-body);
+}
+/* The two senses get distinct tints so the mixing is visible at a glance. */
+.w2v-chip--a {
+  background: #e8f0f7;
+  border-color: #4a6fa5;
+  color: #2c4a6b;
+}
+.w2v-chip--b {
+  background: var(--accent-wash, #f7e9e9);
+  border-color: var(--accent);
+  color: var(--accent-ink, var(--accent));
+}
+.w2v-chip__score {
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+}
+.w2v-muddle__scores {
+  padding: 0.8rem 0.9rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.w2v-muddle__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.w2v-muddle__row b {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md, 1rem);
+  color: var(--text-strong);
+}
+.w2v-muddle__verdict {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+
+.w2v-figurenote {
+  margin: 0 0 0.6rem;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+
+/* ── Box 1: the substitution slot ─────────────────────────────────── */
+/* The sentence is fixed. The candidate column lives inside it, at the gap,
+   translated so the selected word sits exactly on the sentence's line — the
+   other candidates hang above and below, overlaying the box. Dragging slides
+   the column through the sentence, which is the whole gesture: words passing
+   through a frame. */
+.w2v-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.w2v-slot__frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  /* Vertical padding is set inline from the candidate count — see
+     SlotFigure.tsx — so the hanging column always fits. */
+  padding-left: 1.2rem;
+  padding-right: 1.2rem;
+  /* Plain surface. The only shaded thing in this figure is the candidate
+     column itself, so the shading reads as "this block is the part you
+     grab" rather than as a box the sentence happens to sit in. */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-body);
+}
+.w2v-slot__text {
+  white-space: nowrap;
+}
+
+/* The gap: zero-height anchor on the sentence's line. The column is absolutely
+   positioned from it, so the sentence's own layout never shifts. */
+.w2v-slot__gap {
+  position: relative;
+  display: inline-block;
+  width: 8.5rem;
+  height: 0;
+  vertical-align: middle;
+  /* The overflowing column must paint over the frame, not under it. */
+  z-index: 1;
+}
+
+.w2v-slot__reel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  /* Shaded across the whole column, not just the live row: the shading is
+     what says the entire strip is grabbable, anywhere in it. It travels with
+     the words because it is *their* background. */
+  background: var(--surface-sunken);
+  cursor: ns-resize;
+  touch-action: none;
+  outline: none;
+  transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.w2v-slot__reel:focus-visible {
+  box-shadow: var(--focus-ring, 0 0 0 2px var(--accent));
+}
+
+.w2v-slot__word {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.1rem;
+  /* Unselected candidates stay readable — seeing the whole set is the point —
+     but recede so the live one reads as part of the sentence. */
+  color: var(--text-faint);
+  opacity: 0.5;
+  cursor: pointer;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.w2v-slot__word:hover {
+  opacity: 0.8;
+}
+
+/* The selected row is the word standing in the sentence. */
+.w2v-slot__word--on {
+  opacity: 1;
+}
+.w2v-slot__reel--fits .w2v-slot__word--on {
+  background: var(--accent-wash, #f7e9e9);
+  border-color: var(--accent);
+  color: var(--accent-ink, var(--accent));
+}
+.w2v-slot__reel--misfits .w2v-slot__word--on {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  border-style: dashed;
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.w2v-slot__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+.w2v-slot__verdict {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+  font-style: italic;
+  min-width: 11rem;
+}
+.w2v-slot__verdict--fits {
+  color: var(--accent);
+  font-style: normal;
+}
+.w2v-slot__hint {
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+/* ── Box 2: bag of words ──────────────────────────────────────────── */
+.w2v-bow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.w2v-bow__corpus {
+  padding: 0.85rem 1rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.w2v-bow__corpushead,
+.w2v-bow__corpusfoot {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.w2v-bow__corpushead {
+  margin-bottom: 0.5rem;
+}
+.w2v-bow__corpusfoot {
+  margin-top: 0.4rem;
+  text-align: center;
+}
+.w2v-bow__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.w2v-bow__far {
+  color: var(--text-faint);
+}
+.w2v-bow__plain {
+  color: var(--text-muted);
+}
+.w2v-bow__ctx {
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-wash, #f7e9e9);
+  border-radius: 2px;
+  padding: 0 0.25rem;
+}
+.w2v-bow__target {
+  color: var(--on-accent, #fff);
+  background: var(--accent);
+  border-radius: 2px;
+  padding: 0 0.3rem;
+  font-weight: 700;
+}
+.w2v-bow__ellipsis {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.2rem 0;
+}
+.w2v-bow__arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+.w2v-bow__arrowglyph {
+  font-size: 1rem;
+  color: var(--accent);
+}
+.w2v-bow__bag {
+  padding: 0.85rem 1rem;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.w2v-bow__baghead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 0.55rem;
+}
+.w2v-bow__bagsub {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.w2v-bow__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.w2v-bow__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  background: var(--accent-wash, var(--surface-sunken));
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent-ink, var(--accent));
+}
+.w2v-bow__count {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.w2v-bow__note {
+  margin: 0.7rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.w2v-controls--after {
+  margin-top: 0.9rem;
+  margin-bottom: 0;
+}
+.w2v-spacer {
+  flex: 1;
+  min-width: 1rem;
+}
+.w2v-inlinelabel {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.w2v-minislider {
+  width: 5rem;
+  margin-top: -9px;
+}
+.w2v-inlineval {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-strong);
+}
+
+/* ── Network: encoder/decoder halves ──────────────────────────────── */
+.w2v-net__half {
+  transition: opacity 200ms ease;
+}
+.w2v-net__half--dropped {
+  opacity: 0.3;
+}
+.w2v-net__bracket {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.w2v-net__halfname {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.w2v-net__halfsub {
+  fill: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+.w2v-net__node--excluded {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+  stroke-dasharray: 3 2;
+}
+.w2v-net__word--excluded {
+  fill: var(--text-faint);
+}
+.w2v-net__excluded {
+  fill: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-style: italic;
+}
+.w2v-net__pct {
+  fill: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+.w2v-net__bit--on {
+  fill: var(--on-accent, #fff);
+}
+
+.w2v-dropctl__hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ── The 2D map ───────────────────────────────────────────────────── */
+.w2v-map__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.w2v-map__item {
+  cursor: pointer;
+}
+/* Clicking a point should not leave a box around it. Keyboard focus still
+   shows a ring — the points are reachable by tab and that has to stay
+   visible. */
+.w2v-map__item:focus {
+  outline: none;
+}
+.w2v-map__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.w2v-map__dot {
+  fill: var(--text-faint);
+  transition: fill 120ms ease;
+}
+.w2v-map__dot--sel {
+  fill: var(--accent);
+}
+.w2v-map__dot--near {
+  fill: var(--accent);
+  opacity: 0.7;
+}
+.w2v-map__dot--far {
+  opacity: 0.3;
+}
+.w2v-map__label {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  pointer-events: none;
+}
+.w2v-map__label--sel {
+  fill: var(--text-strong);
+  font-weight: 700;
+  font-size: 12px;
+}
+.w2v-map__label--near {
+  fill: var(--text-body);
+}
+.w2v-map__label--far {
+  opacity: 0.35;
+}
+.w2v-map__sim {
+  fill: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  pointer-events: none;
+}
+.w2v-map__link {
+  stroke: var(--accent);
+}
+.w2v-map__note {
+  margin: 0.7rem 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+
+/* Input and output words are hover targets that feed the network. */
+.w2v-net__hit {
+  cursor: pointer;
+}

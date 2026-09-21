@@ -155,6 +155,10 @@ export function XGBoostPage() {
                 the error of the current model (made up of an ensemble of trees)
               </b>
               .
+              <br />
+              <br />
+              The XGBoost model in this case is designed to predict the weight
+              of dogs from a single feature-- their ear length.
             </p>
           </div>
 

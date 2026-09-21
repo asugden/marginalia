@@ -1,0 +1,654 @@
+/* Transformers lesson — layout and figure styling only. Builds on the
+   attention example's stylesheet (at-* classes: panel rhythm, headings, lane
+   labels, word buttons) so the two pages read as one course. The literal
+   colours in the canonical-figure section reproduce the original paper's
+   figure and exist for recognition, not decoration. */
+
+/* ── Figures ──────────────────────────────────────────────────────── */
+.tf-figwrap {
+  overflow-x: auto;
+  margin-top: 0.4rem;
+}
+.tf-figwrap--tight {
+  margin-top: 0;
+}
+.tf-fig {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.tf-fig rect,
+.tf-fig .at-grid__strip rect {
+  shape-rendering: crispEdges;
+}
+.tf-frame {
+  fill: none;
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 0.75;
+}
+.tf-readout {
+  margin: 0.7rem auto 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-body);
+  max-width: 78ch;
+}
+.tf-readout sub {
+  font-size: 0.75em;
+}
+.tf-p {
+  margin: 0 0 0.8rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-body);
+}
+.tf-p--muted {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.tf-sub--after {
+  margin-top: 1rem;
+}
+
+/* Boxes: a head, or the head as a box. */
+.tf-box {
+  fill: var(--surface);
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.tf-box__title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  fill: var(--text-faint);
+}
+.tf-box__name {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--text-strong);
+}
+.tf-box__gloss {
+  font-size: 10.5px;
+  fill: var(--text-muted);
+}
+
+/* Words and their rows in the head-as-a-box figure. */
+.tf-word {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  fill: var(--text-muted);
+  cursor: pointer;
+}
+.tf-row {
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+.tf-row--dim {
+  opacity: 0.35;
+}
+.tf-row--on .tf-word {
+  fill: var(--accent);
+  font-weight: 700;
+}
+.tf-flow {
+  fill: none;
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.tf-flow--on {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
+.tf-flow--off {
+  stroke-dasharray: 3 3;
+  opacity: 0.5;
+}
+
+/* Multi-head. */
+.tf-head {
+  cursor: pointer;
+}
+.tf-head:hover .tf-box {
+  stroke: var(--accent);
+}
+.tf-head--off .tf-box {
+  stroke-dasharray: 4 3;
+}
+.tf-head--off .tf-box__name,
+.tf-head--off .tf-box__gloss {
+  opacity: 0.45;
+}
+.tf-head__switch {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--text-faint);
+}
+.tf-head:hover .tf-head__switch {
+  fill: var(--accent);
+}
+.tf-strip--off rect {
+  opacity: 0.15;
+}
+.tf-bracket {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.tf-bracket--off {
+  stroke: var(--text-faint);
+  stroke-dasharray: 3 3;
+}
+
+/* Add & norm. */
+.tf-size {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  fill: var(--text-muted);
+}
+.tf-op {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  fill: var(--text-muted);
+}
+.tf-op--small {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* The memory drawers. */
+.tf-drawer__bar {
+  fill: var(--accent);
+  opacity: 0.85;
+}
+.tf-drawer__frame {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 0.75;
+}
+.tf-drawer--open .tf-drawer__frame {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
+.tf-drawer__label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--text-faint);
+}
+.tf-drawer--open .tf-drawer__label {
+  fill: var(--text-strong);
+  font-weight: 700;
+}
+.tf-drawer:not(.tf-drawer--open) .at-grid__strip,
+.tf-drawer:not(.tf-drawer--open) g rect {
+  opacity: 0.55;
+}
+.tf-drawer:not(.tf-drawer--open) .tf-drawer__frame,
+.tf-drawer:not(.tf-drawer--open) .tf-drawer__bar {
+  opacity: 1;
+}
+
+/* The block and the table. */
+.tf-stack {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .tf-stack {
+    grid-template-columns: 1fr;
+  }
+}
+.tf-stack__fig {
+  width: 100%;
+}
+.tf-stack__panel {
+  fill: var(--surface-sunken);
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.tf-stack__nx {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+.tf-blk {
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.tf-blk--attn {
+  fill: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+.tf-blk--norm {
+  fill: var(--surface);
+}
+.tf-blk--ff {
+  fill: color-mix(in srgb, #4a6fa5 16%, var(--surface));
+}
+.tf-blk__label {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--text-strong);
+}
+.tf-blk__sub {
+  font-size: 8.5px;
+  fill: var(--text-muted);
+}
+.tf-stack__lines line,
+.tf-stack__lines path {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.1;
+}
+.tf-stack__head {
+  fill: var(--text-muted);
+}
+.tf-stack__cap {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  fill: var(--text-faint);
+}
+.tf-stack__skip {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  fill: var(--text-faint);
+}
+.tf-stack__side {
+  min-width: 0;
+}
+.tf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  margin: 0.4rem 0 0.8rem;
+}
+.tf-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-weight: 400;
+  padding: 0.3rem 0.5rem 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.tf-table td {
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-body);
+  white-space: nowrap;
+}
+.tf-table__year {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  margin-left: 0.25rem;
+}
+.tf-table__hot {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-weight: 700;
+}
+.tf-table__est td {
+  color: var(--text-muted);
+}
+.tf-tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.tf-tag--paper,
+.tf-tag--open-weights {
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-wash, var(--surface-sunken));
+}
+.tf-tag--reported {
+  border: 1px dashed var(--border-strong, var(--border));
+  background: transparent;
+}
+
+/* ── The layer map at the top ─────────────────────────────────────── */
+.tf-map__repeat {
+  fill: none;
+  stroke: var(--border-strong, var(--border));
+  stroke-dasharray: 5 4;
+  stroke-width: 1;
+}
+.tf-map__nx {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  fill: var(--text-muted);
+}
+.tf-map__wires line {
+  stroke-width: 0.6;
+}
+.tf-map__node {
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 0.6;
+}
+.tf-map__node--hidden {
+  stroke: var(--border);
+}
+.tf-map__flow {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.1;
+}
+.tf-map__head {
+  fill: var(--text-muted);
+}
+.tf-map__skip {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.3;
+  stroke-dasharray: 4 3;
+}
+.tf-map__skiplabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--accent);
+}
+.tf-map__plus {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.tf-map__plussign {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--accent);
+  pointer-events: none;
+}
+.tf-map__cap {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  fill: var(--text-faint);
+}
+.tf-map__marker circle {
+  fill: var(--accent);
+}
+.tf-map__marker text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--surface);
+}
+/* The matching chip on a panel heading. */
+.tf-mapref {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  vertical-align: 0.15em;
+}
+.tf-maplegend {
+  margin: 0.6rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.tf-maplegend a {
+  color: inherit;
+  text-decoration: none;
+}
+.tf-maplegend a:hover {
+  color: var(--accent);
+}
+
+/* ── Add & norm, shown as two paths ───────────────────────────────── */
+.tf-rowlabel {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+.tf-rowlabel--on {
+  fill: var(--accent);
+}
+.tf-rowlabel--sub {
+  font-size: 10px;
+  font-weight: 400;
+  fill: var(--text-faint);
+}
+.tf-strip--ghost rect {
+  opacity: 0.35;
+}
+.tf-meter__track {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+  stroke-width: 0.75;
+}
+.tf-meter__fill {
+  fill: var(--text-faint);
+}
+.tf-meter__fill--yes {
+  fill: var(--accent);
+}
+.tf-meter__word {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  fill: var(--text-muted);
+}
+
+/* ── The canonical figure ─────────────────────────────────────────── */
+.tf-cf {
+  display: grid;
+  grid-template-columns: minmax(260px, 380px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .tf-cf {
+    grid-template-columns: 1fr;
+  }
+}
+.tf-cf__bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+.tf-cf__fig {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tf-cf__credit {
+  margin: 0.4rem 0 0;
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.tf-cf__panel {
+  fill: #f1f1f1;
+  stroke: #2a2a2a;
+  stroke-width: 1.2;
+}
+.tf-cf__line {
+  fill: none;
+  stroke: #2a2a2a;
+  stroke-width: 1.2;
+}
+.tf-cf__head {
+  fill: #2a2a2a;
+}
+.tf-cf__box {
+  stroke: #2a2a2a;
+  stroke-width: 1.1;
+}
+/* The paper's colours. */
+.tf-cf__box--addnorm { fill: #f3f2bd; }
+.tf-cf__box--ff { fill: #c4e5f7; }
+.tf-cf__box--mha { fill: #fbd9ac; }
+.tf-cf__box--embed { fill: #fbd1d4; }
+.tf-cf__box--softmax { fill: #c9e6c9; }
+.tf-cf__box--linear { fill: #d6d8f0; }
+.tf-cf__label {
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 10.5px;
+  fill: #1a1a1a;
+  pointer-events: none;
+}
+.tf-cf__io {
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 9.5px;
+  fill: #1a1a1a;
+}
+.tf-cf__plus {
+  fill: #fff;
+  stroke: #2a2a2a;
+  stroke-width: 1.2;
+}
+.tf-cf__plussign {
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 13px;
+  fill: #1a1a1a;
+  pointer-events: none;
+}
+.tf-cf__sine {
+  fill: #fff;
+  stroke: #2a2a2a;
+  stroke-width: 1.2;
+}
+.tf-cf__sinewave {
+  fill: none;
+  stroke: #2a2a2a;
+  stroke-width: 1.1;
+}
+.tf-cf__blk {
+  cursor: help;
+  transition: opacity 120ms ease;
+}
+.tf-cf__nx {
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 12px;
+  font-style: italic;
+  fill: #1a1a1a;
+}
+.tf-cf__nx.tf-cf__blk--on {
+  fill: var(--accent);
+  font-weight: 700;
+}
+.tf-cf__blk--dim {
+  opacity: 0.35;
+}
+.tf-cf__blk--on .tf-cf__box,
+.tf-cf__blk--on .tf-cf__plus,
+.tf-cf__blk--on .tf-cf__sine {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+.tf-cf__blk--on.tf-cf__line {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+.tf-cf__later {
+  opacity: 0.18;
+}
+.tf-cf__towercap {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  fill: var(--text-faint);
+}
+.tf-cf__towercap--ours {
+  fill: var(--accent);
+  font-weight: 700;
+}
+
+.tf-cf__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.tf-cf__row {
+  display: grid;
+  grid-template-columns: 0.9rem 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.55rem;
+  row-gap: 0.15rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: help;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.tf-cf__row--on {
+  background: var(--surface-sunken);
+  border-color: var(--border-strong, var(--border));
+}
+.tf-cf__row--later {
+  opacity: 0.55;
+}
+.tf-cf__swatch {
+  grid-row: 1 / span 2;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-top: 0.15rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+}
+.tf-cf__swatch--addnorm { background: #f3f2bd; }
+.tf-cf__swatch--ff { background: #c4e5f7; }
+.tf-cf__swatch--mha { background: #fbd9ac; }
+.tf-cf__swatch--embed { background: #fbd1d4; }
+.tf-cf__swatch--out { background: linear-gradient(#c9e6c9 50%, #d6d8f0 50%); }
+.tf-cf__swatch--pos,
+.tf-cf__swatch--nx { background: #fff; }
+.tf-cf__name {
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.tf-cf__here {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+.tf-cf__here a {
+  color: var(--accent);
+}
+.tf-cf__latertag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  border: 1px dashed var(--border-strong, var(--border));
+  border-radius: var(--radius-pill);
+  padding: 0 0.4rem;
+}

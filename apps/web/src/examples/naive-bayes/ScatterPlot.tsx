@@ -157,7 +157,7 @@ export function ScatterPlot({
   // For each feature, each class's fitted 1D Gaussian scaled by its prior.
   // Shared vertical scaling across both margins so the two are comparable.
   const margins = useMemo(() => {
-    if (!nb || !showShapes) return null;
+    if (!nb) return null;
     const N = 120;
     const xs = Array.from(
       { length: N },
@@ -171,7 +171,7 @@ export function ScatterPlot({
       for (const curve of perFeature) for (const v of curve) peak = Math.max(peak, v);
     }
     return { xs, curves, peak };
-  }, [nb, showShapes, nClasses]);
+  }, [nb, nClasses]);
 
   /** Bottom strip: feature 1's curves, hanging below the plot. */
   const bottomPath = (c: number): string => {

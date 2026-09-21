@@ -146,8 +146,7 @@ export function StripPlot({
             className="nb-strip__truth"
           />
         ))}
-      {showShapes &&
-        curves.fitted &&
+      {curves.fitted &&
         scenario.classes.map((_, c) => (
           <path
             key={`f-${c}`}
