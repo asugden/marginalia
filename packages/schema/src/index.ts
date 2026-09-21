@@ -168,7 +168,12 @@ export interface ConversationRow {
   title: string | null;
   /** Bounded attempt counter for free-chat title-gen. See migration comment. */
   title_attempts: number;
-  /** Set when a backbone exits or is otherwise terminated. Read-only thereafter. */
+  /** When the backbone outline was completed (write-once; later turns COALESCE
+   *  rather than overwrite it, so it always marks when credit was earned).
+   *  This is NOT a lock: a completed conversation stays open and continues as
+   *  a free-form thread on the same row, bounded by the global per-conversation
+   *  turn cap. Migration 0001's comment describes the older read-only/422
+   *  behavior and is retained only as history. */
   completed_at: number | null;
   /** Display title of the agent at the time this conversation was created.
    *  Survives agent deletion so old conversations don't all read as
@@ -361,6 +366,41 @@ export interface ProvenanceSubmissionRow {
   snapshot_event_seq: number;
   created_at: number;
   revoked_at: number | null;
+  /** Assignment this was submitted against; NULL for an unattached submission. */
+  assignment_id: string | null;
+  /** Checkpoint within that assignment; NULL for an unattached submission. */
+  checkpoint_id: string | null;
+}
+
+/**
+ * A named piece of writing with one or more due checkpoints. "Draft due Monday,
+ * final due Wednesday" is ONE assignment with two checkpoints — the student
+ * keeps a single document across both, and how it changed between them is the
+ * thing worth looking at.
+ */
+export interface ProvenanceAssignmentRow {
+  id: string;
+  course_id: string;
+  title: string;
+  instructions: string;
+  created_at: number;
+  updated_at: number;
+  /** Set instead of deleting, so already-attached submissions keep their name. */
+  archived_at: number | null;
+}
+
+export interface ProvenanceAssignmentCheckpointRow {
+  id: string;
+  assignment_id: string;
+  /** Display order within the assignment; not a due-date sort. */
+  ord: number;
+  name: string;
+  /**
+   * NULL means no deadline, so this checkpoint can never be late. Lateness is
+   * never stored — it is `submitted_at > due_at`, evaluated on read, so moving
+   * a deadline immediately moves which submissions count as late.
+   */
+  due_at: number | null;
 }
 
 /** v0.5 §3 — citation a RAG-grounded assistant message leaned on. Display

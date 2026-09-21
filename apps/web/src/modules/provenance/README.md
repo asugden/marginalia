@@ -78,7 +78,8 @@ is never stored server-side.
   `apps/web/src/main.tsx` (or `bootstrap.ts`).
 - `api.ts` — typed fetch wrappers for `/api/provenance/*`.
 - `components/` — components used only here (editor, agent panel,
-  submission viewer, instructor submissions list).
+  submission viewer, instructor submissions list, assignments editor +
+  roster grid).
 
 ## Instructor Submissions surface
 
@@ -97,16 +98,104 @@ from LLM / autocorrect) and a "% not typed" figure computed from the frozen
 render, so an instructor can triage without opening each snapshot. Titles link
 to `/s/:token`.
 
-Note this is a list of *ad-hoc shares*, not of structured checkpoints: there are
-no assignments, due dates, or defined checkpoints in the data model, so the page
-can only report what students chose to share and when.
+Rows carry their assignment and checkpoint when they have one; a submission made
+outside any assignment still lists, exactly as every submission did before
+assignments existed.
 
 Backed by `GET /api/provenance/submissions?courseId=` — instructor-only, 403
 otherwise. The tab appears in the instructor strip only when the Writing module
 is enabled (`TabVisibilityFlags.provenanceEnabled`).
 
-Still absent: any *authoring* surface for provenance assignments. Submissions is
-review-only.
+## Assignments surface
+
+`/course/:id/instructor/assignments` (`AssignmentsPage.tsx`) — **writing
+assignment authoring**, plus a combined list retained from before the
+assignment wrapper.
+
+Since the wrapper landed, the one list of everything a course assigns is the
+**Assign band** (`/course/:id/instructor/assign`, the `course-items` module),
+which covers writing, agents, and examples in one real table. What stays here is
+what Assign deliberately does not do: authoring a writing assignment's title,
+instructions, and ordered checkpoints. Writing is the only kind needing several
+dated moments, which is why it keeps its own editor instead of being squeezed
+into the wrapper's single `due_at`.
+
+`provenance_assignments` and `provenance_assignment_checkpoints` are untouched by
+the wrapper — a `course_items` row points at an assignment through `payload_ref`
+and owns only its scheduling. Completion for writing on the Assign list is
+**"submitted"** (a live submission exists), a deliberately distinct verb from an
+agent's "finished" and an example's "marked done": an artifact is not a
+self-report, and the labels must never converge.
+
+The legacy list below is unchanged. Each row is tagged `Writing` or `Example`; a
+writing row opens its checkpoint roster, an example row opens the examples
+curation surface at `assign/examples`.
+
+Rows sort by the soonest deadline they still carry, undated last. A writing
+assignment's date is its earliest checkpoint that hasn't passed — the next thing
+the class owes — falling back to its latest deadline once all of them are behind
+us; an example has at most one date. Undated entries sort last because "no
+deadline" is the instructor declining to schedule something, and a list read for
+"what's next" should not open with items that are never next. Archived writing
+sinks below everything live. Ties break on title so order is stable across
+reloads rather than depending on fetch timing.
+
+**The union is presentation-only.** Nothing is merged underneath: the two kinds
+keep separate tables (`provenance_assignments` vs. `course_examples`), separate
+endpoints, separate editors, and separate rules. This page reads the examples
+module through its public `api.ts` and holds each kind in its own arm of a
+discriminated union rather than flattening them into shared fields. The combined
+list exists because "what have I set this class?" is one question — not because
+the features became one feature.
+
+The examples privacy split survives intact across the boundary. The only
+examples figure this list shows is how many students marked an example complete
+(their own opt-in claim, free from the completion roster fetch). Nothing from the
+anonymous usage aggregate appears here; see the examples module README for why
+those two must not sit on one row.
+
+No per-row submitted count appears on writing rows. That number lives only
+inside the per-assignment roster endpoint, so showing it on the list would cost
+one extra round-trip per row; open the assignment to see who has submitted and
+who hasn't.
+
+Writing assignments themselves: one assignment, N checkpoints: a draft
+and a final are two checkpoints of one assignment, because the student keeps one
+document across both. Checkpoints are edited as an ordered list (add, remove,
+reorder) with an optional `datetime-local` deadline each; an empty date means no
+deadline, and nothing submitted to such a checkpoint is ever late. Saving
+replaces the checkpoint list wholesale. Assignments can be archived — out of the
+student's picker, still legible on the instructor's side — or deleted, which
+leaves already-attached submissions intact and merely unattached.
+
+`/course/:id/instructor/assignments/:assignmentId` (`AssignmentRosterPage.tsx`)
+— one row per enrolled student, one column per checkpoint. Cells read
+`✓ <date>`, `✓ <date> LATE`, or `— not yet`.
+
+**Every student appears, including those who submitted nothing.** That is the
+reason the page exists: the Submissions list can only show what was submitted,
+so the student who submitted nothing is precisely the one it cannot surface. The
+grid scrolls inside its own container so a wide assignment never makes the page
+scroll sideways.
+
+Nothing here is a verdict. `LATE` is `submitted_at > due_at` recomputed on every
+load from the checkpoint's current deadline, so moving a deadline moves the
+label. Empty cells are muted, not red, and there is deliberately no summary
+column, miss count, or per-student score — see the worker README's "no false
+positives" rule, which binds this surface too.
+
+### Student-side picker
+
+`SubmissionModal.tsx` grows a "Submitting to" select when the course has any
+assignments, listing each assignment's checkpoints with their deadlines, plus a
+"Not part of an assignment" option. Submitting after a deadline shows a plain,
+non-punitive notice first — "This is after the Sep 20 deadline. You can still
+submit; it will be marked late." — and then submits normally. There is no
+cutoff: late submissions are always accepted, matching the attendance module's
+"nothing is silently denied" posture.
+
+**When the course has no assignments the picker is absent entirely** and the
+modal looks and behaves exactly as it did before.
 
 ## Slices
 

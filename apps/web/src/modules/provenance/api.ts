@@ -547,21 +547,36 @@ export interface SubmissionSummary {
   canRevoke: boolean;
 }
 
+/** Result of minting. `late` is the server's read of the checkpoint deadline at
+ *  submit time — reported back so the student sees the same bare fact the
+ *  instructor will, never as a refusal. */
+export interface MintResult {
+  token: string;
+  createdAt: number;
+  assignmentId: string | null;
+  checkpointId: string | null;
+  late: boolean;
+}
+
+/** Freeze a snapshot. `attach` is optional: omitted, the submission belongs to
+ *  no assignment, which is how every submission worked before assignments and
+ *  how it still works in a course that has none. */
 export async function mintSubmission(
   documentId: string,
   courseId: string,
-): Promise<{ token: string; createdAt: number }> {
+  attach?: { assignmentId: string; checkpointId: string },
+): Promise<MintResult> {
   const res = await fetch(
     apiUrl(`/api/provenance/documents/${encodeURIComponent(documentId)}/submissions`),
     {
       ...fetchInit,
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ courseId }),
+      body: JSON.stringify({ courseId, ...attach }),
     },
   );
   if (!res.ok) throw await apiError(res);
-  return (await res.json()) as { token: string; createdAt: number };
+  return (await res.json()) as MintResult;
 }
 
 export async function listSubmissions(
@@ -602,6 +617,13 @@ export interface CourseSubmissionSummary {
      */
     pasteCount: number;
   };
+  /** Assignment context; all null when the submission is unattached. */
+  assignmentId: string | null;
+  assignmentTitle: string | null;
+  checkpointId: string | null;
+  checkpointName: string | null;
+  /** `submittedAt > dueAt`, computed server-side on every read. */
+  late: boolean;
 }
 
 /** Every submission checkpoint in the course, newest first. Instructor-only;
@@ -705,4 +727,160 @@ export async function setProvenanceHideMarks(
   });
   if (!res.ok) throw await apiError(res);
   return (await res.json()) as { hideProvenanceMarks: boolean };
+}
+
+// ── Assignments ─────────────────────────────────────────────────────────
+//
+// An assignment is one piece of writing with N checkpoints. "Draft due Monday,
+// final due Wednesday" is one assignment with two checkpoints — the student
+// keeps a single document across both.
+
+export interface CheckpointDTO {
+  id: string;
+  name: string;
+  /** Epoch ms, or null for no deadline — such a checkpoint is never late. */
+  dueAt: number | null;
+}
+
+export interface AssignmentDTO {
+  id: string;
+  courseId: string;
+  title: string;
+  instructions: string;
+  /** In the instructor's chosen order, which need not be date order. */
+  checkpoints: CheckpointDTO[];
+  archivedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A checkpoint as the editor sends it — no id, since the server replaces the
+ *  whole list on save rather than reconciling against stored rows. */
+export interface CheckpointInput {
+  name: string;
+  dueAt: number | null;
+}
+
+/** The course's assignments. Readable by students too — they need it to pick
+ *  what they're submitting to. Archived ones are instructor-only. */
+export async function listAssignments(
+  courseId: string,
+  opts?: { includeArchived?: boolean },
+  signal?: AbortSignal,
+): Promise<AssignmentDTO[]> {
+  const qs = new URLSearchParams({ courseId });
+  if (opts?.includeArchived) qs.set("includeArchived", "1");
+  const res = await fetch(apiUrl(`/api/provenance/assignments?${qs}`), {
+    ...fetchInit,
+    signal,
+  });
+  if (!res.ok) throw await apiError(res);
+  const body = (await res.json()) as { assignments: AssignmentDTO[] };
+  return body.assignments;
+}
+
+export async function getAssignment(
+  courseId: string,
+  id: string,
+  signal?: AbortSignal,
+): Promise<AssignmentDTO> {
+  const res = await fetch(
+    apiUrl(
+      `/api/provenance/assignments/${encodeURIComponent(id)}?courseId=${encodeURIComponent(courseId)}`,
+    ),
+    { ...fetchInit, signal },
+  );
+  if (!res.ok) throw await apiError(res);
+  return (await res.json()) as AssignmentDTO;
+}
+
+/** Instructor only (403 otherwise). */
+export async function createAssignment(params: {
+  courseId: string;
+  title: string;
+  instructions: string;
+  checkpoints: CheckpointInput[];
+}): Promise<AssignmentDTO> {
+  const res = await fetch(apiUrl(`/api/provenance/assignments`), {
+    ...fetchInit,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await apiError(res);
+  return (await res.json()) as AssignmentDTO;
+}
+
+/** Instructor only. Supplying `checkpoints` replaces the list wholesale;
+ *  omitting it leaves the existing checkpoints alone. */
+export async function updateAssignment(
+  id: string,
+  params: {
+    courseId: string;
+    title?: string;
+    instructions?: string;
+    archived?: boolean;
+    checkpoints?: CheckpointInput[];
+  },
+): Promise<AssignmentDTO> {
+  const res = await fetch(apiUrl(`/api/provenance/assignments/${encodeURIComponent(id)}`), {
+    ...fetchInit,
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await apiError(res);
+  return (await res.json()) as AssignmentDTO;
+}
+
+/** Instructor only. Submissions already attached survive and read as
+ *  unattached — deleting an assignment never destroys a student's snapshot. */
+export async function deleteAssignment(courseId: string, id: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/provenance/assignments/${encodeURIComponent(id)}?courseId=${encodeURIComponent(courseId)}`,
+    ),
+    { ...fetchInit, method: "DELETE" },
+  );
+  if (!res.ok) throw await apiError(res);
+}
+
+/** One student's state at one checkpoint. `token` null = nothing submitted. */
+export interface RosterCell {
+  checkpointId: string;
+  token: string | null;
+  submittedAt: number | null;
+  /** Submitted after the deadline. A bare fact, not a verdict. */
+  late: boolean;
+}
+
+export interface RosterStudent {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  /** One entry per checkpoint, in checkpoint order, submitted or not. */
+  cells: RosterCell[];
+}
+
+export interface AssignmentRoster {
+  assignment: AssignmentDTO;
+  students: RosterStudent[];
+}
+
+/** Every enrolled student × every checkpoint — including students who have
+ *  submitted nothing, which the course-wide submissions list cannot show.
+ *  Instructor only. */
+export async function getAssignmentRoster(
+  courseId: string,
+  id: string,
+  signal?: AbortSignal,
+): Promise<AssignmentRoster> {
+  const res = await fetch(
+    apiUrl(
+      `/api/provenance/assignments/${encodeURIComponent(id)}/roster?courseId=${encodeURIComponent(courseId)}`,
+    ),
+    { ...fetchInit, signal },
+  );
+  if (!res.ok) throw await apiError(res);
+  return (await res.json()) as AssignmentRoster;
 }

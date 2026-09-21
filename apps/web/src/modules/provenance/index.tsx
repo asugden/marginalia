@@ -7,3 +7,5 @@ export { EditorPage } from "./components/EditorPage.js";
 export { AgentsPage } from "./components/AgentsPage.js";
 export { PublicSubmissionPage } from "./components/PublicSubmissionPage.js";
 export { SubmissionsPage } from "./components/SubmissionsPage.js";
+export { AssignmentsPage } from "./components/AssignmentsPage.js";
+export { AssignmentRosterPage } from "./components/AssignmentRosterPage.js";

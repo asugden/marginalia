@@ -57,6 +57,7 @@ import { buildRender, plainTextFromDoc } from "./render.js";
 import {
   toAgentDTO,
   toAgentSummary,
+  toAssignmentDTO,
   toConversationDTO,
   toDocumentDTO,
   toDocumentSummary,
@@ -65,6 +66,8 @@ import {
   type InboundEvent,
   type ProvenanceEventKind,
   type ProvenanceOrigin,
+  type RosterCellDTO,
+  type RosterStudentDTO,
 } from "./types.js";
 
 const MAX_TITLE_CHARS = 200;
@@ -1015,12 +1018,24 @@ export async function createSubmissionRoute(
 ): Promise<Response> {
   const userId = requireUser(identity);
   if (userId instanceof Response) return userId;
-  const body = (await req.json().catch(() => null)) as { courseId?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    courseId?: string;
+    assignmentId?: string;
+    checkpointId?: string;
+  } | null;
   if (!body?.courseId) return error("courseId required", 400);
   const enrollmentError = await requireEnrollment(env, userId, body.courseId);
   if (enrollmentError) return enrollmentError;
   const doc = await repo.getDocument(env.DB, body.courseId, userId, documentId);
   if (!doc) return error("Document not found", 404);
+
+  // Optional assignment attachment. Resolved BEFORE the render is built so a
+  // bad pairing fails without minting a row. Both ids must be present or both
+  // absent — a checkpoint without its assignment would leave the submission
+  // half-attached, and an assignment without a checkpoint has no deadline to
+  // read. Omitting them entirely is the unattached path, unchanged.
+  const attach = await resolveAttachment(env, body.courseId, body.assignmentId, body.checkpointId);
+  if (attach instanceof Response) return attach;
 
   // Build the frozen render from the authoritative event log + the doc's
   // current text. Independent of any student-facing coloring.
@@ -1042,7 +1057,63 @@ export async function createSubmissionRoute(
     renderJson: JSON.stringify(render),
     snapshotEventSeq,
   });
-  return json({ token: row.token, createdAt: row.created_at }, 201);
+  if (attach) {
+    await repo.attachSubmission(env.DB, row.token, attach.assignmentId, attach.checkpointId);
+  }
+  // `late` is reported back so the student sees the same bare fact the
+  // instructor will — submitted after the deadline, accepted anyway. It is
+  // recomputed from the deadline on every later read, never stored.
+  return json(
+    {
+      token: row.token,
+      createdAt: row.created_at,
+      assignmentId: attach?.assignmentId ?? null,
+      checkpointId: attach?.checkpointId ?? null,
+      late: attach ? isLate(row.created_at, attach.dueAt) : false,
+    },
+    201,
+  );
+}
+
+/**
+ * Validate an optional (assignmentId, checkpointId) pair against the course the
+ * submission is being made in. Returns null for the unattached path, the
+ * resolved ids plus the checkpoint's deadline when valid, or an error Response.
+ *
+ * The checkpoint is resolved through its own assignment rather than trusting
+ * the pairing the client sent, so a student cannot attach to a checkpoint that
+ * belongs to a different assignment — or to another course entirely.
+ */
+async function resolveAttachment(
+  env: Env,
+  courseId: string,
+  assignmentId: string | undefined,
+  checkpointId: string | undefined,
+): Promise<{ assignmentId: string; checkpointId: string; dueAt: number | null } | null | Response> {
+  if (!assignmentId && !checkpointId) return null;
+  if (!assignmentId || !checkpointId) {
+    return error("assignmentId and checkpointId must be given together", 400);
+  }
+  const assignment = await repo.getAssignment(env.DB, courseId, assignmentId);
+  if (!assignment) return error("Assignment not found", 404);
+  const resolved = await repo.getCheckpointWithCourse(env.DB, checkpointId);
+  if (
+    !resolved ||
+    resolved.courseId !== courseId ||
+    resolved.checkpoint.assignment_id !== assignmentId
+  ) {
+    return error("Checkpoint not found", 404);
+  }
+  return { assignmentId, checkpointId, dueAt: resolved.checkpoint.due_at };
+}
+
+/**
+ * The whole of lateness: a timestamp against a deadline. No grace window, no
+ * severity, no rounding in either direction. A checkpoint with no deadline is
+ * never late.
+ */
+function isLate(submittedAt: number, dueAt: number | null): boolean {
+  return dueAt !== null && submittedAt > dueAt;
 }
 
 /** GET /documents/:id/submissions — list this document's share tokens. */
@@ -1112,6 +1183,13 @@ export async function listCourseSubmissionsRoute(
       studentEmail: r.student_email,
       studentName: r.student_name,
       origins: summarizeOrigins(r.render_json),
+      // Null throughout for an unattached submission — every row predating
+      // assignments reads this way, and the list renders them as it always did.
+      assignmentId: r.assignment_id,
+      assignmentTitle: r.assignment_title,
+      checkpointId: r.checkpoint_id,
+      checkpointName: r.checkpoint_name,
+      late: isLate(r.created_at, r.checkpoint_due_at),
     })),
   });
 }
@@ -1271,4 +1349,315 @@ export async function publicSubmissionConversationsRoute(
     });
   }
   return json({ conversations: out });
+}
+
+// ── Assignments (instructor authoring + student picker) ─────────────────
+//
+// An assignment names a piece of writing and carries the checkpoints it is due
+// at. Authoring is instructor-only; the list is readable by any enrolled user,
+// because a student needs it to choose what they are submitting to.
+//
+// Nothing here computes a verdict. The one derived value in the whole surface
+// is `late` — `submitted_at > due_at` — and it stays a bare fact: no grace
+// window, no severity, no aggregate "concern" column built on top of it.
+
+const MAX_ASSIGNMENT_TITLE = 200;
+const MAX_ASSIGNMENT_INSTRUCTIONS = 20_000;
+const MAX_CHECKPOINT_NAME = 120;
+// An assignment is a handful of due moments, not a syllabus. The cap exists to
+// bound the roster grid's width, which stops being readable well before this.
+const MAX_CHECKPOINTS = 20;
+
+/** Parse + validate the checkpoint array from a create/update body. */
+function parseCheckpoints(raw: unknown): repo.CheckpointInput[] | Response {
+  if (!Array.isArray(raw)) return error("checkpoints must be an array", 400);
+  if (raw.length === 0) return error("An assignment needs at least one checkpoint", 400);
+  if (raw.length > MAX_CHECKPOINTS) {
+    return error(`At most ${MAX_CHECKPOINTS} checkpoints`, 400);
+  }
+  const out: repo.CheckpointInput[] = [];
+  for (const item of raw) {
+    const { name, dueAt } = (item ?? {}) as { name?: unknown; dueAt?: unknown };
+    if (typeof name !== "string" || !name.trim()) {
+      return error("Each checkpoint needs a name", 400);
+    }
+    if (name.length > MAX_CHECKPOINT_NAME) {
+      return error(`Checkpoint names are limited to ${MAX_CHECKPOINT_NAME} characters`, 400);
+    }
+    // Undefined, null, and empty all mean "no deadline" — the client's date
+    // input clears to an empty string, and that must not become NaN.
+    let due: number | null = null;
+    if (dueAt !== undefined && dueAt !== null && dueAt !== "") {
+      if (typeof dueAt !== "number" || !Number.isFinite(dueAt)) {
+        return error("dueAt must be a timestamp in milliseconds, or null", 400);
+      }
+      due = Math.trunc(dueAt);
+    }
+    out.push({ name: name.trim(), dueAt: due });
+  }
+  return out;
+}
+
+/** Gate an instructor-only assignment action; returns the courseId or a Response. */
+async function requireInstructor(
+  env: Env,
+  userId: string,
+  courseId: string,
+): Promise<Response | null> {
+  const enrollment = await loadEnrollment(env, userId, courseId);
+  if (enrollment instanceof Response) return enrollment;
+  if (enrollment.role !== "instructor") return error("Instructors only", 403);
+  return null;
+}
+
+/**
+ * GET /assignments?courseId=[&includeArchived=1] — the course's assignments.
+ *
+ * Readable by any enrolled user: students need it to pick what they're
+ * submitting to. Archived assignments are instructor-only, since their sole
+ * purpose is to stay out of the student's picker while remaining legible on
+ * the instructor's side.
+ */
+export async function listAssignmentsRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const enrollment = await loadEnrollment(env, userId, courseId);
+  if (enrollment instanceof Response) return enrollment;
+
+  const includeArchived =
+    url.searchParams.get("includeArchived") === "1" && enrollment.role === "instructor";
+  const assignments = await repo.listAssignments(env.DB, courseId, { includeArchived });
+  // One query for every checkpoint in the course, bucketed here — the
+  // alternative is a query per assignment on a page that lists all of them.
+  const checkpoints = await repo.listCheckpointsForCourse(env.DB, courseId);
+  const byAssignment = new Map<string, typeof checkpoints>();
+  for (const c of checkpoints) {
+    const bucket = byAssignment.get(c.assignment_id);
+    if (bucket) bucket.push(c);
+    else byAssignment.set(c.assignment_id, [c]);
+  }
+  return json({
+    assignments: assignments.map((a) => toAssignmentDTO(a, byAssignment.get(a.id) ?? [])),
+  });
+}
+
+/** GET /assignments/:id?courseId= — one assignment with its checkpoints. */
+export async function getAssignmentRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+  assignmentId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const enrollmentError = await requireEnrollment(env, userId, courseId);
+  if (enrollmentError) return enrollmentError;
+  const assignment = await repo.getAssignment(env.DB, courseId, assignmentId);
+  if (!assignment) return error("Assignment not found", 404);
+  const checkpoints = await repo.listCheckpoints(env.DB, assignmentId);
+  return json(toAssignmentDTO(assignment, checkpoints));
+}
+
+/** POST /assignments — create. Instructor only. */
+export async function createAssignmentRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const body = (await req.json().catch(() => null)) as {
+    courseId?: string;
+    title?: string;
+    instructions?: string;
+    checkpoints?: unknown;
+  } | null;
+  if (!body?.courseId) return error("courseId is required", 400);
+  const gate = await requireInstructor(env, userId, body.courseId);
+  if (gate) return gate;
+
+  const title = (body.title ?? "").trim();
+  if (!title) return error("title is required", 400);
+  if (title.length > MAX_ASSIGNMENT_TITLE) {
+    return error(`Title is limited to ${MAX_ASSIGNMENT_TITLE} characters`, 400);
+  }
+  const instructions = body.instructions ?? "";
+  if (instructions.length > MAX_ASSIGNMENT_INSTRUCTIONS) {
+    return error("Instructions are too long", 400);
+  }
+  const checkpoints = parseCheckpoints(body.checkpoints);
+  if (checkpoints instanceof Response) return checkpoints;
+
+  const row = await repo.createAssignment(env.DB, {
+    courseId: body.courseId,
+    title,
+    instructions,
+    checkpoints,
+  });
+  const saved = await repo.listCheckpoints(env.DB, row.id);
+  return json(toAssignmentDTO(row, saved), 201);
+}
+
+/**
+ * PATCH /assignments/:id — edit. Instructor only.
+ *
+ * Supplying `checkpoints` replaces the list wholesale (see `updateAssignment`);
+ * omitting it edits only the title/instructions/archived fields.
+ */
+export async function updateAssignmentRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  assignmentId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const body = (await req.json().catch(() => null)) as {
+    courseId?: string;
+    title?: string;
+    instructions?: string;
+    archived?: boolean;
+    checkpoints?: unknown;
+  } | null;
+  if (!body?.courseId) return error("courseId is required", 400);
+  const gate = await requireInstructor(env, userId, body.courseId);
+  if (gate) return gate;
+
+  let title: string | undefined;
+  if (body.title !== undefined) {
+    title = body.title.trim();
+    if (!title) return error("title cannot be empty", 400);
+    if (title.length > MAX_ASSIGNMENT_TITLE) {
+      return error(`Title is limited to ${MAX_ASSIGNMENT_TITLE} characters`, 400);
+    }
+  }
+  if (body.instructions !== undefined && body.instructions.length > MAX_ASSIGNMENT_INSTRUCTIONS) {
+    return error("Instructions are too long", 400);
+  }
+  let checkpoints: repo.CheckpointInput[] | undefined;
+  if (body.checkpoints !== undefined) {
+    const parsed = parseCheckpoints(body.checkpoints);
+    if (parsed instanceof Response) return parsed;
+    checkpoints = parsed;
+  }
+
+  const row = await repo.updateAssignment(env.DB, body.courseId, assignmentId, {
+    title,
+    instructions: body.instructions,
+    archived: body.archived,
+    checkpoints,
+  });
+  if (!row) return error("Assignment not found", 404);
+  const saved = await repo.listCheckpoints(env.DB, assignmentId);
+  return json(toAssignmentDTO(row, saved));
+}
+
+/** DELETE /assignments/:id?courseId= — delete. Instructor only. Attached
+ *  submissions survive and read as unattached; see `deleteAssignment`. */
+export async function deleteAssignmentRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+  assignmentId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const gate = await requireInstructor(env, userId, courseId);
+  if (gate) return gate;
+  const deleted = await repo.deleteAssignment(env.DB, courseId, assignmentId);
+  if (!deleted) return error("Assignment not found", 404);
+  return json({ ok: true });
+}
+
+/**
+ * GET /assignments/:id/roster?courseId= — one row per enrolled student, one
+ * cell per checkpoint. **Instructor-only**; it crosses the owner boundary the
+ * way the course-wide submissions list does.
+ *
+ * Every student appears, including those who submitted nothing — that absence
+ * is the reading the page exists to make visible, and it cannot be one if the
+ * student simply isn't in the list.
+ *
+ * `late` is computed here, against each checkpoint's CURRENT `due_at`. Nothing
+ * is stored, so extending a deadline clears the flag on the next load rather
+ * than leaving a judgment the instructor has already reversed.
+ */
+export async function assignmentRosterRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+  assignmentId: string,
+): Promise<Response> {
+  const userId = requireUser(identity);
+  if (userId instanceof Response) return userId;
+  const courseId = url.searchParams.get("courseId");
+  if (!courseId) return error("courseId is required", 400);
+  const gate = await requireInstructor(env, userId, courseId);
+  if (gate) return gate;
+
+  const assignment = await repo.getAssignment(env.DB, courseId, assignmentId);
+  if (!assignment) return error("Assignment not found", 404);
+  const checkpoints = await repo.listCheckpoints(env.DB, assignmentId);
+  const dueByCheckpoint = new Map(checkpoints.map((c) => [c.id, c.due_at]));
+  const rows = await repo.listAssignmentRoster(env.DB, courseId, assignmentId);
+
+  // Collapse the (student × checkpoint) rows into one entry per student. The
+  // LEFT JOIN emits a single all-null row for a student who submitted nothing,
+  // which lands here as a student with every cell empty — exactly right.
+  const byStudent = new Map<string, RosterStudentDTO>();
+  const found = new Map<string, Map<string, RosterCellDTO>>();
+  for (const r of rows) {
+    let student = byStudent.get(r.user_id);
+    if (!student) {
+      student = {
+        userId: r.user_id,
+        email: r.student_email,
+        displayName: r.student_name,
+        cells: [],
+      };
+      byStudent.set(r.user_id, student);
+      found.set(r.user_id, new Map());
+    }
+    if (!r.checkpoint_id || !r.token || r.created_at === null) continue;
+    // A checkpoint id that no longer resolves means the instructor re-authored
+    // the list (checkpoints are replaced, not merged). The submission is real
+    // but has nowhere to sit, so it's dropped from the grid rather than shown
+    // in a column that no longer exists.
+    if (!dueByCheckpoint.has(r.checkpoint_id)) continue;
+    found.get(r.user_id)!.set(r.checkpoint_id, {
+      checkpointId: r.checkpoint_id,
+      token: r.token,
+      submittedAt: r.created_at,
+      late: isLate(r.created_at, dueByCheckpoint.get(r.checkpoint_id) ?? null),
+    });
+  }
+  // Emit cells in checkpoint order so the client can render the grid
+  // positionally, with an empty cell wherever nothing was submitted.
+  for (const [studentUserId, student] of byStudent) {
+    const cells = found.get(studentUserId)!;
+    student.cells = checkpoints.map(
+      (c) =>
+        cells.get(c.id) ?? {
+          checkpointId: c.id,
+          token: null,
+          submittedAt: null,
+          late: false,
+        },
+    );
+  }
+
+  return json({
+    assignment: toAssignmentDTO(assignment, checkpoints),
+    students: [...byStudent.values()],
+  });
 }

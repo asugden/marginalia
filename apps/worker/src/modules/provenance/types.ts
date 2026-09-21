@@ -5,6 +5,8 @@
 
 import type {
   ProvenanceAgentRow,
+  ProvenanceAssignmentCheckpointRow,
+  ProvenanceAssignmentRow,
   ProvenanceConversationRow,
   ProvenanceDocumentRow,
   ProvenanceEventRow,
@@ -17,6 +19,8 @@ import type {
 
 export type {
   ProvenanceAgentRow,
+  ProvenanceAssignmentCheckpointRow,
+  ProvenanceAssignmentRow,
   ProvenanceConversationRow,
   ProvenanceDocumentRow,
   ProvenanceEventRow,
@@ -200,4 +204,68 @@ export function toMessageDTO(row: ProvenanceMessageRow): MessageDTO {
     seq: row.seq,
     createdAt: row.created_at,
   };
+}
+
+// ── Assignment DTOs ──────────────────────────────────────────────────────
+
+export interface CheckpointDTO {
+  id: string;
+  name: string;
+  /** Epoch ms, or null when the checkpoint has no deadline. */
+  dueAt: number | null;
+}
+
+export interface AssignmentDTO {
+  id: string;
+  courseId: string;
+  title: string;
+  instructions: string;
+  /** In the instructor's chosen order, which is not necessarily date order. */
+  checkpoints: CheckpointDTO[];
+  archivedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export function toCheckpointDTO(row: ProvenanceAssignmentCheckpointRow): CheckpointDTO {
+  return { id: row.id, name: row.name, dueAt: row.due_at };
+}
+
+export function toAssignmentDTO(
+  row: ProvenanceAssignmentRow,
+  checkpoints: ProvenanceAssignmentCheckpointRow[],
+): AssignmentDTO {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    title: row.title,
+    instructions: row.instructions,
+    checkpoints: checkpoints.map(toCheckpointDTO),
+    archivedAt: row.archived_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** One student's state at one checkpoint, as the roster grid renders it. */
+export interface RosterCellDTO {
+  checkpointId: string;
+  /** Null when this student has submitted nothing to this checkpoint. */
+  token: string | null;
+  submittedAt: number | null;
+  /**
+   * `submittedAt > dueAt`, computed on read. A checkpoint with no deadline is
+   * never late, and nothing here is stored — moving a deadline moves the flag.
+   * It reports a timestamp against a date and nothing more: it is not a score,
+   * and no surface may render it as one.
+   */
+  late: boolean;
+}
+
+export interface RosterStudentDTO {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  /** One entry per checkpoint, in checkpoint order, present or not. */
+  cells: RosterCellDTO[];
 }
