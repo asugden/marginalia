@@ -166,8 +166,15 @@ export async function* sendMessage(
   const totalTurns = prev.totalTurns + 1;
   const budgetSpent = !topic || turnsOnTopic >= topic.budget;
 
+  // Mirrors the real machine: once the outline is finished the state freezes
+  // and the conversation continues as free-form on the same thread, rather
+  // than terminating or running the topic index past the end of the list.
+  const wasFinished = prev.finished;
+
   let next: BackboneState;
-  if (budgetSpent) {
+  if (wasFinished) {
+    next = prev;
+  } else if (budgetSpent) {
     const nextIndex = prev.currentTopicIndex + 1;
     const finished = nextIndex >= MOCK_TOPICS.length;
     next = { currentTopicIndex: nextIndex, turnsOnTopic: 0, totalTurns, finished };
@@ -175,7 +182,11 @@ export async function* sendMessage(
     next = { ...prev, turnsOnTopic, totalTurns };
   }
 
-  const reply = next.finished ? "[mock] That completes the backbone." : fakeReply(prev);
+  const reply = wasFinished
+    ? "[mock] The outline is done — happy to keep going on anything you like."
+    : next.finished
+      ? "[mock] That completes the backbone."
+      : fakeReply(prev);
   let assembled = "";
   for (const word of reply.split(" ")) {
     const chunk = (assembled ? " " : "") + word;
@@ -187,6 +198,8 @@ export async function* sendMessage(
   convo.messages.push({ role: "assistant", content: assembled });
   convo.state = next;
   convo.updatedAt = Date.now();
+  // Write-once, like the server's COALESCE: continuing after completion must
+  // never move the timestamp that records when credit was earned.
   if (next.finished && convo.completedAt === null) {
     convo.completedAt = Date.now();
   }
@@ -195,12 +208,20 @@ export async function* sendMessage(
   yield {
     type: "done",
     state: next,
-    transition: budgetSpent ? (next.finished ? "finished" : "forced") : "stay",
+    transition: wasFinished
+      ? "finished"
+      : budgetSpent
+        ? next.finished
+          ? "finished"
+          : "forced"
+        : "stay",
     currentTopic: nextTopic
       ? { title: nextTopic.title, index: next.currentTopicIndex }
       : null,
-    completedAt: next.finished ? convo.completedAt : null,
-    completionMessage: next.finished ? COMPLETION : null,
+    // One-time events: only the turn that actually closes the outline carries
+    // the stamp and the completion message.
+    completedAt: next.finished && !wasFinished ? convo.completedAt : null,
+    completionMessage: next.finished && !wasFinished ? COMPLETION : null,
     conversationTitle: null,
   };
 }

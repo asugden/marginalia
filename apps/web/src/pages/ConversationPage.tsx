@@ -432,18 +432,35 @@ export function ConversationPage() {
           {history.length > 0 && (
             <div className="app-side__block">
               <div className="mono-label">Conversations</div>
+              {/* Completion is surfaced persistently on the row, not just
+                  inline in the thread. Now that finishing the outline no
+                  longer closes the conversation, a student can keep chatting
+                  indefinitely — they need to be able to glance over at any
+                  moment and see that credit is already banked and stopping is
+                  fine. The inline marker scrolls away; this doesn't.
+                  `completedAt` is live in the row's own state so the badge
+                  appears the moment the outline closes, without a refetch. */}
               <ul className="app-side__history">
-                {history.map((h) => (
-                  <li
-                    key={h.id}
-                    className={h.id === activeConvId ? "is-active" : ""}
-                  >
-                    <Link to={`${base}/chat/${h.id}`}>
-                      <span>{h.title || "Untitled"}</span>
-                      <small>{relativeTime(h.updatedAt)}</small>
-                    </Link>
-                  </li>
-                ))}
+                {history.map((h) => {
+                  const isActive = h.id === activeConvId;
+                  const rowCompleted =
+                    (isActive && completedAt !== null) || h.completedAt !== null;
+                  return (
+                    <li key={h.id} className={isActive ? "is-active" : ""}>
+                      <Link to={`${base}/chat/${h.id}`}>
+                        <span>{h.title || "Untitled"}</span>
+                        <small className="app-side__histmeta">
+                          {relativeTime(h.updatedAt)}
+                          {rowCompleted && (
+                            <Badge tone="success" dot>
+                              Completed
+                            </Badge>
+                          )}
+                        </small>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -535,44 +552,53 @@ export function ConversationPage() {
               );
             })}
             {completion && <Message role="system">{completion}</Message>}
+            {/* Inline marker at the point the outline closed. Deliberately
+                paired with the persistent sidebar badge below: this one is
+                accurate about *when* completion happened but scrolls away,
+                so it can't be the only signal that credit is banked. */}
+            {completedAt !== null && (
+              <div className="ds-completed" role="status">
+                Outline completed on{" "}
+                {new Date(completedAt).toLocaleDateString(undefined, {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+                . You can keep asking questions here, or stop whenever you like.
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
         </div>
 
         {error && <p className="error">{error}</p>}
 
-        {completedAt !== null ? (
-          <div className="ds-completed" role="status">
-            Completed on{" "}
-            {new Date(completedAt).toLocaleDateString(undefined, {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-            . Start a <Link to={base}>new chat</Link> to continue.
-          </div>
-        ) : (
-          <div className="app-conv__composer">
-            <ChatComposer
-              value={input}
-              onChange={setInput}
-              onSend={send}
-              disabled={streaming || finished}
-              placeholder={
-                finished
-                  ? "Conversation complete"
-                  : "Message " + agentLabel + "…"
-              }
-              footer={
-                <span>
-                  {hasBackbone
-                    ? "Following the agent’s outline"
+        {/* The composer is ALWAYS rendered. Completing the outline earns
+            credit; it does not end the conversation. Previously this branch
+            replaced the composer entirely with a "start a new chat" note,
+            which stranded students who had merely run out of turn budget
+            mid-explanation — the only way forward threw away the whole
+            thread and restarted at topic 1. A completed conversation now
+            continues free-form on the same history; `finished` no longer
+            disables sending (only an in-flight stream does). */}
+        <div className="app-conv__composer">
+          <ChatComposer
+            value={input}
+            onChange={setInput}
+            onSend={send}
+            disabled={streaming}
+            placeholder={"Message " + agentLabel + "\u2026"}
+            footer={
+              <span>
+                {finished
+                  ? "Outline complete \u00b7 open follow-up"
+                  : hasBackbone
+                    ? "Following the agent\u2019s outline"
                     : "Free-form room"}
-                </span>
-              }
-            />
-          </div>
-        )}
+              </span>
+            }
+          />
+        </div>
       </main>
     </div>
   );

@@ -290,6 +290,12 @@ html, body { height: 100%; }
 .app-side__history a:hover { background: var(--surface); }
 .app-side__history li.is-active a { background: var(--surface); box-shadow: var(--shadow-xs); }
 .app-side__history li.is-active a span { color: var(--text-strong); font-weight: 600; }
+/* Row meta line: relative time plus, for a finished outline, a persistent
+   "Completed" badge. The badge is the student's always-visible proof that
+   credit is banked — a completed conversation stays open for follow-up, so
+   without it they'd have no standing signal that they may stop. */
+.app-side__histmeta { display: flex; align-items: center; gap: 0.4rem; }
+.app-side__histmeta .ds-badge { font-size: var(--text-2xs); padding: 0 0.3rem; }
 .app-side__histempty { padding: 0.45rem 0.55rem; color: var(--text-faint); font-size: var(--text-sm); }
 
 .app-conv { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; }

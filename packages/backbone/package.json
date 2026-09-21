@@ -6,9 +6,13 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx src/machine.test.ts"
   },
   "dependencies": {
     "@marginalia/voices": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
   }
 }

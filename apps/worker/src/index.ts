@@ -15,6 +15,8 @@
 //   POST /api/conversations                 - start a conversation for an agent
 //   GET  /api/conversations/:id             - fetch transcript + state
 //   POST /api/conversations/:id/messages    - send a student turn, stream the reply
+//   GET  /api/course-items?courseId=        - the assignment wrapper: everything
+//                                             this course assigns, one list
 
 import { ProviderError } from "@marginalia/providers";
 import type { LLMProvider, Message as LLMMessage } from "@marginalia/providers";
@@ -56,6 +58,8 @@ import type {
 import { isTermSeason } from "@marginalia/schema";
 import { routeProvenance } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
+import { routeExamples } from "./modules/examples/routes.js";
+import { routeCourseItems } from "./modules/course-items/routes.js";
 
 // v0.1 single-tenant default. Phase 2 derives org from the authenticated email.
 const DEFAULT_ORG = "default";
@@ -295,6 +299,26 @@ async function route(
   // Self-contained module; see apps/worker/src/modules/attendance/README.md.
   if (head === "attendance") {
     const handled = await routeAttendance(req, env, url, identity, parts);
+    if (handled) return handled;
+  }
+
+  // /api/examples/* — course curation of the public example pages, plus the
+  // two deliberately-separate usage signals (anonymous aggregate; opt-in
+  // completion). The example pages themselves are static and ungated — this
+  // module never serves them. See apps/worker/src/modules/examples/README.md.
+  if (head === "examples") {
+    const handled = await routeExamples(req, env, url, identity, parts);
+    if (handled) return handled;
+  }
+
+  // /api/course-items/* — the assignment wrapper: one list naming everything a
+  // course assigns (writing, agents, examples), with scheduling and ordering.
+  // It owns dates and order only; each module keeps its content and defines
+  // what completion means, which is why the list reports a distinct verb per
+  // kind rather than a shared boolean. See
+  // apps/worker/src/modules/course-items/README.md.
+  if (head === "course-items") {
+    const handled = await routeCourseItems(req, env, url, identity, parts);
     if (handled) return handled;
   }
 
@@ -3387,6 +3411,11 @@ async function listConversationsRoute(
 
     if (def.backbone && state) {
       const total = def.backbone.topics.length;
+      // A finished backbone leaves currentTopicIndex one past the last topic
+      // (that overflow is how the machine signals "done"). Clamping keeps a
+      // completed conversation reading as n/n instead of n+1/n — which
+      // matters now that a completed conversation stays open and the student
+      // keeps seeing this row while they continue chatting.
       const idx = Math.min(state.currentTopicIndex, total - 1);
       topicProgress = { index: idx, total };
       if (state.finished || r.completed_at !== null) {
@@ -3543,18 +3572,26 @@ async function postMessage(
     ? (JSON.parse(conv.backbone_state) as BackboneState)
     : null;
 
-  // §1: completed conversations are read-only. The schema's completed_at is
-  // the authoritative gate (state.finished is the input that sets it on the
-  // turn it fires). 422 per spec — the request is well-formed but the resource
-  // refuses further turns.
-  if (conv.completed_at !== null || state?.finished) {
-    return error("This conversation is complete; start a new one", 422);
-  }
+  // Completion ends the OUTLINE, not the conversation. Earlier versions
+  // treated completed_at as a wall and rejected further turns with 422, which
+  // meant the most common way a student hit it — spending the last topic's
+  // turn budget mid-explanation, not actually finishing — dead-ended the
+  // thread and forced a restart at topic 1 with no history. Credit is still
+  // earned permanently (completed_at is write-once; see repo.commitTurn's
+  // COALESCE), but the student keeps talking to the same agent on the same
+  // thread, now in free-form mode with the outline as context. buildPrompt's
+  // finished branch handles the tone shift.
+  const continuingAfterCompletion = conv.completed_at !== null || !!state?.finished;
 
-  // Hard ceiling on turns for agents without a backbone (the backbone state
-  // machine bounds the others). Without this a non-backbone "Ask the textbook"
-  // agent is unbounded.
-  if (!def.backbone && conv.turn_count >= MAX_TURNS_PER_CONVERSATION) {
+  // Hard ceiling on student turns. The backbone state machine bounds a
+  // conversation only while the outline is still running; once it finishes
+  // (or the agent never had a backbone) this global cap is the only thing
+  // standing between a free-form thread and unbounded growth, so it must
+  // apply to both. 409, as before.
+  if (
+    (!def.backbone || continuingAfterCompletion) &&
+    conv.turn_count >= MAX_TURNS_PER_CONVERSATION
+  ) {
     return error("Conversation turn limit reached", 409);
   }
 
@@ -3663,6 +3700,14 @@ function streamTurn(params: {
         let topicAfter: { title: string; index: number } | null = null;
         let completionMessage: string | null = null;
 
+        // Was the outline already complete when this turn began? If so the
+        // machine short-circuits (transition() returns kind "finished" without
+        // touching state) and this is a free-form continuation turn, not the
+        // turn that finished the outline. The distinction matters below: the
+        // completion message and the completed_at stamp are one-time events
+        // belonging to the turn that closed the last topic.
+        const wasAlreadyFinished = conv.completed_at !== null || state?.finished === true;
+
         if (def.backbone && state) {
           const result = transition(def.backbone, state, raw);
           nextState = result.state;
@@ -3671,7 +3716,7 @@ function streamTurn(params: {
           topicAfter = topic
             ? { title: topic.title, index: result.state.currentTopicIndex }
             : null;
-          if (result.state.finished) {
+          if (result.state.finished && !wasAlreadyFinished) {
             completionMessage = def.backbone.completionMessage ?? null;
           }
         }
@@ -3694,7 +3739,11 @@ function streamTurn(params: {
         // to be race-safe), updated backbone state, turn count, and completed_at
         // all in one D1 batch. If any statement fails, none commit — never a
         // user turn persisted with the assistant reply dropped.
-        const finishedNow = nextState?.finished === true;
+        // Stamp completed_at only on the turn that actually closes the
+        // outline. Continuation turns pass null so the original timestamp —
+        // the moment credit was earned — is what the client and sidebar keep
+        // showing. (repo.commitTurn also COALESCEs, so this is belt-and-braces.)
+        const finishedNow = nextState?.finished === true && !wasAlreadyFinished;
         const completedAtStamp = finishedNow ? Date.now() : null;
         await repo.commitTurn(env.DB, {
           conversationId: conv.id,
