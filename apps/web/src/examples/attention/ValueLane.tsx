@@ -32,9 +32,9 @@ import {
   WCELL,
   WORD_H,
   maxAbs,
-  sign,
   type HoveredVector,
 } from "./AttentionGrid.js";
+import { magnitude, value } from "../shared/palette.js";
 
 interface Props {
   head: Head;
@@ -53,8 +53,10 @@ interface Props {
 
 const X0 = 190; // left gutter: lane labels, the W_V swatch, and the weights caption
 const TOP = 16;
-const FORM_H = 84; // the "× W_V" band: label over a 16-tall swatch
-const WEIGHT_H = 26; // the "× weight" cells
+const FORM_H = 138; // the "× W_V" band: label over a 16-tall swatch
+// The "× weight" cells are squares the size of the attention grid's cells,
+// coloured the same way, so the row of weights reads as the grid's row.
+const WEIGHT_H = CELL - 2;
 const SUM_H = 64; // the converging lines
 
 export function ValueLane({
@@ -124,7 +126,7 @@ export function ValueLane({
           </marker>
         </defs>
 
-        <text className="at-grid__axis" x={X0} y={TOP - 4}>
+        <text className="fig-label" x={X0} y={TOP - 4}>
           every word in the sentence →
         </text>
 
@@ -173,12 +175,12 @@ export function ValueLane({
           × weight
         </text>
         <text
-          className="at-grid__axis"
+          className="fig-label-sub"
           x={X0 - 10}
           y={yW + WEIGHT_H / 2 + 10}
           textAnchor="end"
         >
-          {word}'s row of the grid
+          <tspan className="fig-word--key">{word}</tspan>'s row of the grid
         </text>
 
         {/* ── One column per word ── */}
@@ -214,7 +216,7 @@ export function ValueLane({
                     y={d * VCELL}
                     width={STRIP_T}
                     height={VCELL - 1}
-                    style={{ fill: sign(v / eBounds[j]!) }}
+                    style={{ fill: value(v / eBounds[j]!) }}
                   />
                 ))}
               </g>
@@ -248,7 +250,7 @@ export function ValueLane({
                     y={d * VCELL}
                     width={STRIP_T}
                     height={VCELL - 1}
-                    style={{ fill: sign(v / vBound) }}
+                    style={{ fill: value(v / vBound) }}
                   />
                 ))}
                 {off && (
@@ -262,14 +264,12 @@ export function ValueLane({
               {/* × weight — from the grid, and pointedly unchanged by zeroing */}
               <rect
                 className="at-vlane__wcell"
-                x={x + 3}
+                x={x + 1}
                 y={yW}
-                width={CELL - 6}
+                width={CELL - 2}
                 height={WEIGHT_H}
                 rx={3}
-                style={{
-                  fill: `color-mix(in srgb, var(--accent) ${Math.round(wt * 100)}%, var(--surface))`,
-                }}
+                style={{ fill: magnitude(wt) }}
               />
               <text
                 className={`at-grid__num${wt > 0.6 ? " at-grid__num--inv" : ""}`}
@@ -312,13 +312,7 @@ export function ValueLane({
         >
           out
         </text>
-        <g
-          className={`at-grid__strip at-grid__strip--on${hv?.kind === "out" ? " at-vlane__out--on" : ""}`}
-          transform={`translate(${outX}, ${yOut})`}
-          onMouseEnter={() => onHover({ kind: "out", index: i })}
-          onMouseLeave={() => onHover(null)}
-        >
-          <rect className="at-grid__hit" x={-2} y={-4} width={vLen + 4} height={STRIP_T + 8} />
+        <g className="at-grid__strip at-grid__strip--on" transform={`translate(${outX}, ${yOut})`}>
           {Array.from(out, (v, d) => (
             <rect
               key={d}
@@ -326,7 +320,7 @@ export function ValueLane({
               y={0}
               width={VCELL - 1}
               height={STRIP_T}
-              style={{ fill: sign(v / vBound) }}
+              style={{ fill: value(v / vBound) }}
             />
           ))}
           <rect
@@ -339,7 +333,7 @@ export function ValueLane({
           />
         </g>
         <text
-          className="at-grid__axis"
+          className="fig-label-sub"
           x={midX}
           y={yOut + STRIP_T + 16}
           textAnchor="middle"

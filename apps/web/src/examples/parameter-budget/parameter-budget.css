@@ -1,11 +1,18 @@
-/* Parameter budget explorer — layout and figure styling only.
-   Surfaces and buttons come from the design system (<Card>, <Button>). */
+/* Counting parameters — layout and figure styling only.
+   Surfaces and buttons come from the design system (<Card>, <Button>);
+   figure text from examples/shared/figure.css. */
 
 .pb-panel { margin-bottom: 1rem; }
 .pb-h2 {
   margin: 0 0 0.3rem;
   font-size: var(--text-lg, 1.15rem);
   line-height: 1.25;
+  color: var(--text-strong);
+}
+.pb-h3 {
+  margin: 1.25rem 0 0.6rem;
+  font-size: var(--text-md, 1rem);
+  line-height: 1.3;
   color: var(--text-strong);
 }
 .pb-sub {
@@ -28,6 +35,87 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+.pb-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Figures draw 1:1 and shrink to fit, never grow (style.md §12). */
+.pb-fig { overflow: hidden; }
+.pb-svg { display: block; max-width: 100%; height: auto; }
+.pb-fig-strong { font-weight: 700; }
+.pb-fig--gap { margin-top: 1.25rem; }
+
+/* ── Controls: what the reader operates is sunken (style.md §14) ──── */
+.pb-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.65rem 1rem;
+  margin: 0 0 1.1rem;
+}
+.pb-controls__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.pb-controls__row input[type="range"] { flex: 1; min-width: 0; max-width: 22rem; }
+.pb-controls__label {
+  flex: none;
+  width: 7.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+.pb-controls__value {
+  flex: none;
+  min-width: 3.5rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.pb-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .pb-controls__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+  .pb-controls__row input[type="range"] { width: 100%; max-width: none; }
+}
+
+/* ── Legend ───────────────────────────────────────────────────────── */
+.pb-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.6rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.pb-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+.pb-legend__gap { width: 1rem; }
 
 /* ── Header with the running total ────────────────────────────────── */
 .pb-head {
@@ -36,7 +124,7 @@
   align-items: flex-start;
   gap: 1.5rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 .pb-total {
   display: flex;
@@ -45,225 +133,187 @@
   gap: 0.05rem;
   text-align: right;
 }
-.pb-total__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-}
 .pb-total__val {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 2rem;
   line-height: 1.05;
-  color: var(--accent);
+  color: var(--text-strong);
   font-weight: 700;
 }
-.pb-total__sub { font-size: var(--text-2xs); color: var(--text-muted); }
 
-/* ── The architecture figure ──────────────────────────────────────── */
-.pb-arch {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  padding: 0.5rem 0 0;
+/* ── The network's width bars: the reader's control, so the accent ── */
+.pb-netbar {
+  fill: var(--accent);
+  cursor: ew-resize;
+  touch-action: none;
 }
-.pb-layer {
+.pb-netbar:focus-visible { outline: none; stroke: var(--accent-deep); stroke-width: 2; }
+.pb-netbar__grip { fill: var(--text-on-accent); opacity: 0.8; pointer-events: none; }
+
+/* ── Where a language model's parameters go ───────────────────────── */
+.pb-split { display: flex; flex-direction: column; gap: 0.7rem; }
+.pb-split__row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 17rem) 1fr 9rem;
+  gap: 1rem;
+  align-items: center;
+}
+.pb-split__name { display: flex; flex-direction: column; gap: 0.1rem; }
+.pb-split__title { font-size: var(--text-sm); font-weight: 700; color: var(--text-body); }
+.pb-split__sub { font-size: var(--text-xs); color: var(--text-muted); }
+.pb-split__track { position: relative; height: 16px; }
+.pb-split__fill,
+.pb-split__idle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  transition: width 160ms ease;
+}
+/* Experts a word does not use: in memory, idle for this word. */
+.pb-split__idle {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+}
+.pb-split__val { display: flex; flex-direction: column; align-items: flex-end; gap: 0.05rem; }
+.pb-split__n { font-size: var(--text-sm); font-weight: 700; color: var(--text-strong); }
+.pb-split__pct { font-size: var(--text-xs); color: var(--text-muted); }
+@media (max-width: 640px) {
+  .pb-split__row { grid-template-columns: 1fr 6.5rem; }
+  .pb-split__track { grid-column: 1 / -1; order: 3; }
+}
+
+/* ── Readouts: white boxes, a kicker over the value ───────────────── */
+.pb-readouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+.pb-readout {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 5rem;
-}
-.pb-layer__bar {
-  display: flex;
-  align-items: flex-end;
-  width: 3rem;
+  gap: 0.1rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-  overflow: hidden;
 }
-.pb-layer__fill {
-  width: 100%;
-  background: var(--accent);
-  transition: height 120ms ease;
-}
-/* Input and output layers are fixed by the task; hidden ones are the choice. */
-.pb-layer__fill--end { background: var(--text-faint); }
-.pb-layer__slider { width: 5rem; }
-.pb-layer__meta {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.05rem;
-}
-.pb-layer__n {
+.pb-readout__val {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: var(--text-md, 1rem);
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-strong);
 }
-.pb-layer__role {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-}
+.pb-readout__sub { font-size: var(--text-xs); color: var(--text-muted); }
+.pb-readout--total { border-color: var(--border-strong); }
 
-.pb-archctl {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-top: 1.1rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
-}
-.pb-archctl__group {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-.pb-archctl__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-  margin-right: 0.2rem;
-}
-
-/* ── The arithmetic table ─────────────────────────────────────────── */
-.pb-table { overflow-x: auto; }
-.pb-table__head,
-.pb-table__row,
-.pb-table__foot {
+/* ── Rounding table: a row per precision, click to choose ─────────── */
+.pb-qtable { overflow-x: auto; }
+.pb-qtable__head,
+.pb-qtable__row {
   display: grid;
-  grid-template-columns: 7rem minmax(10rem, 1fr) 5rem 7rem minmax(6rem, 1fr);
+  grid-template-columns: 6rem 8rem 7rem minmax(12rem, 1fr);
   gap: 0.75rem;
   align-items: center;
 }
-.pb-table__head {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0.4rem;
-}
-.pb-table__row { padding: 0.35rem 0; font-size: var(--text-sm); }
-.pb-table__conn {
-  font-family: var(--font-mono);
+.pb-qtable__row {
+  padding: 0.35rem 0.4rem;
+  margin: 0 -0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   color: var(--text-body);
+  cursor: pointer;
 }
-.pb-table__sub { color: var(--text-strong); font-weight: 700; }
-.pb-table__bar {
+.pb-qtable__row:hover { background: var(--surface-hover); }
+.pb-qtable__row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pb-qtable__row--on { background: var(--accent-wash); }
+.pb-qtable__row--on .pb-qtable__name { color: var(--accent); font-weight: 700; }
+.pb-qtable__name { font-family: var(--font-mono); }
+.pb-qtable__score {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+/* Accuracy is computed and cannot go below zero: the positive arm of the
+   computed scale (style.md §11). */
+.pb-bar {
+  flex: 1;
+  max-width: 14rem;
   height: 10px;
   background: var(--surface-sunken);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
-.pb-table__fill {
+.pb-bar__fill {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--ml-value-pos);
   border-radius: var(--radius-pill);
-  transition: width 120ms ease;
-}
-.pb-table__foot {
-  margin-top: 0.45rem;
-  padding-top: 0.55rem;
-  border-top: 1px solid var(--border);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
+  transition: width 160ms ease;
 }
 
-/* ── Precision picker ─────────────────────────────────────────────── */
-.pb-precisions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.6rem;
-}
-.pb-precision {
+/* ── Distillation ─────────────────────────────────────────────────── */
+.pb-thumb {
   appearance: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border);
+  padding: 2px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
+  line-height: 0;
 }
-.pb-precision:hover { border-color: var(--accent); }
-.pb-precision--on {
-  border-color: var(--accent);
-  background: var(--accent-wash, var(--surface-sunken));
+.pb-thumb:hover { border-color: var(--text-muted); }
+.pb-thumb:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pb-thumb--on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pb-distill {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 3rem;
 }
-.pb-precision__name {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-.pb-precision__size {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.25rem;
-  color: var(--text-strong);
-  font-weight: 700;
-}
-.pb-precision--on .pb-precision__size { color: var(--accent); }
-.pb-precision__note {
-  font-size: var(--text-2xs);
-  color: var(--text-faint);
-  line-height: 1.4;
+.pb-distill__side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
 /* ── The scale ladder ─────────────────────────────────────────────── */
-.pb-ladder { display: flex; flex-direction: column; gap: 0.35rem; }
+.pb-ladder { display: flex; flex-direction: column; gap: 0.3rem; }
 .pb-rung {
   display: grid;
-  grid-template-columns: minmax(9rem, 14rem) 1fr 4rem 5rem;
+  grid-template-columns: minmax(9rem, 13rem) 1fr 4rem 5rem;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.25rem 0.4rem;
+  padding: 0.2rem 0.4rem;
   border-radius: var(--radius-sm);
 }
+/* The reader's own models: the "look at this one" marker, the accent's job. */
 .pb-rung--current {
-  background: var(--accent-wash, var(--surface-sunken));
-  outline: 1px solid var(--accent);
+  background: var(--accent-wash);
 }
 .pb-rung__name {
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .pb-rung--ours .pb-rung__name { color: var(--text-body); }
-.pb-rung--current .pb-rung__name { color: var(--text-strong); font-weight: 700; }
+.pb-rung--current .pb-rung__name { color: var(--accent); font-weight: 700; }
 .pb-rung__track {
   height: 10px;
   background: var(--surface-sunken);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
+/* A count, on a log axis: neutral grey, the same for every model. */
 .pb-rung__fill {
   display: block;
   height: 100%;
-  background: var(--text-faint);
+  background: var(--ink-400);
   border-radius: var(--radius-pill);
+  transition: width 120ms ease;
 }
-.pb-rung--ours .pb-rung__fill { background: var(--accent); }
 .pb-rung__params,
 .pb-rung__bytes {
   font-family: var(--font-mono);
@@ -272,4 +322,8 @@
   text-align: right;
 }
 .pb-rung__params { color: var(--text-strong); font-weight: 700; }
-.pb-rung__bytes { color: var(--text-faint); }
+.pb-rung__bytes { color: var(--text-muted); }
+@media (max-width: 640px) {
+  .pb-rung { grid-template-columns: 1fr 4rem 4.5rem; }
+  .pb-rung__track { display: none; }
+}

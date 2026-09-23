@@ -38,6 +38,17 @@
   box-sizing: border-box;
 }
 
+/* Native form controls paint themselves with the platform's own accent
+   (system blue on macOS) unless told otherwise. Every one of them belongs to
+   the UI, never to a figure, so they all take the brand accent here rather
+   than each stylesheet remembering to say so. */
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"],
+progress {
+  accent-color: var(--accent);
+}
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {

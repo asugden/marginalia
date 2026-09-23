@@ -137,7 +137,6 @@
   gap: 0.4rem;
   padding: 0.2rem 0.4rem;
   border-radius: var(--radius-sm);
-  cursor: help;
   outline: none;
 }
 .at-chip:hover,
@@ -314,11 +313,11 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  color: var(--accent);
+  color: var(--ml-value-pos-ink);
   font-weight: 700;
 }
 .at-dot__product--neg {
-  color: #4a6fa5;
+  color: var(--ml-value-neg-ink);
 }
 .at-dot__total {
   display: flex;
@@ -333,10 +332,10 @@
 }
 .at-dot__total b {
   font-size: var(--text-lg, 1.15rem);
-  color: var(--accent);
+  color: var(--ml-value-pos-ink);
 }
 .at-dot__total--neg {
-  color: #4a6fa5 !important;
+  color: var(--ml-value-neg-ink) !important;
 }
 
 /* ── Stage breadcrumb above the grid ──────────────────────────────── */
@@ -390,13 +389,6 @@
 .at-grid__collabel--on {
   fill: var(--accent);
   font-weight: 700;
-}
-.at-grid__axis {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  fill: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 /* ── Hovered-cell explanation ─────────────────────────────────────── */
@@ -504,10 +496,6 @@
   fill: none;
   stroke: var(--border-strong, var(--border));
   stroke-width: 0.75;
-}
-.at-vlane__out--on .at-vlane__outframe {
-  stroke: var(--text-strong);
-  stroke-width: 1.5;
 }
 
 /* ── Why this gets expensive: handshake, speck, stopwatch ─────────── */
@@ -907,10 +895,10 @@
   padding: 0.12rem 0.3rem;
 }
 .at-mm__term b {
-  color: var(--accent);
+  color: var(--ml-value-pos-ink);
 }
 .at-mm__neg {
-  color: #4a6fa5 !important;
+  color: var(--ml-value-neg-ink) !important;
 }
 .at-mm__more {
   font-size: var(--text-2xs);
@@ -1052,9 +1040,6 @@
   flex-direction: column;
   gap: 0.6rem;
 }
-.at-pos__col {
-  transition: opacity 120ms ease;
-}
 .at-pos__num {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1070,31 +1055,25 @@
 .at-pos__col--on .at-pos__word {
   fill: var(--accent);
 }
-.at-pos__col--cmp .at-pos__num,
-.at-pos__col--cmp .at-pos__word {
-  fill: var(--text-strong);
-}
 .at-pos__clock {
   fill: var(--surface);
   stroke: var(--border-strong, var(--border));
   stroke-width: 1;
 }
-.at-pos__col--on .at-pos__clock,
-.at-pos__col--cmp .at-pos__clock {
+.at-pos__col--on .at-pos__clock {
   stroke: var(--text-strong);
 }
 .at-pos__tick {
   stroke: var(--text-faint);
   stroke-width: 1;
 }
+/* Every hand is the same ink and the same weight. The fastest one used to be
+   drawn in the accent, which made the top row read as a different kind of
+   thing when it is just the first of four turning at different speeds. */
 .at-pos__hand {
   stroke: var(--text-strong);
   stroke-width: 1.4;
   stroke-linecap: round;
-}
-.at-pos__hand--fast {
-  stroke: var(--accent);
-  stroke-width: 1.8;
 }
 .at-pos__pivot {
   fill: var(--text-strong);
@@ -1117,6 +1096,7 @@
 }
 .at-pos__sumhead input[type="range"] {
   width: min(16rem, 50vw);
+  accent-color: var(--accent);
 }
 .at-pos__at {
   font-family: var(--font-mono);
@@ -1150,7 +1130,6 @@
 .at-grid__strip {
   opacity: 0.85;
   transition: opacity 120ms ease;
-  cursor: help;
 }
 /* While a cell, strip or row is lit, every other strip steps back — the same
    dimming the cells do — so the lineage of the lit thing stands out. */
@@ -1203,5 +1182,49 @@
   font-size: var(--text-xs);
   line-height: 1.5;
   color: var(--text-muted);
+  max-width: 78ch;
+}
+
+/* ── The idea: words asking each other questions (IdeaPanel) ───────── */
+.at-idea__row {
+  cursor: pointer;
+}
+.at-idea__band {
+  fill: transparent;
+}
+.at-idea__row:hover .at-idea__band {
+  fill: color-mix(in srgb, var(--surface-sunken) 50%, var(--surface));
+}
+.at-idea__band--on,
+.at-idea__row:hover .at-idea__band--on {
+  fill: var(--surface-sunken);
+}
+.at-idea__bubble {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.at-idea__asker .at-idea__bubble {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+/* Speech, not commentary: the reading face at body ink. */
+.at-idea__say {
+  fill: var(--text-body);
+}
+.at-idea__cell {
+  fill: transparent;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.at-idea__readout {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-body);
   max-width: 78ch;
 }

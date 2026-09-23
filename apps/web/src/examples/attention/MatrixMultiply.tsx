@@ -16,6 +16,7 @@
 // for weights.
 
 import { useState } from "react";
+import { learned, value } from "../shared/palette.js";
 
 interface Props {
   /** The input embedding. */
@@ -97,7 +98,7 @@ export function MatrixMultiply({
                       ? " at-mm__cell--dim"
                       : ""
                   }`}
-                  style={{ background: sign(W[row * cols + col]! / wBound) }}
+                  style={{ background: learned(W[row * cols + col]! / wBound) }}
                   onMouseEnter={() => setActiveRow(row)}
                   title={`row ${row}, col ${col}: ${W[row * cols + col]!.toFixed(3)}`}
                 />
@@ -124,7 +125,7 @@ export function MatrixMultiply({
               <span
                 key={idx}
                 className="at-mm__vcell"
-                style={{ background: sign(v / eBound) }}
+                style={{ background: value(v / eBound) }}
                 title={`${idx}: ${v.toFixed(3)}`}
               />
             ))}
@@ -153,7 +154,7 @@ export function MatrixMultiply({
                 className={`at-mm__vcell at-mm__vcell--hot${
                   activeRow === idx ? " at-mm__vcell--on" : ""
                 }`}
-                style={{ background: sign(v / oBound) }}
+                style={{ background: value(v / oBound) }}
                 onMouseEnter={() => setActiveRow(idx)}
                 title={`${idx}: ${v.toFixed(3)}`}
               />
@@ -189,14 +190,4 @@ export function MatrixMultiply({
       </div>
     </div>
   );
-}
-
-/** Red positive, blue negative — matching the weight convention used by the
- *  network examples elsewhere in the gallery. */
-function sign(t: number): string {
-  const c = Math.max(-1, Math.min(1, t));
-  if (c >= 0) {
-    return `color-mix(in srgb, var(--accent) ${Math.round(c * 92)}%, var(--surface))`;
-  }
-  return `color-mix(in srgb, #4a6fa5 ${Math.round(-c * 92)}%, var(--surface))`;
 }

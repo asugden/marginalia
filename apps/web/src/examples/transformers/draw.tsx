@@ -1,12 +1,17 @@
 // Small SVG pieces shared by the transformer panels, in the attention
-// example's visual language: a vector is a strip of red/blue cells, an
-// attention pattern is a little grid shaded by weight, a matrix is a swatch.
+// example's visual language: a vector is a strip of cells, an attention
+// pattern is a little grid shaded by weight, a matrix is a swatch. Colours
+// follow ../shared/palette.ts — computed numbers in vermillion/cerulean,
+// learned parameters in sage/plum, attention weights on the positive arm.
 // Keeping one drawing vocabulary across the two pages is what lets this page
 // say "the whole attention example is now this box" and be believed.
 
-import { maxAbs, sign } from "../attention/AttentionGrid.js";
+import { WCELL, maxAbs, sign } from "../attention/AttentionGrid.js";
+import { learned, magnitude, value } from "../shared/palette.js";
 
-export { maxAbs, sign };
+// `sign` is the legacy ramp, re-exported only for the RNN example until it
+// has its own palette pass. Nothing on the transformer page uses it.
+export { WCELL, maxAbs, sign };
 
 export function Strip({
   v,
@@ -16,6 +21,7 @@ export function Strip({
   dir = "h",
   cell = 5,
   thick = 9,
+  kind = "value",
   className,
 }: {
   v: Float32Array;
@@ -25,8 +31,12 @@ export function Strip({
   dir?: "h" | "v";
   cell?: number;
   thick?: number;
+  /** A computed vector by default; "learned" for one the model fitted, such
+   *  as a weight matrix's row. */
+  kind?: "value" | "learned";
   className?: string;
 }) {
+  const fill = kind === "learned" ? learned : value;
   return (
     <g className={className} transform={`translate(${x}, ${y})`}>
       {Array.from(v, (val, d) => (
@@ -36,7 +46,7 @@ export function Strip({
           y={dir === "h" ? 0 : d * cell}
           width={dir === "h" ? cell - 1 : thick}
           height={dir === "h" ? thick : cell - 1}
-          style={{ fill: sign(val / bound) }}
+          style={{ fill: fill(val / bound) }}
         />
       ))}
     </g>
@@ -74,7 +84,7 @@ export function MiniGrid({
             height={c - 1}
             rx={1}
             style={{
-              fill: `color-mix(in srgb, var(--accent) ${Math.round(w * 100)}%, var(--surface))`,
+              fill: magnitude(w),
               opacity: activeRow === null || activeRow === i ? 1 : 0.3,
             }}
           />
@@ -112,9 +122,9 @@ export function Swatch({
             key={`${r}-${c}`}
             x={c * cell}
             y={r * cell}
-            width={cell - 0.4}
-            height={cell - 0.4}
-            style={{ fill: sign(W[r * cols + c]! / bound) }}
+            width={cell - 0.5}
+            height={cell - 0.5}
+            style={{ fill: learned(W[r * cols + c]! / bound) }}
           />
         )),
       )}

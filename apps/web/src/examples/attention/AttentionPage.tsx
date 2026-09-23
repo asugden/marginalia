@@ -37,6 +37,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card, Wordmark } from "../../components/index.js";
 import "../mnist-mlp/digit-recognizer.css";
+import "../shared/controls.css";
+import "../shared/figure.css";
 import "./attention.css";
 import {
   cosine,
@@ -49,6 +51,7 @@ import {
 } from "./attention.js";
 import { AttentionGrid, type HoveredVector } from "./AttentionGrid.js";
 import { CostPanel } from "./CostPanel.js";
+import { IdeaPanel } from "./IdeaPanel.js";
 import { MatrixMultiply } from "./MatrixMultiply.js";
 import { MovementPlot } from "./MovementPlot.js";
 import { PositionPanel } from "./PositionPanel.js";
@@ -164,174 +167,190 @@ export function AttentionPage() {
 
           {head && run && (
             <>
-              {/* ── The sentence and the grid it produces, in one view ── */}
-              <Card className="at-main" padding="md">
-                <div className="at-main__head">
-                  <div>
-                    <h2 className="at-h2">The attention matrix</h2>
-                    <p className="at-sub">
-                      In the case of words, attention computes how much each
-                      word relates to and affects each other word. The input
-                      sentence runs along the top and down the side. Each word
-                      is <Link to="/examples/word2vec">embedded</Link>{" "}
-                      individually (to a vector of length {head.eDim} we call
-                      E). The same vector is used any time the word is found.
-                      <br />
-                      <br />
-                      Attention depends on converting our input vectors E into
-                      two different versions, the <b>key</b> and the{" "}
-                      <b>query</b>. You can think of the query as the question
-                      "what am I looking for?". The key is the name tag or "what
-                      do I say I am?" The important differentiator between the
-                      two is that the keys compete against each other to answer
-                      the query (via <Link to="/examples/softmax">softmax</Link>
-                      ).
-                      <br />
-                      <br />
-                      In detail, the embedding vector is multiplied by the
-                      learned key matrix (W<sub>K</sub>) to become a key vector,
-                      represented along the top. The same vector is multiplied
-                      by the learned query matrix (W
-                      <sub>Q</sub>) to become a query vector, represented along
-                      the side. Each entry in the matrix is the dot product of
-                      the two vectors with a softmax across the rows when
-                      showing weights.
-                    </p>
-                    {/* <p className="at-figurenote">
-                      Rows ask, columns answer. Hover any strip to see its
-                      numbers.
-                    </p> */}
-                  </div>
-                  <div className="at-sentences">
-                    {head.sentences.map((s, i) => (
-                      <Button
-                        key={s}
-                        size="sm"
-                        variant={i === sentenceIndex ? "primary" : "subtle"}
-                        onClick={() => {
-                          setSentenceIndex(i);
-                          setActiveRow(null);
-                          setActiveCell(null);
-                          setHoveredVector(null);
-                          setZeroedValue(null);
-                        }}
-                      >
-                        {s.split(" ").slice(1, 3).join(" ")}…
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="at-gridwrap">
-                  <div className="at-gridbar">
-                    <div className="at-pipeline">
-                      <span
-                        className={`at-pipeline__item${!softmaxOn ? " at-pipeline__item--on" : ""}`}
-                      >
-                        Q · K
-                      </span>
-                      <span className="at-pipeline__arrow">→</span>
-                      <span
-                        className={`at-pipeline__item${softmaxOn ? " at-pipeline__item--on" : ""}`}
-                      >
-                        ÷ √d, then softmax
-                      </span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={softmaxOn ? "primary" : "subtle"}
-                      onClick={() => setSoftmaxOn((v) => !v)}
-                    >
-                      {softmaxOn ? "Showing weights" : "Showing raw scores"}
-                    </Button>
-                  </div>
-
-                  <AttentionGrid
-                    head={head}
-                    run={run}
-                    stage={softmaxOn ? "weights" : "scores"}
-                    activeRow={activeRow}
-                    activeCell={activeCell}
-                    hoveredVector={hoveredVector}
-                    onHoverCell={setActiveCell}
-                    onHoverVector={setHoveredVector}
-                    onSelectRow={(i) => setActiveRow(i)}
-                    masked={false}
-                  />
-
-                  <p className="at-gridnote">
-                    {softmaxOn ? (
-                      <>
-                        The soft max function normalizes each row to a
-                        probability, such that they sum to 1. Look at the{" "}
-                        <b>{run.tokens[featuredRow]}</b> row: the emphasis is on
-                        its two adjectives. That behavior was learned by the
-                        neural network.
-                      </>
-                    ) : (
-                      <>
-                        These are the combinations of the query and key vectors
-                        (in the form of dot products). The values can be
-                        negative. Toggle "showing raw scores" to see them
-                        normalized.
-                      </>
-                    )}
-                  </p>
-                </div>
-              </Card>
-
-              {/* ── The value: what actually gets passed along ── */}
-              <ValuesPanel
-                head={head}
-                run={run}
-                row={selectedRow}
-                zeroed={zeroedValue}
-                onZero={setZeroedValue}
-                outZeroed={outWithZeroed}
-                onSelectRow={(i) => setActiveRow(i)}
-              />
-
-              {/* ── What attention did to this word ── */}
-              <Card className="at-panel" padding="md">
-                <h2 className="at-h2">How this word changed</h2>
-                <p className="at-sub">
-                  Attention moves each query word (in this case{" "}
-                  {run.tokens[selectedRow]}) towards the matching key words from
-                  the matrix. Exactly how is shown below. The amount it moves is
-                  associated with the matrix weights. You can see an arrow from
-                  where the word meaning started to where it was adjusted by
-                  attention. It's easiest to see as a noun takes on the meanings
-                  of neighboring adjectives.
-                </p>
-                {/* The same choice as clicking a word on the grid, repeated
-                    here so nobody has to scroll up to change it. */}
-                <div
-                  className="at-wordpick"
-                  role="group"
-                  aria-label="Choose the word to follow"
-                >
-                  {run.tokens.map((t, i) => (
-                    <Button
-                      key={`${t}-${i}`}
-                      size="sm"
-                      variant={selectedRow === i ? "primary" : "subtle"}
-                      onClick={() => setActiveRow(i)}
-                    >
-                      {t}
-                    </Button>
-                  ))}
-                </div>
-                <MovementPlot
-                  run={run}
-                  row={selectedRow}
-                  outOverride={outWithZeroed?.[selectedRow] ?? null}
-                />
-              </Card>
-
-              <QKVPanel head={head} run={run} row={selectedRow} />
+              {/* ── The idea, before any numbers ── */}
+              <IdeaPanel head={head} />
 
               {/* ── The cost ── */}
               <CostPanel n={costTokens} onChange={setCostTokens} />
+
+              {/* One bar for the three panels that follow a word: the grid,
+                  the value and the movement. It is sticky only inside this
+                  wrapper, so it scrolls away with the third of them. */}
+              <div className="ex-followed">
+                <div
+                  className="ex-controls"
+                  role="group"
+                  aria-label="Choose the sentence and the word to follow"
+                >
+                  <div className="ex-controls__row">
+                    <span className="ex-controls__label">Sentence</span>
+                    <div className="ex-controls__buttons">
+                      {head.sentences.map((s, i) => (
+                        <Button
+                          key={s}
+                          size="sm"
+                          variant={i === sentenceIndex ? "primary" : "subtle"}
+                          onClick={() => {
+                            setSentenceIndex(i);
+                            setActiveRow(null);
+                            setActiveCell(null);
+                            setHoveredVector(null);
+                            setZeroedValue(null);
+                          }}
+                        >
+                          {s.split(" ").slice(1, 3).join(" ")}…
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="ex-controls__row">
+                    <span className="ex-controls__label">Word</span>
+                    <div className="ex-controls__buttons">
+                      {run.tokens.map((t, i) => (
+                        <Button
+                          key={`${t}-${i}`}
+                          size="sm"
+                          variant={selectedRow === i ? "primary" : "subtle"}
+                          onClick={() => setActiveRow(i)}
+                        >
+                          {t}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── The sentence and the grid it produces, in one view ── */}
+                <Card className="at-main" padding="md">
+                  <div className="at-main__head">
+                    <div>
+                      <h2 className="at-h2">The attention matrix</h2>
+                      <p className="at-sub">
+                        In the case of words, attention computes how much each
+                        word relates to and affects each other word. The input
+                        sentence runs along the top and down the side. Each word
+                        is <Link to="/examples/word2vec">embedded</Link>{" "}
+                        individually (to a vector of length {head.eDim} we call
+                        E). The same vector is used any time the word is found.
+                        <br />
+                        <br />
+                        Attention depends on converting our input vectors E into
+                        two different versions, the <b>key</b> and the{" "}
+                        <b>query</b>. You can think of the query as the question
+                        "what am I looking for?". The key is the name tag or
+                        "what do I say I am?" The important differentiator
+                        between the two is that the keys compete against each
+                        other to answer the query (via{" "}
+                        <Link to="/examples/softmax">softmax</Link>
+                        ).
+                        <br />
+                        <br />
+                        In detail, the embedding vector is multiplied by the
+                        learned key matrix (W<sub>K</sub>) to become a key
+                        vector, represented along the top. The same vector is
+                        multiplied by the learned query matrix (W
+                        <sub>Q</sub>) to become a query vector, represented
+                        along the side. Each entry in the matrix is the dot
+                        product of the two vectors with a softmax across the
+                        rows when showing weights.
+                      </p>
+                      {/* <p className="at-figurenote">
+                      Rows ask, columns answer. Hover any strip to see its
+                      numbers.
+                    </p> */}
+                    </div>
+                  </div>
+
+                  <div className="at-gridwrap">
+                    <div className="at-gridbar">
+                      <div className="at-pipeline">
+                        <span
+                          className={`at-pipeline__item${!softmaxOn ? " at-pipeline__item--on" : ""}`}
+                        >
+                          Q · K
+                        </span>
+                        <span className="at-pipeline__arrow">→</span>
+                        <span
+                          className={`at-pipeline__item${softmaxOn ? " at-pipeline__item--on" : ""}`}
+                        >
+                          ÷ √d, then softmax
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={softmaxOn ? "primary" : "subtle"}
+                        onClick={() => setSoftmaxOn((v) => !v)}
+                      >
+                        {softmaxOn ? "Showing weights" : "Showing raw scores"}
+                      </Button>
+                    </div>
+
+                    <AttentionGrid
+                      head={head}
+                      run={run}
+                      stage={softmaxOn ? "weights" : "scores"}
+                      activeRow={activeRow}
+                      activeCell={activeCell}
+                      hoveredVector={hoveredVector}
+                      onHoverCell={setActiveCell}
+                      onHoverVector={setHoveredVector}
+                      onSelectRow={(i) => setActiveRow(i)}
+                      masked={false}
+                    />
+
+                    <p className="at-gridnote">
+                      {softmaxOn ? (
+                        <>
+                          The soft max function normalizes each row to a
+                          probability, such that they sum to 1. Look at the{" "}
+                          <b>{run.tokens[featuredRow]}</b> row: the emphasis is
+                          on its two adjectives. That behavior was learned by
+                          the neural network.
+                        </>
+                      ) : (
+                        <>
+                          These are the combinations of the query and key
+                          vectors (in the form of dot products). The values can
+                          be negative. Toggle "showing raw scores" to see them
+                          normalized.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </Card>
+
+                {/* ── The value: what actually gets passed along ── */}
+                <ValuesPanel
+                  head={head}
+                  run={run}
+                  row={selectedRow}
+                  zeroed={zeroedValue}
+                  onZero={setZeroedValue}
+                  outZeroed={outWithZeroed}
+                  onSelectRow={(i) => setActiveRow(i)}
+                />
+
+                {/* ── What attention did to this word ── */}
+                <Card className="at-panel" padding="md">
+                  <h2 className="at-h2">How this word changed</h2>
+                  <p className="at-sub">
+                    Attention moves each query word (in this case{" "}
+                    {run.tokens[selectedRow]}) towards the matching key words
+                    from the matrix. Exactly how is shown below. The amount it
+                    moves is associated with the matrix weights. You can see an
+                    arrow from where the word meaning started to where it was
+                    adjusted by attention. It's easiest to see as a noun takes
+                    on the meanings of neighboring adjectives.
+                  </p>
+                  <MovementPlot
+                    run={run}
+                    row={selectedRow}
+                    outOverride={outWithZeroed?.[selectedRow] ?? null}
+                  />
+                </Card>
+              </div>
+
+              <QKVPanel head={head} run={run} row={selectedRow} />
 
               {/* ── Now, transformers ── */}
               <Card className="at-panel" padding="md">
@@ -343,16 +362,19 @@ export function AttentionPage() {
                   because they're so short. In practice, we actually label the
                   embedding of each word with an abstract representation of its
                   position.
+                  <br />
+                  <br />
+                  To represent positions in embedding vectors, we can't simply
+                  add integers. However, our technique must ensure that it has
+                  the same characteristic of integers. Namely, the difference
+                  between two positions must be equivalent ot an absolute
+                  position. A clever mechanism proposed by the{" "}
+                  <i>Attention is all you need</i> paper is sinusoidal encoding,
+                  in which different positions have an offset encoded by
+                  alternating sines and cosines at varying frequencies
+                  (represented here by clocks).
                 </p>
                 <PositionPanel run={run} row={selectedRow} />
-                <p className="at-panel__note">
-                  The head on this page was fitted without positions, so this
-                  shows the input it <i>would</i> receive rather than a re-run.
-                  Real encodings use more hands, turning far more slowly, so
-                  they can count to thousands of words; the newest models turn
-                  the hands inside the attention step instead of adding them
-                  to the word. The idea is the same.
-                </p>
               </Card>
             </>
           )}

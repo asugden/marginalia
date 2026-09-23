@@ -13,6 +13,7 @@
 // symbol carries the shape of its contents.
 
 import { useId, useState } from "react";
+import { value } from "../shared/palette.js";
 
 interface Props {
   /** The symbol, e.g. "E", "Q", "K", "V". */
@@ -100,13 +101,8 @@ export function VectorChip({
   );
 }
 
-/** Red for positive, blue for negative — the same convention the network
- *  examples use for weights, so the colour language is consistent across the
- *  gallery. */
+/** Q and K are computed, so they take the value scale — mixed toward the
+ *  sunken well the chip sits in rather than the page's paper. */
 function cellColor(t: number): string {
-  const clamped = Math.max(-1, Math.min(1, t));
-  if (clamped >= 0) {
-    return `color-mix(in srgb, var(--accent) ${Math.round(clamped * 90)}%, var(--surface-sunken))`;
-  }
-  return `color-mix(in srgb, #4a6fa5 ${Math.round(-clamped * 90)}%, var(--surface-sunken))`;
+  return value(t, 90, "--surface-sunken");
 }

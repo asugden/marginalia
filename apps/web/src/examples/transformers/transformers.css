@@ -4,6 +4,70 @@
    colours in the canonical-figure section reproduce the original paper's
    figure and exist for recognition, not decoration. */
 
+/* ── The control bar ───────────────────────────────────────────────
+   One bar drives every panel, pinned as the page scrolls — the same
+   technique, and the same surface, as the ensemble pages' scrubber
+   (random-forest/ensemble.css, .ens-scrub). */
+.tf-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  /* Sunken rather than white, so the bar reads as the page's controls and not
+     as one more panel — it floats over white panels as it scrolls. */
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.7rem 1.1rem;
+  /* No bottom margin: a sticky box stops when its MARGIN box meets the end of
+     its container, so a bottom margin here would make it park that far above
+     the last panel. The gap below it lives on the next panel instead. */
+  margin: 1.5rem 0 0;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+}
+.tf-controls + * {
+  margin-top: 1.25rem;
+}
+.tf-controls__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.tf-controls__label {
+  flex: none;
+  width: 5.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+.tf-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+/* On a phone a wrapped bar would pin half the screen; scroll it sideways. */
+@media (max-width: 640px) {
+  .tf-controls__label {
+    width: auto;
+  }
+  .tf-controls__buttons {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .tf-controls__buttons > * {
+    flex: none;
+  }
+}
+/* A jump from the map lands the heading below the pinned bar, not under it. */
+.tf-page [id^="tf-"] {
+  scroll-margin-top: 8rem;
+}
+
 /* ── Figures ──────────────────────────────────────────────────────── */
 .tf-figwrap {
   overflow-x: auto;
@@ -101,44 +165,13 @@
   stroke: var(--accent);
   stroke-width: 1.25;
 }
-.tf-flow--off {
-  stroke-dasharray: 3 3;
-  opacity: 0.5;
-}
 
-/* Multi-head. */
-.tf-head {
-  cursor: pointer;
-}
-.tf-head:hover .tf-box {
-  stroke: var(--accent);
-}
-.tf-head--off .tf-box {
-  stroke-dasharray: 4 3;
-}
-.tf-head--off .tf-box__name,
-.tf-head--off .tf-box__gloss {
-  opacity: 0.45;
-}
-.tf-head__switch {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  fill: var(--text-faint);
-}
-.tf-head:hover .tf-head__switch {
-  fill: var(--accent);
-}
-.tf-strip--off rect {
-  opacity: 0.15;
-}
+/* Multi-head. The head boxes are a figure, not a control: nothing in this
+   panel is clickable. */
 .tf-bracket {
   fill: none;
   stroke: var(--accent);
   stroke-width: 1;
-}
-.tf-bracket--off {
-  stroke: var(--text-faint);
-  stroke-dasharray: 3 3;
 }
 
 /* Add & norm. */
@@ -159,77 +192,66 @@
   letter-spacing: 0.05em;
 }
 
-/* The memory drawers. */
-.tf-drawer__bar {
-  fill: var(--accent);
-  opacity: 0.85;
+/* The fact neurons, one per fact. Hover shows a neuron's incoming weights. */
+.tf-fact__hit {
+  fill: transparent;
 }
-.tf-drawer__frame {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 0.75;
+.tf-fact__node {
+  stroke: #888888; /* the digit recognizer's hidden-neuron border */
+  stroke-width: 1.75;
 }
-.tf-drawer--open .tf-drawer__frame {
-  stroke: var(--accent);
-  stroke-width: 1.25;
+.tf-fact--fired .tf-fact__node {
+  stroke: var(--text-strong);
+  stroke-width: 2.25;
 }
-.tf-drawer__label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  fill: var(--text-faint);
+/* Where each thing the word gains comes from: the sentence, or the weights. */
+.tf-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 78ch;
+  margin: 0.7rem auto 0;
 }
-.tf-drawer--open .tf-drawer__label {
-  fill: var(--text-strong);
-  font-weight: 700;
-}
-.tf-drawer:not(.tf-drawer--open) .at-grid__strip,
-.tf-drawer:not(.tf-drawer--open) g rect {
-  opacity: 0.55;
-}
-.tf-drawer:not(.tf-drawer--open) .tf-drawer__frame,
-.tf-drawer:not(.tf-drawer--open) .tf-drawer__bar {
-  opacity: 1;
-}
-
-/* The block and the table. */
-.tf-stack {
+.tf-source {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) 1fr;
-  gap: 1.5rem;
-  align-items: start;
+  grid-template-columns: 15rem 1fr;
+  gap: 0.8rem;
+  align-items: baseline;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-body);
 }
-@media (max-width: 760px) {
-  .tf-stack {
+@media (max-width: 640px) {
+  .tf-source {
     grid-template-columns: 1fr;
+    gap: 0.1rem;
   }
 }
-.tf-stack__fig {
-  width: 100%;
-}
-.tf-stack__panel {
-  fill: var(--surface-sunken);
-  stroke: var(--border-strong, var(--border));
-  stroke-width: 1;
-}
-.tf-stack__nx {
+.tf-source__from {
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  fill: var(--text-muted);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
-.tf-blk {
-  stroke: var(--border-strong, var(--border));
-  stroke-width: 1;
+.tf-source__fact {
+  font-family: var(--font-mono);
+  margin-right: 0.35rem;
 }
-.tf-blk--attn {
-  fill: color-mix(in srgb, var(--accent) 16%, var(--surface));
+.tf-source__tag {
+  display: inline-block;
+  margin-right: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-wash, var(--surface-sunken));
+  border-radius: var(--radius-pill);
+  padding: 0 0.45rem;
 }
-.tf-blk--norm {
-  fill: var(--surface);
-}
-.tf-blk--ff {
-  fill: color-mix(in srgb, #4a6fa5 16%, var(--surface));
-}
+
+/* Shared captions and arrowheads, used by the BERT and RNN figures. */
 .tf-blk__label {
   font-size: 11px;
   font-weight: 700;
@@ -238,12 +260,6 @@
 .tf-blk__sub {
   font-size: 8.5px;
   fill: var(--text-muted);
-}
-.tf-stack__lines line,
-.tf-stack__lines path {
-  fill: none;
-  stroke: var(--text-muted);
-  stroke-width: 1.1;
 }
 .tf-stack__head {
   fill: var(--text-muted);
@@ -254,71 +270,6 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   fill: var(--text-faint);
-}
-.tf-stack__skip {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  fill: var(--text-faint);
-}
-.tf-stack__side {
-  min-width: 0;
-}
-.tf-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  margin: 0.4rem 0 0.8rem;
-}
-.tf-table th {
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-  font-weight: 400;
-  padding: 0.3rem 0.5rem 0.3rem 0;
-  border-bottom: 1px solid var(--border);
-}
-.tf-table td {
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-body);
-  white-space: nowrap;
-}
-.tf-table__year {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--text-faint);
-  margin-left: 0.25rem;
-}
-.tf-table__hot {
-  font-family: var(--font-mono);
-  color: var(--accent);
-  font-weight: 700;
-}
-.tf-table__est td {
-  color: var(--text-muted);
-}
-.tf-tag {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.05rem 0.4rem;
-  border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
-  color: var(--text-muted);
-}
-.tf-tag--paper,
-.tf-tag--open-weights {
-  color: var(--accent-ink, var(--accent));
-  background: var(--accent-wash, var(--surface-sunken));
-}
-.tf-tag--reported {
-  border: 1px dashed var(--border-strong, var(--border));
-  background: transparent;
 }
 
 /* ── The layer map at the top ─────────────────────────────────────── */
@@ -336,14 +287,47 @@
   fill: var(--text-muted);
 }
 .tf-map__wires line {
-  stroke-width: 0.6;
+  stroke-width: 0.75;
 }
-.tf-map__node {
+.tf-map__emblinks line {
   stroke: var(--border-strong, var(--border));
-  stroke-width: 0.6;
+  stroke-width: 0.75;
+}
+.tf-map__fan {
+  stroke: var(--text-muted);
+  stroke-width: 0.9;
+}
+.tf-map__headlabel {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  fill: var(--text-muted);
+}
+/* W_O is a learned matrix; a sage wash says so without drawing its cells. */
+.tf-map__wo {
+  fill: color-mix(in srgb, var(--ml-learned-pos) 18%, var(--surface));
+  stroke: var(--ml-learned-pos);
+  stroke-width: 1;
+}
+.tf-map__wolabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--ml-learned-pos-ink);
+}
+/* A mid-grey rim, as the deep network example draws its neurons, scaled to
+   these smaller nodes. Fact neurons that fired keep their darker outline below. */
+.tf-map__node {
+  stroke: var(--ink-500);
+  stroke-width: 0.9;
 }
 .tf-map__node--hidden {
-  stroke: var(--border);
+  stroke-width: 0.7;
+}
+.tf-map__node--open {
+  stroke: var(--text-strong);
+  stroke-width: 1;
 }
 .tf-map__flow {
   fill: none;
@@ -383,6 +367,24 @@
   letter-spacing: 0.05em;
   fill: var(--text-faint);
 }
+/* Each stage's marker and caption link to its panel. */
+.tf-map__link {
+  cursor: pointer;
+}
+.tf-map__link:hover .tf-map__cap,
+.tf-map__link:hover .tf-map__nx,
+.tf-map__link:focus-visible .tf-map__cap,
+.tf-map__link:focus-visible .tf-map__nx {
+  fill: var(--accent);
+  text-decoration: underline;
+}
+.tf-map__link:hover .tf-map__marker circle,
+.tf-map__link:focus-visible .tf-map__marker circle {
+  fill: var(--accent-hover);
+}
+.tf-map__link:focus-visible {
+  outline: none;
+}
 .tf-map__marker circle {
   fill: var(--accent);
 }
@@ -408,22 +410,6 @@
   font-weight: 700;
   vertical-align: 0.15em;
 }
-.tf-maplegend {
-  margin: 0.6rem 0 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.2rem;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-.tf-maplegend a {
-  color: inherit;
-  text-decoration: none;
-}
-.tf-maplegend a:hover {
-  color: var(--accent);
-}
-
 /* ── Add & norm, shown as two paths ───────────────────────────────── */
 .tf-rowlabel {
   font-size: 12px;
@@ -449,8 +435,9 @@
 .tf-meter__fill {
   fill: var(--text-faint);
 }
+/* Similarity is computed and here never below zero. */
 .tf-meter__fill--yes {
-  fill: var(--accent);
+  fill: var(--ml-value-pos);
 }
 .tf-meter__word {
   font-family: var(--font-mono);
@@ -544,7 +531,6 @@
   stroke-width: 1.1;
 }
 .tf-cf__blk {
-  cursor: help;
   transition: opacity 120ms ease;
 }
 .tf-cf__nx {
@@ -602,7 +588,6 @@
   padding: 0.45rem 0.6rem;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  cursor: help;
   transition: background 120ms ease, border-color 120ms ease;
 }
 .tf-cf__row--on {
@@ -627,9 +612,14 @@
 .tf-cf__swatch--out { background: linear-gradient(#c9e6c9 50%, #d6d8f0 50%); }
 .tf-cf__swatch--pos,
 .tf-cf__swatch--nx { background: #fff; }
+/* The legend is this page talking, not the paper: it takes the page's own
+   label face rather than the figure's serif. The figure keeps the serif so it
+   still looks like the figure. */
 .tf-cf__name {
-  font-family: "Times New Roman", Georgia, serif;
-  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-strong);
 }
 .tf-cf__here {

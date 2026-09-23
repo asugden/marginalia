@@ -1,0 +1,494 @@
+/* Recurrent networks lesson — what it needs beyond the attention and
+   transformer stylesheets it imports. Pac-Man's yellow and the corridor's
+   dark stretch are intrinsic to the figure and stay literal. */
+
+.rn-h3 {
+  margin: 1.2rem 0 0.3rem;
+  font-size: var(--text-md, 1rem);
+  color: var(--text-strong);
+}
+
+/* ── controls ──────────────────────────────────────────────────────── */
+.rn-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.6rem;
+}
+.rn-controls__hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 0.3rem;
+}
+
+.rn-sentence {
+  margin-bottom: 0.8rem;
+}
+.rn-sentence__own {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.rn-input {
+  flex: 1 1 22rem;
+  min-width: 14rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-strong);
+}
+.rn-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.rn-vocab__toggle {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rn-warn {
+  margin: 0.5rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--danger, #b4232f);
+}
+.rn-vocab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.rn-vocab__group {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.35rem;
+}
+.rn-vocab__group .fig-label {
+  min-width: 6.5rem;
+}
+.rn-vocab__word {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.rn-vocab__word:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── the corridor ──────────────────────────────────────────────────── */
+.rn-corridor {
+  overflow: visible;
+  /* Never shrink to fit: a corridor scrolls sideways inside .tf-figwrap
+     rather than scaling Pac-Man and the words down to specks. */
+  max-width: none;
+}
+.rn-track {
+  fill: var(--surface-sunken);
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.rn-track--dark {
+  fill: #1c1a2e;
+  stroke: #1c1a2e;
+}
+.rn-dot {
+  fill: var(--text-muted);
+}
+.rn-dot--unknown {
+  fill: none;
+  stroke: var(--danger, #b4232f);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 2;
+}
+.rn-pellet--click {
+  cursor: pointer;
+}
+.rn-pellet--click:hover .rn-word {
+  fill: var(--accent);
+}
+.rn-word {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--text-body);
+}
+.rn-word--now {
+  fill: var(--accent);
+  font-weight: 700;
+}
+.rn-word--eaten {
+  fill: var(--text-faint);
+}
+.rn-word--unknown {
+  fill: var(--danger, #b4232f);
+}
+.rn-word--dark {
+  fill: #6b6885;
+}
+.rn-pacmove {
+  transition: transform 320ms ease-in-out;
+}
+.rn-empty {
+  fill: none;
+  stroke: var(--border);
+  stroke-dasharray: 2 2;
+}
+.rn-gate__hot {
+  fill: none;
+  stroke: var(--text-strong);
+  stroke-width: 1.2;
+}
+
+/* the little verdict meter */
+.rn-meter__track {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+  stroke-width: 0.6;
+}
+.rn-meter__fill--pos {
+  fill: var(--accent);
+}
+.rn-meter__fill--neg {
+  fill: #4a6fa5;
+}
+.rn-meter__mid {
+  stroke: var(--text-faint);
+  stroke-width: 0.8;
+}
+.rn-meter__label {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  fill: var(--text-muted);
+}
+.rn-meter__label--pos {
+  fill: var(--accent);
+}
+.rn-meter__label--neg {
+  fill: #4a6fa5;
+}
+
+/* ── inside: the loop and the chain ────────────────────────────────── */
+.rn-inside {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+.rn-inside .tf-readout {
+  flex: 1 1 100%;
+}
+.rn-inside__eq {
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--text-faint);
+}
+.rn-inside__chain {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+.rn-inside__chain .tf-fig {
+  /* Same rule: the chain has small text, so it scrolls instead of scaling. */
+  max-width: none;
+}
+.rn-gradfig .tf-fig {
+  max-width: none;
+}
+.rn-loop {
+  flex: 0 0 auto;
+}
+.rn-wire {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.1;
+}
+.rn-box {
+  fill: var(--surface);
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.rn-node {
+  fill: var(--surface);
+  stroke: var(--text-muted);
+  stroke-width: 1.1;
+}
+
+/* ── the LSTM's far experiment ─────────────────────────────────────── */
+.rn-far {
+  margin-top: 1.2rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.rn-stretch {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.9rem;
+  background: var(--surface);
+}
+.rn-stretch__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.rn-stretch__head input[type="range"] {
+  flex: 1 1 12rem;
+  accent-color: var(--accent);
+}
+.rn-stretch__n {
+  font-family: var(--font-mono);
+  min-width: 1.6rem;
+  text-align: right;
+  color: var(--text-strong);
+}
+.rn-stretch__sentence {
+  margin: 0.6rem 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+.rn-stretch__hot {
+  color: var(--accent);
+  font-weight: 700;
+}
+.rn-stretch__fill {
+  color: var(--text-faint);
+}
+.rn-verdicts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.8rem 1.4rem;
+}
+.rn-bigmeter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.rn-bigmeter__track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+.rn-bigmeter__mid {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--text-faint);
+}
+.rn-bigmeter__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  transition: width 120ms linear;
+}
+.rn-bigmeter__fill--pos {
+  background: var(--accent);
+}
+.rn-bigmeter__fill--neg {
+  background: #4a6fa5;
+}
+.rn-bigmeter__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.rn-bigmeter__label small {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+.rn-curves {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+.rn-curves svg {
+  flex: 0 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+.rn-curves .tf-p {
+  flex: 1 1 20rem;
+}
+.rn-curves__axis {
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.rn-curves__line {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+.rn-curves__line--plain {
+  stroke: var(--text-muted);
+}
+.rn-curves__line--lstm {
+  stroke: var(--accent);
+}
+.rn-curves__tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.rn-curves__tag--plain {
+  fill: var(--text-muted);
+}
+.rn-curves__tag--lstm {
+  fill: var(--accent);
+}
+
+/* ── the calculator ────────────────────────────────────────────────── */
+.rn-calc {
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  padding: 0.8rem 0.9rem;
+  max-width: 34rem;
+}
+.rn-calc__display {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #1c1917;
+  color: #e8f1d8;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+  font-family: var(--font-mono);
+  min-height: 2.6rem;
+}
+.rn-calc__value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.rn-calc__value--gone {
+  color: #8fb0d8;
+}
+.rn-calc__value--boom {
+  color: #f08a8a;
+}
+.rn-calc__count {
+  font-size: var(--text-2xs);
+  color: #9a9a8a;
+  white-space: nowrap;
+}
+.rn-calc__keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(4.2rem, 1fr));
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+.rn-calc__key {
+  appearance: none;
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--surface);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: 0.55rem 0.4rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.rn-calc__key:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.rn-calc__key:active {
+  background: var(--surface-sunken);
+}
+.rn-calc__row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.rn-calc__tape {
+  margin: 0.55rem 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* the network's calculator */
+.rn-picks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0.2rem;
+}
+.rn-picks .fig-label {
+  margin-right: 0.3rem;
+}
+.rn-factor {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--text-body);
+}
+.rn-factor--gone {
+  fill: #4a6fa5;
+}
+.rn-factor--boom {
+  fill: var(--accent);
+  font-weight: 700;
+}
+.rn-remain {
+  fill: color-mix(in srgb, var(--accent) 55%, var(--surface));
+  stroke: var(--accent);
+  stroke-width: 0.6;
+}
+.rn-remain__pct {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--text-strong);
+  font-weight: 700;
+}
+
+/* ── lights off ────────────────────────────────────────────────────── */
+.rn-dream {
+  margin-top: 0.9rem;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.rn-dream .tf-p {
+  margin: 0;
+}

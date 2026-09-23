@@ -30,9 +30,10 @@
 // inside the attention step instead of adding them, but the idea is the same.
 
 import { useMemo, useState } from "react";
+import { value } from "../shared/palette.js";
 import type { AttentionRun } from "./attention.js";
 import { cosine } from "./attention.js";
-import { maxAbs, sign } from "./AttentionGrid.js";
+import { maxAbs } from "./AttentionGrid.js";
 
 interface Props {
   run: AttentionRun;
@@ -75,7 +76,6 @@ export function PositionPanel({ run, row }: Props) {
   const eDim = run.E[0]?.length ?? 16;
   const sel = Math.min(row, n - 1);
   const word = run.tokens[sel]!;
-  const [hover, setHover] = useState<number | null>(null);
   const [placeAt, setPlaceAt] = useState<number | null>(null);
   const at = placeAt ?? sel;
 
@@ -88,10 +88,6 @@ export function PositionPanel({ run, row }: Props) {
   const w = X0 + n * COL + 10;
   const yStrip = Y_CLOCK0 + CLOCKS * CLOCK_GAP - 6;
   const h = yStrip + stripLen + 16;
-
-  const cmp = hover !== null && hover !== sel ? hover : null;
-  const delta = cmp !== null ? Math.abs(cmp - sel) : 0;
-  const alike = cmp !== null ? cosine(codes[sel]!, codes[cmp]!) : 0;
 
   // The sum: what + where, for the selected word at its real position and at
   // the slider's.
@@ -112,54 +108,79 @@ export function PositionPanel({ run, row }: Props) {
           role="img"
           aria-label={`${n} positions, each with ${CLOCKS} clock hands turning at different speeds; the hands' angles are the position code, drawn beneath as a strip of numbers.`}
         >
-          <text className="at-grid__axis" x={X0} y={14}>
-            one column per position →
-          </text>
-
           {/* gutter labels */}
-          <text className="at-grid__axis" x={X0 - 10} y={Y_NUM} textAnchor="end">
+          <text
+            className="fig-label"
+            x={X0 - 10}
+            y={Y_NUM}
+            textAnchor="end"
+          >
             position
           </text>
-          <text className="at-grid__axis" x={X0 - 10} y={Y_WORD} textAnchor="end">
+          <text
+            className="fig-label"
+            x={X0 - 10}
+            y={Y_WORD}
+            textAnchor="end"
+          >
             word
           </text>
-          {["a quarter turn per word", "half as fast", "half again", "slower still"].map(
-            (label, k) => (
-              <text
-                key={k}
-                className="at-grid__axis"
-                x={X0 - 10}
-                y={Y_CLOCK0 + k * CLOCK_GAP + 3}
-                textAnchor="end"
-              >
-                {label}
-              </text>
-            ),
-          )}
-          <text className="at-grid__axis" x={X0 - 10} y={yStrip + 8} textAnchor="end">
-            the same hands,
+          {[
+            "one quarter turn per word",
+            "one eigth turn",
+            "one sixteenth",
+            "one thirty-second",
+          ].map((label, k) => (
+            <text
+              key={k}
+              className="fig-label"
+              x={X0 - 10}
+              y={Y_CLOCK0 + k * CLOCK_GAP + 3}
+              textAnchor="end"
+            >
+              {label}
+            </text>
+          ))}
+          <text
+            className="fig-note"
+            x={X0 - 10}
+            y={yStrip + 8}
+            textAnchor="end"
+          >
+            The same position encoding,
           </text>
-          <text className="at-grid__axis" x={X0 - 10} y={yStrip + 20} textAnchor="end">
-            written as {eDim} numbers
+          <text
+            className="fig-note"
+            x={X0 - 10}
+            y={yStrip + 20}
+            textAnchor="end"
+          >
+            written as vectors.
           </text>
 
           {run.tokens.map((t, p) => {
             const x = X0 + p * COL;
             const cx = x + COL / 2;
             const isSel = p === sel;
-            const isCmp = p === cmp;
             return (
               <g
                 key={`${t}-${p}`}
-                className={`at-pos__col${isSel ? " at-pos__col--on" : ""}${isCmp ? " at-pos__col--cmp" : ""}`}
-                onMouseEnter={() => setHover(p)}
-                onMouseLeave={() => setHover(null)}
+                className={`at-pos__col${isSel ? " at-pos__col--on" : ""}`}
               >
-                <rect className="at-grid__hit" x={x} y={Y_NUM - 14} width={COL} height={h - Y_NUM + 10} />
-                <text className="at-pos__num" x={cx} y={Y_NUM} textAnchor="middle">
+                <text
+                  className="at-pos__num"
+                  x={cx}
+                  y={Y_NUM}
+                  textAnchor="middle"
+                >
                   {p + 1}
                 </text>
-                <text className="at-pos__word" x={cx} y={Y_WORD} textAnchor="middle">
+                <text
+                  className="at-pos__word"
+                  x={cx}
+                  y={Y_WORD}
+                  textAnchor="middle"
+                >
                   {t}
                 </text>
                 {Array.from({ length: CLOCKS }, (_, k) => {
@@ -168,15 +189,26 @@ export function PositionPanel({ run, row }: Props) {
                   return (
                     <g key={k}>
                       <circle className="at-pos__clock" cx={cx} cy={cy} r={R} />
-                      <line className="at-pos__tick" x1={cx} y1={cy - R} x2={cx} y2={cy - R + 3} />
                       <line
-                        className={`at-pos__hand${k === 0 ? " at-pos__hand--fast" : ""}`}
+                        className="at-pos__tick"
+                        x1={cx}
+                        y1={cy - R}
+                        x2={cx}
+                        y2={cy - R + 3}
+                      />
+                      <line
+                        className="at-pos__hand"
                         x1={cx}
                         y1={cy}
                         x2={cx + (R - 2.5) * Math.sin(a)}
                         y2={cy - (R - 2.5) * Math.cos(a)}
                       />
-                      <circle className="at-pos__pivot" cx={cx} cy={cy} r={1.2} />
+                      <circle
+                        className="at-pos__pivot"
+                        cx={cx}
+                        cy={cy}
+                        r={1.2}
+                      />
                     </g>
                   );
                 })}
@@ -188,7 +220,7 @@ export function PositionPanel({ run, row }: Props) {
                       y={d * CELL}
                       width={9}
                       height={CELL - 1}
-                      style={{ fill: sign(v / codeBound) }}
+                      style={{ fill: value(v / codeBound) }}
                     />
                   ))}
                 </g>
@@ -197,30 +229,6 @@ export function PositionPanel({ run, row }: Props) {
           })}
         </svg>
       </div>
-
-      <p className="at-gridnote">
-        {cmp !== null ? (
-          <>
-            Positions <b>{sel + 1}</b> and <b>{cmp + 1}</b> have codes that are{" "}
-            <b>{alike.toFixed(2)}</b> alike
-            {delta === 1
-              ? " — neighbours, nearly the same"
-              : delta >= n - 2
-                ? " — far apart, and it shows"
-                : ""}
-            . From one to the other the fast hand turned <b>{delta * 90}°</b>,
-            the next <b>{delta * 45}°</b>, the next <b>{delta * 22.5}°</b> —
-            the same turns as between <i>any</i> two positions {delta} apart.
-            That is the clever part: “the word {delta === 1 ? "just" : `${delta} places`} before me” is one
-            pattern, learnable once, true everywhere in the sentence.
-          </>
-        ) : (
-          <>
-            Every column has its own pattern of hands, and no two match. Hover
-            another position to compare it with <b>{word}</b>'s.
-          </>
-        )}
-      </p>
 
       {/* ── what + where ── */}
       <div className="at-pos__sum">
@@ -239,7 +247,11 @@ export function PositionPanel({ run, row }: Props) {
           />
           <b className="at-pos__at">{at + 1}</b>
           {at !== sel && (
-            <button type="button" className="at-pos__reset" onClick={() => setPlaceAt(null)}>
+            <button
+              type="button"
+              className="at-pos__reset"
+              onClick={() => setPlaceAt(null)}
+            >
               back to {sel + 1}
             </button>
           )}
@@ -260,7 +272,7 @@ export function PositionPanel({ run, row }: Props) {
             ] as const
           ).map(([v, label, x]) => (
             <g key={label}>
-              <text className="at-grid__axis" x={x} y={22}>
+              <text className="fig-label" x={x} y={22}>
                 {label}
               </text>
               <g transform={`translate(${x}, 30)`}>
@@ -271,35 +283,29 @@ export function PositionPanel({ run, row }: Props) {
                     y={0}
                     width={CELL - 1}
                     height={12}
-                    style={{ fill: sign(val / sumBound) }}
+                    style={{ fill: value(val / sumBound) }}
                   />
                 ))}
               </g>
             </g>
           ))}
-          <text className="tf-op at-pos__op" x={stripLen + 40} y={41} textAnchor="middle">
+          <text
+            className="tf-op at-pos__op"
+            x={stripLen + 40}
+            y={41}
+            textAnchor="middle"
+          >
             +
           </text>
-          <text className="tf-op at-pos__op" x={2 * stripLen + 100} y={41} textAnchor="middle">
+          <text
+            className="tf-op at-pos__op"
+            x={2 * stripLen + 100}
+            y={41}
+            textAnchor="middle"
+          >
             =
           </text>
         </svg>
-        <p className="at-gridnote">
-          {at === sel ? (
-            <>
-              This is the vector attention actually sees for <b>{word}</b>: the
-              word and its place, added. Move the slider to put the same word
-              somewhere else.
-            </>
-          ) : (
-            <>
-              <b>{word}</b> at position {sel + 1} and <b>{word}</b> at position{" "}
-              {at + 1} are <b>{movedAlike.toFixed(2)}</b> alike. Same word,
-              different place, different input — which is exactly what nothing
-              else on this page could tell apart.
-            </>
-          )}
-        </p>
       </div>
     </div>
   );

@@ -66,3 +66,32 @@
 .dsg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 0.5rem; }
 .dsg-icon { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.75rem 0.4rem; border: 1px solid var(--border-faint); border-radius: var(--radius-sm); color: var(--text-secondary); }
 .dsg-icon__name { font-family: var(--font-mono); font-size: 0.625rem; color: var(--text-faint); }
+
+/* ---- Figure scales (the example colour language) -------------------- */
+.dsg-scale__what { font-size: var(--text-sm); color: var(--text-secondary); margin: -0.35rem 0 0.6rem; max-width: 68ch; }
+.dsg-scale { max-width: 520px; }
+.dsg-scale__ramp { display: flex; height: 26px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.dsg-scale__step { flex: 1 1 0; }
+.dsg-scale__ends { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); margin-top: 0.3rem; }
+/* The same scale on the two marks the figures actually use: a vector's cells
+   and a row of neurons, at the size they ship at. */
+.dsg-scale__marks { display: flex; align-items: center; gap: 1.25rem; margin: 0.9rem 0 0.75rem; }
+.dsg-scale__cell { width: 5px; height: 12px; }
+.dsg-scale__cell + .dsg-scale__cell { margin-left: 1px; }
+.dsg-scale__node { width: 9px; height: 9px; border-radius: 3.2px; border: 1px solid var(--border); }
+.dsg-scale__node + .dsg-scale__node { margin-left: 3px; }
+.dsg-swatches--poles { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); max-width: 520px; }
+.dsg-scale__note { font-size: var(--text-xs); color: var(--text-muted); max-width: 68ch; margin: 0.5rem 0 0; padding-left: 0.65rem; border-left: 2px solid var(--border-strong); }
+
+/* ---- Examples · Figures group -------------------------------------- */
+/* A second top-level group: the examples' own layer over the system. */
+.dsg-group { margin: 4rem 0 0; padding-top: 2rem; border-top: 2px solid var(--border-strong); }
+.dsg-group__title { margin: 0.3rem 0 0; }
+.dsg-figspec { display: block; width: 100%; max-width: 440px; height: auto; margin: 0.75rem 0 1.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.dsg-figtext { display: flex; flex-direction: column; gap: 0.25rem; max-width: 760px; }
+.dsg-figtext__row { display: grid; grid-template-columns: 200px 1fr; gap: 1rem; align-items: baseline; padding: 0.55rem 0; border-bottom: 1px solid var(--border-faint); }
+.dsg-figtext__sample { min-width: 0; }
+.dsg-figtext__meta { display: flex; flex-direction: column; gap: 0.15rem; }
+.dsg-figtext__use { font-size: var(--text-sm); color: var(--text-body); line-height: 1.45; }
+.dsg-figtext__spec { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
+@media (max-width: 640px) { .dsg-figtext__row { grid-template-columns: 1fr; gap: 0.3rem; } }

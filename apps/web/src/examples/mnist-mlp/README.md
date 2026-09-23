@@ -2,7 +2,7 @@
 
 A standalone, static, interactive page that visualizes a real neural
 network classifying a hand-drawn digit in real time. Mounted at
-`/examples/digit-recognizer`. No backend, no auth, no course context —
+`/examples/deep-neural-network`. No backend, no auth, no course context —
 it loads a pre-trained model as a static JSON asset and runs the whole
 forward pass in the browser.
 
@@ -79,7 +79,7 @@ quantity the trace ranks edges by.
 - `DigitRecognizerPage.tsx` — loads the weights, runs the forward pass
   (coalesced to one pass per frame), and shows the prediction + controls.
 - `weights.json` — the trained model, committed so the page is fully
-  static. Also copied to `public/examples/digit-recognizer/` (the
+  static. Also copied to `public/examples/deep-neural-network/` (the
   browser fetches it from there).
 - `train/train.mjs` — the offline trainer that produced `weights.json`.
 
@@ -109,7 +109,7 @@ copy it into `public/`:
 
 ```
 cp apps/web/src/examples/mnist-mlp/weights.json \
-   apps/web/public/examples/digit-recognizer/weights.json
+   apps/web/public/examples/deep-neural-network/weights.json
 ```
 
 Training is deterministic (fixed PRNG seed), so a re-run reproduces the

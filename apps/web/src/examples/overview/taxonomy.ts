@@ -54,7 +54,7 @@ export const FAMILIES: Family[] = [
     // and leaves Regression's column room to its left.
     lean: "right",
     models: [
-      { name: "support vector machine" },
+      { name: "support vector machine", slug: "svm" },
       { name: "naive Bayes", slug: "naive-bayes" },
     ],
   },
@@ -78,8 +78,9 @@ export const FAMILIES: Family[] = [
     // Last family: grows left, back along the axis, so it clears the arrowhead.
     lean: "left",
     models: [
-      { name: "dense", slug: "digit-recognizer" },
+      { name: "fully connected", slug: "deep-neural-network" },
       { name: "CNNs", slug: "cnn-digit-recognizer" },
+      { name: "RNNs / LSTMs", slug: "rnn" },
       { name: "transformers / LLMs", slug: "attention" },
     ],
   },

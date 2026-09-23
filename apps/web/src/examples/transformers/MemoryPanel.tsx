@@ -1,23 +1,38 @@
-// The feed-forward layer, drawn as what it is: a bank of memories.
+// The feed-forward layer, drawn as the dense network it is.
 //
-// Half of every transformer block is not attention at all. After the heads
-// have let the words read each other, each word — alone, with no view of the
-// others — passes through a two-layer network: expand, threshold, contract.
-// Read row by row that network is a set of drawers. Each drawer has a KEY (a
-// pattern it responds to) and a VALUE (what it adds when it opens). Present a
-// word, a few keys match, those drawers open, and their values are added to
-// the word. Research on real models finds that this is where facts are
-// stored: which drawers open for "Eiffel Tower" is what makes "Paris" likely
-// a few layers later, and editing those drawers edits the fact.
+// Half of every transformer block is not attention. After the words have read
+// each other, each word — alone — passes through a two-layer network: its
+// sixteen numbers feed a row of hidden neurons, each of which computes a
+// weighted sum plus a bias and passes it through a ReLU, exactly as on the
+// activation page; the neurons that fire add their outgoing weights back
+// onto the word. Research that took trained models apart found neurons in
+// these layers holding facts, and found that editing them edits the fact.
 //
-// This page's memory is DESIGNED and labelled so (see transformer.ts): one
-// drawer per word the model knows, keyed on that word's embedding. The
-// mechanism — sparse keys, summed values, each word on its own — is exact;
-// the contents stand in for the thousands of learned drawers a real layer
-// has.
+// This layer's neurons are designed, one per fact (facts.json), so each can
+// be labelled with what it adds. Every fact word is in none of the sentences
+// — polish, soccer, iron — because that is the finding the panel exists to
+// show: attention mixes in what is in the sentence; this layer adds what the
+// model knows from elsewhere. Which word fires a neuron is carried by its
+// incoming weights, which the drawing shows; hover a neuron to see them. The
+// readout sets the two sources side by side. No "key", no "value": on this
+// page those words belong to attention.
 
-import type { BlockRun, Model } from "./transformer.js";
-import { Strip, maxAbs } from "./draw.js";
+import { useState } from "react";
+import "../shared/figure.css";
+import {
+  LEARNED_NEG,
+  LEARNED_POS,
+  magnitude,
+  value,
+} from "../shared/palette.js";
+import {
+  cosine,
+  factNeurons,
+  factVector,
+  nearest,
+  type BlockRun,
+  type Model,
+} from "./transformer.js";
 
 interface Props {
   model: Model;
@@ -25,132 +40,305 @@ interface Props {
   row: number;
 }
 
-const DRAWER_W = 26;
-const KEY_CELL = 3;
-const BAR_H = 44;
-const CELL = 5;
+const W = 720;
+const H = 360;
+const CX = 420;
+const GUTTER_X = 10;
+const Y_IN = 46;
+const IN_STEP = 22;
+const IN_NODE = 14;
+const Y_HID = 196;
+const HID_STEP = 58;
+const HID_NODE = 26;
+const Y_OUT = 326;
+/** How strongly a neuron must fire to count as recalling its fact. */
+const RECALL = 0.5;
 
 export function MemoryPanel({ model, run, row }: Props) {
+  const [hover, setHover] = useState<number | null>(null);
   const i = Math.min(row, run.tokens.length - 1);
   const word = run.tokens[i]!;
-  const mem = run.memory[i]!;
   const x1 = run.x1[i]!;
+  const x2 = run.x2[i]!;
+  const mem = run.memory[i]!;
+  const context = fromSentence(run, i);
+  const neurons = factNeurons(model);
   const eDim = model.eDim;
-  const n = model.vocab.length;
-  const keyLen = eDim * KEY_CELL;
-  const w = n * DRAWER_W + 20;
-  const inY = 34;
-  const barY = inY + 60;
-  const keyY = barY + BAR_H + 8;
-  const labelY = keyY + keyLen + 12;
-  const outY = labelY + 70;
-  const h = outY + 40;
-  const inLen = eDim * CELL;
-  const inX = (w - inLen) / 2;
-  const keyBound = maxAbs(model.vocab.map((v) => model.embed.get(v)!));
-  const maxAct = Math.max(0.001, ...Array.from(mem.activation));
-  const openSet = new Set(mem.open);
+  const n = neurons.length;
+
+  // Only a strongly firing neuron counts as recalling a fact; the rest are
+  // the small nudges every word picks up.
+  const top = mem.open[0];
+  const headline =
+    top !== undefined && mem.activation[top]! >= RECALL ? top : null;
+  const nudge = top !== undefined && headline === null ? top : null;
+
+  const inX = (d: number) => CX + (d - (eDim - 1) / 2) * IN_STEP;
+  const hidX = (k: number) => CX + (k - (n - 1) / 2) * HID_STEP;
+  const bound = (v: Float32Array) => Math.max(1e-6, ...Array.from(v, Math.abs));
+  const bIn = bound(x1);
+  const bOut = bound(mem.out);
+  const wBound = Math.max(...neurons.map((nr) => bound(nr.w)));
+  const vBound = Math.max(...neurons.map((nr) => bound(nr.v)));
 
   return (
     <div className="tf-figwrap">
       <svg
         className="tf-fig"
-        viewBox={`0 0 ${w} ${h}`}
-        width={w}
-        height={h}
-        role="img"
-        aria-label={`${word}'s vector is presented to ${n} memory drawers; ${mem.open.length} open, and their values are added to the word.`}
+        viewBox={`0 0 ${W} ${H}`}
+        width={W}
+        height={H}
+        role="group"
+        aria-label={`The fully connected layers for ${word}: sixteen numbers in, ${n} fact neurons, sixteen numbers out.`}
       >
-        <text className="at-grid__axis" x={inX} y={inY - 10}>
-          {word}, after attention — presented to every drawer
+        {/* Gutter captions. */}
+        <text className="fig-label" x={GUTTER_X} y={Y_IN - 2}>
+          in
         </text>
-        <Strip v={x1} bound={maxAbs([x1])} x={inX} y={inY} cell={CELL} />
-        <text className="at-grid__axis" x={10} y={barY - 6}>
-          how strongly each key matched
+        <text className="fig-label-sub" x={GUTTER_X} y={Y_IN + 11}>
+          after attention
+        </text>
+        <text className="fig-label" x={GUTTER_X} y={Y_HID - 2}>
+          hidden layer
+        </text>
+        <text className="fig-label-sub" x={GUTTER_X} y={Y_HID + 11}>
+          "fact neurons"
+        </text>
+        <text className="fig-label" x={GUTTER_X} y={Y_OUT - 2}>
+          adds
+        </text>
+        <text className="fig-label-sub" x={GUTTER_X} y={Y_OUT + 11}>
+          onto the word
         </text>
 
-        {model.vocab.map((v, k) => {
-          const x = 10 + k * DRAWER_W;
-          const cx = x + DRAWER_W / 2;
-          const act = mem.activation[k]!;
-          const open = openSet.has(k);
-          const bar = (act / maxAct) * BAR_H;
+        {/* Connections in: each neuron's weights, sage and plum. */}
+        <g className="tf-map__wires">
+          {neurons.map((nr, k) =>
+            Array.from({ length: eDim }, (_, d) => {
+              const t = nr.w[d]! / wBound;
+              const lit = hover === k;
+              return (
+                <line
+                  key={`a-${k}-${d}`}
+                  x1={inX(d)}
+                  y1={Y_IN + IN_NODE / 2}
+                  x2={hidX(k)}
+                  y2={Y_HID - HID_NODE / 2}
+                  style={{
+                    stroke: t >= 0 ? LEARNED_POS : LEARNED_NEG,
+                    opacity:
+                      hover === null
+                        ? 0.08 + 0.3 * Math.abs(t)
+                        : lit
+                          ? 0.25 + 0.7 * Math.abs(t)
+                          : 0.03,
+                  }}
+                />
+              );
+            }),
+          )}
+          {/* Connections out: drawn strongly only for neurons that fired. */}
+          {neurons.map((nr, k) =>
+            Array.from({ length: eDim }, (_, d) => {
+              const t = nr.v[d]! / vBound;
+              const fired = mem.activation[k]! > 0;
+              return (
+                <line
+                  key={`b-${k}-${d}`}
+                  x1={hidX(k)}
+                  y1={Y_HID + HID_NODE / 2 + 30}
+                  x2={inX(d)}
+                  y2={Y_OUT - IN_NODE / 2}
+                  style={{
+                    stroke: t >= 0 ? LEARNED_POS : LEARNED_NEG,
+                    opacity: fired ? 0.2 + 0.7 * Math.abs(t) : 0.03,
+                  }}
+                />
+              );
+            }),
+          )}
+        </g>
+
+        {/* In: the word's sixteen numbers. */}
+        <text className="fig-label" x={inX(eDim - 1) + 18} y={Y_IN + 4}>
+          <tspan className="fig-word">{word}</tspan>
+        </text>
+        {Array.from(x1, (v, d) => (
+          <Node
+            key={d}
+            cx={inX(d)}
+            cy={Y_IN}
+            size={IN_NODE}
+            fill={value(v / bIn)}
+          />
+        ))}
+
+        {/* The fact neurons. */}
+        {neurons.map((nr, k) => {
+          const a = mem.activation[k]!;
+          const cx = hidX(k);
           return (
-            <g key={v} className={`tf-drawer${open ? " tf-drawer--open" : ""}`}>
-              {open && (
-                <line
-                  className="tf-flow tf-flow--on"
-                  x1={inX + inLen / 2}
-                  y1={inY + 10}
-                  x2={cx}
-                  y2={barY + BAR_H - bar - 2}
-                />
-              )}
+            <g
+              key={k}
+              className={`tf-fact${a > 0 ? " tf-fact--fired" : ""}`}
+              onMouseEnter={() => setHover(k)}
+              onMouseLeave={() => setHover(null)}
+            >
               <rect
-                className="tf-drawer__bar"
-                x={cx - 6}
-                y={barY + BAR_H - bar}
-                width={12}
-                height={bar}
-                rx={1}
+                className="tf-fact__hit"
+                x={cx - HID_STEP / 2}
+                y={Y_HID - 40}
+                width={HID_STEP}
+                height={90}
               />
-              <Strip
-                v={model.embed.get(v)!}
-                bound={keyBound}
-                x={cx - 4.5}
-                y={keyY}
-                dir="v"
-                cell={KEY_CELL}
-                thick={9}
-              />
-              <rect className="tf-drawer__frame" x={x + 2} y={keyY - 3} width={DRAWER_W - 4} height={keyLen + 5} rx={2} />
               <text
-                className="tf-drawer__label"
-                transform={`translate(${cx + 3}, ${labelY}) rotate(55)`}
+                className="fig-num"
+                x={cx}
+                y={Y_HID - HID_NODE / 2 - 7}
+                textAnchor="middle"
               >
-                {v}
+                {a > 0 ? a.toFixed(2) : "0"}
               </text>
-              {open && (
-                <line
-                  className="tf-flow tf-flow--on"
-                  x1={cx}
-                  y1={labelY + 46}
-                  x2={inX + inLen / 2}
-                  y2={outY - 6}
-                />
-              )}
+              <Node
+                cx={cx}
+                cy={Y_HID}
+                size={HID_NODE}
+                fill={magnitude(Math.min(1, a))}
+                className="tf-fact__node"
+              />
+              <text
+                className="fig-word"
+                x={cx}
+                y={Y_HID + HID_NODE / 2 + 14}
+                textAnchor="middle"
+              >
+                {nr.fact.to}
+              </text>
             </g>
           );
         })}
 
-        <text className="at-grid__axis" x={inX} y={outY - 10}>
-          what the open drawers add, summed
-        </text>
-        <Strip v={mem.out} bound={maxAbs([mem.out])} x={inX} y={outY} cell={CELL} />
+        {/* Out: what the firing neurons add. */}
+        {Array.from(mem.out, (v, d) => (
+          <Node
+            key={d}
+            cx={inX(d)}
+            cy={Y_OUT}
+            size={IN_NODE}
+            fill={value(v / bOut)}
+          />
+        ))}
       </svg>
 
-      <p className="tf-readout">
-        {mem.open.length === 0 ? (
-          <>
-            No drawer matched <b>{word}</b> closely enough to open, so the
-            memory adds nothing and the word passes through unchanged. That is
-            allowed, and common.
-          </>
-        ) : (
-          <>
-            For <b>{word}</b>, {mem.open.length === 1 ? "one drawer opened" : `${mem.open.length} drawers opened`}:{" "}
-            <b>
-              {mem.open
-                .slice(0, 4)
-                .map((k) => `${model.vocab[k]} (${mem.activation[k]!.toFixed(2)})`)
-                .join(", ")}
-            </b>
-            {mem.open.length > 4 ? ", …" : ""}. Each one's value is added to
-            the word, scaled by how well it matched. Every other drawer stays
-            shut and contributes nothing.
-          </>
-        )}
-      </p>
+      <div className="tf-sources">
+        <div className="tf-source">
+          <span className="tf-source__from">From attention</span>
+          <span className="tf-source__what">
+            {context.length > 0
+              ? context.map((c) => c.word).join(", ")
+              : "mostly itself"}
+          </span>
+        </div>
+        <div className="tf-source">
+          <span className="tf-source__from">From the fully connected layers</span>
+          <FactReadout
+            model={model}
+            word={word}
+            x1={x1}
+            x2={x2}
+            headline={headline}
+            nudge={nudge}
+          />
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** The other words this word took from, averaged over the heads: what
+ *  attention mixed in from the sentence. Itself excluded; 5% or more. Shown
+ *  as words only — a percentage averaged over heads would disagree with the
+ *  single-head percentages in panel 1. */
+function fromSentence(run: BlockRun, i: number): { word: string; w: number }[] {
+  const n = run.tokens.length;
+  const avg = Array.from(
+    { length: n },
+    (_, k) =>
+      run.heads.reduce((s, h) => s + h.weights[i]![k]!, 0) / run.heads.length,
+  );
+  return avg
+    .map((w, k) => ({ word: run.tokens[k]!, w, k }))
+    .filter((d) => d.k !== i && d.w >= 0.05)
+    .sort((a, b) => b.w - a.w)
+    .slice(0, 3);
+}
+
+function FactReadout({
+  model,
+  word,
+  x1,
+  x2,
+  headline,
+  nudge,
+}: {
+  model: Model;
+  word: string;
+  x1: Float32Array;
+  x2: Float32Array;
+  headline: number | null;
+  /** The strongest neuron when none fires strongly enough to recall a fact. */
+  nudge: number | null;
+}) {
+  if (headline === null) {
+    const to = nudge === null ? null : factNeurons(model)[nudge]!.fact.to;
+    return (
+      <span className="tf-source__what">
+        {to
+          ? `small nudges only, the largest toward ${to}`
+          : `${word} passes through as it came`}
+      </span>
+    );
+  }
+  const fact = factNeurons(model)[headline]!.fact;
+  const to = factVector(model, fact.to);
+  const f = (v: number) => v.toFixed(2).replace("-", "−");
+  const before = cosine(x1, to);
+  const after = cosine(x2, to);
+  const still = nearest(model, x2, 1)[0]!.word;
+  return (
+    <span className="tf-source__what">
+      <b className="tf-source__fact">{fact.to}</b>
+      <span className="tf-source__tag">from outside the sentence</span> {word}{" "}
+      moves from {f(before)} to <b>{f(after)}</b> like {fact.to}, and stays
+      nearest to {still}
+    </span>
+  );
+}
+
+function Node({
+  cx,
+  cy,
+  size,
+  fill,
+  className = "tf-map__node",
+}: {
+  cx: number;
+  cy: number;
+  size: number;
+  fill: string;
+  className?: string;
+}) {
+  const r = size * 0.36;
+  return (
+    <rect
+      className={className}
+      x={cx - size / 2}
+      y={cy - size / 2}
+      width={size}
+      height={size}
+      rx={r}
+      ry={r}
+      style={{ fill }}
+    />
   );
 }

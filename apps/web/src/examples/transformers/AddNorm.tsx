@@ -10,11 +10,12 @@
 //   this way      word → layer → word + the layer's output (still the word? yes)
 //
 // with, for each path, the nearest known word and the similarity to the
-// original. Then the norm, with the size before and after.
+// original. Then the norm, with the mean and standard deviation before and
+// after.
 
-import type { BlockRun, Model } from "./transformer.js";
-import { cosine, nearest, rms } from "./transformer.js";
 import { Strip, maxAbs } from "./draw.js";
+import type { BlockRun, Model } from "./transformer.js";
+import { cosine, meanSd, nearest } from "./transformer.js";
 
 interface Props {
   model: Model;
@@ -63,96 +64,252 @@ export function AddNorm({ model, run, row, which }: Props) {
         aria-label={`Two paths for ${word}. The old way replaces the word with what ${layer} computed and it stops resembling ${word}. This way adds it to the word and ${word} stays ${word}. Then the sum is normalised.`}
       >
         {/* column captions */}
-        <text className="at-grid__axis" x={X_STRIP} y={24}>
-          the word
+        <text className="fig-label" x={X_STRIP} y={24}>
+          embedding
         </text>
-        <text className="at-grid__axis" x={X_STRIP + len + GAP} y={24}>
-          what {layer} made
+        <text className="fig-label" x={X_STRIP + len + GAP} y={24}>
+          post-{layer}
         </text>
-        <text className="at-grid__axis" x={xSum} y={24}>
-          what goes on
+        <text className="fig-label" x={xSum} y={24}>
+          combined vector
         </text>
-        <text className="at-grid__axis" x={xMeter} y={24}>
-          still {word}?
+        <text className="fig-label" x={xMeter} y={24}>
+          closest match
         </text>
 
         {/* row 1: the old way — replace */}
-        <text className="tf-rowlabel" x={X_LABEL} y={rows.old - 4} textAnchor="end">
-          the old way
+        <text
+          className="tf-rowlabel"
+          x={X_LABEL}
+          y={rows.old - 4}
+          textAnchor="end"
+        >
+          most layers
         </text>
-        <text className="tf-rowlabel tf-rowlabel--sub" x={X_LABEL} y={rows.old + 9} textAnchor="end">
+        <text
+          className="tf-rowlabel tf-rowlabel--sub"
+          x={X_LABEL}
+          y={rows.old + 9}
+          textAnchor="end"
+        >
           multiply, move on
         </text>
-        <Strip v={kept} bound={bound} x={X_STRIP} y={rows.old - 6} cell={CELL} thick={THICK} className="tf-strip--ghost" />
-        <line className="tf-map__flow" x1={X_STRIP + len + 6} y1={rows.old} x2={X_STRIP + len + GAP - 8} y2={rows.old} markerEnd="url(#tf-map-arrow)" />
-        <Strip v={added} bound={bound} x={X_STRIP + len + GAP} y={rows.old - 6} cell={CELL} thick={THICK} />
-        <line className="tf-map__flow" x1={X_STRIP + 2 * len + GAP + 6} y1={rows.old} x2={xSum - 8} y2={rows.old} markerEnd="url(#tf-map-arrow)" />
-        <Strip v={added} bound={bound} x={xSum} y={rows.old - 6} cell={CELL} thick={THICK} />
-        <Meter x={xMeter} y={rows.old} sim={replaceSim} word={replaceNearest.word} />
+        <Strip
+          v={kept}
+          bound={bound}
+          x={X_STRIP}
+          y={rows.old - 6}
+          cell={CELL}
+          thick={THICK}
+          className="tf-strip--ghost"
+        />
+        <line
+          className="tf-map__flow"
+          x1={X_STRIP + len + 6}
+          y1={rows.old}
+          x2={X_STRIP + len + GAP - 8}
+          y2={rows.old}
+          markerEnd="url(#tf-map-arrow)"
+        />
+        <Strip
+          v={added}
+          bound={bound}
+          x={X_STRIP + len + GAP}
+          y={rows.old - 6}
+          cell={CELL}
+          thick={THICK}
+        />
+        <line
+          className="tf-map__flow"
+          x1={X_STRIP + 2 * len + GAP + 6}
+          y1={rows.old}
+          x2={xSum - 8}
+          y2={rows.old}
+          markerEnd="url(#tf-map-arrow)"
+        />
+        <Strip
+          v={added}
+          bound={bound}
+          x={xSum}
+          y={rows.old - 6}
+          cell={CELL}
+          thick={THICK}
+        />
+        <Meter
+          x={xMeter}
+          y={rows.old}
+          sim={replaceSim}
+          word={replaceNearest.word}
+        />
 
         {/* row 2: this way — add */}
-        <text className="tf-rowlabel tf-rowlabel--on" x={X_LABEL} y={rows.add - 4} textAnchor="end">
+        <text
+          className="tf-rowlabel tf-rowlabel--on"
+          x={X_LABEL}
+          y={rows.add - 4}
+          textAnchor="end"
+        >
           a transformer
         </text>
-        <text className="tf-rowlabel tf-rowlabel--sub" x={X_LABEL} y={rows.add + 9} textAnchor="end">
+        <text
+          className="tf-rowlabel tf-rowlabel--sub"
+          x={X_LABEL}
+          y={rows.add + 9}
+          textAnchor="end"
+        >
           add it back
         </text>
-        <Strip v={kept} bound={bound} x={X_STRIP} y={rows.add - 6} cell={CELL} thick={THICK} />
-        <text className="tf-op" x={X_STRIP + len + GAP / 2} y={rows.add + 6} textAnchor="middle">
+        <Strip
+          v={kept}
+          bound={bound}
+          x={X_STRIP}
+          y={rows.add - 6}
+          cell={CELL}
+          thick={THICK}
+        />
+        <text
+          className="tf-op"
+          x={X_STRIP + len + GAP / 2}
+          y={rows.add + 6}
+          textAnchor="middle"
+        >
           +
         </text>
-        <Strip v={added} bound={bound} x={X_STRIP + len + GAP} y={rows.add - 6} cell={CELL} thick={THICK} />
-        <text className="tf-op" x={X_STRIP + 2 * len + GAP + GAP / 2} y={rows.add + 6} textAnchor="middle">
+        <Strip
+          v={added}
+          bound={bound}
+          x={X_STRIP + len + GAP}
+          y={rows.add - 6}
+          cell={CELL}
+          thick={THICK}
+        />
+        <text
+          className="tf-op"
+          x={X_STRIP + 2 * len + GAP + GAP / 2}
+          y={rows.add + 6}
+          textAnchor="middle"
+        >
           =
         </text>
-        <Strip v={sum} bound={bound} x={xSum} y={rows.add - 6} cell={CELL} thick={THICK} />
+        <Strip
+          v={sum}
+          bound={bound}
+          x={xSum}
+          y={rows.add - 6}
+          cell={CELL}
+          thick={THICK}
+        />
         <Meter x={xMeter} y={rows.add} sim={addSim} word={addNearest.word} />
 
         {/* row 3: then norm */}
-        <text className="tf-rowlabel" x={X_LABEL} y={rows.norm - 4} textAnchor="end">
+        <text
+          className="tf-rowlabel"
+          x={X_LABEL}
+          y={rows.norm - 4}
+          textAnchor="end"
+        >
           then norm
         </text>
-        <text className="tf-rowlabel tf-rowlabel--sub" x={X_LABEL} y={rows.norm + 9} textAnchor="end">
-          same shape, size one
+        <text
+          className="tf-rowlabel tf-rowlabel--sub"
+          x={X_LABEL}
+          y={rows.norm + 9}
+          textAnchor="end"
+        >
+          mean 0, standard deviation 1
         </text>
-        <Strip v={sum} bound={bound} x={xSum} y={rows.norm - 6} cell={CELL} thick={THICK} className="tf-strip--ghost" />
+        <Strip
+          v={sum}
+          bound={bound}
+          x={xSum}
+          y={rows.norm - 6}
+          cell={CELL}
+          thick={THICK}
+          className="tf-strip--ghost"
+        />
         <text className="tf-size" x={xSum} y={rows.norm + 22}>
-          size {rms(sum).toFixed(2)}
+          <Stats v={sum} />
         </text>
-        <line className="tf-map__flow" x1={xSum + len + 6} y1={rows.norm} x2={xMeter - 8} y2={rows.norm} markerEnd="url(#tf-map-arrow)" />
-        <Strip v={normed} bound={maxAbs([normed])} x={xMeter} y={rows.norm - 6} cell={CELL} thick={THICK} />
+        <line
+          className="tf-map__flow"
+          x1={xSum + len + 6}
+          y1={rows.norm}
+          x2={xMeter - 8}
+          y2={rows.norm}
+          markerEnd="url(#tf-map-arrow)"
+        />
+        <Strip
+          v={normed}
+          bound={maxAbs([normed])}
+          x={xMeter}
+          y={rows.norm - 6}
+          cell={CELL}
+          thick={THICK}
+        />
         <text className="tf-size" x={xMeter} y={rows.norm + 22}>
-          size {rms(normed).toFixed(2)}
+          <Stats v={normed} />
         </text>
-        <path className="tf-map__flow" d={`M ${xSum + len / 2} ${rows.add + 10} L ${xSum + len / 2} ${rows.norm - 12}`} markerEnd="url(#tf-map-arrow)" />
+        <path
+          className="tf-map__flow"
+          d={`M ${xSum + len / 2} ${rows.add + 10} L ${xSum + len / 2} ${rows.norm - 12}`}
+          markerEnd="url(#tf-map-arrow)"
+        />
 
         <defs>
-          <marker id="tf-map-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <marker
+            id="tf-map-arrow"
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto"
+          >
             <path d="M0,0.5 L8,4 L0,7.5 Z" className="tf-map__head" />
           </marker>
         </defs>
       </svg>
 
       <p className="tf-readout">
-        Replace the word with what {layer} computed and the result is closest to{" "}
-        <b>{replaceNearest.word}</b>, only <b>{replaceSim.toFixed(2)}</b> like{" "}
-        <b>{word}</b> — the word is gone. Add it back and the result is closest
-        to <b>{addNearest.word}</b>, <b>{addSim.toFixed(2)}</b> like {word}: still
-        the word, now carrying what it learned. Every layer in a transformer
-        makes that same choice.
+        Notice that the changes introduced by the transformer tend to be small
+        adjustments rather than wholesale shifts.
       </p>
     </div>
   );
 }
 
 /** "Still the word?" — a similarity bar and the nearest known word. */
-function Meter({ x, y, sim, word }: { x: number; y: number; sim: number; word: string }) {
+function Meter({
+  x,
+  y,
+  sim,
+  word,
+}: {
+  x: number;
+  y: number;
+  sim: number;
+  word: string;
+}) {
   const wBar = 110;
   const v = Math.max(0, Math.min(1, sim));
   return (
     <g>
-      <rect className="tf-meter__track" x={x} y={y - 5} width={wBar} height={10} rx={5} />
-      <rect className={`tf-meter__fill${v > 0.7 ? " tf-meter__fill--yes" : ""}`} x={x} y={y - 5} width={wBar * v} height={10} rx={5} />
+      <rect
+        className="tf-meter__track"
+        x={x}
+        y={y - 5}
+        width={wBar}
+        height={10}
+        rx={5}
+      />
+      <rect
+        className={`tf-meter__fill${v > 0.7 ? " tf-meter__fill--yes" : ""}`}
+        x={x}
+        y={y - 5}
+        width={wBar * v}
+        height={10}
+        rx={5}
+      />
       <text className="tf-size" x={x + wBar + 8} y={y + 4}>
         {sim.toFixed(2)}
       </text>
@@ -160,5 +317,16 @@ function Meter({ x, y, sim, word }: { x: number; y: number; sim: number; word: s
         nearest word: {word}
       </text>
     </g>
+  );
+}
+
+/** "mean 0.04 · sd 0.26", with a real minus sign and no "−0.00". */
+function Stats({ v }: { v: Float32Array }) {
+  const { mean, sd } = meanSd(v);
+  const f = (x: number) => (Math.abs(x) < 0.005 ? "0.00" : x.toFixed(2).replace("-", "−"));
+  return (
+    <>
+      mean {f(mean)} · sd {f(sd)}
+    </>
   );
 }

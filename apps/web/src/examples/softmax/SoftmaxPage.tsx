@@ -175,7 +175,7 @@ export function SoftmaxPage() {
 
           {/* Temperature sits above the figure it reshapes, so a drag and its
               effect are in view together. */}
-          <Card className="sm-temp" padding="md">
+          <div className="sm-temp">
             <div className="sm-temp__main">
               <label htmlFor="sm-temperature">
                 <span className="sm-temp__name">Temperature (T)</span>
@@ -201,7 +201,7 @@ export function SoftmaxPage() {
               <span className="sm-temp__stat">{topProb.toFixed(2)}</span>
               <span className="sm-temp__statsub">{LABELS[topIndex]}</span>
             </div>
-          </Card>
+          </div>
 
           {/* The stages, side by side, all live. */}
           <div className="sm-stages">
@@ -296,7 +296,7 @@ export function SoftmaxPage() {
           </div>
 
           {/* Every control here produces a visible change in the figure. */}
-          <Card className="sm-try" padding="md">
+          <div className="sm-try">
             <div className="sm-try__group">
               <span className="sm-try__label">Try</span>
               {PRESETS.map((p) => (
@@ -351,7 +351,7 @@ export function SoftmaxPage() {
                 Notice that the softmax is not affected by shifts.
               </span>
             </div>
-          </Card>
+          </div>
         </div>
       </div>
     </div>
@@ -509,7 +509,10 @@ function LogitBars({
           </div>
         ))}
       </div>
-      <p className="sm-bars__hint">drag a bar, or focus one and use ↑ / ↓</p>
+      {/* Empty, like the read-only columns', so all four baselines align. */}
+      <p className="sm-bars__hint" aria-hidden="true">
+        &nbsp;
+      </p>
     </div>
   );
 }
@@ -603,7 +606,7 @@ function ValueBars({
             <span className="sm-bars__name">{l}</span>
             <span
               className={`sm-mono sm-bars__num${
-                Number.isFinite(values[i]!) && values[i]! < 0 ? " sm-bad" : ""
+                Number.isFinite(values[i]!) && values[i]! < 0 ? " sm-neg" : ""
               }`}
             >
               {format(values[i]!)}

@@ -81,6 +81,16 @@ exists to demonstrate.
   the definition, so the page no longer spends space on it. `softmax.ts` still
   returns `max` and `shifted` if a future column wants them.
 
+## Colours
+
+Every bar is a computed number: vermillion when positive, cerulean when
+negative (`--ml-value-pos` / `--ml-value-neg`), and the eˣ and probability
+columns, which cannot go negative, use the positive arm alone. Negative
+numbers under the bars take `--ml-value-neg-ink`. The accent marks only the
+final column, the one to look at. The temperature and "Try" boxes are
+sunken, because they are controls; the winner's probability beside the
+slider is a white readout in `--ml-value-pos-ink`.
+
 ## Architecture
 
 - `softmax.ts` — softmax with temperature, returning every intermediate

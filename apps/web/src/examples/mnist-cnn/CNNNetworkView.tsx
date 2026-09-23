@@ -29,9 +29,10 @@
 // Drawing reuses the shared useGridDraw hook. SVG stays smooth by redrawing
 // only on new activations (throttled upstream).
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { CNNNet, CNNActivations } from "./cnn-net.js";
 import { useGridDraw } from "../shared/useGridDraw.js";
+import { LEARNED_NEG, LEARNED_POS, input, learned, magnitude, value } from "../shared/palette.js";
 
 export interface CNNNetworkViewProps {
   net: CNNNet;
@@ -69,16 +70,30 @@ const MAP2 = 84;    // conv2 (7x7)
 const MAPP2 = 48;   // pool2 (3x3)
 const KSW = 42;     // kernel swatch (3x3)
 
-function shade(v: number): string {
-  const t = Math.max(0, Math.min(1, v));
-  const g = Math.round(255 * (1 - t));
-  return `rgb(${g},${g},${g})`;
+// Colour follows the figure scales (docs/style.md §11, ../shared/palette.ts):
+//   the drawing and any patch of it: input, paper to ink;
+//   kernels and connections: learned, sage positive / plum negative;
+//   feature maps: greyscale, paper to ink — a deliberate EXCEPTION to the
+//   computed scale. A feature map is an image of the drawing as a kernel
+//   sees it, and in grey the digit's shadow carries through every layer the
+//   way it does in the input, which is the thing the figure is for;
+//   dense neurons, output: computed and, after the ReLU (or the softmax),
+//   never negative — the positive arm, paper to vermillion;
+//   the kernel scan's products and raw sum, which can go negative: the signed
+//   computed scale, vermillion / cerulean.
+function inputShade(v: number): string {
+  return input(Math.max(0, Math.min(1, v)));
 }
-// Positive weight -> red, negative -> blue, intensity by |w|/scale.
+/** A feature-map cell: greyscale, like the input (see the exception above). */
+function mapShade(v: number): string {
+  return input(Math.max(0, Math.min(1, v)));
+}
+/** A computed value that cannot be negative: a dense neuron, an output. */
+function unitShade(v: number): string {
+  return magnitude(Math.max(0, Math.min(1, v)));
+}
 function weightFill(w: number, scale: number): string {
-  const t = Math.max(0, Math.min(1, Math.abs(w) / scale));
-  if (w >= 0) { const c = Math.round(255 * (1 - t)); return `rgb(209,${52 + c * 0.6},${75 + c * 0.5})`; }
-  const c = Math.round(255 * (1 - t)); return `rgb(${47 + c * 0.6},${111 + c * 0.4},208)`;
+  return learned(w / scale);
 }
 function rowCenters(n: number, cx: number, w: number): number[] {
   const gap = w / n;
@@ -106,7 +121,7 @@ function FeatureMap({ buf, ch, h, w, x, y, size, norm, dim }: {
   const cells = [];
   for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
     const v = buf[ch * h * w + r * w + c]! / norm;
-    cells.push(<rect key={`${r}-${c}`} x={x + c * cw} y={y + r * chh} width={cw + 0.4} height={chh + 0.4} fill={shade(v)} />);
+    cells.push(<rect key={`${r}-${c}`} x={x + c * cw} y={y + r * chh} width={cw + 0.4} height={chh + 0.4} fill={mapShade(v)} />);
   }
   return <g opacity={dim ? 0.55 : 1}>{cells}<rect x={x} y={y} width={size} height={size} fill="none" stroke="#c9c2b8" strokeWidth={1} /></g>;
 }
@@ -128,6 +143,26 @@ export function CNNNetworkView({
   // dismisses it.
   const [conv2Popup, setConv2Popup] = useState<number | null>(null);
   const armed = scanKernel != null;
+
+  // The scan card is a pop-up, so it closes like one: a click anywhere but the
+  // input grid or a kernel, or Esc. No separate "stop" control is needed.
+  useEffect(() => {
+    if (!armed) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest(".mnist-net__draw, .cnn-kernel")) return;
+      onPickKernel(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onPickKernel(null);
+    };
+    window.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [armed, onPickKernel]);
 
   const eventCell = (e: ReactPointerEvent): { r: number; c: number } | null => {
     const svg = svgRef.current; if (!svg) return null;
@@ -363,15 +398,17 @@ export function CNNNetworkView({
   };
 
   return (
-    <svg ref={svgRef} className="mnist-net" viewBox={`0 0 ${VW} ${VH}`} width="100%"
+    <svg ref={svgRef} className="mnist-net" viewBox={`0 0 ${VW} ${VH}`} width={VW} height={VH}
       preserveAspectRatio="xMidYMid meet" role="img"
-      aria-label="Convolutional network: draw a digit at the top; kernels, feature maps, pooling, a dense layer, then the output digits.">
+      aria-label="Convolutional network: draw a digit at the top; kernels, feature maps, pooling, a fully connected layer, then the output digits.">
 
       {/* "Show wiring" Sankey ribbons — drawn FIRST so every map sits on top.
           Soft purple, curved. input->activeConv1, conv1->pool1 (1:1), ALL
           pool1->activeConv2 (fan-in), conv2->pool2 (1:1). */}
       {showWiring && (() => {
-        const PURPLE = "#7c5cc4";
+        // Wiring is structure, not data: a general data-mark hue, never a
+        // figure scale (docs/style.md §11).
+        const PURPLE = "var(--purple-600)";
         const c1 = conv1Geo(wireC1), p1 = pool1Geo(wireC1);
         const c2 = conv2Geo(wireC2), p2 = pool2Geo(wireC2);
         // input -> active conv1 (input bottom edge is wide; taper into conv1)
@@ -398,25 +435,27 @@ export function CNNNetworkView({
       })()}
 
       {/* Layer captions. */}
-      <g className="mnist-net__labels" fontSize={13}>
-        <text x={10} y={Y_INPUT} dominantBaseline="middle">input</text>
-        <text x={10} y={Y_CONV1 - 96} dominantBaseline="middle">conv 1</text>
-        <text x={10} y={Y_POOL1} dominantBaseline="middle">pool 1</text>
-        <text x={10} y={Y_CONV2 - 96} dominantBaseline="middle">conv 2</text>
-        <text x={10} y={Y_POOL2} dominantBaseline="middle">pool 2</text>
-        <text x={10} y={Y_DENSE} dominantBaseline="middle">dense</text>
-        <text x={10} y={Y_OUT} dominantBaseline="middle">output</text>
+      <g>
+        <text className="fig-label fig-label--lg" x={10} y={Y_INPUT} dominantBaseline="middle">input</text>
+        <text className="fig-label fig-label--lg" x={10} y={Y_CONV1 - 96} dominantBaseline="middle">conv 1</text>
+        <text className="fig-label fig-label--lg" x={10} y={Y_POOL1} dominantBaseline="middle">pool 1</text>
+        <text className="fig-label fig-label--lg" x={10} y={Y_CONV2 - 96} dominantBaseline="middle">conv 2</text>
+        <text className="fig-label fig-label--lg" x={10} y={Y_POOL2} dominantBaseline="middle">pool 2</text>
+        <text className="fig-label fig-label--lg" x={10} y={Y_DENSE - 9} dominantBaseline="middle">fully
+          <tspan x={10} dy={18}>connected</tspan>
+        </text>
+        <text className="fig-label fig-label--lg" x={10} y={Y_OUT} dominantBaseline="middle">output</text>
       </g>
 
       {/* Fully-connected edges (pool2 -> dense -> output), drawn under nodes. */}
       <g strokeLinecap="round">
         {denseEdges.d1.map((e, i) => (
           <line key={`de1-${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y}
-            stroke={e.w >= 0 ? "#d1344b" : "#2f6fd0"} strokeOpacity={0.28} strokeWidth={0.8} />
+            stroke={e.w >= 0 ? LEARNED_POS : LEARNED_NEG} strokeOpacity={0.28} strokeWidth={0.8} />
         ))}
         {denseEdges.d2.map((e, i) => (
           <line key={`de2-${i}`} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y}
-            stroke={e.w >= 0 ? "#d1344b" : "#2f6fd0"} strokeOpacity={0.4} strokeWidth={1} />
+            stroke={e.w >= 0 ? LEARNED_POS : LEARNED_NEG} strokeOpacity={0.4} strokeWidth={1} />
         ))}
       </g>
 
@@ -425,7 +464,7 @@ export function CNNNetworkView({
         {Array.from({ length: GRID * GRID }, (_, i) => {
           const r = Math.floor(i / GRID), c = i % GRID;
           const v = activations ? activations.raw[i]! : 0;
-          return <rect key={`in-${i}`} x={gx0 + c * cellS} y={gy0 + r * cellS} width={cellS} height={cellS} fill={shade(v)} stroke="#e7e2da" strokeWidth={0.4} />;
+          return <rect key={`in-${i}`} x={gx0 + c * cellS} y={gy0 + r * cellS} width={cellS} height={cellS} fill={inputShade(v)} stroke="var(--border)" strokeWidth={0.4} />;
         })}
         <rect x={gx0} y={gy0} width={INPUT_BLOCK} height={INPUT_BLOCK} fill="none" stroke="#888" strokeWidth={1.5} />
         <rect className="mnist-net__draw" x={gx0} y={gy0} width={INPUT_BLOCK} height={INPUT_BLOCK} fill="transparent"
@@ -446,101 +485,6 @@ export function CNNNetworkView({
         )}
       </g>
 
-      {/* Visual convolution panel (click a conv-1 kernel). Image patch x kernel
-          -> element-wise products -> one output neuron. */}
-      {armed && activations && (() => {
-        const f = scanKernel!, kb = f * 9;
-        const patch: number[] = [], prod: number[] = [];
-        let sum = net.b1[f]!;
-        for (let ky = 0; ky < 3; ky++) for (let kx = 0; kx < 3; kx++) {
-          const px = activations.input[(scan.r + ky) * GRID + (scan.c + kx)]!;
-          const w = net.k1[kb + ky * 3 + kx]!;
-          patch.push(px); prod.push(px * w); sum += px * w;
-        }
-        const relu = Math.max(0, sum);
-        // Products are GRAYSCALE BY MAGNITUDE — only the kernel gets the red/blue
-        // treatment, so students read colour as "this is a weight" and nothing
-        // else. But a student still has to see which contributions are negative,
-        // so negatives get a blue OUTLINE rather than a blue fill: one channel
-        // (darkness) carries "how much", a separate channel (the ring) carries
-        // "which way". No new colour scale to learn.
-        let pmax = 1e-6; for (const p of prod) pmax = Math.max(pmax, Math.abs(p));
-        const px0 = gx0 + INPUT_BLOCK + 30, py0 = gy0 + 4;
-        const cell = 26;
-        const gridW = cell * 3;
-        const patchX = px0, kernX = px0 + gridW + 40; // image patch left, kernel right (row 1)
-        const prodY = py0 + gridW + 46;          // products grid top (row 2)
-        // TWO neurons sit to the RIGHT of the products grid (not below), so the
-        // panel stays short and doesn't overlap the network below: the raw sum
-        // (which can be negative) and then the ReLU of it. Showing both is the
-        // point — ReLU is invisible if you only ever see the post-ReLU value.
-        const outCY = prodY + gridW / 2;
-        const sumX = patchX + gridW + 30;              // after the -> arrow
-        const reluX = sumX + DENSE_NODE + 46;          // after the ReLU arrow
-        const panelBottom = prodY + gridW + 22;
-        // Wide enough for whichever row sticks out further: the kernel grid on
-        // row 1, or the ReLU neuron on row 2.
-        const panelW = Math.max(kernX + gridW, reluX + DENSE_NODE) - px0 + 24;
-        const draw3 = (vals: number[], x: number, y: number, kind: "gray" | "weight") => (
-          Array.from({ length: 9 }, (_, i) => {
-            const r = Math.floor(i / 3), c = i % 3;
-            const fill = kind === "weight" ? weightFill(vals[i]!, k1scale) : shade(vals[i]!);
-            return <rect key={i} x={x + c * cell} y={y + r * cell} width={cell} height={cell} fill={fill} stroke="#e7e2da" strokeWidth={0.6} />;
-          })
-        );
-        return (
-          <g className="mnist-conv-panel" pointerEvents="none" fontFamily="var(--font-mono, monospace)">
-            <rect x={px0 - 16} y={py0 - 16} width={panelW + 20} height={panelBottom - py0 + 16} rx={10}
-              fill="var(--surface,#fff)" stroke="var(--accent,#2b62a8)" strokeWidth={1.5} />
-            <text x={px0 - 4} y={py0 + 4} fontSize={11} fill="var(--text-muted,#78716a)">kernel {f} · convolution</text>
-            {/* row 1: image patch  ×  kernel */}
-            {draw3(patch, patchX, py0 + 14, "gray")}
-            <rect x={patchX} y={py0 + 14} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} />
-            <text x={patchX + gridW + 20} y={py0 + 14 + gridW / 2} fontSize={20} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">×</text>
-            {draw3(net.k1.slice(f * 9, f * 9 + 9) as unknown as number[], kernX, py0 + 14, "weight")}
-            <rect x={kernX} y={py0 + 14} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} rx={3} />
-            <text x={patchX + 4} y={py0 + 14 + gridW + 14} fontSize={9} fill="var(--text-faint,#a8a097)">image patch</text>
-            <text x={kernX + 4} y={py0 + 14 + gridW + 14} fontSize={9} fill="var(--text-faint,#a8a097)">kernel</text>
-            {/* row 2: products (left)  ->  output neuron (right) */}
-            <text x={px0 - 4} y={prodY - 8} fontSize={10} fill="var(--text-secondary,#57514a)">↓ multiply, cell by cell</text>
-            {Array.from({ length: 9 }, (_, i) => {
-              const r = Math.floor(i / 3), c = i % 3;
-              const x = patchX + c * cell, y = prodY + r * cell;
-              const neg = prod[i]! < 0;
-              return (
-                <g key={i}>
-                  <rect x={x} y={y} width={cell} height={cell} fill={shade(Math.abs(prod[i]!) / pmax)} stroke="#e7e2da" strokeWidth={0.6} />
-                  {/* negative contribution: inset blue ring, drawn on top so it
-                      stays visible however dark the fill underneath is */}
-                  {neg && <rect x={x + 1.5} y={y + 1.5} width={cell - 3} height={cell - 3} fill="none" stroke="#2f6fd0" strokeWidth={2} />}
-                </g>
-              );
-            })}
-            <rect x={patchX} y={prodY} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1} />
-            {/* products -> sum -> ReLU, left to right */}
-            <text x={patchX + gridW + 15} y={outCY - 4} fontSize={15} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">→</text>
-            <text x={patchX + gridW + 15} y={outCY + 11} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">add</text>
-            {/* the raw sum: can be negative, so it uses the same magnitude-fill
-                + blue-ring convention as the product cells above */}
-            <rect x={sumX} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
-              fill={shade(Math.min(1, Math.abs(sum) / (pmax * 3 + 1e-6)))} stroke="#888888" strokeWidth={2} />
-            {sum < 0 && (
-              <rect x={sumX + 2} y={outCY - DENSE_NODE / 2 + 2} width={DENSE_NODE - 4} height={DENSE_NODE - 4}
-                rx={DENSE_RX - 2} ry={DENSE_RX - 2} fill="none" stroke="#2f6fd0" strokeWidth={2} />
-            )}
-            <text x={sumX + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 13} fontSize={10} textAnchor="middle" fill="var(--text-body,#3f3a34)">{sum.toFixed(2)}</text>
-            <text x={sumX + DENSE_NODE / 2} y={outCY - DENSE_NODE / 2 - 7} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">sum</text>
-            {/* ReLU step */}
-            <text x={sumX + DENSE_NODE + 23} y={outCY - 4} fontSize={15} textAnchor="middle" dominantBaseline="central" fill="var(--text-secondary,#57514a)">→</text>
-            <text x={sumX + DENSE_NODE + 23} y={outCY + 11} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">ReLU</text>
-            <rect x={reluX} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
-              fill={shade(Math.min(1, relu / (pmax * 3 + 1e-6)))} stroke="#888888" strokeWidth={2} />
-            <text x={reluX + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 13} fontSize={10} textAnchor="middle" fill="var(--text-body,#3f3a34)">{relu.toFixed(2)}</text>
-            <text x={reluX + DENSE_NODE / 2} y={outCY - DENSE_NODE / 2 - 7} fontSize={8} textAnchor="middle" fill="var(--text-faint,#a8a097)">output</text>
-          </g>
-        );
-      })()}
-
       {/* Conv 1: clickable kernel swatch above each feature map + hover grid. */}
       <g>
         {colX.map((cx, f) => {
@@ -549,16 +493,16 @@ export function CNNNetworkView({
           const isArmed = scanKernel === f;
           return (
             <g key={`c1-${f}`}>
-              <g style={{ cursor: "pointer" }} onClick={() => onPickKernel(isArmed ? null : f)}>
+              <g className="cnn-kernel" style={{ cursor: "pointer" }} onClick={() => onPickKernel(isArmed ? null : f)}>
                 {Array.from({ length: 9 }, (_, i) => {
                   const w = net.k1[f * 9 + i]!, r = Math.floor(i / 3), c = i % 3, cs = KSW / 3;
-                  return <rect key={i} x={kx + c * cs} y={ky + r * cs} width={cs} height={cs} fill={weightFill(w, k1scale)} stroke="#fff" strokeWidth={0.5} />;
+                  return <rect key={i} x={kx + c * cs} y={ky + r * cs} width={cs} height={cs} fill={weightFill(w, k1scale)} stroke="var(--surface)" strokeWidth={0.5} />;
                 })}
                 <rect x={kx} y={ky} width={KSW} height={KSW} fill="none" stroke={isArmed ? "var(--accent,#2b62a8)" : "#888"} strokeWidth={isArmed ? 3 : 1.5} rx={4} />
               </g>
               {activations
                 ? <FeatureMap buf={activations.conv1} ch={f} h={net.c1} w={net.c1} x={g.x} y={g.y} size={MAP1} norm={n1[f]} dim={!!hover && !(hover.layer === "conv1" && hover.ch === f)} />
-                : <rect x={g.x} y={g.y} width={MAP1} height={MAP1} fill="#fff" stroke="#c9c2b8" />}
+                : <rect x={g.x} y={g.y} width={MAP1} height={MAP1} fill="var(--surface)" stroke="#c9c2b8" />}
               {(() => { const b = trailBox("conv1", f); return b && (
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
               ); })()}
@@ -580,7 +524,7 @@ export function CNNNetworkView({
             <g key={`p1-${f}`}>
               {activations
                 ? <FeatureMap buf={activations.pool1} ch={f} h={net.p1} w={net.p1} x={g.x} y={g.y} size={MAPP1} norm={np1[f]} dim={dimP1} />
-                : <rect x={g.x} y={g.y} width={MAPP1} height={MAPP1} fill="#fff" stroke="#c9c2b8" />}
+                : <rect x={g.x} y={g.y} width={MAPP1} height={MAPP1} fill="var(--surface)" stroke="#c9c2b8" />}
               {/* Trail box on pool 1. For a conv-2 (or deeper) hover this lands
                   on EVERY channel — a conv-2 filter reads a 3x3 across all
                   eight pool-1 maps at once. */}
@@ -605,18 +549,18 @@ export function CNNNetworkView({
                   channel). Click opens the full 8-slice popup. */}
               <g style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); setConv2Popup(f); }}>
                 {/* two offset shadow tiles = the "there are more behind" cue */}
-                <rect x={kx + 6} y={ky - 6} width={KSW} height={KSW} rx={4} fill="#efece6" stroke="#c9c2b8" strokeWidth={1} />
-                <rect x={kx + 3} y={ky - 3} width={KSW} height={KSW} rx={4} fill="#f6f4ef" stroke="#c9c2b8" strokeWidth={1} />
+                <rect x={kx + 6} y={ky - 6} width={KSW} height={KSW} rx={4} fill="var(--sand-200)" stroke="#c9c2b8" strokeWidth={1} />
+                <rect x={kx + 3} y={ky - 3} width={KSW} height={KSW} rx={4} fill="var(--sand-100)" stroke="#c9c2b8" strokeWidth={1} />
                 {/* the summary swatch (channel-mean 3x3) on top */}
                 {Array.from({ length: 9 }, (_, i) => {
                   const w = k2mean[f * 9 + i]!, r = Math.floor(i / 3), c = i % 3, cs = KSW / 3;
-                  return <rect key={i} x={kx + c * cs} y={ky + r * cs} width={cs} height={cs} fill={weightFill(w, k2scale)} stroke="#fff" strokeWidth={0.5} />;
+                  return <rect key={i} x={kx + c * cs} y={ky + r * cs} width={cs} height={cs} fill={weightFill(w, k2scale)} stroke="var(--surface)" strokeWidth={0.5} />;
                 })}
                 <rect x={kx} y={ky} width={KSW} height={KSW} fill="none" stroke="#888" strokeWidth={1.5} rx={4} />
               </g>
               {activations
                 ? <FeatureMap buf={activations.conv2} ch={f} h={net.c2} w={net.c2} x={g.x} y={g.y} size={MAP2} norm={n2[f]} dim={!!hover && !(hover.layer === "conv2" && hover.ch === f)} />
-                : <rect x={g.x} y={g.y} width={MAP2} height={MAP2} fill="#fff" stroke="#c9c2b8" />}
+                : <rect x={g.x} y={g.y} width={MAP2} height={MAP2} fill="var(--surface)" stroke="#c9c2b8" />}
               {(() => { const b = trailBox("conv2", f); return b && (
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="var(--accent,#2b62a8)" strokeWidth={2} pointerEvents="none" />
               ); })()}
@@ -634,20 +578,20 @@ export function CNNNetworkView({
             <g key={`p2-${f}`}>
               {activations
                 ? <FeatureMap buf={activations.pool2} ch={f} h={net.p2} w={net.p2} x={g.x} y={g.y} size={MAPP2} norm={np2[f]} dim={!!hover && !(hover.layer === "pool2" && hover.ch === f)} />
-                : <rect x={g.x} y={g.y} width={MAPP2} height={MAPP2} fill="#fff" stroke="#c9c2b8" />}
+                : <rect x={g.x} y={g.y} width={MAPP2} height={MAPP2} fill="var(--surface)" stroke="#c9c2b8" />}
               {activations && hoverGrid("pool2", f, g)}
             </g>
           );
         })}
       </g>
 
-      {/* Dense neurons — heavily-rounded squares matching the MLP hidden
-          layers (25px, rx 9, #888888 border at width 2, ~3px gaps). */}
+      {/* Dense neurons — the shared neuron (.fig-neuron): 25 units, rx 9,
+          the node-border grey at 2 px on screen. */}
       <g>
         {denseX.map((cx, i) => (
           <rect key={`d-${i}`} x={cx - DENSE_NODE / 2} y={Y_DENSE - DENSE_NODE / 2}
             width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
-            fill={shade(activations ? activations.dense[i]! / nd : 0)} stroke="#888888" strokeWidth={2} />
+            fill={unitShade(activations ? activations.dense[i]! / nd : 0)} className="fig-neuron" />
         ))}
       </g>
 
@@ -658,16 +602,114 @@ export function CNNNetworkView({
           const label = net.labels[i] ?? "";
           const win = i === predicted && v > 0;
           const S = 40, long = label.length > 2;
-          const glyph = win ? "#fff" : v > 0.55 ? "#fff" : "var(--text-strong,#1c1917)";
+          const glyph = win ? "var(--text-on-accent)" : v > 0.55 ? "var(--surface)" : "var(--text-strong)";
           return (
             <g key={`o-${i}`}>
               <rect x={cx - S / 2} y={Y_OUT - S / 2} width={S} height={S} rx={10} ry={10}
-                fill={win ? "var(--accent,#2b62a8)" : shade(v)} stroke={win ? "var(--accent,#2b62a8)" : "#888"} strokeWidth={win ? 3.5 : 2.25} />
+                fill={win ? "var(--accent,#2b62a8)" : unitShade(v)} className={win ? undefined : "fig-tile"}
+                stroke={win ? "var(--accent,#2b62a8)" : undefined} strokeWidth={win ? 3.5 : undefined} />
               <text x={cx} y={Y_OUT} textAnchor="middle" dominantBaseline="central" fontFamily="var(--font-mono, monospace)" fontSize={long ? 11 : 20} fontWeight={700} fill={glyph}>{label}</text>
             </g>
           );
         })}
       </g>
+
+      {/* Drawn last but for the conv-2 pop-up, so it sits on top of every
+          layer. Visual convolution panel (click a conv-1 kernel). Image patch x kernel
+          -> element-wise products -> one output neuron. */}
+      {armed && activations && (() => {
+        const f = scanKernel!, kb = f * 9;
+        const patch: number[] = [], prod: number[] = [];
+        let sum = net.b1[f]!;
+        for (let ky = 0; ky < 3; ky++) for (let kx = 0; kx < 3; kx++) {
+          const px = activations.input[(scan.r + ky) * GRID + (scan.c + kx)]!;
+          const w = net.k1[kb + ky * 3 + kx]!;
+          patch.push(px); prod.push(px * w); sum += px * w;
+        }
+        const relu = Math.max(0, sum);
+        let pmax = 1e-6; for (const p of prod) pmax = Math.max(pmax, Math.abs(p));
+        // A card floating to the right of the input grid: sand, bordered and
+        // shadowed so it reads as a pop-up over the figure, joined to the
+        // scan window by a leader line. Row 1: the image patch × the kernel.
+        // Row 2: their products → the sum → the ReLU. Both neurons are shown
+        // because the ReLU is invisible if you only ever see its output.
+        const PAD = 22;
+        const cell = 36;
+        const gridW = cell * 3;
+        const px0 = gx0 + INPUT_BLOCK + 58;   // content's left edge
+        const py0 = gy0 - 8;                  // title baseline area
+        const y1 = py0 + 30;                  // row 1: patch × kernel
+        const patchX = px0;
+        const kernX = px0 + gridW + 56;
+        const y2 = y1 + gridW + 64;           // row 2: products → sum → ReLU
+        const outCY = y2 + gridW / 2;
+        const sumX = patchX + gridW + 50;
+        const reluX = sumX + DENSE_NODE + 64;
+        const right = Math.max(kernX + gridW, reluX + DENSE_NODE);
+        const cardX = px0 - PAD, cardY = py0 - PAD + 4;
+        const cardW = right - px0 + 2 * PAD;
+        const cardH = y2 + gridW + 30 - cardY;
+        // Leader: from the scan window's right edge to the card's left edge.
+        const lx = gx0 + (scan.c + 3) * cellS, ly = gy0 + (scan.r + 1.5) * cellS;
+        const ty = Math.max(cardY + 24, Math.min(cardY + cardH - 24, ly));
+        const draw3 = (vals: number[], x: number, y: number, kind: "gray" | "weight") => (
+          Array.from({ length: 9 }, (_, i) => {
+            const r = Math.floor(i / 3), c = i % 3;
+            const fill = kind === "weight" ? weightFill(vals[i]!, k1scale) : inputShade(vals[i]!);
+            return <rect key={i} x={x + c * cell} y={y + r * cell} width={cell} height={cell} fill={fill} stroke="var(--border)" strokeWidth={0.75} />;
+          })
+        );
+        const frame = (x: number, y: number) => (
+          <rect x={x} y={y} width={gridW} height={gridW} fill="none" stroke="#888" strokeWidth={1.25} rx={2} />
+        );
+        return (
+          <g className="mnist-conv-panel" pointerEvents="none">
+            <defs>
+              <filter id="cnn-card-shadow" x="-10%" y="-10%" width="120%" height="130%">
+                <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="var(--ink-900)" floodOpacity="0.16" />
+              </filter>
+            </defs>
+            <line x1={lx} y1={ly} x2={cardX} y2={ty} className="cnn-card__leader" />
+            <rect x={cardX} y={cardY} width={cardW} height={cardH} rx={14} className="cnn-card" filter="url(#cnn-card-shadow)" />
+            <text className="fig-label cnn-card__title" x={px0} y={py0 + 10}>kernel {f}</text>
+
+            {/* row 1: image patch × kernel */}
+            {draw3(patch, patchX, y1, "gray")}
+            {frame(patchX, y1)}
+            <text className="cnn-card__op" x={patchX + gridW + 28} y={y1 + gridW / 2} textAnchor="middle" dominantBaseline="central">×</text>
+            {draw3(net.k1.slice(f * 9, f * 9 + 9) as unknown as number[], kernX, y1, "weight")}
+            {frame(kernX, y1)}
+            <text className="fig-label" x={patchX} y={y1 + gridW + 20}>image patch</text>
+            <text className="fig-label" x={kernX} y={y1 + gridW + 20}>kernel</text>
+
+            {/* row 2: products → sum → ReLU */}
+            <text className="fig-note" x={patchX} y={y2 - 12}>Multiply, cell by cell:</text>
+            {Array.from({ length: 9 }, (_, i) => {
+              const r = Math.floor(i / 3), c = i % 3;
+              // A product is computed and signed: vermillion adds to the sum,
+              // cerulean takes away.
+              return (
+                <rect key={i} x={patchX + c * cell} y={y2 + r * cell} width={cell} height={cell} fill={value(prod[i]! / pmax)} stroke="var(--border)" strokeWidth={0.75} />
+              );
+            })}
+            {frame(patchX, y2)}
+            <text className="cnn-card__op" x={patchX + gridW + 25} y={outCY - 6} textAnchor="middle" dominantBaseline="central">→</text>
+            <text className="fig-label-sub" x={patchX + gridW + 25} y={outCY + 16} textAnchor="middle">add</text>
+            {/* the raw sum can be negative, so it takes the signed scale; the
+                ReLU after it cannot, and is one cell of a feature map, so grey */}
+            <text className="fig-label" x={sumX + DENSE_NODE / 2} y={outCY - DENSE_NODE / 2 - 9} textAnchor="middle">sum</text>
+            <rect x={sumX} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
+              fill={value(sum / (pmax * 3 + 1e-6))} className="fig-neuron" />
+            <text className="fig-num" x={sumX + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 18} textAnchor="middle">{sum.toFixed(2)}</text>
+            <text className="cnn-card__op" x={sumX + DENSE_NODE + 32} y={outCY - 6} textAnchor="middle" dominantBaseline="central">→</text>
+            <text className="fig-label-sub" x={sumX + DENSE_NODE + 32} y={outCY + 16} textAnchor="middle">ReLU</text>
+            <text className="fig-label" x={reluX + DENSE_NODE / 2} y={outCY - DENSE_NODE / 2 - 9} textAnchor="middle">output</text>
+            <rect x={reluX} y={outCY - DENSE_NODE / 2} width={DENSE_NODE} height={DENSE_NODE} rx={DENSE_RX} ry={DENSE_RX}
+              fill={mapShade(relu / (pmax * 3 + 1e-6))} className="fig-neuron" />
+            <text className="fig-num" x={reluX + DENSE_NODE / 2} y={outCY + DENSE_NODE / 2 + 18} textAnchor="middle">{relu.toFixed(2)}</text>
+          </g>
+        );
+      })()}
 
       {/* Conv-2 filter popup: the real 3x3x8 stack, all 8 slices wide (one per
           pool-1 channel). A conv-2 output = sum over these 8 slices of (that
@@ -685,12 +727,20 @@ export function CNNNetworkView({
         return (
           <g className="mnist-c2popup" onClick={() => setConv2Popup(null)} style={{ cursor: "pointer" }}>
             {/* backdrop */}
-            <rect x={0} y={0} width={VW} height={VH} fill="#1c1917" fillOpacity={0.42} />
+            <rect x={0} y={0} width={VW} height={VH} style={{ fill: "var(--ink-900)" }} fillOpacity={0.42} />
             {/* panel */}
-            <rect x={startX - 26} y={py - 46} width={total + 52} height={sw + 108} rx={12}
-              fill="var(--surface,#fff)" stroke="var(--accent,#2b62a8)" strokeWidth={2} />
-            <text x={VW / 2} y={py - 22} textAnchor="middle" fontFamily="var(--font-mono, monospace)" fontSize={13} fontWeight={700} fill="var(--text-strong,#1c1917)">
-              conv 2 · filter {f} — a 3×3 for each of the 8 pool-1 channels
+            <defs>
+              <filter id="cnn-c2-shadow" x="-10%" y="-20%" width="120%" height="150%">
+                <feDropShadow dx="0" dy="8" stdDeviation="10" floodColor="var(--ink-900)" floodOpacity="0.2" />
+              </filter>
+            </defs>
+            <rect x={startX - 30} y={py - 54} width={total + 60} height={sw + 84} rx={14}
+              className="cnn-card" filter="url(#cnn-c2-shadow)" />
+            <text className="fig-label cnn-card__title" x={VW / 2} y={py - 28} textAnchor="middle">
+              conv 2 · filter {f}
+            </text>
+            <text className="fig-note" x={VW / 2} y={py - 10} textAnchor="middle">
+              A 3×3 kernel for each of the 8 pool-1 channels.
             </text>
             {Array.from({ length: net.f1 }, (_, ch) => {
               const bx = startX + ch * (sw + gap);
@@ -698,19 +748,13 @@ export function CNNNetworkView({
                 <g key={ch}>
                   {Array.from({ length: 9 }, (_, i) => {
                     const w = net.k2[(f * net.f1 + ch) * 9 + i]!, r = Math.floor(i / 3), c = i % 3;
-                    return <rect key={i} x={bx + c * cs} y={py + r * cs} width={cs} height={cs} fill={weightFill(w, scale)} stroke="#fff" strokeWidth={0.6} />;
+                    return <rect key={i} x={bx + c * cs} y={py + r * cs} width={cs} height={cs} fill={weightFill(w, scale)} stroke="var(--surface)" strokeWidth={0.6} />;
                   })}
                   <rect x={bx} y={py} width={sw} height={sw} fill="none" stroke="#888" strokeWidth={1.25} rx={4} />
-                  <text x={bx + sw / 2} y={py + sw + 16} textAnchor="middle" fontFamily="var(--font-mono, monospace)" fontSize={10} fill="var(--text-muted,#78716a)">ch {ch}</text>
+                  <text className="fig-label" x={bx + sw / 2} y={py + sw + 17} textAnchor="middle">ch {ch}</text>
                 </g>
               );
             })}
-            <text x={VW / 2} y={py + sw + 40} textAnchor="middle" fontFamily="var(--font-mono, monospace)" fontSize={11} fill="var(--text-secondary,#57514a)">
-              output = Σ (channel’s 3×3 window · its kernel) over all 8 channels, + bias, ReLU
-            </text>
-            <text x={VW / 2} y={py + sw + 58} textAnchor="middle" fontFamily="var(--font-mono, monospace)" fontSize={10} fill="var(--text-faint,#a8a097)">
-              (click anywhere to close)
-            </text>
           </g>
         );
       })()}

@@ -36,6 +36,14 @@ export interface RawHeads {
   Wo: number[];
 }
 
+/** Raw JSON as emitted by train/build-facts.mjs: the fact layer's facts, and
+ *  the outside-the-sentences words they point at, in the same 16-d space. */
+export interface RawFacts {
+  meta: { eDim: number; note: string };
+  facts: Fact[];
+  embeddings: Record<string, number[]>;
+}
+
 export interface HeadSpec {
   name: string;
   gloss: string;
@@ -54,9 +62,13 @@ export interface Model {
   heads: HeadSpec[];
   Wo: Float32Array;
   meta: RawHeads["meta"];
+  /** The fact layer's facts; empty when no facts file was loaded. */
+  facts: Fact[];
+  /** Embeddings of the fact words, which appear in no sentence. */
+  factEmbed: Map<string, Float32Array>;
 }
 
-export function loadModel(raw: RawHeads): Model {
+export function loadModel(raw: RawHeads, rawFacts?: RawFacts): Model {
   const { eDim } = raw.meta;
   const embed = new Map<string, Float32Array>();
   raw.vocab.forEach((w, i) => {
@@ -78,7 +90,26 @@ export function loadModel(raw: RawHeads): Model {
     })),
     Wo: new Float32Array(raw.Wo),
     meta: raw.meta,
+    facts: rawFacts?.facts ?? [],
+    factEmbed: new Map(
+      Object.entries(rawFacts?.embeddings ?? {}).map(([w, v]) => [w, new Float32Array(v)]),
+    ),
   };
+}
+
+/** Fetch the heads and the fact layer, and load them as one model. Both the
+ *  transformer and BERT pages run the same block, so both load both. */
+export async function fetchModel(signal?: AbortSignal): Promise<Model> {
+  const get = async (url: string) => {
+    const r = await fetch(url, { signal });
+    if (!r.ok) throw new Error(`${url.split("/").pop()} ${r.status}`);
+    return r.json();
+  };
+  const [raw, facts] = await Promise.all([
+    get("/examples/transformers/heads.json") as Promise<RawHeads>,
+    get("/examples/transformers/facts.json") as Promise<RawFacts>,
+  ]);
+  return loadModel(raw, facts);
 }
 
 /** One head's pass over the sentence: the attention pattern and each word's
@@ -164,47 +195,119 @@ export function add(a: Float32Array, b: Float32Array): Float32Array {
 
 /** Root-mean-square size of a vector, for the "how big are these numbers"
  *  readout beside the add & norm step. */
-export function rms(x: Float32Array): number {
-  let s = 0;
-  for (let i = 0; i < x.length; i++) s += x[i]! * x[i]!;
-  return Math.sqrt(s / (x.length || 1));
+/** The mean and standard deviation of a word's numbers — the two things
+ *  layerNorm resets, to 0 and 1. */
+export function meanSd(x: Float32Array): { mean: number; sd: number } {
+  const n = x.length || 1;
+  let mean = 0;
+  for (let i = 0; i < x.length; i++) mean += x[i]!;
+  mean /= n;
+  let vr = 0;
+  for (let i = 0; i < x.length; i++) vr += (x[i]! - mean) ** 2;
+  return { mean, sd: Math.sqrt(vr / n) };
 }
 
-// ── The feed-forward layer as a key–value memory ──────────────────────────
+// ── The feed-forward layer, as a store of facts ───────────────────────────
 //
-// A real feed-forward layer is  W_2 · relu(W_1 · x) : expand, threshold,
-// contract. Read row by row, that is a bank of memories: row i of W_1 is a
-// KEY that fires when the input resembles it, and column i of W_2 is the
-// VALUE that fires adds to the output. (Geva et al., 2021; Meng et al.,
-// 2022 locate factual associations in exactly these layers.)
+// A real feed-forward layer is  W_2 · relu(W_1 · x + b) : widen, ReLU,
+// narrow. Each hidden neuron fires for some pattern in the word it is shown
+// (its row of W_1 and its bias) and, when it fires, adds something to the
+// word (its column of W_2). Research that took trained models apart found
+// individual neurons like this holding facts — the neurons that fire for
+// "Eiffel Tower" add a push toward "Paris" — and found that editing them
+// edits the fact (Geva et al., 2021; Meng et al., 2022).
 //
-// This page has no trained feed-forward layer, and 16 dimensions of GloVe
-// leave nothing to train one on. So the memory here is DESIGNED, and labelled
-// as such on the page: one drawer per word the model knows, keyed on that
-// word's embedding, whose value nudges the output toward that word. It shows
-// the mechanism exactly — sparse keys firing, values summed, one word at a
-// time with no cross-talk — while the contents are a stand-in for the
-// thousands of learned drawers a real layer has.
+// This page has no trained feed-forward layer: sixteen dimensions of GloVe
+// leave nothing to train one on. So the layer here is DESIGNED, and the page
+// says so. It has one hidden neuron per fact (facts.json, built by
+// train/build-facts.mjs). A fact joins a word in the sentences to something
+// NO sentence says — pierogi → polish, stadium → soccer — because that is
+// the finding: attention can only mix in what is in the input; this layer
+// adds what is not. A fact neuron's incoming weights point along its trigger
+// word, so it fires for that word and for words near it; its outgoing
+// weights add a push toward its fact word. Everything else is the real
+// mechanism: a weighted sum, a bias, a ReLU, and the firing neurons' pushes
+// added together, one word at a time.
+
+export interface Fact {
+  /** The word the neuron fires for. */
+  from: string;
+  /** The word it pushes toward when it fires. */
+  to: string;
+}
+
+
+/** How closely the word has to match a trigger before the neuron fires: the
+ *  bias. Below it the ReLU holds the neuron at zero. Low enough that a word
+ *  fires a few neurons partly — about a quarter of them, on these sentences —
+ *  with its own fact's neuron far ahead, rather than one neuron and nothing
+ *  else. */
+const FACT_THRESHOLD = 0.1;
+/** How hard a fully firing neuron pushes toward its fact word. */
+const FACT_PUSH = 0.9;
+
+export interface FactNeuron {
+  fact: Fact;
+  /** Row of W_1: the trigger word's direction, scaled so w·x is the cosine
+   *  match for a normalised input (whose length is always √16 = 4). */
+  w: Float32Array;
+  b: number;
+  /** Column of W_2: the push toward the fact word. */
+  v: Float32Array;
+}
+
+const NEURONS = new WeakMap<Model, FactNeuron[]>();
+
+export function factNeurons(model: Model): FactNeuron[] {
+  const cached = NEURONS.get(model);
+  if (cached) return cached;
+  const n = Math.sqrt(model.eDim);
+  const unit = (x: Float32Array) => {
+    const len = Math.hypot(...Array.from(x)) || 1;
+    return Float32Array.from(x, (v) => v / len);
+  };
+  const gain = 1 / (1 - FACT_THRESHOLD);
+  const neurons = model.facts.map((fact) => {
+    const from = unit(model.embed.get(fact.from)!);
+    const to = unit(factVector(model, fact.to));
+    return {
+      fact,
+      w: Float32Array.from(from, (v) => (v * gain) / n),
+      b: -FACT_THRESHOLD * gain,
+      v: Float32Array.from(to, (v) => v * FACT_PUSH * n),
+    };
+  });
+  NEURONS.set(model, neurons);
+  return neurons;
+}
+
+/** A fact word's embedding: fact words live outside the sentence vocabulary. */
+export function factVector(model: Model, word: string): Float32Array {
+  const v = model.factEmbed.get(word) ?? model.embed.get(word);
+  if (!v) throw new Error(`no embedding for fact word "${word}"`);
+  return v;
+}
 
 export interface MemoryRun {
-  /** Per drawer: how strongly its key fired (0 when closed). */
+  /** Per neuron: its weighted sum plus bias, before the ReLU. */
+  match: Float32Array;
+  /** Per neuron: after the ReLU — 0 when it does not fire. */
   activation: Float32Array;
-  /** Indices of the drawers that opened, strongest first. */
+  /** Indices of the neurons that fired, strongest first. */
   open: number[];
-  /** Σ activation × value: what the memory adds to the word. */
+  /** What the firing neurons add to the word. */
   out: Float32Array;
 }
 
-/** Keys fire on cosine similarity above a threshold; a real layer's ReLU
- *  does the same job with a learned bias. */
-const MEMORY_THRESHOLD = 0.3;
-
 export function runMemory(model: Model, x: Float32Array): MemoryRun {
-  const keys = model.vocab.map((w) => model.embed.get(w)!);
-  const activation = new Float32Array(keys.length);
-  keys.forEach((k, i) => {
-    const c = cosine(x, k);
-    activation[i] = Math.max(0, c - MEMORY_THRESHOLD) / (1 - MEMORY_THRESHOLD);
+  const neurons = factNeurons(model);
+  const match = new Float32Array(neurons.length);
+  const activation = new Float32Array(neurons.length);
+  neurons.forEach((nr, i) => {
+    let z = nr.b;
+    for (let d = 0; d < x.length; d++) z += nr.w[d]! * x[d]!;
+    match[i] = z;
+    activation[i] = Math.max(0, z);
   });
   const open = Array.from(activation, (a, i) => ({ a, i }))
     .filter((d) => d.a > 0)
@@ -212,15 +315,15 @@ export function runMemory(model: Model, x: Float32Array): MemoryRun {
     .map((d) => d.i);
   const out = new Float32Array(model.eDim);
   for (const i of open) {
-    const v = keys[i]!;
+    const v = neurons[i]!.v;
     const a = activation[i]!;
     for (let d = 0; d < model.eDim; d++) out[d]! += a * v[d]!;
   }
-  return { activation, open, out };
+  return { match, activation, open, out };
 }
 
 /** One full encoder block over a token list. `mutedHeads` zeroes the listed
- *  heads' outputs, for the "switch a head off" demonstration. */
+ *  heads' outputs. */
 export function runBlock(
   model: Model,
   tokens: string[],

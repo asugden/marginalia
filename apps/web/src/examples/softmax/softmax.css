@@ -1,8 +1,9 @@
 /* Softmax example — layout and figure styling only.
-   Surfaces and buttons come from the design system (<Card>, <Button>);
-   nothing here re-implements a DS primitive. The literal colours are the
-   negative-value blue and the off-the-chart hatch, both intrinsic to the
-   visualization's sign convention (matching the network examples). */
+   Surfaces and buttons come from the design system (<Card>, <Button>).
+   Every bar is a computed number, so it takes the computed scale
+   (docs/style.md §11): vermillion positive, cerulean negative. The two
+   controls boxes, temperature and "Try", are the sunken surface of things
+   the reader operates (§14). */
 
 /* Four side-by-side bar columns need more room than the default 1100px
    example container. Scoped here rather than widening every example. */
@@ -12,10 +13,15 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
-.sm-bad { color: var(--danger, #b3261e); }
+/* A negative computed number, in the computed scale's negative ink. */
+.sm-neg { color: var(--ml-value-neg-ink); }
 
 /* ── Temperature, above the figure it reshapes ────────────────────── */
 .sm-temp {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1.1rem;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 1.5rem;
@@ -50,39 +56,36 @@
   justify-content: space-between;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--text-faint);
+  color: var(--fig-text-label);
   margin-top: 0.25rem;
 }
+/* The readout: a white box, since it reports rather than controls. */
 .sm-temp__side {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.1rem;
-  padding-left: 1.5rem;
-  border-left: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   min-width: 6.5rem;
-}
-@media (max-width: 640px) {
-  .sm-temp__side {
-    border-left: none;
-    border-top: 1px solid var(--border);
-    padding-left: 0;
-    padding-top: 0.75rem;
-  }
 }
 .sm-temp__statlabel {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
+/* A probability: the computed scale's ink. */
 .sm-temp__stat {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 1.6rem;
+  font-weight: 700;
   line-height: 1.1;
-  color: var(--text-strong);
+  color: var(--ml-value-pos-ink);
 }
 .sm-temp__statsub {
   font-size: var(--text-2xs);
@@ -137,11 +140,11 @@
 }
 .sm-stage--good .sm-stage__step {
   background: var(--accent);
-  color: var(--on-accent, #fff);
+  color: var(--text-on-accent);
 }
 .sm-stage--bad .sm-stage__step {
   background: var(--danger, #b3261e);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .sm-stage__title {
   margin: 0;
@@ -194,7 +197,7 @@
   top: -0.62rem;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--text-faint);
+  color: var(--fig-text-label);
   background: var(--surface);
   padding: 0 0.15rem;
 }
@@ -208,24 +211,27 @@
   min-height: 2px;
   padding: 0;
   border: none;
-  border-radius: 3px;
-  background: var(--accent);
+  /* Rounded only at the far end: the other end sits on zero. */
+  border-radius: 3px 3px 0 0;
+  background: var(--ml-value-pos);
   cursor: ns-resize;
   touch-action: none;
   transition: height 90ms ease, bottom 90ms ease;
 }
 /* Read-only stages: same shape, no drag affordance. */
 .sm-bars__bar--static { cursor: default; }
-/* Negative values read as the opposite sign, matching the red/blue weight
-   convention used by the network examples. */
-.sm-bars__bar--neg { background: #4a6fa5; }
+/* Negative values take the computed scale's other pole. */
+.sm-bars__bar--neg {
+  background: var(--ml-value-neg);
+  border-radius: 0 0 3px 3px;
+}
 /* Clamped at the edge of the track — hatched so "off the chart" is legible
    rather than silently pinned. */
 .sm-bars__bar--over {
   background-image: repeating-linear-gradient(
     45deg,
     transparent 0 3px,
-    rgba(255, 255, 255, 0.55) 3px 6px
+    color-mix(in srgb, var(--surface) 55%, transparent) 3px 6px
   );
 }
 .sm-bars__bar:focus-visible {
@@ -251,8 +257,9 @@
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   gap: 0.45rem;
+  /* No gap: in columns 3 and 4 this rule is the zero line the bars stand on. */
   padding-top: 0.45rem;
-  margin-top: 0.35rem;
+  margin-top: 0;
   border-top: 1px solid var(--border);
 }
 .sm-bars__label {
@@ -274,13 +281,17 @@
 .sm-bars__hint {
   margin: 0.5rem 0 0;
   font-size: var(--text-2xs);
-  color: var(--text-faint);
+  color: var(--text-muted);
   text-align: center;
   min-height: 1.1em;
 }
 
 /* ── Things to try ────────────────────────────────────────────────── */
 .sm-try {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1.1rem;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
@@ -297,7 +308,7 @@
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-faint);
+  color: var(--text-secondary);
   margin-right: 0.2rem;
 }
 .sm-try__hint {

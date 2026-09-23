@@ -1,0 +1,62 @@
+/* The pinned control bar: one place to choose what every panel below
+   follows (a sentence, a word), stuck to the top while those panels are on
+   screen. Put the bar and the panels it drives in one `.ex-followed`
+   wrapper: a sticky box is pinned only inside its container, so the bar
+   scrolls away when the last of them does.
+
+   Sunken rather than white, so it reads as the page's controls and not one
+   more panel. The same surface as the ensemble pages' scrubber
+   (random-forest/ensemble.css). */
+.ex-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.7rem 1.1rem;
+  /* No bottom margin: a sticky box stops where its MARGIN box meets the end
+     of its container, so a bottom margin would park it that far above the
+     last panel. The gap below lives on the next panel instead. */
+  margin: 1.5rem 0 0;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+}
+.ex-controls + * {
+  margin-top: 1.25rem;
+}
+.ex-controls__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.ex-controls__label {
+  flex: none;
+  width: 5.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+.ex-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+/* On a phone a wrapped bar would pin half the screen; scroll it sideways. */
+@media (max-width: 640px) {
+  .ex-controls__label {
+    width: auto;
+  }
+  .ex-controls__buttons {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .ex-controls__buttons > * {
+    flex: none;
+  }
+}
