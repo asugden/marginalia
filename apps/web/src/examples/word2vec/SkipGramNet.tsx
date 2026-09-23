@@ -3,8 +3,11 @@
 // Spacing, node size and stroke weights are taken from the digit recognizer so
 // the two figures read as the same kind of object: a generous first gap where
 // the interesting fan-out happens, tighter gaps below, 25px nodes with rx 9,
-// and 1.5px borders. Red positive, blue negative, opacity and width by
-// magnitude. SVG so it stays crisp on a projector.
+// and 1.5px borders. Colours follow ../shared/palette.ts: connections are
+// learned weights (sage positive, plum negative, width by magnitude), the
+// hidden layer is computed (vermillion/cerulean), the bag is a probability
+// (paper to vermillion) and the one-hot input is data as it arrived (ink).
+// SVG so it stays crisp on a projector.
 //
 // What this figure has to carry that the digit recognizer does not:
 //
@@ -22,6 +25,8 @@
 // only 128, so there is nothing to threshold and no detail slider to need.
 
 import { useMemo } from "react";
+import { input, magnitude, value } from "../shared/palette.js";
+import { Strip } from "../transformers/draw.js";
 
 export interface SkipGramNetProps {
   /** Words shown as input/output rows (a readable slice of the vocabulary). */
@@ -36,7 +41,8 @@ export interface SkipGramNetProps {
   encoder: Float32Array | null;
   /** Decoder weights, row-major [shownWords x hiddenDrawn]. */
   decoder: Float32Array | null;
-  /** Fade the decoder half — the "throw it away" moment. */
+  /** Remove the decoder half and show the embedding in its place — the
+   *  "throw it away" moment. */
   decoderDropped: boolean;
   /** Hovering a word in the INPUT row feeds it through the network.
    *
@@ -77,6 +83,12 @@ const HNODE_STROKE = 2; // MLP hidden neuron border
 const HNODE_BORDER = "#888888"; // MLP hidden neuron border colour
 
 const HIDDEN_STEP = 28.5; // MLP hidden-layer spacing
+
+// With the decoder removed, the embedding is redrawn where the bag was, in the
+// strip form every later example uses for a word's vector (the transformer
+// page's Strip, scaled up: one tall cell per number).
+const EMB_CELL = 15;
+const EMB_THICK = 27;
 
 interface Pt {
   cx: number;
@@ -210,7 +222,7 @@ export function SkipGramNet({
           output
         </text>
         <text x={GUTTER - 20} y={Y_OUT + 8} textAnchor="end" className="w2v-net__sublabel">
-          the bag
+          {decoderDropped ? "the embedding" : "the bag"}
         </text>
       </g>
 
@@ -240,6 +252,7 @@ export function SkipGramNet({
       {/* Decoder edges. */}
       <g>
         {decoder &&
+          !decoderDropped &&
           geo.hiddenPts.map((a, c) =>
             geo.output.map((b, r) => {
               // The input word's own output node is out of play; so are its edges.
@@ -254,7 +267,7 @@ export function SkipGramNet({
                   y2={b.cy - TILE / 2}
                   className={`w2v-net__edge${w >= 0 ? "" : " w2v-net__edge--neg"}`}
                   strokeWidth={0.4 + (Math.abs(w) / decMax) * 2.0}
-                  opacity={decoderDropped ? 0.04 : 0.3}
+                  opacity={0.3}
                 />
               );
             }),
@@ -293,8 +306,8 @@ export function SkipGramNet({
             height={TILE}
             rx={TILE_RX}
             ry={TILE_RX}
-            fill={i === inputIndex ? "var(--accent)" : "var(--surface)"}
-            stroke={i === inputIndex ? "var(--accent)" : TILE_BORDER}
+            fill={i === inputIndex ? input(1) : "var(--surface)"}
+            stroke={i === inputIndex ? "var(--ml-input-ink)" : TILE_BORDER}
             strokeWidth={i === inputIndex ? 3.5 : TILE_STROKE}
           />
           <text
@@ -324,49 +337,64 @@ export function SkipGramNet({
             height={HNODE}
             rx={HNODE_RX}
             ry={HNODE_RX}
-            fill={sign(v / hiddenBound)}
+            fill={value(v / hiddenBound)}
             stroke={HNODE_BORDER}
             strokeWidth={HNODE_STROKE}
           />
         );
       })}
 
+      {/* With the decoder gone, the hidden layer IS the output: say so, and
+          draw it the way the rest of the gallery draws a word's vector. */}
+      {decoderDropped && hidden && (
+        <g className="w2v-net__emb">
+          <text className="w2v-net__embnote" x={W / 2} y={Y_OUT - 34} textAnchor="middle">
+            The output becomes the hidden layer. We will represent embeddings as
+          </text>
+          <Strip
+            v={hidden}
+            bound={hiddenBound}
+            x={W / 2 - (hidden.length * EMB_CELL) / 2}
+            y={Y_OUT - 10}
+            cell={EMB_CELL}
+            thick={EMB_THICK}
+          />
+          {inputIndex >= 0 && (
+            <text className="w2v-net__word" x={W / 2} y={Y_OUT + EMB_THICK + 8} textAnchor="middle">
+              {shownWords[inputIndex]}
+            </text>
+          )}
+        </g>
+      )}
+
       {/* Output row: the bag, with the input word ruled out. */}
-      {geo.output.map((p, i) => {
+      {!decoderDropped && geo.output.map((p, i) => {
         const isSelf = i === inputIndex;
         const prob = outputs?.[i] ?? 0;
         const t = isSelf ? 0 : prob / outMax;
         return (
           <g key={`out-${i}`}>
             <rect
-              className={`${isSelf ? "w2v-net__node--excluded" : ""}${
-                decoderDropped ? " w2v-net__node--faded" : ""
-              }`}
+              className={isSelf ? "w2v-net__node--excluded" : ""}
               x={p.cx - TILE / 2}
               y={p.cy - TILE / 2}
               width={TILE}
               height={TILE}
               rx={TILE_RX}
               ry={TILE_RX}
-              fill={
-                isSelf || decoderDropped
-                  ? "var(--surface)"
-                  : `color-mix(in srgb, var(--accent) ${Math.round(t * 95)}%, var(--surface))`
-              }
+              fill={isSelf ? "var(--surface)" : magnitude(t, 95)}
               stroke={TILE_BORDER}
               strokeWidth={TILE_STROKE}
             />
             <text
-              className={`w2v-net__word${isSelf ? " w2v-net__word--excluded" : ""}${
-                decoderDropped ? " w2v-net__word--faded" : ""
-              }`}
+              className={`w2v-net__word${isSelf ? " w2v-net__word--excluded" : ""}`}
               x={p.cx}
               y={p.cy + TILE / 2 + 16}
               textAnchor="middle"
             >
               {shownWords[i]}
             </text>
-            {!isSelf && !decoderDropped && prob > 0.015 && (
+            {!isSelf && prob > 0.015 && (
               <text
                 className="w2v-net__pct"
                 x={p.cx}
@@ -403,13 +431,4 @@ export function SkipGramNet({
       />
     </svg>
   );
-}
-
-/** Red positive, blue negative — the gallery's shared weight convention. */
-function sign(t: number): string {
-  const c = Math.max(-1, Math.min(1, t));
-  if (c >= 0) {
-    return `color-mix(in srgb, var(--accent) ${Math.round(c * 92)}%, var(--surface))`;
-  }
-  return `color-mix(in srgb, #4a6fa5 ${Math.round(-c * 92)}%, var(--surface))`;
 }

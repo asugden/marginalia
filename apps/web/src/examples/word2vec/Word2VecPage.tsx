@@ -427,8 +427,8 @@ export function Word2VecPage() {
                       <br />
                       <br />
                       In the center is a hidden{" "}
-                      <Link to="/examples/digit-recognizer">
-                        dense layer
+                      <Link to="/examples/deep-neural-network">
+                        fully connected layer
                       </Link>{" "}
                       that feeds into the{" "}
                       <Link to="/examples/softmax">output</Link>. The output is
@@ -484,7 +484,7 @@ export function Word2VecPage() {
                     </div>
                   </div>
                   <p>
-                    The key to embedding is that a dense layer is nothing more
+                    The key to embedding is that a fully connected layer is nothing more
                     than a set of numbers, otherwise known as a <b>vector</b>.
                     The final hidden layer feeds the prediction model, which
                     means that it contains the information necessary to predict

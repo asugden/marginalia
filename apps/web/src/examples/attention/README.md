@@ -26,11 +26,33 @@ in two ways: it separated things that only make sense together (the sentence
 and the grid its vectors produce; the raw scores and their softmax), and it
 put the quadratic-cost payoff behind eight clicks.
 
+The sentence and the word being followed are chosen in one pinned bar at
+the top (`../shared/controls.css`), sticky over the first three panels —
+the grid, the value, the movement — and scrolling away with the third.
+Clicking a row of the grid still chooses the word too.
+
 This version is a single scrolling page where everything reacts, matching the
 naive-bayes example rather than the decision-tree one. Steps earn their place
 when each one changes the figure; here they did not.
 
 ## What it shows
+
+0. **The idea, before any numbers** (`IdeaPanel.tsx`). The first review by
+   a mathematician found the page started at step two: it showed Q · K
+   without ever saying what attention is *for*. This panel gives the
+   picture with no numbers at all, in the 3Blue1Brown manner. Each word of
+   the first sentence gets a row with three speech bubbles: what it asks
+   (query: "Anyone describing a food?"), what it says it is (key: "I
+   describe food") and what it hands over (value: "wet and limp"). Beside
+   them is the comparison matrix as a grid of circles, one per pair, sized
+   by how well that row's question fits that column's answer. Clicking a
+   word follows its question: the answers that fit stay lit and a readout
+   says what the word takes in ("It leaves as a soggy and greasy
+   pierogi"). The speech is written by hand and the note says so; the
+   circle areas are the head's real weights for that sentence, so the
+   pattern is the one the attention matrix below prints as percentages.
+   Words the head gives no question to ("Nothing to ask") attend mostly
+   to themselves, which is what the shipped head does.
 
 1. **The sentence and the grid, in one view.** The n × n grid holds one
    cell per *pair* of words. Clicking a word focuses its row. The point of
@@ -56,7 +78,8 @@ when each one changes the figure; here they did not.
    and nothing about *what*, so the third matrix gets its own panel, drawn in
    the grid's own grammar (`ValueLane.tsx`): one column per word running
    word → `E` → `× W_V` swatch → `V`, then a `× weight` cell holding the
-   selected word's row of the grid, then one line per word converging on the
+   selected word's row of the grid (square, the grid cell's size and colour,
+   so the row visibly matches the grid above), then one line per word converging on the
    output strip, with line thickness carrying the weight. The weighted sum is
    therefore drawn rather than stated — "mostly greasy and soggy" is visible
    before it is read. Clicking a value zeroes it: the output moves, the
@@ -196,6 +219,8 @@ Measured behaviour of the shipped head (printed by the trainer):
   on the edges (word → E → × W → Q or K), so each cell reads as the dot
   product of the two strips that meet there and each strip reads as an
   embedding pushed through a shared matrix.
+- `IdeaPanel.tsx` — the opening panel: speech bubbles for query, key and
+  value per word, beside the matrix drawn as circles sized by weight.
 - `ValueLane.tsx` — the value panel's figure: word → E → × W_V → V, × the
   selected row's weights, summed into the output, with one line per word
   whose thickness is its weight.

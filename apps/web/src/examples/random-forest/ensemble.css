@@ -9,10 +9,13 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  /* Sunken rather than white, so the bar reads as the page's controls and not
+     as one more figure — it floats over white figures as it scrolls. The
+     transformers page's control bar takes the same surface. */
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   padding: 0.85rem 1.1rem;
   margin: 1.5rem 0 1.25rem;
   position: sticky;

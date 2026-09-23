@@ -89,7 +89,8 @@
 .mnist-bars li { display: grid; grid-template-columns: 2.5rem 1fr 2.6rem; align-items: center; gap: 0.5rem; font-size: var(--text-sm); }
 .mnist-bars__name { font-family: var(--font-mono); color: var(--text-body); font-variant-numeric: tabular-nums; }
 .mnist-bars__track { height: 8px; background: var(--surface-sunken); border-radius: 999px; overflow: hidden; }
-.mnist-bars__fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 90ms linear; }
+/* A probability is a computed value that cannot go below zero. */
+.mnist-bars__fill { display: block; height: 100%; background: var(--ml-value-pos); border-radius: 999px; transition: width 90ms linear; }
 .mnist-bars__pct { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: var(--text-2xs); }
 
 .mnist-slider {
@@ -111,10 +112,14 @@
 
 .mnist-legend { font-size: var(--text-xs); color: var(--text-muted); display: flex; flex-direction: column; gap: 0.5rem; }
 .mnist-legend__row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-.mnist-legend__swatch { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
-.mnist-legend__swatch--pos { background: #d1344b; }
-.mnist-legend__swatch--neg { background: #2f6fd0; }
-.mnist-legend__grad { width: 60px; height: 10px; border-radius: 3px; display: inline-block; background: linear-gradient(to right, #fff, #000); border: 1px solid var(--border); }
+.mnist-legend__swatch { width: 30px; height: 8px; border-radius: 2px; display: inline-block; border: 1px solid var(--border); }
+/* Ramps, not flat bars: the edge colour is the scale sampled at the
+   weight, so weak reads pale and strong reads full. */
+.mnist-legend__swatch--pos { background: linear-gradient(to right, var(--ml-mark-zero), var(--ml-learned-pos)); }
+.mnist-legend__swatch--neg { background: linear-gradient(to right, var(--ml-mark-zero), var(--ml-learned-neg)); }
+.mnist-legend__grad { width: 60px; height: 10px; border-radius: 3px; display: inline-block; background: linear-gradient(to right, var(--ml-mark-zero), var(--ml-value-pos)); border: 1px solid var(--border); }
+/* The drawn digit is the input, so it keeps the greyscale ramp. */
+.mnist-legend__grad--input { background: linear-gradient(to right, var(--ml-mark-zero), var(--ml-input-ink)); }
 
 /* ── Network canvas ──────────────────────────────────────────── */
 .mnist-canvas {
@@ -154,7 +159,10 @@
   letter-spacing: 0.06em;
 }
 .mnist-clear:hover { background: var(--surface-hover); border-color: var(--accent); color: var(--accent); }
-.mnist-net { display: block; }
+/* The network figures are 1000 units wide in a ~750 px column: they shrink
+   to fit (never grow), so they declare the shrink for the shared figure
+   text to undo (examples/shared/figure.css). */
+.mnist-net { display: block; max-width: 100%; height: auto; --fig-scale: 1.33; }
 .mnist-net__labels text { fill: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; }
 .mnist-net__caption { fill: var(--text-secondary); }
 .mnist-loading { color: var(--text-muted); text-align: center; padding: 4rem 0; }

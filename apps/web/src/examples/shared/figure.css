@@ -1,0 +1,156 @@
+/* Figure text — the voices every example figure speaks in.
+ *
+ * The rules, and why, are in docs/style.md §12 "Figure text"; the rendered
+ * specimens are in the /design gallery under Examples · Figures. Each class
+ * sets both `fill` (SVG text) and `color` (HTML), so one class serves a
+ * label whether it is drawn in the SVG or laid over it.
+ *
+ * Sizes are in pixels ON SCREEN. A figure drawn 1:1 shows them as written.
+ * A figure that must be drawn wider than its column (the network examples'
+ * 1000-unit viewBox in a ~750 px column) shrinks, and its text with it; such
+ * a figure declares --fig-scale: its width ÷ the column's, and the sizes
+ * here are multiplied back up to land at the same pixels.
+ *
+ * Six roles, and the one test that picks between them: does the text NAME a
+ * part of the figure (label, row title), MARK a position on it (tick), carry
+ * the DATA (word, number), or EXPLAIN it (note)?
+ */
+
+/* Label: names a part — a layer, a lane, a column, an axis, a stage.
+   A name, never a sentence: four words at most. */
+.fig-label {
+  font-family: var(--font-mono);
+  font-size: calc(10px * var(--fig-scale, 1));
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  fill: var(--fig-text-label);
+  color: var(--fig-text-label);
+}
+/* A figure's primary layer names (input, hidden, output) on a large figure. */
+.fig-label--lg {
+  font-size: calc(12px * var(--fig-scale, 1));
+  letter-spacing: 0.04em;
+}
+/* The quieter second line under a label: what the part is, in lowercase. */
+.fig-label-sub {
+  font-family: var(--font-mono);
+  font-size: calc(9.5px * var(--fig-scale, 1));
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  fill: var(--fig-text-label);
+  color: var(--fig-text-label);
+}
+
+/* Row title: only when the rows ARE the argument — alternatives the reader
+   compares side by side ("the old way" / "a transformer", "sigmoid" /
+   "ReLU"). Ordinary lanes and layers take .fig-label. */
+.fig-row {
+  font-family: var(--font-sans);
+  font-size: calc(12px * var(--fig-scale, 1));
+  font-weight: 700;
+  text-transform: none;
+  fill: var(--text-body);
+  color: var(--text-body);
+}
+
+/* Tick: a position on an axis. */
+.fig-tick {
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--fig-scale, 1));
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  fill: var(--fig-text-label);
+  color: var(--fig-text-label);
+}
+
+/* Word: the data's own tokens, exactly as written — never uppercased. */
+.fig-word {
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--fig-scale, 1));
+  text-transform: none;
+  fill: var(--text-muted);
+  color: var(--text-muted);
+}
+
+/* The word the figure is following, inside a label ("embedding: pierogi"):
+   it stays a word — lowercase, as written — and is picked out dark and bold. */
+.fig-word--key {
+  font-family: var(--font-mono);
+  text-transform: none;
+  letter-spacing: 0;
+  fill: var(--text-strong);
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+/* Number: a value read off the figure. Beside a mark drawn in one of the
+   figure scales it may take that scale's -ink colour instead. */
+.fig-num {
+  font-family: var(--font-mono);
+  font-size: calc(10.5px * var(--fig-scale, 1));
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  fill: var(--text-body);
+  color: var(--text-body);
+}
+
+/* Note: a phrase or sentence explaining something in the figure. Sentence
+   case, the reading face; never uppercase. Italic for a reading of a mark. */
+.fig-note {
+  font-family: var(--font-sans);
+  font-size: calc(11px * var(--fig-scale, 1));
+  text-transform: none;
+  fill: var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+/* Link: a figure's text that goes to another example (wrap the text in an
+   <a>, or a router <Link>, with this class). It keeps the voice of the text
+   it wraps and takes the accent, underlined, only on hover or focus. */
+.fig-link {
+  cursor: pointer;
+  text-decoration: none;
+}
+.fig-link:hover,
+.fig-link:focus-visible,
+.fig-link:hover > text,
+.fig-link:focus-visible > text {
+  fill: var(--accent);
+  color: var(--accent);
+  text-decoration: underline;
+  outline: none;
+}
+
+/* Selected: the one treatment for "this one", on any role. */
+.fig-on {
+  fill: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+/* Everything else while something is selected. */
+.fig-dim {
+  opacity: 0.35;
+}
+
+/* ── Neurons ────────────────────────────────────────────────────────────
+   One neuron, everywhere: a heavily rounded square (corner radius about a
+   third of its side) with a mid-grey border, the deep neural network
+   example's spec. Border widths are on-screen pixels, multiplied by
+   --fig-scale like the text, so a shrunk figure's neurons keep their edge. */
+.fig-neuron {
+  stroke: var(--fig-node-border);
+  stroke-width: calc(2px * var(--fig-scale, 1));
+}
+/* An input or output tile: the larger square the network examples use for a
+   pixel-free input or an output class. */
+.fig-tile {
+  stroke: var(--fig-tile-border);
+  stroke-width: calc(2.25px * var(--fig-scale, 1));
+}
+/* A neuron smaller than 16 units (a dense row drawn as dots) keeps its border
+   in proportion rather than at full weight. */
+.fig-neuron--small {
+  stroke-width: calc(1px * var(--fig-scale, 1));
+}

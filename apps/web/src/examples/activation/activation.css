@@ -1,0 +1,436 @@
+/* Activation-functions example — layout and figure styling only.
+   Page chrome (topbar, eyebrow lockup, lede, slider boxes, readout boxes)
+   comes from the deep-neural-network stylesheet, which this page imports, so
+   the two read as one course. Figure colour follows docs/style.md §11: inputs
+   greyscale, weights sage/plum, computed numbers vermillion/cerulean; the
+   accent is UI only. The neuron and tile specs are the digit recognizer's. */
+
+/* ── Panels ────────────────────────────────────────────────────────── */
+.af-panel {
+  margin-bottom: 1rem;
+}
+.af-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.af-sub {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.af-note {
+  margin: 0.85rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* Each panel is the digit recognizer's layout: a controls column on the
+   left, the figure on the right. */
+.af-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .af-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.af-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+/* Drawn 1:1 — never scaled up — so the figure-text sizes are real pixels
+   and match every other example's (docs/style.md §12). Narrow screens
+   still shrink it to fit. */
+.af-fig {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* ── The activation bar ────────────────────────────────────────────
+   Pinned while the two panels it drives are on screen, then it scrolls
+   away with them — the transformers page's control bar, same surface. */
+.af-followed {
+  /* the wrapper the bar is sticky within; no styling of its own */
+}
+.af-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.7rem 1.1rem;
+  /* No bottom margin: a sticky box parks where its margin box meets the end
+     of its container. The gap below lives on the next panel. */
+  margin: 0 0 0;
+  position: sticky;
+  top: 0.5rem;
+  z-index: 2;
+}
+.af-controls + * {
+  margin-top: 1.25rem;
+}
+.af-controls__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+/* The Neuroscience switch, pushed to the bar's right-hand end. */
+.af-controls__end {
+  margin-left: auto;
+}
+.af-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+/* The little curve drawn in each activation button. */
+.af-glyph {
+  display: block;
+  width: 26px;
+  height: 14px;
+}
+.af-glyph path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.af-glyph line {
+  stroke: currentColor;
+  stroke-width: 0.6;
+  opacity: 0.45;
+}
+
+/* ── Side-column pieces ─────────────────────────────────────────── */
+.af-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+}
+.af-box--quiet {
+  background: var(--surface-sunken);
+}
+.af-kicker {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+.af-big {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text-strong);
+}
+.af-big--value {
+  color: var(--ml-value-pos-ink);
+}
+.af-flow {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  color: var(--text-body);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.af-flow b {
+  font-size: 1.15rem;
+}
+.af-flow__arrow {
+  color: var(--text-faint);
+}
+.af-flow__fn {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.af-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+.af-text + .af-text {
+  margin-top: 0.5rem;
+}
+.af-eq {
+  display: block;
+  margin: 0.45rem 0 0.1rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.af-question {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display, inherit);
+  font-size: var(--text-md, 1rem);
+  line-height: 1.35;
+  color: var(--text-strong);
+}
+.af-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.af-stepper .af-big {
+  min-width: 1.4ch;
+  text-align: center;
+}
+
+/* Slider groups: one row per number, label · slider · value. */
+.af-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.af-sliders + .af-sliders {
+  margin-top: 0.7rem;
+}
+.af-slider {
+  display: grid;
+  grid-template-columns: 1.9rem 1fr 3.1rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--text-body);
+}
+.af-slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+/* A weight slider takes the learned colour of its sign. */
+.af-slider--pos input {
+  accent-color: var(--ml-learned-pos);
+}
+.af-slider--neg input {
+  accent-color: var(--ml-learned-neg);
+}
+.af-slider__val {
+  text-align: right;
+}
+.af-slider__val--pos {
+  color: var(--ml-learned-pos-ink);
+}
+.af-slider__val--neg {
+  color: var(--ml-learned-neg-ink);
+}
+.af-slider--wide {
+  grid-template-columns: 4.6rem 1fr 3.1rem;
+}
+
+/* ── Figure marks ──────────────────────────────────────────────── */
+/* Figure text takes the shared voices (examples/shared/figure.css,
+   docs/style.md §12); only the pieces below are this page's own. */
+.af-tile {
+  stroke: #c9c2b8; /* the digit recognizer's output-tile border */
+  stroke-width: 2.25;
+}
+.af-node {
+  stroke: #888888; /* the digit recognizer's hidden-neuron border */
+  stroke-width: 2;
+}
+.af-node--big {
+  stroke-width: 2.25;
+}
+.af-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.af-sigma {
+  font-family: var(--font-display, serif) !important;
+  font-size: 26px;
+  fill: var(--text-strong);
+  pointer-events: none;
+}
+.af-wlabel rect {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 0.75;
+}
+.af-wlabel text {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.af-wlabel--pos text {
+  fill: var(--ml-learned-pos-ink);
+}
+.af-wlabel--neg text {
+  fill: var(--ml-learned-neg-ink);
+}
+.af-sum--total {
+  font-weight: 700;
+  fill: var(--text-strong);
+}
+.af-note-italic {
+  font-style: italic;
+}
+.af-sum--rule {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.af-neuronframe {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+}
+.af-flowline {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.1;
+}
+.af-arrowhead {
+  fill: var(--text-muted);
+}
+
+/* Plots. */
+.af-plot__frame {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.af-plot__axis {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.af-plot__grid {
+  stroke: var(--border-faint, var(--border));
+  stroke-width: 1;
+}
+/* The activation function's own curve is a shape, not a datum: ink. */
+.af-plot__fn {
+  fill: none;
+  stroke: var(--text-strong);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.af-plot__guide {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+/* A network's output as a curve: a computed value, so vermillion. */
+.af-plot__fit {
+  fill: none;
+  stroke: var(--ml-value-pos);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.af-plot__data {
+  fill: var(--ml-input-ink);
+}
+.af-plot__cursor {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+.af-plot__hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.af-bar-glyph {
+  stroke: var(--ml-input-ink);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.af-bar-glyph--small {
+  stroke-width: 1.6;
+}
+
+/* Mini plots under the hidden neurons: each neuron's own response. */
+.af-mini__frame {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 0.75;
+}
+.af-mini__fn {
+  fill: none;
+  stroke: var(--ml-value-pos);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.af-mini__zero {
+  stroke: var(--border-strong);
+  stroke-width: 0.75;
+}
+
+/* The deep chains. */
+.af-chain__wire {
+  stroke: var(--ml-learned-pos);
+  stroke-width: 2;
+  opacity: 0.6;
+}
+.af-chain__track {
+  fill: var(--surface-sunken);
+}
+/* How much a layer still moves with the input: computed, never negative. */
+.af-chain__bar {
+  fill: var(--ml-value-pos);
+}
+/* A response too small to matter reads as the label grey. */
+.af-chain__resp--dead {
+  fill: var(--fig-text-label);
+}
+
+/* The Neuroscience view's drawn cells: one grey, the neuron border's. The
+   nucleus is filled inline with the cell's firing rate. */
+.af-cell {
+  fill: var(--fig-node-border);
+}
+.af-cell__soma {
+  fill: var(--surface);
+  stroke: var(--fig-node-border);
+}
+.af-cell__nucleus {
+  stroke: var(--fig-node-border);
+  stroke-width: 1;
+}
+.af-cell__axon,
+.af-axon {
+  fill: none;
+  stroke: var(--fig-node-border);
+}
+/* A synapse's bouton takes its weight's sign: sage excites, plum inhibits. */
+.af-bouton--pos {
+  fill: var(--ml-learned-pos);
+}
+.af-bouton--neg {
+  fill: var(--ml-learned-neg);
+}

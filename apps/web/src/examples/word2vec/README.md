@@ -6,8 +6,9 @@ no auth — it loads a real embedding table as a static JSON asset and computes
 every similarity, neighbour and analogy in the browser.
 
 Visual conventions follow the [deep neural network](../mnist-mlp/README.md)
-example (network drawn top-to-bottom, input at the top, red positive / blue
-negative weights, edge-magnitude threshold on a slider, layer captions in a
+example (network drawn top-to-bottom, input at the top, the shared figure
+scales from `../shared/palette.ts` — sage/plum learned weights,
+vermillion/cerulean computed values, ink for the one-hot input — edge-magnitude threshold on a slider, layer captions in a
 left gutter, SVG throughout) and the [attention](../attention/README.md)
 example (one scrolling page of live panels rather than a stepped walkthrough).
 
@@ -46,10 +47,14 @@ example (one scrolling page of live panels rather than a stepped walkthrough).
    words' worth of context predicted through 32 numbers per word. The cheapest
    way to do well is to give words used in similar contexts similar numbers.
 
-5. **Throw away the decoder.** A toggle that fades the entire decoder half of
-   the figure — bracket, label, edges, output nodes — while the encoder stays
-   solid. The halves are bracketed and named in the figure itself, so this is a
-   visible event rather than a number changing in a table.
+5. **Throw away the decoder.** A toggle that removes the decoder half of the
+   figure — its edges and output nodes go, its bracket fades — while the
+   encoder stays solid. In the bag's place the figure says the output is now
+   the hidden layer and redraws that layer as an embedding strip (the
+   transformer page's `Strip`), introducing the rectangle-of-cells form every
+   later example uses for a word's vector. The halves are bracketed and named
+   in the figure itself, so this is a visible event rather than a number
+   changing in a table.
 
 6. **Play.** Cosine similarity between any two words, clickable nearest
    neighbours, and analogies.
@@ -94,7 +99,7 @@ thresholding and no detail slider. All the arithmetic runs at the table's full
 says so above itself.
 
 **Spacing and weights** are taken from the digit recognizer (230px first gap,
-108px after; 25px nodes at rx 9; 1.5px borders; red positive, blue negative) so
+108px after; 25px nodes at rx 9; 1.5px borders) so
 the two figures read as the same kind of object.
 
 **The 2D map** is PCA over exactly the plotted words, so its axes carry no

@@ -82,13 +82,6 @@
   flex: 1 1 8rem;
   min-width: 8rem;
 }
-.bt-reuse__cap {
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
 .bt-reuse__box {
   display: flex;
   flex-direction: column;
@@ -121,4 +114,187 @@
   color: var(--text-faint);
   font-family: var(--font-mono);
   padding-top: 1rem;
+}
+
+/* ── Where the first vector comes from ─────────────────────────────── */
+.bt-wp {
+  margin-bottom: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.bt-wp__try {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.bt-wp__try .fig-label {
+  margin-right: 0.3rem;
+}
+.bt-wp__input {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-strong);
+  width: 11rem;
+}
+.bt-wp__input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.bt-wp__pieces {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0.2rem;
+  font-family: var(--font-mono);
+}
+.bt-wp__word {
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.bt-wp__arrow {
+  color: var(--text-faint);
+}
+.bt-wp__piece {
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--surface);
+  color: var(--text-strong);
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.bt-wp__piece--cont {
+  background: var(--surface-sunken);
+  border-style: dashed;
+}
+.bt-wp__piece--unk {
+  color: var(--danger, #b4232f);
+  border-color: var(--danger, #b4232f);
+}
+.bt-wp__count {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  margin-left: 0.2rem;
+}
+.bt-emb__sentences {
+  margin-bottom: 0.5rem;
+}
+.bt-emb__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.3rem;
+}
+.bt-emb__tok {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.bt-emb__tok:hover {
+  border-color: var(--accent);
+}
+.bt-emb__tok--on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.bt-emb__tok--special {
+  background: var(--surface-sunken);
+  letter-spacing: 0.04em;
+}
+.bt-emb__tok--cont {
+  border-style: dashed;
+}
+.bt-emb__pos {
+  font-size: 9px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.bt-emb__blank {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+  stroke-dasharray: 3 2;
+}
+.bt-emb__blanktext {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  fill: var(--text-muted);
+}
+
+/* ── ELMo beside BERT ──────────────────────────────────────────────── */
+.bt-elmo__title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--text-strong);
+}
+.bt-elmo__state {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+.bt-elmo__state--on {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+.bt-elmo__join {
+  stroke: var(--accent);
+  stroke-width: 0.8;
+  stroke-dasharray: 2 2;
+}
+.bt-elmo__eq {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  fill: var(--text-muted);
+}
+
+/* ── skip-gram / CBOW / masked LM ──────────────────────────────────── */
+.bt-obj__title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--text-strong);
+}
+.bt-obj__tile {
+  fill: var(--surface);
+  stroke: var(--border-strong, var(--border));
+  stroke-width: 1;
+}
+.bt-obj__tile--hot {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+.bt-obj__tile--hollow {
+  fill: none;
+  stroke-dasharray: 3 2;
+}
+.bt-obj__text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--text-body);
+}
+.bt-obj__text--hot {
+  fill: #fff;
+  font-weight: 700;
+}
+.bt-obj__divider {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
 }

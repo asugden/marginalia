@@ -7,14 +7,13 @@
 //   1. The head, as a box. Words in, words out, computed from the attention
 //      page's own head so the two pages agree.
 //   2. Many heads at once, and W_O, the matrix that folds them together.
-//      Three heads fitted to find three different relationships; switch any
-//      off.
+//      Three heads fitted to find three different relationships.
 //   3. Add & norm. The word keeps itself and gains context; the numbers stay
 //      in range.
 //   4. The feed-forward layer as a memory of keys and values — where research
-//      finds the facts — drawn as drawers that open for a word.
-//   5. One block, stacked N times, with the shapes of real models and where
-//      those numbers come from.
+//      finds the facts — drawn as a dense network of fact neurons.
+//   5. (Step 5 on the map, blocks in series, lives on the large language
+//      models page, with the shapes of real models.)
 //   6. The figure from "Attention Is All You Need", redrawn and translated
 //      box by box into the panels above. Our construction is its encoder.
 //
@@ -25,19 +24,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card, Wordmark } from "../../components/index.js";
-import "../mnist-mlp/digit-recognizer.css";
 import "../attention/attention.css";
-import "./transformers.css";
-import { loadModel, runBlock, type Model, type RawHeads } from "./transformer.js";
+import "../mnist-mlp/digit-recognizer.css";
+import "../shared/figure.css";
+import { AddNorm } from "./AddNorm.js";
+import { CanonicalFigure } from "./CanonicalFigure.js";
 import { HeadBox } from "./HeadBox.js";
 import { LayerMap } from "./LayerMap.js";
-import { MultiHead } from "./MultiHead.js";
-import { AddNorm } from "./AddNorm.js";
 import { MemoryPanel } from "./MemoryPanel.js";
-import { StackPanel } from "./StackPanel.js";
-import { CanonicalFigure } from "./CanonicalFigure.js";
-
-const HEADS_URL = "/examples/transformers/heads.json";
+import { MultiHead } from "./MultiHead.js";
+import { fetchModel, runBlock, type Model } from "./transformer.js";
+import "./transformers.css";
 
 export function TransformersPage() {
   const [model, setModel] = useState<Model | null>(null);
@@ -45,16 +42,11 @@ export function TransformersPage() {
   const [sentenceIndex, setSentenceIndex] = useState(0);
   // The noun the heads were built around sits at index 3 in every sentence.
   const [row, setRow] = useState(3);
-  const [muted, setMuted] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch(HEADS_URL, { signal: ctrl.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`heads ${r.status}`);
-        return r.json();
-      })
-      .then((raw: RawHeads) => setModel(loadModel(raw)))
+    fetchModel(ctrl.signal)
+      .then(setModel)
       .catch((e) => {
         if (!ctrl.signal.aborted) setLoadError(e.message);
       });
@@ -66,30 +58,53 @@ export function TransformersPage() {
     [model, sentenceIndex],
   );
   const run = useMemo(
-    () => (model ? runBlock(model, tokens, muted) : null),
-    [model, tokens, muted],
+    () => (model ? runBlock(model, tokens) : null),
+    [model, tokens],
   );
 
-  const toggleHead = (k: number) =>
-    setMuted((m) => {
-      const next = new Set(m);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
-
-  const wordPick = run && (
-    <div className="at-wordpick" role="group" aria-label="Choose the word to follow">
-      {run.tokens.map((t, i) => (
-        <Button
-          key={`${t}-${i}`}
-          size="sm"
-          variant={row === i ? "primary" : "subtle"}
-          onClick={() => setRow(i)}
-        >
-          {t}
-        </Button>
-      ))}
+  // One control bar for the whole page, pinned as the reader scrolls — the
+  // ensemble pages' technique. Every panel follows the same sentence and the
+  // same word, so there is one place to change them rather than a copy of the
+  // buttons above each figure.
+  const controls = model && run && (
+    <div
+      className="tf-controls"
+      role="group"
+      aria-label="Choose the sentence and the word to follow"
+    >
+      <div className="tf-controls__row">
+        <span className="tf-controls__label">Sentence</span>
+        <div className="tf-controls__buttons">
+          {model.sentences.map((s, i) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={i === sentenceIndex ? "primary" : "subtle"}
+              onClick={() => {
+                setSentenceIndex(i);
+                setRow(3);
+              }}
+            >
+              {s.split(" ").slice(1, 3).join(" ")}…
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="tf-controls__row">
+        <span className="tf-controls__label">Word</span>
+        <div className="tf-controls__buttons">
+          {run.tokens.map((t, i) => (
+            <Button
+              key={`${t}-${i}`}
+              size="sm"
+              variant={row === i ? "primary" : "subtle"}
+              onClick={() => setRow(i)}
+            >
+              {t}
+            </Button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
@@ -97,7 +112,11 @@ export function TransformersPage() {
     <div className="app">
       <header className="app-topbar app-topbar--wide">
         <div className="app-topbar__inner">
-          <Link to="/examples" className="app-lockup-link" aria-label="Examples">
+          <Link
+            to="/examples"
+            className="app-lockup-link"
+            aria-label="Examples"
+          >
             <Wordmark size="sm" />
           </Link>
           <span className="mnist-crumb">Examples</span>
@@ -106,242 +125,210 @@ export function TransformersPage() {
       </header>
 
       <div className="app__body">
-        <div className="mnist-page">
+        <div className="mnist-page tf-page">
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
             <h1>Transformers</h1>
             <p className="mnist-lede">
-              The <Link to="/examples/attention">attention</Link> example built
-              one attention head and looked inside it. A transformer is what
-              you get when you treat that head as a finished part: run several
-              at once, add what they find back onto each word, pass every word
-              through a memory, and repeat the whole thing dozens of times.
-              This page builds that block, one piece at a time, on the same
-              sentences and the same head — and ends by decoding the famous
-              diagram everyone has seen and few can read.
+              <Link to="/examples/attention">Attention</Link> covered the most
+              complex component of the transformer block, but now we need to put
+              it in context. The attention example we saw before was a "head",
+              and multiple heads plus a few more layers complete the
+              transformer.
             </p>
           </div>
 
           {loadError && (
-            <p className="mnist-error">Couldn't load the heads ({loadError}).</p>
+            <p className="mnist-error">
+              Couldn't load the heads ({loadError}).
+            </p>
           )}
-          {!model && !loadError && <div className="mnist-loading">Loading heads…</div>}
+          {!model && !loadError && (
+            <div className="mnist-loading">Loading heads…</div>
+          )}
 
           {model && run && (
             <>
-              {/* ── The map: one layer, drawn once, pointed at throughout ── */}
-              <Card className="at-panel" padding="md" id="tf-map">
-                <div className="at-main__head">
-                  <div>
-                    <h2 className="at-h2">One layer, as a map</h2>
-                    <p className="at-sub">
-                      This is the whole thing, drawn the way networks are
-                      usually drawn: columns of neurons, widening in the middle
-                      and narrowing again. One part does not fit that shape —
-                      attention is not a column of neurons but a grid of word
-                      pairs, so it is drawn as the grid from the attention page.
-                      The dashed arcs over the top carry the word itself past
-                      each stage to a <b>+</b>. Every number is live for the
-                      word you choose. The panels below build it left to right,
-                      and each carries the number of its place on the map.
-                    </p>
+              {/* The bar is sticky within this wrapper only: it stays pinned
+                  through the panels that follow the chosen word (the map
+                  through the memory) and scrolls away with them. From the
+                  stack panel down nothing depends on the word, so a pinned
+                  bar would just be in the way. */}
+              <div className="tf-followed">
+                {controls}
+
+                {/* ── The map: one layer, drawn once, pointed at throughout ── */}
+                <Card className="at-panel" padding="md" id="tf-map">
+                  <div className="at-main__head">
+                    <div>
+                      <h2 className="at-h2">Complete transformer map</h2>
+                      <p className="at-sub">
+                        Here is a map of a complete transformer. We covered{" "}
+                        <Link to="/examples/attention">attention</Link> or step
+                        1 in a previous example. The changes that we compute are
+                        added to any word (e.g. pierogi) and then passed through
+                        a fully connected network. The result of that network is
+                        added again. That is one transformer block; a{" "}
+                        <Link to="/examples/language-models">
+                          large language model
+                        </Link>{" "}
+                        repeats it in series.
+                      </p>
+                    </div>
                   </div>
-                  <div className="at-sentences">
-                    {model.sentences.map((s, i) => (
-                      <Button
-                        key={s}
-                        size="sm"
-                        variant={i === sentenceIndex ? "primary" : "subtle"}
-                        onClick={() => {
-                          setSentenceIndex(i);
-                          setRow(3);
-                        }}
-                      >
-                        {s.split(" ").slice(1, 3).join(" ")}…
-                      </Button>
-                    ))}
+                  <LayerMap model={model} run={run} row={row} />
+                </Card>
+
+                {/* ── 1. The head as a box ── */}
+                <Card className="at-panel" padding="md" id="tf-head">
+                  <div className="at-main__head">
+                    <div>
+                      <h2 className="at-h2">
+                        <span className="tf-mapref">1</span>Attention callback
+                      </h2>
+                      <p className="at-sub">
+                        Consider the entirety of attention (with keys, queries,
+                        and values) as a single operation. The result is each
+                        input word updated with some of its context.
+                      </p>
+                    </div>
                   </div>
-                </div>
-                {wordPick}
-                <LayerMap model={model} run={run} row={row} />
-                <p className="tf-maplegend">
-                  <a href="#tf-heads"><span className="tf-mapref">1</span>attention: the head, then many heads</a>
-                  <a href="#tf-addnorm"><span className="tf-mapref">2</span>add &amp; norm</a>
-                  <a href="#tf-memory"><span className="tf-mapref">3</span>the memory, two layers</a>
-                  <a href="#tf-memory"><span className="tf-mapref">4</span>add &amp; norm again</a>
-                  <a href="#tf-stack"><span className="tf-mapref">5</span>repeat</a>
-                </p>
-              </Card>
+                  <HeadBox run={run} row={row} onSelectRow={setRow} />
+                </Card>
 
-              {/* ── 1. The head as a box ── */}
-              <Card className="at-panel" padding="md" id="tf-head">
-                <div className="at-main__head">
-                  <div>
-                    <h2 className="at-h2"><span className="tf-mapref">1</span>The attention head, as one box</h2>
-                    <p className="at-sub">
-                      Everything the attention page did — the grid of how much
-                      each word takes from each other, the values that say
-                      what it takes — is now one object with words going in
-                      and words coming out. Each word comes out as itself plus
-                      some of the words it attended to. This box is the
-                      attention page's head, number for number.
-                    </p>
-                  </div>
-                </div>
-                {wordPick}
-                <HeadBox run={run} row={row} onSelectRow={setRow} />
-              </Card>
+                {/* ── 2. Many heads ── */}
+                <Card className="at-panel" padding="md" id="tf-heads">
+                  <h2 className="at-h2">
+                    <span className="tf-mapref">1</span>Multi-headed attention
+                  </h2>
+                  <p className="at-sub">
+                    The abstract question asked by keys and queries (called an
+                    "attention head") examines a single kind of relationship.
+                    Similar to multiple convolutional kernels, most transformer
+                    networks run multiple heads side-by-side. Each head has its
+                    own{" "}
+                    <b>
+                      W<sub>K</sub>
+                    </b>
+                    ,{" "}
+                    <b>
+                      W<sub>Q</sub>
+                    </b>
+                    , and{" "}
+                    <b>
+                      W<sub>V</sub>
+                    </b>
+                    , but they operate off of the same embeddings. Each head's
+                    outputs are stacked end-to-end and multiplied by one more
+                    learned matrix,{" "}
+                    <b>
+                      W<sub>O</sub>
+                    </b>
+                    , to return to the same size of a single word embedding.
+                    <br />
+                    <br />
+                    We have labeled attention heads using phrases like
+                    "adjectives -&gt; noun", but{" "}
+                    <b>
+                      these are human interpretations of a black box process
+                    </b>
+                    .
+                  </p>
+                  <MultiHead model={model} run={run} row={row} />
+                </Card>
 
-              {/* ── 2. Many heads ── */}
-              <Card className="at-panel" padding="md" id="tf-heads">
-                <h2 className="at-h2"><span className="tf-mapref">1</span>Many heads at once</h2>
-                <p className="at-sub">
-                  One head can look for one kind of relationship. A transformer
-                  layer runs several side by side, each with its own three
-                  matrices, each reading the same sentence and free to find
-                  something different. The three here were fitted to find
-                  three different things. Every head produces its own output
-                  for every word; those outputs are <b>stacked end to end</b>{" "}
-                  and multiplied by one more learned matrix,{" "}
-                  <b>
-                    W<sub>O</sub>
-                  </b>
-                  , to get back to a single vector the width of the word. That
-                  is the matrix the attention page's footnote promised: its
-                  job is combining heads.
-                </p>
-                {wordPick}
-                <MultiHead
-                  model={model}
-                  run={run}
-                  row={row}
-                  muted={muted}
-                  onToggleHead={toggleHead}
-                />
-                <p className="at-panel__note">
-                  Head 1 is the attention page's head. Heads 2 and 3 were
-                  fitted the same way to different targets. Real heads are not
-                  this tidy — a production model's heads each do several
-                  overlapping things at once — but “several heads, several
-                  relationships” is the right picture. W<sub>O</sub> here is a
-                  fixed random matrix, not a fitted one: with no network around
-                  it there is nothing to fit it against.
-                </p>
-              </Card>
+                {/* ── 3. Add & norm ── */}
+                <Card className="at-panel" padding="md" id="tf-addnorm">
+                  <h2 className="at-h2">
+                    <span className="tf-mapref">2</span>Add and normalize
+                  </h2>
+                  <p className="at-sub">
+                    Ironically, most layers in neural networks fully transform
+                    the previous layer. The previous layer is multiplied by
+                    weights and then passed through an{" "}
+                    <Link to="/examples/activation-function">
+                      activation function
+                    </Link>
+                    . In contrast, the two processes performed by a transformer{" "}
+                    <b>adjust</b> embeddings rather than transform them. The
+                    changes are offsets that are added. These offsets applied
+                    layer after layer would let a word's embedding drift. To fix
+                    that, we normalize word-by-word to a mean of 0 and a
+                    standard deviation of 1.
+                  </p>
+                  <AddNorm model={model} run={run} row={row} which={1} />
+                  <p className="at-panel__note">
+                    Note: layer norm in a traditional model learns two
+                    additional parameters, gain and offset, that allows better
+                    performance.
+                  </p>
+                </Card>
 
-              {/* ── 3. Add & norm ── */}
-              <Card className="at-panel" padding="md" id="tf-addnorm">
-                <h2 className="at-h2"><span className="tf-mapref">2</span>Add &amp; norm: keep the word, add what it learned</h2>
-                <p className="at-sub">
-                  Every layer in the networks you have met so far{" "}
-                  <b>replaces</b> its input: multiply by the weights, pass the
-                  result on, and what came in is gone. A transformer does
-                  something different at the <b>+</b> on the map: it takes
-                  what attention computed and <b>adds it to the word it was
-                  given</b>. Below, the same word goes down both paths. Watch
-                  the meter on the right.
-                </p>
-                <AddNorm model={model} run={run} row={row} which={1} />
-                <p className="at-panel__note">
-                  “Size” is the typical magnitude of the sixteen numbers.
-                  Notice how small attention's contribution is next to the
-                  word itself — that is typical, not a quirk of this page: a
-                  word stays mostly itself and each layer nudges it — and how
-                  the norm sets the size to one regardless. A real layer norm
-                  also multiplies by a learned gain and adds a learned offset;
-                  that changes nothing about the idea and is left out of the
-                  drawing.
-                </p>
-              </Card>
-
-              {/* ── 4. The memory ── */}
-              <Card className="at-panel" padding="md" id="tf-memory">
-                <h2 className="at-h2"><span className="tf-mapref">3</span>The other half: a memory for facts</h2>
-                <p className="at-sub">
-                  Half of every block is not attention at all. After the words
-                  have read each other, each word — <b>alone, with no view of
-                  the others</b> — passes through the same two-layer network
-                  you met in the{" "}
-                  <Link to="/examples/digit-recognizer">digit recognizer</Link>:
-                  widen, threshold, narrow. Read row by row, that network is a
-                  bank of drawers. Each drawer has a <b>key</b>, a pattern it
-                  responds to, and a <b>value</b>, what it adds when it opens.
-                  Present a word; the few drawers whose keys match open; their
-                  values are added to the word. Researchers who took real
-                  models apart found that this is where facts are kept: the
-                  drawers that open for “Eiffel Tower” are what make “Paris”
-                  likely later on, and editing those drawers edits the fact.
-                </p>
-                {wordPick}
-                <MemoryPanel model={model} run={run} row={row} />
-                <p className="at-sub tf-sub--after">
-                  <span className="tf-mapref">4</span>…and then, exactly as
-                  before, the result is added to the word and normalised.
-                </p>
-                <AddNorm model={model} run={run} row={row} which={2} />
-                <p className="at-panel__note">
-                  <b>This memory is designed, not learned.</b> Sixteen
-                  dimensions of word vectors give nothing to train a real one
-                  on, so it has one drawer per word this tiny model knows,
-                  keyed on that word's embedding. A real layer has thousands of
-                  drawers per block, keyed on patterns no single word names —
-                  but they open, sum, and stay shut in exactly this way. The
-                  research: Geva, Schuster, Berant &amp; Levy (2021),
-                  “Transformer Feed-Forward Layers Are Key-Value Memories”;
-                  Meng, Bau, Andonian &amp; Belinkov (2022), “Locating and
-                  Editing Factual Associations in GPT”. The memory is also
-                  where most of the parameters are: for a word of width d,
-                  attention's four matrices hold about 4d² numbers and the
-                  memory's two hold about 8d², two-thirds of the block.
-                </p>
-              </Card>
-
-              {/* ── 5. Stack it ── */}
-              <Card className="at-panel" padding="md" id="tf-stack">
-                <h2 className="at-h2"><span className="tf-mapref">5</span>One block, then stack it</h2>
-                <p className="at-sub">
-                  Heads, add &amp; norm, memory, add &amp; norm: that is a
-                  transformer block, and a transformer is the block repeated
-                  with the output of one feeding the next. Every copy has its
-                  own heads and its own drawers. The shapes of real models are
-                  public for some and guessed at for others; here are both,
-                  labelled.
-                </p>
-                <StackPanel />
-              </Card>
+                {/* ── 4. The memory ── */}
+                <Card className="at-panel" padding="md" id="tf-memory">
+                  <h2 className="at-h2">
+                    <span className="tf-mapref">3</span>Fully connected layers
+                  </h2>
+                  <p className="at-sub">
+                    The attention component of the transformer updates words via
+                    their context, but does not update them via their content.
+                    This has been labeled "communicate, then compute." To update
+                    each word via its own content, we use the same type of{" "}
+                    <Link to="/examples/deep-neural-network">
+                      fully connected
+                    </Link>{" "}
+                    network that we saw previously. (The transformer paper
+                    calls it the feed-forward network: two fully connected
+                    layers applied to each word on its own.)
+                    <br />
+                    <br />
+                    Recent research (see note 1) has shown that this is where
+                    the model stores facts. For example, a sentence about
+                    Michael Jordan will have the concept of basketball added to
+                    it via these layers. Perhaps surprisingly, this is where the
+                    vast majority of parameters of a large language model live.
+                  </p>
+                  <MemoryPanel
+                    model={model}
+                    run={run}
+                    row={row}
+                  />
+                  <p className="at-sub tf-sub--after" id="tf-addnorm2">
+                    <span className="tf-mapref">4</span>Then the result is added
+                    to the word and normalised, exactly as in{" "}
+                    <a href="#tf-addnorm">step 2</a>.
+                  </p>
+                  <p className="at-panel__note">
+                    Note 1: Geva, Schuster, Berant &amp; Levy (2021),
+                    “Transformer Feed-Forward Layers Are Key-Value Memories”;
+                    Meng, Bau, Andonian &amp; Belinkov (2022), “Locating and
+                    Editing Factual Associations in GPT”.
+                    <br />
+                    Note 2: this is the only example that was generated by hand
+                    rather than by a real model. At the scale of any large
+                    language model, it is not as simple as the idea of "Polish"
+                    or "subway". That kind of information will be contained
+                    across many neurons.
+                  </p>
+                </Card>
+              </div>
 
               {/* ── 6. The canonical figure ── */}
               <Card className="at-panel" padding="md" id="tf-figure">
-                <h2 className="at-h2">The famous figure, decoded</h2>
+                <h2 className="at-h2">Attention figure, decoded</h2>
                 <p className="at-sub">
-                  This is the diagram from the 2017 paper that introduced the
-                  transformer, redrawn. It is reproduced everywhere and read
-                  almost nowhere, partly because it names its boxes after the
-                  mathematics and partly because it draws more machine than a
-                  modern language model has: two towers, for translating one
-                  sequence into another. <b>Hover any box</b> to see what it
-                  is in the language of this page, and where you watched it
-                  happen. Everything this page built is the <b>left tower</b>
-                  , the encoder. The right tower's extra pieces — the mask,
-                  the arrows from encoder to decoder, the output layers — are
-                  named here and built later.
+                  The famous figure from the 2017 paper "Attention is all you
+                  need" is commonly reproduced, but it can be difficult to
+                  understand. First, it is read from bottom to top. Second, it
+                  considers a decoder for the specific problem of language
+                  translation. The tranformer blocks used in most neural
+                  networks today are just the encoder side. Hover over each
+                  section to see how it links to the ideas discussed above.
                 </p>
                 <CanonicalFigure />
               </Card>
             </>
           )}
-
-          <footer className="mnist-foot">
-            <p>
-              One transformer block, computed live in your browser on the same
-              sentences and the same 16-dimensional word vectors as the
-              attention example. Head 1 is that example's head; heads 2 and 3
-              were fitted offline to find other relationships; W<sub>O</sub>{" "}
-              and the memory's contents were designed rather than learned, and
-              the page says where. The mechanism — stacking, folding, adding,
-              normalising, keys opening drawers — is exact.
-            </p>
-          </footer>
         </div>
       </div>
     </div>

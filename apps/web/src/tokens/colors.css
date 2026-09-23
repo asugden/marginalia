@@ -85,6 +85,75 @@
   --purple-600: #847aee;  --purple-tint: #f0effd;  --purple-ink: #4d478a;
   --salmon-600: #ed6a5a;  --salmon-tint: #fdedeb;  --salmon-ink: #893d34;
 
+  /* ---- Figure marks: the machine-learning examples ------------- *
+   * Three reserved scales, one per kind of number a model figure can
+   * show. They are fixed values, deliberately NOT derived from the
+   * brand accent: a deployer re-tinting the UI must not change what a
+   * figure means, and the accent has its own job (below).
+   *
+   *   learned     a parameter the model fitted — weight matrices,
+   *               kernels, embeddings-as-parameters. Signed: sage for
+   *               positive, plum for negative.
+   *   value       a number the model computed on this input —
+   *               activations, projections, scores, outputs. Signed:
+   *               vermillion for positive, cerulean for negative. When
+   *               the quantity cannot go below zero (an attention
+   *               weight, a probability) use the positive arm alone,
+   *               paper to vermillion.
+   *   input       the data as it arrived, and genuine edge cases:
+   *               greyscale, paper to ink.
+   *
+   * RESERVED: sage and plum mean "learned" and nothing else. Do not
+   * reach for them for a series colour, a category fill, a status or a
+   * highlight — if a figure uses them for anything else, the one thing
+   * a student can rely on across examples stops being reliable. The
+   * --ml- prefix marks this whole group as example-figure semantics;
+   * a non-ML example should take the general data-mark hues above
+   * instead. The brand accent stays what it is everywhere else in the
+   * product: buttons, selection, focus, "look here" — never a datum.
+   *
+   * The -ink variants are darkened to hold AA as text on paper, for
+   * the numeric read-outs that sit beside the marks.
+   * ============================================================== */
+  --ml-learned-pos: #4c7d57;  /* sage      — positive parameter */
+  --ml-learned-neg: #774879;  /* plum      — negative parameter */
+  --ml-value-pos:   #c13f29;  /* vermillion — positive computed value */
+  --ml-value-neg:   #1777b8;  /* cerulean   — negative computed value */
+  --ml-input-ink:   var(--ink-900); /* inputs / edge cases: paper to ink */
+  --ml-mark-zero:   var(--surface); /* what every scale mixes toward at zero */
+
+  /* Categories: the class a point belongs to, in a classifier. Not a
+   * number, so not a scale — a fixed order of hues, assigned class 1,
+   * 2, 3 and never cycled. Chosen clear of all four poles above and of
+   * any red or blue accent; validated for colour-blind separation on
+   * white (worst pair ΔE 12, tritan 7.7, so the classes always carry a
+   * letter as well). In a classifier the class owns the hue, and the
+   * mark says what kind of thing it is: a dot is data, a soft fill is
+   * the true distribution, a solid line is a fit, a flat wash is a
+   * prediction. See docs/style.md §11. */
+  --ml-class-1: #00879c;           /* teal */
+  --ml-class-2: var(--purple-600); /* periwinkle */
+  --ml-class-3: var(--amber-600);  /* amber */
+
+  /* Figure text: labels, axes and ticks inside a figure. The deep neural
+   * network example's label ink (4.8:1 on white, against --text-faint's
+   * 2.6:1), because figure labels are read from the back of a classroom.
+   * --text-faint stays for the UI's placeholders and disabled states.
+   * See docs/style.md §12. */
+  --fig-text-label: var(--ink-500);
+  /* Neuron and tile borders: the deep neural network example's node spec,
+   * named so every figure draws the same neuron. See docs/style.md §12. */
+  --fig-node-border: #888888;
+  --fig-tile-border: #c9c2b8;
+
+  --ml-learned-pos-ink: #3d6546;
+  --ml-learned-neg-ink: #613a63;
+  --ml-value-pos-ink:   #a03322;
+  --ml-value-neg-ink:   #135f92;
+  --ml-class-1-ink:     #00606f;
+  --ml-class-2-ink:     var(--purple-ink);
+  --ml-class-3-ink:     var(--amber-ink);
+
   /* ================================================================
    * Semantic aliases — consume these in components
    * ============================================================== */

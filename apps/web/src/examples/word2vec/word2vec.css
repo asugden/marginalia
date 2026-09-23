@@ -89,11 +89,12 @@
   letter-spacing: 0;
   font-size: 9px;
 }
+/* Connections are learned weights: sage positive, plum negative. */
 .w2v-net__edge {
-  stroke: var(--accent);
+  stroke: var(--ml-learned-pos);
 }
 .w2v-net__edge--neg {
-  stroke: #4a6fa5;
+  stroke: var(--ml-learned-neg);
 }
 .w2v-net__edges--dropped {
   pointer-events: none;
@@ -139,6 +140,13 @@
   stroke: var(--border-strong);
   stroke-dasharray: 3 3;
   stroke-width: 1;
+}
+.w2v-net__embnote {
+  fill: var(--text-body);
+  font-size: 13px;
+}
+.w2v-net__emb rect {
+  shape-rendering: crispEdges;
 }
 .w2v-net__dropped {
   fill: var(--accent);
@@ -259,7 +267,7 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 1.3rem;
-  color: var(--accent);
+  color: var(--ml-value-pos-ink);
   font-weight: 700;
   min-width: 3.6rem;
 }
@@ -270,10 +278,11 @@
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
+/* Similarity is computed: the positive arm of the value scale. */
 .w2v-simscore__fill {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--ml-value-pos);
   border-radius: var(--radius-pill);
   transition: width 120ms ease;
 }
@@ -342,7 +351,7 @@ button.w2v-neighbour:hover {
 .w2v-neighbour__fill {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--ml-value-pos);
   border-radius: var(--radius-pill);
 }
 .w2v-neighbour__score {
@@ -424,16 +433,18 @@ button.w2v-neighbour:hover {
   font-size: var(--text-xs);
   color: var(--text-body);
 }
-/* The two senses get distinct tints so the mixing is visible at a glance. */
+/* The two senses get distinct tints so the mixing is visible at a glance.
+   They are categories, so they take the general data-mark hues — never the
+   accent, and never the figure scales. */
 .w2v-chip--a {
-  background: #e8f0f7;
-  border-color: #4a6fa5;
-  color: #2c4a6b;
+  background: var(--purple-tint);
+  border-color: var(--purple-600);
+  color: var(--purple-ink);
 }
 .w2v-chip--b {
-  background: var(--accent-wash, #f7e9e9);
-  border-color: var(--accent);
-  color: var(--accent-ink, var(--accent));
+  background: var(--amber-tint);
+  border-color: var(--amber-600);
+  color: var(--amber-ink);
 }
 .w2v-chip__score {
   color: var(--text-faint);
@@ -801,7 +812,7 @@ button.w2v-neighbour:hover {
   font-style: italic;
 }
 .w2v-net__pct {
-  fill: var(--accent);
+  fill: var(--ml-value-pos-ink);
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 700;
@@ -869,7 +880,7 @@ button.w2v-neighbour:hover {
   opacity: 0.35;
 }
 .w2v-map__sim {
-  fill: var(--accent);
+  fill: var(--ml-value-pos-ink);
   font-family: var(--font-mono);
   font-size: 8px;
   pointer-events: none;

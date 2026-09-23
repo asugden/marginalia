@@ -25,6 +25,7 @@
 
 import { useId, useMemo } from "react";
 import type { AttentionRun, Head } from "./attention.js";
+import { learned, magnitude, value } from "../shared/palette.js";
 
 export type GridStage = "scores" | "scaled" | "weights";
 
@@ -57,12 +58,17 @@ interface Props {
 export const CELL = 46; // one grid cell
 export const VCELL = 6; // one component of an E / Q / K / V strip, along the strip
 export const STRIP_T = 9; // strip thickness
-export const WCELL = 4; // one weight of a W swatch
+export const WCELL = 7; // one weight of a W swatch — big enough to read as a grid of numbers
 export const WORD_H = 62; // column lane: the rotated words
 const WORD_W = 76; // row lane: the word column
 const PAD = 6;
-const FORM_W = 72; // the "× W_Q" column; holds a 16-wide swatch
-const FORM_H = 60; // the "× W_K" band; holds its label over an 8-tall swatch
+const FORM_W = 72; // the "× W_Q" column. The swatch is wider than this and
+//                    overflows it symmetrically, centred on the label, so the
+//                    grid itself does not have to move right.
+const FORM_H = 116; // the "× W_K" band: its label over an 8-tall swatch, plus the
+//                     clearance the W_Q swatch needs below it. Both swatches live
+//                     in the corner where the two lanes meet, so they stack: W_K
+//                     under its own label, W_Q above the row-lane headers.
 const TOP = 16; // caption line above the column lane
 
 export function AttentionGrid({
@@ -174,10 +180,10 @@ export function AttentionGrid({
         </defs>
 
         {/* ── Captions on the two lanes ── */}
-        <text className="at-grid__axis" x={4} y={TOP - 4}>
+        <text className="fig-label" x={4} y={TOP - 4}>
           rows: queries ↓
         </text>
-        <text className="at-grid__axis" x={gridX} y={TOP - 4}>
+        <text className="fig-label" x={gridX} y={TOP - 4}>
           columns: keys →
         </text>
 
@@ -288,7 +294,7 @@ export function AttentionGrid({
                     y={d * VCELL}
                     width={STRIP_T}
                     height={VCELL - 1}
-                    style={{ fill: sign(v / eBounds[j]!) }}
+                    style={{ fill: value(v / eBounds[j]!) }}
                   />
                 ))}
               </g>
@@ -314,7 +320,7 @@ export function AttentionGrid({
                     y={d * VCELL}
                     width={STRIP_T}
                     height={VCELL - 1}
-                    style={{ fill: sign(v / qkBound) }}
+                    style={{ fill: value(v / qkBound) }}
                   />
                 ))}
               </g>
@@ -354,7 +360,7 @@ export function AttentionGrid({
                     y={0}
                     width={VCELL - 1}
                     height={STRIP_T}
-                    style={{ fill: sign(v / eBounds[i]!) }}
+                    style={{ fill: value(v / eBounds[i]!) }}
                   />
                 ))}
               </g>
@@ -380,7 +386,7 @@ export function AttentionGrid({
                     y={0}
                     width={VCELL - 1}
                     height={STRIP_T}
-                    style={{ fill: sign(v / qkBound) }}
+                    style={{ fill: value(v / qkBound) }}
                   />
                 ))}
               </g>
@@ -465,7 +471,7 @@ export function Swatch({
             y={r * WCELL}
             width={WCELL - 0.5}
             height={WCELL - 0.5}
-            style={{ fill: sign(W[r * cols + c]! / bound) }}
+            style={{ fill: learned(W[r * cols + c]! / bound) }}
           />
         )),
       )}
@@ -491,20 +497,19 @@ export function maxAbs(vectors: Float32Array[]): number {
   return b || 1;
 }
 
-/** Cell fill. Weights use a single-hue ramp (they are all >= 0); raw and
- *  scaled scores are signed, so they use the same red/blue convention the
- *  network examples use for positive/negative weights. */
+/** Cell fill. Attention weights are computed and cannot go below zero, so
+ *  they take the positive arm of the value scale on its own; raw and scaled
+ *  scores are signed and take the whole of it. Both are computed numbers,
+ *  which is why they share a language — see ../shared/palette.ts. */
 function shade(t: number, stage: GridStage): string {
   const clamp = Math.max(0, Math.min(1, t));
-  if (stage === "weights") {
-    return `color-mix(in srgb, var(--accent) ${Math.round(clamp * 100)}%, var(--surface))`;
-  }
-  const signed = (clamp - 0.5) * 2;
-  return sign(signed, 85);
+  if (stage === "weights") return magnitude(clamp);
+  return value((clamp - 0.5) * 2, 85);
 }
 
-/** Red positive, blue negative — used for the E/Q/K strips, the W swatches
- *  and the signed score cells, so one colour language covers the figure. */
+/** Legacy signed ramp, kept only because the RNN example still (via
+ *  ../transformers/draw.tsx) imports it. New code takes `learned`,
+ *  `value`, `magnitude` or `input` from ../shared/palette.ts instead. */
 export function sign(t: number, strength = 92): string {
   const c = Math.max(-1, Math.min(1, t));
   if (c >= 0) {

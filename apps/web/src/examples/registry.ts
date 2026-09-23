@@ -48,7 +48,7 @@ export const EXAMPLES: ExampleSpec[] = [
     ),
   },
   {
-    slug: "digit-recognizer",
+    slug: "deep-neural-network",
     title: "Deep Neural Network",
     blurb:
       "Draw a digit and watch a real neural network classify it — every neuron and connection shown live as the signal flows from your drawing to a prediction.",
@@ -56,6 +56,30 @@ export const EXAMPLES: ExampleSpec[] = [
     Page: lazy(() =>
       import("./mnist-mlp/DigitRecognizerPage.js").then((m) => ({
         default: m.DigitRecognizerPage,
+      })),
+    ),
+  },
+  {
+    slug: "activation-function",
+    title: "Activation Functions",
+    blurb:
+      "One neuron adds up its weighted inputs; the activation decides what it sends on. Widen a network with no activation and it stays a straight line — then bend it, and find out why ReLU beat the more neuron-like sigmoid.",
+    tags: ["neural networks", "ReLU", "sigmoid", "neuroscience", "interactive"],
+    Page: lazy(() =>
+      import("./activation/ActivationPage.js").then((m) => ({
+        default: m.ActivationPage,
+      })),
+    ),
+  },
+  {
+    slug: "complex-shapes",
+    title: "Fitting Complex Shapes",
+    blurb:
+      "Build a curve from steps, the way a tree does, or from bends, the way ReLU neurons do. Draw any shape and buy it parameters until the model follows \u2014 then fit a day of noisy traffic and watch the extra parameters chase the noise.",
+    tags: ["parameters", "overfitting", "trees", "ReLU", "interactive"],
+    Page: lazy(() =>
+      import("./complex-shapes/ComplexShapesPage.js").then((m) => ({
+        default: m.ComplexShapesPage,
       })),
     ),
   },
@@ -72,14 +96,38 @@ export const EXAMPLES: ExampleSpec[] = [
     ),
   },
   {
+    slug: "rnn",
+    title: "Recurrent Neural Networks",
+    blurb:
+      "A network that reads one word at a time and carries what it has read in a single vector \u2014 drawn as a Pac-Man eating a sentence. Open him up, give him a notebook (the LSTM), and find out on a calculator why the plain one forgets.",
+    tags: ["neural networks", "RNN", "LSTM", "sequences", "interactive"],
+    Page: lazy(() =>
+      import("./rnn/RnnPage.js").then((m) => ({
+        default: m.RnnPage,
+      })),
+    ),
+  },
+  {
     slug: "naive-bayes",
     title: "Naive Bayes",
     blurb:
-      "Drag a decision boundary through overlapping distributions, then let naive Bayes fit the same points. Two scores \u2014 yours and the model's \u2014 and the gap between them is the lesson.",
+      "Fit a bell curve per class along each feature by hand, then let naive Bayes fit the same points. Watch what multiplying the curves can and cannot draw.",
     tags: ["classification", "naive Bayes", "probability", "interactive"],
     Page: lazy(() =>
       import("./naive-bayes/NaiveBayesPage.js").then((m) => ({
         default: m.NaiveBayesPage,
+      })),
+    ),
+  },
+  {
+    slug: "svm",
+    title: "Support Vector Machines",
+    blurb:
+      "Draw a straight line between two classes and leave the widest street you can, then let an SVM find the widest one. See which points hold the line in place.",
+    tags: ["classification", "SVM", "margin", "interactive"],
+    Page: lazy(() =>
+      import("./svm/SvmPage.js").then((m) => ({
+        default: m.SvmPage,
       })),
     ),
   },
@@ -148,10 +196,22 @@ export const EXAMPLES: ExampleSpec[] = [
     title: "Transformers",
     blurb:
       "The attention head as a finished part. Run several at once, add what they find back onto each word, pass every word through a memory where the facts live, stack it dozens of times \u2014 then decode the famous diagram box by box.",
-    tags: ["transformers", "multi-head attention", "feed-forward", "architecture", "interactive"],
+    tags: ["transformers", "multi-head attention", "fully connected layers", "architecture", "interactive"],
     Page: lazy(() =>
       import("./transformers/TransformersPage.js").then((m) => ({
         default: m.TransformersPage,
+      })),
+    ),
+  },
+  {
+    slug: "language-models",
+    title: "Large Language Models",
+    blurb:
+      "From a Markov chain of words to a language model: tokens in, one token out, one pass per word. Then many transformer blocks in series, drawn at the real shapes of 2026's open models.",
+    tags: ["Markov chains", "tokenizers", "transformers", "LLMs", "scale", "interactive"],
+    Page: lazy(() =>
+      import("./language-models/LanguageModelsPage.js").then((m) => ({
+        default: m.LanguageModelsPage,
       })),
     ),
   },
@@ -195,8 +255,8 @@ export const EXAMPLES: ExampleSpec[] = [
     slug: "parameter-budget",
     title: "Counting Parameters",
     blurb:
-      "\u201c405 billion parameters\u201d is the unit everyone quotes and nobody derives. Drag the layers, watch the arithmetic, and find out why widening the middle costs so much more than widening the ends.",
-    tags: ["parameters", "architecture", "scale", "interactive"],
+      "From a three-number linear regression through ResNet to trillion-parameter language models, counted from each one\u2019s shape. Then shrink a real network by rounding its numbers, and see how a small model copies a big one.",
+    tags: ["parameters", "architecture", "scale", "quantization", "distillation", "interactive"],
     Page: lazy(() =>
       import("./parameter-budget/ParameterBudgetPage.js").then((m) => ({
         default: m.ParameterBudgetPage,

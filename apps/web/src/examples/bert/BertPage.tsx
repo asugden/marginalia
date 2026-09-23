@@ -9,30 +9,46 @@
 // task-specific layer on top). Nothing here re-explains attention, heads,
 // residuals or the memory; it links to them.
 //
+// The arc, panel by panel:
+//
+//   0. Where the first vector comes from — pieces, not words, and three
+//      tables added (token + position + segment).
+//   1. One vector per word, or one per use? The same word through the block
+//      in four sentences.
+//   2. Before BERT: ELMo, a recurrent network reading both ways.
+//   3. How it learns — fill in the blank, which is CBOW's direction, not
+//      skip-gram's, and why that is the direction that yields a per-use vector.
+//   4. Then reuse it.
+//
 // Every strip is computed live from the transformers example's heads.json.
 // The difference one block makes to a repeated word is small — a few percent
 // — and the page says so: BERT stacks twelve or twenty-four of these and the
 // differences compound. Masked-word prediction is drawn, not faked: this
-// block was never trained to fill blanks, so no guesses are shown.
+// block was never trained to fill blanks, so no guesses are shown. ELMo is a
+// schematic; there is no trained ELMo here.
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card, Wordmark } from "../../components/index.js";
 import "../mnist-mlp/digit-recognizer.css";
+import "../shared/figure.css";
 import "../attention/attention.css";
 import "../transformers/transformers.css";
 import "./bert.css";
 import {
   cosine,
-  loadModel,
+  fetchModel,
   runBlock,
   type BlockRun,
   type Model,
   type RawHeads,
 } from "../transformers/transformer.js";
 import { Strip, maxAbs } from "../transformers/draw.js";
+import "../rnn/rnn.css";
+import { ElmoFigure } from "./ElmoFigure.js";
+import { EmbeddingIntro } from "./EmbeddingIntro.js";
+import { ObjectiveFigure } from "./ObjectiveFigure.js";
 
-const HEADS_URL = "/examples/transformers/heads.json";
 
 export function BertPage() {
   const [model, setModel] = useState<Model | null>(null);
@@ -40,12 +56,8 @@ export function BertPage() {
 
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch(HEADS_URL, { signal: ctrl.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`heads ${r.status}`);
-        return r.json();
-      })
-      .then((raw: RawHeads) => setModel(loadModel(raw)))
+    fetchModel(ctrl.signal)
+      .then(setModel)
       .catch((e) => {
         if (!ctrl.signal.aborted) setLoadError(e.message);
       });
@@ -81,7 +93,10 @@ export function BertPage() {
               missing word using the words on both sides. What comes out
               changes what a <Link to="/examples/word2vec">word embedding</Link>{" "}
               is. A word no longer has one vector. It has one for every
-              sentence it appears in.
+              sentence it appears in. BERT was not the first to do this — ELMo,
+              earlier the same year, did it with a{" "}
+              <Link to="/examples/rnn">recurrent network</Link> — but it is the
+              one that stuck, and this page ends by saying why.
             </p>
           </div>
 
@@ -90,7 +105,19 @@ export function BertPage() {
 
           {model && runs.length > 0 && (
             <>
+              <Card className="at-panel" padding="md">
+                <h2 className="at-h2">Where the first vector comes from</h2>
+                <p className="at-sub">
+                  The transformers example started from word vectors it was
+                  handed. BERT has to make its own, and the input to block 1 is
+                  built in two moves: the text is cut into <b>pieces</b>, and
+                  each piece's vector is the sum of <b>three lookups</b> — what
+                  it is, where it sits, and which sentence it belongs to.
+                </p>
+                <EmbeddingIntro model={model} />
+              </Card>
               <ContextPanel model={model} runs={runs} />
+              <ElmoPanel model={model} />
               <MaskPanel model={model} />
               <ReusePanel />
             </>
@@ -191,13 +218,13 @@ function ContextPanel({ model, runs }: { model: Model; runs: BlockRun[] }) {
           role="img"
           aria-label={`${word} in ${uses.length} sentences: the same embedding each time, a different vector after one transformer block.`}
         >
-          <text className="at-grid__axis" x={x0} y={22}>
+          <text className="fig-label" x={x0} y={22}>
             the embedding
           </text>
-          <text className="at-grid__axis" x={x0 + len + gap} y={22}>
+          <text className="fig-label" x={x0 + len + gap} y={22}>
             took from context
           </text>
-          <text className="at-grid__axis" x={x0 + 2 * (len + gap)} y={22}>
+          <text className="fig-label" x={x0 + 2 * (len + gap)} y={22}>
             after one block
           </text>
           {uses.map((u, r) => {
@@ -238,7 +265,52 @@ function ContextPanel({ model, runs }: { model: Model; runs: BlockRun[] }) {
   );
 }
 
-/* ── 2. How it learns: fill in the blank ─────────────────────────── */
+/* ── 2. Before BERT: ELMo ──────────────────────────────────────────── */
+
+function ElmoPanel({ model }: { model: Model }) {
+  const [si, setSi] = useState(0);
+  const toks = model.sentences[si]!.split(" ");
+  const [at, setAt] = useState(3);
+  return (
+    <Card className="at-panel" padding="md">
+      <h2 className="at-h2">Before BERT: a word read from both sides, by two readers</h2>
+      <p className="at-sub">
+        The idea that a word's vector should depend on its sentence is older
+        than the transformer. The first system to do it at scale read the
+        sentence the way the{" "}
+        <Link to="/examples/rnn">recurrent network</Link> example does — one
+        word at a time, carrying a state — and did it twice, once in each
+        direction. Pick a word and compare how it reaches the rest of the
+        sentence under the two designs.
+      </p>
+      <div className="at-sentences">
+        {model.sentences.map((s, k) => (
+          <Button key={s} size="sm" variant={k === si ? "primary" : "subtle"} onClick={() => { setSi(k); setAt(3); }}>
+            {s.split(" ").slice(1, 3).join(" ")}…
+          </Button>
+        ))}
+      </div>
+      <div className="at-wordpick" role="group" aria-label="Choose the word to follow">
+        {toks.map((t, k) => (
+          <Button key={`${t}-${k}`} size="sm" variant={k === at ? "primary" : "subtle"} onClick={() => setAt(k)}>
+            {t}
+          </Button>
+        ))}
+      </div>
+      <ElmoFigure tokens={toks} at={at} />
+      <p className="at-panel__note">
+        Peters et al., “Deep contextualized word representations” (2018):
+        two layers of LSTM in each direction, trained as language models on a
+        billion words, with a word's final vector a learned mix of the layers.
+        ELMo's vectors were bolted onto existing task models as extra input;
+        BERT replaced the task model with itself. The figure is a schematic —
+        no ELMo is trained on this page.
+      </p>
+    </Card>
+  );
+}
+
+/* ── 3. How it learns: fill in the blank ─────────────────────────── */
 
 function MaskPanel({ model }: { model: Model }) {
   const [si, setSi] = useState(0);
@@ -304,18 +376,47 @@ function MaskPanel({ model }: { model: Model }) {
           meaning — no labels, no answer key, just text.
         </p>
       </div>
+      <h3 className="rn-h3">This is CBOW's direction, not skip-gram's</h3>
+      <p className="at-sub">
+        The <Link to="/examples/word2vec">embeddings</Link> page trained
+        word2vec one way round: a word goes in, its neighbours come out
+        (<b>skip-gram</b>). word2vec shipped a second model that runs the
+        other way: the neighbours go in, as an unordered bag, and the one
+        word in the middle comes out. That is <b>CBOW</b>, the <i>continuous
+        bag of words</i>. Fill-in-the-blank is CBOW's direction. Here are all
+        three on the sentence above, with <b>{toks[m]}</b> as the word.
+      </p>
+      <ObjectiveFigure tokens={toks} at={m} />
+      <p className="tf-readout">
+        Follow the arrows. Skip-gram puts the word <i>in</i>, so the vector
+        you keep afterwards is a row of the input table — one row per word,
+        the same in every sentence, which is exactly the limit the previous
+        panel was about. CBOW puts the <i>surroundings</i> in, so whatever
+        the network builds at the blank is built from this sentence and no
+        other. If what you want at the end is a vector for <b>this</b> use
+        of <b>{toks[m]}</b>, the blank has to be where the word is, and the
+        context has to be what goes in: the direction is forced by the goal.
+        BERT keeps that direction and changes everything else about it: the
+        bag becomes the whole sentence in order (the position vectors from
+        the first panel), the average becomes twelve blocks of attention that
+        weight each word differently, and the window of two becomes every
+        word there is. The other route to context — predict the <i>next</i>{" "}
+        word, as ELMo and the text generators do — can only ever put one side
+        in.
+      </p>
       <p className="at-panel__note">
         The original BERT also learned to say whether two sentences followed
         each other; later versions dropped that, having found the blanks did
         the work. No guesses are drawn here: this block was fitted to show
         attention, never trained to fill blanks, and a made-up answer would
-        teach the wrong thing.
+        teach the wrong thing. The blanks are also why the segment and
+        position tables have to exist: a bag needs neither.
       </p>
     </Card>
   );
 }
 
-/* ── 3. Then reuse it ─────────────────────────────────────────────── */
+/* ── 4. Then reuse it ─────────────────────────────────────────────── */
 
 const TASKS = [
   { name: "sentiment", input: "a review", output: "positive / negative", reads: "cls" },
@@ -346,12 +447,12 @@ function ReusePanel() {
       </div>
       <div className="bt-reuse">
         <div className="bt-reuse__col">
-          <span className="at-grid__axis bt-reuse__cap">in</span>
+          <span className="fig-label bt-reuse__cap">in</span>
           <span className="bt-reuse__box bt-reuse__box--in">{t.input}</span>
         </div>
         <span className="bt-reuse__arrow">→</span>
         <div className="bt-reuse__col">
-          <span className="at-grid__axis bt-reuse__cap">the same trunk, every time</span>
+          <span className="fig-note bt-reuse__cap">The same trunk, every time.</span>
           <span className="bt-reuse__box bt-reuse__box--trunk">
             12 transformer blocks
             <small>pre-trained once, on blanks</small>
@@ -359,7 +460,7 @@ function ReusePanel() {
         </div>
         <span className="bt-reuse__arrow">→</span>
         <div className="bt-reuse__col">
-          <span className="at-grid__axis bt-reuse__cap">new for this task</span>
+          <span className="fig-note bt-reuse__cap">New for this task.</span>
           <span className="bt-reuse__box bt-reuse__box--head">
             one small layer
             <small>{t.reads === "cls" ? "reads the summary vector" : "reads every word's vector"}</small>
@@ -367,7 +468,7 @@ function ReusePanel() {
         </div>
         <span className="bt-reuse__arrow">→</span>
         <div className="bt-reuse__col">
-          <span className="at-grid__axis bt-reuse__cap">out</span>
+          <span className="fig-label bt-reuse__cap">out</span>
           <span className="bt-reuse__box bt-reuse__box--out">{t.output}</span>
         </div>
       </div>

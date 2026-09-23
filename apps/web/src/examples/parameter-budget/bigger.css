@@ -1,0 +1,184 @@
+/* "Make it bigger!": blocks in series, heads in parallel, and the table of
+   published shapes whose rows choose the model. Moved from the language
+   models example. The heads are structure, not data, so they are drawn in
+   neutral ink; the accent marks the block being pointed at. */
+
+/* The digit recognizer's shape: a readout column, then the figure. */
+.mb-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .mb-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.mb-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.mb-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+}
+.mb-kicker {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+.mb-stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 0.8rem;
+  align-items: baseline;
+}
+.mb-stats dt {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.mb-stats dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
+  color: var(--text-strong);
+  text-align: right;
+}
+.mb-stats__total {
+  font-size: 1.35rem !important;
+}
+.mb-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+
+/* ── The grid ─────────────────────────────────────────────────── */
+.mb-grid {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.mb-head {
+  fill: var(--text-muted);
+  transition: fill 90ms ease;
+}
+.mb-block--on .mb-head,
+.mb-head--on {
+  fill: var(--accent);
+}
+.mb-block__hit {
+  fill: transparent;
+}
+.mb-bracket {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.2;
+}
+.mb-series,
+.mb-step {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+}
+.mb-arrowhead {
+  fill: var(--text-muted);
+}
+
+/* ── The table: its rows choose the model ─────────────────────── */
+.mb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  margin: 1.25rem 0 0.8rem;
+}
+.mb-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fig-text-label);
+  font-weight: 400;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.mb-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-body);
+  white-space: nowrap;
+}
+.mb-row {
+  cursor: pointer;
+}
+.mb-row:hover td {
+  background: var(--surface-hover);
+}
+.mb-row:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}
+.mb-row--on td {
+  background: var(--accent-wash);
+}
+.mb-row--on td:first-child {
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.mb-row--est {
+  cursor: default;
+}
+.mb-row--est td {
+  color: var(--text-muted);
+  background: none !important;
+}
+.mb-table__year {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fig-text-label);
+  margin-left: 0.25rem;
+  font-weight: 400;
+}
+.mb-table__total {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.mb-tag {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.mb-tag--reported {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+}
+.mb-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 90ch;
+}
+
+.mb-table__active {
+  color: var(--text-muted);
+}

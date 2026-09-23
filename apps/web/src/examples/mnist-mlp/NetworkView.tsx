@@ -12,7 +12,7 @@
 // Nodes: circles filled white (0) -> black (1) by activation. Hidden layers
 // use ReLU output normalized per-layer so there's always visible contrast.
 //
-// Edges: one line per weight, red for positive, blue for negative, opacity and
+// Edges: one line per weight, sage for positive, plum for negative, opacity and
 // width scaled by |weight|. There are 10k input->h1 weights alone, so we draw
 // only weights whose |value| clears a magnitude threshold — a slider moves the
 // threshold. This is faithful to the reference (which also hides weak weights)
@@ -31,6 +31,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Net, Activations } from "./net.js";
+import { LEARNED_NEG, LEARNED_POS, input, learned, magnitude } from "../shared/palette.js";
 
 export interface NetworkViewProps {
   net: Net;
@@ -140,28 +141,40 @@ function buildGeo(net: Net): Geo {
   };
 }
 
-// White (0) -> black (1). Activation is 0..1-ish; clamp.
+// A neuron's activation: computed, and a ReLU or a softmax never returns less
+// than zero, so it takes the positive arm of the value scale on its own.
+// Clamped because the last layer's inputs can overshoot 1 slightly.
 function shade(v: number): string {
-  const t = Math.max(0, Math.min(1, v));
-  const g = Math.round(255 * (1 - t));
-  return `rgb(${g},${g},${g})`;
+  return magnitude(Math.max(0, Math.min(1, v)));
 }
 
-// Positive weight -> red, negative -> blue. LINE WIDTH scales LINEARLY with
-// |weight| relative to the layer max, so thickness reads as a direct stand-in
-// for weight magnitude — a strong connection is visibly fatter than a weak one.
-// It's clamped to [WIDTH_MIN, WIDTH_CAP] so the thinnest stay visible and the
-// fattest don't dominate; the slope is tuned so the average width across the
-// drawn (thresholded) edges stays about where it was. Opacity keeps its gentle
-// gamma so faint edges remain legible.
+// The drawn digit is the input as it arrived, not something the model worked
+// out, so it stays greyscale. See ../shared/palette.ts.
+function inputShade(v: number): string {
+  return input(Math.max(0, Math.min(1, v)));
+}
+
+// An edge is a learned parameter, so its COLOUR is the learned scale sampled
+// at the edge's own weight — sage above zero, plum below, mixed toward the
+// paper as the weight gets smaller. The same 0.6 gamma the old opacity ramp
+// used is applied to the sample, so faint edges stay as legible as they were;
+// what changed is that the colour, not the alpha, is now carrying it. A low
+// constant transparency remains so dense bundles still read where they cross.
+//
+// LINE WIDTH scales LINEARLY with |weight| relative to the layer max, so
+// thickness reads as a direct stand-in for weight magnitude — a strong
+// connection is visibly fatter than a weak one. It's clamped to
+// [WIDTH_MIN, WIDTH_CAP] so the thinnest stay visible and the fattest don't
+// dominate.
 const WIDTH_MIN = 0.5;
 const WIDTH_CAP = 5.5;
+const EDGE_GAMMA = 0.6;
 function edgeStroke(w: number, abs: number, max: number): { color: string; opacity: number; width: number } {
   const r = abs / max; // 0..1
-  const tOpacity = Math.pow(r, 0.6);
+  const t = Math.pow(r, EDGE_GAMMA);
   return {
-    color: w >= 0 ? "#d1344b" : "#2f6fd0",
-    opacity: 0.1 + 0.8 * tOpacity,
+    color: learned(w >= 0 ? t : -t),
+    opacity: 0.9,
     width: Math.min(WIDTH_CAP, WIDTH_MIN + 4.0 * r),
   };
 }
@@ -473,7 +486,7 @@ export function NetworkView({
           <line
             key={`${key}-${i}`}
             x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
-            stroke={s.color} strokeOpacity={s.opacity} strokeWidth={s.width}
+            style={{ stroke: s.color }} strokeOpacity={s.opacity} strokeWidth={s.width}
           />
         );
       });
@@ -506,22 +519,23 @@ export function NetworkView({
         {renderEdges(drawn3, geo.max3, "e3")}
       </g>
 
-      {/* Highlight layer: the traced path, drawn thick with a soft glow. Red for
-          a positive edge, blue for negative — same vocabulary as the weights.
+      {/* Highlight layer: the traced path, drawn thick with a soft glow. Sage
+          for a positive edge, plum for negative — the learned scale at full
+          strength, because a traced edge is being pointed at, not measured.
           Each edge carries a wide invisible hit-line so hovering it is easy and
           shows a weight tooltip. */}
       {path && (
         <g strokeLinecap="round" className="mnist-net__path">
           {path.edges.map((e, i) => {
-            const color = e.positive ? "#d1344b" : "#2f6fd0";
+            const color = e.positive ? LEARNED_POS : LEARNED_NEG;
             const on = hoveredEdge === i;
             return (
               <g key={`pe-${i}`}>
                 {/* glow underlay */}
                 <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
-                  stroke={color} strokeOpacity={on ? 0.4 : 0.25} strokeWidth={on ? 9 : 7} />
+                  style={{ stroke: color }} strokeOpacity={on ? 0.4 : 0.25} strokeWidth={on ? 9 : 7} />
                 <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
-                  stroke={color} strokeOpacity={0.95} strokeWidth={on ? 3.4 : 2.4} />
+                  style={{ stroke: color }} strokeOpacity={0.95} strokeWidth={on ? 3.4 : 2.4} />
                 {/* wide invisible hover target */}
                 <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}
                   stroke="transparent" strokeWidth={16}
@@ -550,7 +564,7 @@ export function NetworkView({
               key={`in-${i}`}
               x={c.cx - c.s / 2} y={c.cy - c.s / 2}
               width={c.s} height={c.s}
-              fill={shade(v)}
+              style={{ fill: inputShade(v) }}
               stroke="#e7e2da" strokeWidth={0.5}
               // Keep path pixels at full strength; dim the rest while a path is
               // shown so the outlined pixels stand out.
@@ -602,7 +616,7 @@ export function NetworkView({
               key={`h1-${i}`}
               x={p.cx - S / 2} y={p.cy - S / 2} width={S} height={S}
               rx={HNODE_RX} ry={HNODE_RX}
-              fill={shade(activations ? activations.h1[i]! / n1.m : 0)}
+              style={{ fill: shade(activations ? activations.h1[i]! / n1.m : 0) }}
               stroke={onPath ? "#111" : "#888888"} strokeWidth={onPath ? 3 : 2}
               opacity={pathActive && !onPath ? 0.3 : 1}
             />
@@ -619,7 +633,7 @@ export function NetworkView({
               key={`h2-${i}`}
               x={p.cx - S / 2} y={p.cy - S / 2} width={S} height={S}
               rx={HNODE_RX} ry={HNODE_RX}
-              fill={shade(activations ? activations.h2[i]! / n2.m : 0)}
+              style={{ fill: shade(activations ? activations.h2[i]! / n2.m : 0) }}
               stroke={onPath ? "#111" : "#888888"} strokeWidth={onPath ? 3 : 2}
               opacity={pathActive && !onPath ? 0.3 : 1}
             />
@@ -658,7 +672,7 @@ export function NetworkView({
               <rect
                 x={p.cx - S / 2} y={p.cy - S / 2}
                 width={S} height={S} rx={10} ry={10}
-                fill={win ? "var(--accent, #2b62a8)" : shade(v)}
+                style={{ fill: win ? "var(--accent)" : shade(v) }}
                 stroke={hovered ? "#111" : win ? "var(--accent, #2b62a8)" : "#c9c2b8"}
                 strokeWidth={hovered ? 3.5 : win ? 3.5 : 2.25}
               />
@@ -716,11 +730,11 @@ export function NetworkView({
         bx = Math.max(6, Math.min(W - boxW - 6, bx));
         let by = my - boxH - 14;
         if (by < 4) by = my + 14; // flip below if no room above
-        const accent = e.positive ? "#d1344b" : "#2f6fd0";
+        const accent = e.positive ? LEARNED_POS : LEARNED_NEG;
         return (
           <g className="mnist-net__tip" pointerEvents="none">
             <rect x={bx} y={by} width={boxW} height={boxH} rx={7} ry={7}
-              fill="#1c1917" stroke={accent} strokeWidth={1.5} opacity={0.97} />
+              fill="#1c1917" style={{ stroke: accent }} strokeWidth={1.5} opacity={0.97} />
             {lines.map((l, i) => (
               <text
                 key={i}

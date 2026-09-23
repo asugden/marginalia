@@ -1,4 +1,4 @@
-// The digit-recognizer example page (/examples/digit-recognizer).
+// The deep-neural-network example page (/examples/deep-neural-network).
 //
 // Fully static and unauthenticated: it loads the pre-trained weights as a JSON
 // asset and runs the whole network in the browser. No course, no /api call, no
@@ -24,7 +24,7 @@ import { NetworkView } from "./NetworkView.js";
 
 // The weights ship in /public so they're served as a plain static asset by the
 // same host as the SPA. Fetched once on mount.
-const WEIGHTS_URL = "/examples/digit-recognizer/weights.json";
+const WEIGHTS_URL = "/examples/deep-neural-network/weights.json";
 
 export function DigitRecognizerPage() {
   const [net, setNet] = useState<Net | null>(null);
@@ -125,7 +125,7 @@ export function DigitRecognizerPage() {
               Draw a digit on the grid at the top of the network. The top of the
               network is the model's input layer. All of the pixels are values
               between 0 and 1, which then connect to every neuron in Hidden
-              layer 1 (a dense network). This custom neural network was trained
+              layer 1 (a fully connected network). This custom neural network was trained
               on tens of thousands of handwritten digits (MNIST), and predicts
               which digit it is with 97% accuracy. Every entry in Hidden 1 and
               Hidden 2 is a neuron; every line is a connection. Watch the signal
@@ -206,6 +206,10 @@ export function DigitRecognizerPage() {
                   <span className="mnist-legend__grad" />
                   neuron value: low → high
                 </div>
+                <div className="mnist-legend__row">
+                  <span className="mnist-legend__grad mnist-legend__grad--input" />
+                  what you drew: the input itself
+                </div>
               </div>
             </aside>
 
@@ -245,7 +249,7 @@ export function DigitRecognizerPage() {
 
           <footer className="mnist-foot">
             <p>
-              This is a fully-connected network (otherwise known as a
+              This is a fully connected network (otherwise known as a
               "multilayer perceptron") with two hidden layers of 25 neurons.
             </p>
           </footer>

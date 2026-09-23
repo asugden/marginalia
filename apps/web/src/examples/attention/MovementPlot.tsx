@@ -109,22 +109,13 @@ export function MovementPlot({ run, row, outOverride }: Props) {
             viewBox="0 0 10 10"
             refX="9"
             refY="5"
-            markerWidth="6"
-            markerHeight="6"
+            markerWidth="4.2"
+            markerHeight="4.2"
             orient="auto-start-reverse"
           >
             <path d="M 0 0 L 10 5 L 0 10 z" className="at-move__arrowhead" />
           </marker>
         </defs>
-        <line
-          className="at-move__journey"
-          x1={selfPoint.x}
-          y1={selfPoint.y}
-          x2={outPoint.x}
-          y2={outPoint.y}
-          markerEnd="url(#at-move-arrow)"
-        />
-
         {/* Every token's value vector. */}
         {points.map((p, j) => {
           const isSelf = j === i;
@@ -168,6 +159,17 @@ export function MovementPlot({ run, row, outOverride }: Props) {
         >
           output
         </text>
+
+        {/* The journey, drawn last: its arrowhead lands on the output dot, so
+            it has to sit above it rather than under it. */}
+        <line
+          className="at-move__journey"
+          x1={selfPoint.x}
+          y1={selfPoint.y}
+          x2={outPoint.x}
+          y2={outPoint.y}
+          markerEnd="url(#at-move-arrow)"
+        />
       </svg>
 
       <div className="at-move__readout">

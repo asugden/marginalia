@@ -1,0 +1,604 @@
+/* Large-language-models example — layout and figure styling only.
+   Page chrome comes from the digit recognizer's stylesheet; figure text takes
+   the shared voices in examples/shared/figure.css (docs/style.md §12). */
+
+.lm-panel {
+  margin-bottom: 1rem;
+}
+.lm-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.lm-sub {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+
+.lm-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+}
+.lm-kicker {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.lm-series {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+}
+.lm-arrowhead {
+  fill: var(--text-muted);
+}
+
+.lm-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 90ch;
+}
+
+.lm-h3 {
+  margin: 1.1rem 0 0.5rem;
+  font-size: var(--text-md, 1rem);
+  line-height: 1.3;
+  color: var(--text-strong);
+}
+.lm-arrowhead--on {
+  fill: var(--accent);
+}
+
+/* ── Controls box: what the reader operates (style.md §14) ────── */
+.lm-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.65rem 1rem;
+  margin: 0 0 1rem;
+}
+.lm-controls__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.lm-controls__label {
+  flex: none;
+  width: 7.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+.lm-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .lm-controls__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+}
+
+/* ── The next-word slot (the word2vec example's reel) ────────────
+   The text sits on one line; the candidate column hangs through the gap at
+   its end, translated so the row on the line is the one being drawn. Each
+   row carries its probability to the right, on the computed scale. */
+.lm-reel {
+  margin-bottom: 1rem;
+}
+.lm-reel__frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding-left: 1.2rem;
+  padding-right: 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-body);
+}
+.lm-reel__controls {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  gap: 0.35rem;
+  z-index: 2;
+}
+.lm-iconbtn--outline {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+/* Long text is cut from the left, so the gap never moves off screen. */
+.lm-reel__text {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  white-space: pre;
+  padding: 0.3rem 0 1.4rem;
+  margin-bottom: -1.1rem;
+}
+.lm-reel__text--clipped {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 3rem);
+}
+.lm-reel__inner {
+  flex: none;
+  display: inline-flex;
+  white-space: pre;
+}
+.lm-reel__before {
+  color: var(--text-secondary);
+}
+/* The current state: underlined and named in purple. The accent is taken by
+   the drawn word, and purple here is one of the design system's general
+   hues, not a figure scale: it marks text, never a number. */
+.lm-reel__state {
+  position: relative;
+  color: var(--purple-ink);
+  font-weight: 600;
+  border-bottom: 2px solid var(--purple-600);
+  padding-bottom: 0.2rem;
+}
+.lm-reel__statelabel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--purple-600);
+  white-space: nowrap;
+}
+.lm-reel__gap {
+  position: relative;
+  flex: none;
+  width: 19.5rem;
+  height: 0;
+  z-index: 1;
+}
+.lm-reel__slot {
+  position: absolute;
+  left: 0;
+  top: -19px;
+  width: 9rem;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--fig-text-label);
+}
+.lm-reel__column {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  /* Still while the box rolls; slides once, after, to seat the drawn word. */
+  transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+/* The lottery box: the one thing that moves during the draw. */
+.lm-reel__box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 9rem;
+  box-sizing: border-box;
+  border: 2px solid var(--text-strong);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  z-index: 1;
+  transition: transform 60ms ease-out;
+}
+.lm-reel__column--landed .lm-reel__box {
+  border-color: var(--accent);
+}
+.lm-reel__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: opacity 140ms ease;
+}
+.lm-reel__row--dim {
+  opacity: 0.35;
+}
+.lm-reel__word {
+  flex: none;
+  width: 9rem;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: var(--surface-sunken);
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-body);
+}
+.lm-reel__sub {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--fig-text-label);
+}
+.lm-reel__row--on .lm-reel__word {
+  background: var(--accent-wash);
+  color: var(--accent-ink, var(--accent));
+}
+.lm-reel__bar {
+  flex: none;
+  width: 7rem;
+  height: 12px;
+  background: var(--sand-100);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.lm-reel__fill {
+  display: block;
+  height: 100%;
+  background: var(--ml-value-pos);
+}
+.lm-reel__pct {
+  flex: none;
+  width: 3rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ml-value-pos-ink);
+}
+.lm-reel__footer {
+  margin: 0.4rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: center;
+}
+@media (max-width: 640px) {
+  .lm-reel__frame {
+    font-size: 1rem;
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+  .lm-reel__gap {
+    width: 13.5rem;
+  }
+  .lm-reel__word,
+  .lm-reel__box,
+  .lm-reel__slot {
+    width: 6.5rem;
+    font-size: 0.9rem;
+  }
+  .lm-reel__bar {
+    width: 3.5rem;
+  }
+}
+
+/* ── Example text: a readout ───────────────────────────────────── */
+.lm-sample {
+  margin-bottom: 0.9rem;
+}
+.lm-sample__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+}
+.lm-sample__head .lm-kicker {
+  margin: 0;
+}
+.lm-sample__text {
+  margin: 0;
+  font-family: var(--font-display, serif);
+  font-size: var(--text-md, 1rem);
+  line-height: 1.6;
+  color: var(--text-body);
+  max-width: 78ch;
+}
+
+/* ── Tokens ───────────────────────────────────────────────────
+   Each chip is a column: the piece, its ID, its embedding row. The first
+   column carries the lane names at the same heights, so they line up. */
+.lm-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.25rem;
+}
+.lm-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+.lm-chip__text {
+  box-sizing: border-box;
+  height: 2.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  background: var(--sand-100);
+  border: 1px solid var(--sand-300);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  white-space: pre;
+  color: var(--text-strong);
+}
+.lm-chip--alt .lm-chip__text {
+  background: var(--amber-tint);
+}
+.lm-chip__space {
+  color: var(--fig-text-label);
+}
+.lm-chip__id {
+  height: 14px;
+  line-height: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-body);
+  text-align: center;
+}
+.lm-chip__vec {
+  height: 12px;
+  display: flex;
+  justify-content: center;
+}
+.lm-chip__vec svg {
+  display: block;
+}
+/* The lane names: same three heights, no chip. */
+.lm-chip--lanes {
+  padding-right: 0.4rem;
+}
+.lm-chip--lanes > * {
+  background: none;
+  border: none;
+  padding: 0;
+  justify-content: flex-end;
+  display: flex;
+  align-items: center;
+  text-align: right;
+  font-size: 10px;
+}
+.lm-sub--tight {
+  margin-bottom: 0.6rem;
+}
+
+/* ── Merges: letters to tokens ───────────────────────────────── */
+.lm-merge {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 0.5rem;
+}
+.lm-merge__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.lm-merge__n {
+  flex: none;
+  width: 4.5rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fig-text-label);
+}
+.lm-merge__pieces {
+  flex: none;
+  width: 15.5rem;
+  display: flex;
+  gap: 2px;
+}
+/* Why the pair was merged: its place in the merge order, and how often it
+   turns up in the fan fiction, with the words it turns up in. */
+.lm-merge__why {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.lm-merge__rank,
+.lm-merge__count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-body);
+}
+.lm-merge__rank {
+  width: 6.5rem;
+}
+.lm-merge__count {
+  width: 3.5rem;
+  text-align: right;
+}
+.lm-merge__ex {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.lm-merge__head,
+.lm-merge__head .lm-merge__rank,
+.lm-merge__head .lm-merge__count {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fig-text-label);
+}
+.lm-merge__piece {
+  min-width: 1.1rem;
+  padding: 0.1rem 0.3rem;
+  background: var(--sand-100);
+  border: 1px solid var(--sand-300);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.3;
+  white-space: pre;
+  text-align: center;
+  color: var(--text-body);
+}
+.lm-merge__piece--new {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent-ink, var(--accent));
+  font-weight: 700;
+}
+
+/* ── Output histogram ─────────────────────────────────────────── */
+.lm-hist {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.lm-hist__bar {
+  fill: var(--ml-value-pos);
+}
+.lm-hist__axis {
+  stroke: var(--border-strong);
+}
+.lm-count {
+  margin: 0.7rem 0 0;
+  max-width: 78ch;
+  line-height: 1.6;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.lm-count__num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.lm-out {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
+}
+.lm-out__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+.lm-out__step--text {
+  align-items: flex-start;
+}
+.lm-out__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.lm-out__arrow {
+  color: var(--fig-text-label);
+  font-size: 1.1rem;
+}
+.lm-out__text {
+  font-size: var(--text-md, 1rem);
+  color: var(--text-body);
+  white-space: pre;
+}
+.lm-out__text b {
+  color: var(--accent-ink, var(--accent));
+}
+
+/* ── The pipeline ─────────────────────────────────────────────── */
+.lm-pipe {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 0.75rem;
+}
+.lm-pipe__chip,
+.lm-pipe__track {
+  fill: var(--sand-100);
+  stroke: var(--sand-300);
+}
+.lm-pipe__cell {
+  fill: var(--sand-100);
+  stroke: var(--fig-tile-border);
+  stroke-width: 0.75;
+}
+.lm-pipe__block {
+  fill: var(--surface);
+  stroke: var(--fig-node-border);
+  stroke-width: 1.5;
+}
+.lm-pipe__edge {
+  stroke: var(--border-strong);
+  stroke-width: 0.6;
+}
+.lm-pipe__neuron {
+  fill: var(--surface);
+}
+.lm-pipe__prob {
+  fill: var(--ml-value-pos);
+}
+.lm-pipe__drawn {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.lm-pipe__drawn--on {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+  stroke-dasharray: none;
+}
+.lm-pipe__loop {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.lm-pipe__loop--on {
+  stroke: var(--accent);
+}
+.lm-table__guess {
+  font-family: var(--font-mono);
+  font-style: italic;
+}

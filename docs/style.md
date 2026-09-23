@@ -173,6 +173,14 @@ matches it: same border (`--line`), same radius (6 px), same padding
 The rule lives in [styles.css](../apps/web/src/styles.css) under
 `.field input[type="text"]`. No input element should style itself.
 
+Native controls — range sliders, checkboxes, radios, progress bars —
+paint themselves with the *platform's* accent unless told otherwise,
+which is how a system-blue slider ends up on a warm-paper page. A base
+rule in [styles.css](../apps/web/src/styles.css) gives all of them
+`accent-color: var(--accent)`. A control is UI, so it takes the brand
+accent whatever the deploy's accent happens to be — never a figure
+colour, and never a hardcoded blue.
+
 ---
 
 ## 5. Per-user view and the Roster / Admin overlap
@@ -327,3 +335,254 @@ Use it to review or tweak the system in isolation, then apply the
 change to the app. It's the living companion to this document: the
 rules live here, the rendered specimens live there. Adding a new
 shared component? Add it to the gallery in the same change.
+
+---
+
+## 11. Figure colour in the examples
+
+The interactive examples draw numbers, and a student reading three
+examples in a week should not have to relearn what a colour means.
+Every number an example draws is one of three kinds, and each kind has
+exactly one scale. The values are tokens in
+[tokens/colors.css](../apps/web/src/tokens/colors.css) under the
+`--ml-` prefix, and the drawing helpers are in
+[examples/shared/palette.ts](../apps/web/src/examples/shared/palette.ts).
+
+| Kind | What it is | Scale |
+|---|---|---|
+| **Learned** | A parameter the model fitted: weight matrices, kernels. | Sage `#4c7d57` positive, plum `#774879` negative. |
+| **Computed** | A number produced from this input: activations, projections, scores, outputs. | Vermillion `#c13f29` positive, cerulean `#1777b8` negative. When the quantity cannot go below zero — an attention weight, a probability — use the positive arm alone, paper to vermillion. |
+| **Input** | The data as it arrived: pixels, raw features. Also genuine edge cases with no sign to show. | Greyscale, paper to ink. |
+| **Category** | The class a point belongs to, in a classifier. Not a number, so not a scale. | A fixed order: teal `#00879c`, periwinkle `--purple-600`, amber `--amber-600` (`--ml-class-1…3`). |
+
+**In a classifier the class owns the hue, and the mark says what kind of
+thing it is.** A classifier's parameters belong to a class (naive Bayes
+fits a mean and a spread per class), so painting them sage would cost the
+one thing the reader most needs: which class a curve is for. Instead
+every mark takes its class's hue, and its form carries the kind, the same
+way in every example:
+
+| Mark | Kind |
+|---|---|
+| a dot | the data |
+| a soft fill with no edge | the true distribution the data was drawn from |
+| a solid line | a fit (the model's, or the reader's own, with handles) |
+| a flat wash at low opacity | a prediction: which class the classifier picks there |
+
+The hues sit clear of all four figure poles and of any red or blue
+accent, and pass the colour-blind check on white (worst pair ΔE 12,
+tritan 7.7). Because the tritan pair is in the floor band, a class is
+never told by colour alone: it always carries its letter as well.
+
+Three rules hold it together.
+
+**Sage and plum mean "learned" and nothing else.** Not a series colour,
+not a category fill, not a status, not a highlight — in any example,
+ML or otherwise. They are the one thing a student can rely on across
+the gallery, and they stop being reliable the first time they mean
+something else. A non-ML example that needs distinguishable hues takes
+the general data-mark palette (`--purple-600`, `--salmon-600`, the
+`-600` semantic hues) instead.
+
+**The brand accent never encodes a number.** It belongs to the UI:
+buttons, selection, focus, the marker that says *look at this one*. It
+also changes from deploy to deploy, which is the real argument — a
+figure whose meaning depends on the accent means something different
+at another institution, and on a deploy whose accent is blue the
+positive and negative poles collapse into each other. Figure scales are
+fixed values for that reason.
+
+**Zero is the surface.** Every scale mixes toward the background the
+mark sits on, so a zero disappears into the page and a sparse vector
+reads as mostly empty. Inset figures pass their own surface as the
+zero (see `palette.ts`).
+
+**Recorded exceptions.** The convolutional network's feature maps stay
+greyscale although they are computed: a feature map is an image of the
+drawing as a kernel sees it, and in grey the digit's shadow carries
+through every layer the way it does in the input. Its dense neurons and
+output still take the computed scale. Any further exception is written
+here, with its reason, or it is a bug.
+
+Examples are migrating onto this one at a time; the attention example
+is done. Until an example has had its pass it may still use the older
+accent-red / slate-blue ramp, which is the thing being replaced.
+
+---
+
+## 12. Figure text
+
+Figure colour (§11) says what a *mark* means. This section says what
+voice a piece of *text* in a figure speaks in. Like §11 it applies to
+the examples only. The classes are in
+[examples/shared/figure.css](../apps/web/src/examples/shared/figure.css),
+and the specimens are in `/design` under **Examples · Figures**.
+
+Every piece of text in a figure does one of four jobs, and the job picks
+the voice:
+
+| Job | Class | Voice |
+|---|---|---|
+| **Names** a part: a layer, lane, column, axis or stage | `.fig-label` (`.fig-label--lg` for a large figure's main layer names) | mono · 10 · UPPERCASE · 0.05em · `--fig-text-label` |
+| …and says what that part is, on a second line | `.fig-label-sub` | mono · 9.5 · lowercase · `--fig-text-label` |
+| **Names** rows that are the argument (see below) | `.fig-row` | sans · 12 · bold · lowercase · `--text-body` |
+| **Marks** a position on an axis | `.fig-tick` | mono · 9 · tabular · `--fig-text-label` |
+| Carries the **data**: its words | `.fig-word` | mono · 11 · exactly as written · `--text-muted` |
+| …the one word the figure follows, inside a label ("embedding: **pierogi**") | `.fig-word--key` (a `<tspan>`) | lowercase · bold · `--text-strong` |
+| Carries the **data**: its numbers | `.fig-num` | mono · 10.5 · tabular · `--text-body`, or a scale's `-ink` colour beside a mark in that scale |
+| **Explains** something | `.fig-note` | sans · 11 · sentence case · `--text-secondary`; italic for a reading of a mark |
+| Selected, on any of the above | `.fig-on` (others `.fig-dim`) | `--accent` · bold; everything else at 0.35 opacity |
+| Goes to another example, on any of the above | `.fig-link` (on the `<a>` / `<Link>` around the text) | the wrapped text's voice; `--accent`, underlined, on hover or focus only |
+
+Text outside the SVG keeps the rules it already follows: a caption or
+figure note under a figure is sans · xs · `--text-muted`, and so is a
+legend.
+
+Six rules hold it together.
+
+**Uppercase names things; it never explains.** A label is a name of four
+words or fewer. If it has a verb or reads as a sentence ("what the open
+drawers add, summed"), it is a note: sentence case, the reading face.
+Uppercase sentences are the most common violation in the gallery today.
+
+**The data is never restyled.** A word from the sentence is shown as it
+was written, in lowercase mono, even inside an uppercase label (wrap it
+in `.fig-word` to reset the case).
+
+**Rows get a title only when they are the argument.** Most rows are
+lanes: "hidden 1", "E", "Q". They are parts of the figure and take
+`.fig-label`, the same voice as a column header. A row title (`.fig-row`)
+is for rows the reader compares as alternatives, such as "the old way" against "a
+transformer" or "sigmoid" against "ReLU". There the row *is* the claim, so it is
+set in the reading face, bold. Columns in the same figure stay labels.
+Different voices for rows and columns are fine when that is the reason.
+
+**One selected state.** Accent and bold, on whatever role the selected thing
+has. Unselected things dim to 0.35 opacity. Do not signal selection
+with dark-and-bold, with accent alone, or by changing size.
+
+**Figure grey is `--fig-text-label`, not `--text-faint`.** Figure labels
+are read from the back of a classroom, so they take the deep neural
+network example's label ink (`--ink-500`, 4.8:1 on white) rather than
+the UI's faint grey (2.6:1). `--text-faint` stays for the UI's
+placeholders and disabled states.
+
+**Figures draw 1:1, so a type size is a pixel size.** The sizes above
+are SVG user units. They only mean pixels if the figure is not scaled.
+Give every figure's `<svg>` its `width` and `height` as well as its
+`viewBox`, and style it `max-width: 100%; height: auto` so it shrinks on
+a narrow screen but never grows. A figure set to `width: 100%` scales
+its text along with it, and two examples using the same class then
+render different sizes.
+
+A figure that genuinely needs more room than its column — the network
+examples draw on a 1000-unit canvas in a ~750 px column — may shrink,
+but it then declares `--fig-scale` (its width ÷ the column's, 1.33 for
+those) on its `<svg>`. The figure-text classes multiply their sizes by
+it, so the text still lands at the stated pixels at desktop width.
+
+**One neuron, everywhere.** A neuron is a heavily rounded square
+(corner radius about a third of its side) with a mid-grey border: the
+deep neural network example's spec, named `--fig-node-border` and drawn
+with `.fig-neuron` (2 px on screen). An input or output tile is the
+larger square, `--fig-tile-border` and `.fig-tile` (2.25 px). Both
+multiply by `--fig-scale` like the text, so a figure that shrinks keeps
+its neurons' edges. A row of neurons small enough to read as dots takes
+`.fig-neuron--small`. Fill is the figure scale for what the neuron holds;
+the border never carries meaning, except that a neuron picked out by the
+figure (fired, on the traced path) takes a darker or accent border.
+
+**Migrating.** Examples are audited one at a time with the checklist in
+[figure-audit.md](figure-audit.md), which also tracks which are done. The
+activation-functions example is the first to use these classes. The older examples predate them and move over one at a time.
+The old shared label class `.at-grid__axis`, once used about 50 times
+for labels, headers and whole sentences alike, has been retired: each use
+now carries the class for its job.
+
+---
+
+## 13. Words in the examples
+
+A student reading several examples in a week should meet one name for
+one idea. When the field has several names, the examples use one and
+mention the others once, where the idea is introduced.
+
+| Say | Not | Where the others are named |
+|---|---|---|
+| **fully connected layer** (no hyphen) | dense layer, MLP, multilayer perceptron, feed-forward layer | the deep neural network example, where the idea is introduced |
+| **street** (an SVM's) | margin | the support vector machine example's lede |
+
+Two uses of another name stay, because they are quotations. The
+transformer page's reproduction of the original paper's figure keeps its
+"Feed Forward" box, and that page names the paper's term once: "the
+feed-forward network: two fully connected layers applied to each word on
+its own". "Feed-forward" is avoided otherwise because it describes
+direction, and it is true of every network without loops, convolutional
+ones included. The recurrent network example's contrast is exactly
+feed-forward against recurrent.
+
+Add a row whenever a second name turns up for something the examples
+already name.
+
+---
+
+## 14. Example panels
+
+The examples are pages of panels. §1–§9 govern the product; this is the
+panel grammar the examples share, so a student moving between them always
+knows where to look.
+
+**A panel is one `Card` (`padding="md"`) holding one idea.** From top to
+bottom:
+
+1. **Title:** an `<h2>`, `--text-lg`, `--text-strong`, sentence case, no
+   full stop, margin `0 0 0.3rem`. A panel numbered on a page map (the
+   transformers example) leads its title with the matching numbered chip.
+2. **Standfirst:** one or two sentences, `--text-sm`, `--text-secondary`,
+   line height 1.6, at most 78ch. Show, don't tell: say what to do or
+   look at, not what the figure will prove.
+3. **The interaction and the figure** (below).
+4. **Note, if needed:** under a top rule, `--text-xs`, `--text-muted`.
+   Sources, honest caveats ("designed, not learned"), and nothing the
+   figure already shows.
+
+**Subheadings** inside a panel are `<h3>`, `--text-md`, `--text-strong`,
+for a second beat within the same idea. If the second beat needs its own
+standfirst and figure, it is a new panel instead.
+
+**Horizontal or vertical.**
+
+- **Side by side** (a controls column of about 260 px on the left, the
+  figure on the right, the deep neural network example's layout) when
+  the figure is taller than it is wide and the reader works it
+  continuously: they move a control, watch the figure, and move it again.
+  The column stacks above the figure below about 860 px.
+- **Stacked** (controls above, readout below, figure full width) when the
+  figure is wide (a sentence, a grid across words, a table), or when the
+  controls are a single row of choices.
+- **One pinned bar** at the top of the page (`examples/shared/controls.css`)
+  when several panels in a row follow the same choice (a sentence, a word,
+  an activation). It wraps exactly those panels so it scrolls away with
+  the last of them, and the panels lose their own copies of the choice.
+  A page-wide switch (the activation example's Neuroscience switch) sits
+  at the bar's right-hand end.
+
+**Surfaces say what a thing is.**
+
+| Thing | Surface |
+|---|---|
+| The panel | `--surface` (white card) |
+| **Anything the reader operates:** the pinned bar, a controls box, a slider group | **`--surface-sunken` (the darker sand)**, `--border-strong` edge |
+| A readout: a number or sentence the figure reports | `--surface` box, `--border` edge |
+| A pop-up over a figure | `--surface-sunken` card, `--border-strong` edge, soft shadow |
+| The figure itself | the panel's white, no box of its own unless it is inset |
+
+**Controls.** A set of choices is a row of `Button`s, `primary` for the
+chosen one and `subtle` for the rest. A `Switch` is used for a page-wide
+on/off. A slider row reads label · slider · value, in mono. The one
+primary per region rule (§2) holds, with the chosen button counting as
+the primary.
+
+**Readouts.** A kicker (mono, `--text-2xs`, uppercase, `--text-muted`)
+over the value. A big number is mono, bold and tabular. A number that is
+a figure-scale value takes that scale's `-ink` colour.

@@ -1,0 +1,279 @@
+/* The fitting-complex-shapes example: panels, side column and figure marks.
+   Page chrome (topbar, eyebrow, lede) comes from the deep neural network
+   stylesheet, the pinned bar from shared/controls.css, figure text from
+   shared/figure.css.
+
+   Figure colour follows docs/style.md §11: the drawn shape and the counts are
+   data as it arrived (ink); a model's curve is computed from its input
+   (vermillion); the usual traffic is the truth the counts were drawn from, a
+   soft grey band with no edge. The two miss curves are neutral: position
+   carries their value, and "the next day" is the honest one, so it is set
+   dark. */
+
+/* ── Panel (style.md §14) ─────────────────────────────────────────── */
+.cs-panel {
+  margin-bottom: 1rem;
+}
+.cs-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.cs-sub {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.cs-note {
+  margin: 1rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* Side by side, stacking below 860 px. */
+.cs-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .cs-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.cs-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+/* ── Boxes ─────────────────────────────────────────────────────────── */
+/* A readout: white, hairline edge. */
+.cs-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.8rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+/* Anything the reader operates: sunken, strong edge. */
+.cs-box--controls {
+  background: var(--surface-sunken);
+  border-color: var(--border-strong);
+  align-items: stretch;
+}
+.cs-box--controls .ds-btn {
+  align-self: flex-start;
+}
+.cs-buttons {
+  display: flex;
+  gap: 0.35rem;
+}
+.cs-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+.cs-big {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text-strong);
+}
+.cs-model {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* Label · slider · value, in mono. */
+.cs-slider {
+  display: grid;
+  grid-template-columns: 5.6rem 1fr 2.2rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--text-body);
+}
+.cs-slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.cs-slider__val {
+  text-align: right;
+  font-weight: 700;
+}
+
+/* The two misses. */
+.cs-score {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  align-self: stretch;
+  gap: 0.6rem;
+}
+.cs-score__name {
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+.cs-score__val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.cs-score__val--next {
+  color: var(--text-strong);
+}
+
+/* ── Legend ───────────────────────────────────────────────────────── */
+.cs-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.cs-legend__row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.cs-legend__row svg {
+  flex: none;
+  overflow: visible;
+}
+
+/* The pinned bar's glyphs take the button's own ink. */
+.cs-glyph path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* ── The figures ──────────────────────────────────────────────────── */
+/* Drawn 1:1, never scaled up, so figure-text sizes are real pixels
+   (style.md §12). Narrow screens still shrink them. */
+.cs-fig {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  touch-action: none;
+  user-select: none;
+}
+.cs-frame {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+}
+.cs-grid {
+  stroke: var(--border);
+  stroke-dasharray: 3 4;
+}
+.cs-axis {
+  stroke: var(--border-strong);
+}
+
+/* The data as it arrived: ink. */
+.cs-shape {
+  fill: none;
+  stroke: var(--ml-input-ink);
+  stroke-width: 7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.22;
+}
+.cs-dot {
+  fill: var(--ml-input-ink);
+  stroke: var(--surface);
+  stroke-width: 0.9;
+}
+.cs-dot--next {
+  fill: var(--surface);
+  stroke: var(--ml-input-ink);
+  stroke-width: 1.2;
+  opacity: 0.7;
+}
+
+/* A model's curve: computed, vermillion. */
+.cs-fit {
+  fill: none;
+  stroke: var(--ml-value-pos);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.cs-fit--ghost {
+  stroke-width: 1.5;
+  opacity: 0.25;
+}
+.cs-knot {
+  stroke: var(--fig-text-label);
+  stroke-width: 1.2;
+}
+
+/* The truth the counts were drawn from: a soft band, no edge. */
+.cs-usual {
+  fill: none;
+  stroke: var(--ink-400);
+  stroke-width: 12;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.3;
+}
+
+/* The miss against parameters. */
+.cs-curve {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.cs-curve--today {
+  stroke: var(--text-muted);
+  stroke-dasharray: 5 3;
+}
+.cs-curve--next {
+  stroke: var(--text-strong);
+}
+.cs-cursor {
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.cs-cursor-dot {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.cs-cursor-dot--today {
+  fill: var(--text-muted);
+}
+.cs-cursor-dot--next {
+  fill: var(--text-strong);
+}
+
+.cs-hit {
+  fill: transparent;
+  cursor: ew-resize;
+}
+.cs-hit--draw {
+  cursor: crosshair;
+}

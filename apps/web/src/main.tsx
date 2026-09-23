@@ -198,6 +198,11 @@ const router = createBrowserRouter([
     path: "/examples/fasttext",
     element: <Navigate to="/examples/word2vec#subword" replace />,
   },
+  {
+    // Renamed from digit-recognizer; the old URL is in course material.
+    path: "/examples/digit-recognizer",
+    element: <Navigate to="/examples/deep-neural-network" replace />,
+  },
   ...EXAMPLES.map((ex) => ({
     path: `/examples/${ex.slug}`,
     // The course strip is mounted here rather than inside each example page,
