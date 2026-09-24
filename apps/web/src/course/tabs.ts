@@ -37,6 +37,8 @@ export interface TabVisibilityFlags {
   agentsEnabled?: boolean;
   /** Writing (provenance) module. Drives the Submissions tab. */
   provenanceEnabled?: boolean;
+  /** Code (Python notebooks) module. Default off. Drives the Code tab. */
+  codeEnabled?: boolean;
 }
 
 /**
@@ -120,6 +122,16 @@ export const TABS: TabSpec[] = [
     // Only meaningful when the Writing module is on. Absent flag reads as on,
     // matching the COALESCE default the enrollment query applies.
     visible: (e) => e?.provenanceEnabled ?? true,
+  },
+  {
+    // Coding assignments: authored here, reviewed per assignment from the
+    // same page. Opt-in — absent flag reads as OFF, unlike Writing/Agents.
+    slug: "code",
+    band: "review",
+    label: "Code",
+    description:
+      "Python notebooks that run in each student's browser. Set coding assignments, choose whether the AI tutor is available, and read what students submit.",
+    visible: (e) => !!e?.codeEnabled,
   },
   {
     slug: "attendance",

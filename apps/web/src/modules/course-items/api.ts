@@ -5,7 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const fetchInit: RequestInit = API_BASE ? { credentials: "include" } : {};
 
-export type ItemKind = "writing" | "agent" | "example" | "reading";
+export type ItemKind = "writing" | "agent" | "example" | "reading" | "code";
 
 /**
  * Per-kind completion. A discriminated union with a DIFFERENT FIELD NAME per
@@ -22,7 +22,8 @@ export type ItemCompletionDTO =
   | { kind: "writing"; submitted: boolean }
   | { kind: "agent"; finished: boolean }
   | { kind: "example"; markedDone: boolean }
-  | { kind: "reading"; markedDone: boolean };
+  | { kind: "reading"; markedDone: boolean }
+  | { kind: "code"; submitted: boolean };
 
 /** Payload detail, shaped per kind by the worker. Narrow at the use site. */
 export interface AgentPayload {
@@ -195,6 +196,8 @@ export function kindLabel(kind: ItemKind): string {
       return "Example";
     case "reading":
       return "Reading";
+    case "code":
+      return "Code";
   }
 }
 
@@ -217,6 +220,8 @@ export function completionLabel(c: ItemCompletionDTO | undefined): string | null
     case "example":
     case "reading":
       return c.markedDone ? "marked done" : null;
+    case "code":
+      return c.submitted ? "submitted" : null;
   }
 }
 

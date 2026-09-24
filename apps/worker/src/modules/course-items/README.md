@@ -45,6 +45,7 @@ same sort of claim:
 | `agent` | any conversation with `completed_at IS NOT NULL` | `conversations` | **server-derived** |
 | `example` | an `example_completions` row | `example_completions` | self-reported |
 | `reading` | (self-report, when built) | — | self-reported |
+| `code` | any submission to the code assignment | `code_submissions` | artifact exists |
 
 A backbone exit is **evidence**; a checkbox is a **claim**. Flattening them
 into one boolean would quietly present a student's self-report as something
@@ -114,6 +115,10 @@ changes, so the Assign list can never drift from what a course actually has:
   `renameItemForPayload` on title change, `removeItemForPayload` on delete.
 - **writing** — `ensureItem` on create, `renameItemForPayload` and
   `setArchivedForPayload` on edit, `removeItemForPayload` on delete.
+- **code** — `ensureItem` on create; `renameItemForPayload`,
+  `setArchivedForPayload` and `setDueForPayload` on edit;
+  `removeItemForPayload` on delete. The code assignment's editor owns its one
+  due date, so the wrapper follows it.
 - **examples** — `syncExampleItems` after every save of the curated list:
   creates wrappers for new slugs, deletes them for dropped slugs, and copies
   dates and note from the curation row (the editor where those are set).

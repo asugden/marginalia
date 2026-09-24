@@ -124,6 +124,8 @@ function detailHref(courseId: string, item: CourseItemDTO): string | null {
       return `${base}/agents/${item.payloadRef}`;
     case "example":
       return `${base}/assign/examples`;
+    case "code":
+      return `${base}/code/${item.payloadRef}`;
     default:
       return null;
   }
@@ -250,6 +252,9 @@ export function AssignPage() {
  */
 function NewItemControl({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
+  // Code is an opt-in module: it appears in this menu only once the course
+  // has turned it on, so a course that never uses it never sees it.
+  const { codeEnabled } = useCourse();
   return (
     <Dropdown
       value=""
@@ -260,11 +265,13 @@ function NewItemControl({ courseId }: { courseId: string }) {
         { value: "writing", label: "Writing assignment" },
         { value: "agent", label: "Agent" },
         { value: "example", label: "Example" },
+        ...(codeEnabled ? [{ value: "code", label: "Coding assignment" }] : []),
       ]}
       onChange={(v) => {
         const base = `/course/${courseId}/instructor`;
         if (v === "writing") navigate(`${base}/assignments`);
         else if (v === "agent") navigate(`${base}/agents`);
+        else if (v === "code") navigate(`${base}/code`);
         else navigate(`${base}/assign/examples`);
       }}
     />

@@ -71,6 +71,7 @@ export function StudentLayout() {
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
           agentsEnabled: e.agentsEnabled,
+          codeEnabled: e.codeEnabled ?? false,
           termSeason: e.termSeason,
           termYear: e.termYear,
           startDate: e.startDate,
@@ -131,7 +132,9 @@ export function StudentLayout() {
         ? "agents"
         : seg === "writing"
           ? "writing"
-          : null;
+          : seg === "code"
+            ? "code"
+            : null;
 
   return (
     <CourseContext.Provider value={value}>
@@ -154,6 +157,7 @@ export function StudentLayout() {
               courseId={courseId}
               provenanceEnabled={value.provenanceEnabled}
               agentsEnabled={value.agentsEnabled}
+              codeEnabled={value.codeEnabled}
               activeModule={activeModule}
               switcher={
                 <CourseSwitcher

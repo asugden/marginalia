@@ -399,6 +399,10 @@ export interface MeEnrollment {
    *  A real on/off toggle, default ON. When off, agents disappear from both
    *  the instructor nav/dashboard and the student view. */
   agentsEnabled: boolean;
+  /** migration 0024 — whether the code (Python notebooks) module is on for
+   *  this course. Opt-in, default OFF: a course that never turns it on never
+   *  shows it anywhere. */
+  codeEnabled: boolean;
   /** v1.2 (migration 0017) — the semester this course is taught in, or null
    *  when unscheduled. Academic year is derived from (termSeason, termYear)
    *  via course/term.ts. */
@@ -956,7 +960,7 @@ export function revealCourseTab(
  *  Instructor-only on the server. */
 export function setCourseFeature(
   courseId: string,
-  feature: "attendance" | "agents" | "provenance",
+  feature: "attendance" | "agents" | "provenance" | "code",
   enabled: boolean,
 ) {
   return jsonFetch<{ ok: true }>(

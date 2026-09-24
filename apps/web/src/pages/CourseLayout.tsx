@@ -74,6 +74,7 @@ export function CourseLayout() {
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
           agentsEnabled: e.agentsEnabled,
+          codeEnabled: e.codeEnabled ?? false,
           termSeason: e.termSeason,
           termYear: e.termYear,
           startDate: e.startDate,

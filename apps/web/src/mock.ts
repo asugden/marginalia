@@ -484,6 +484,7 @@ export async function getMe(): Promise<{
     hideProvenanceMarks: boolean;
     provenanceEnabled: boolean;
     agentsEnabled: boolean;
+    codeEnabled: boolean;
     termSeason: "spring" | "summer" | "fall" | null;
     termYear: number | null;
     startDate: number | null;
@@ -507,6 +508,7 @@ export async function getMe(): Promise<{
         hideProvenanceMarks: false,
         provenanceEnabled: true,
         agentsEnabled: true,
+        codeEnabled: true,
         termSeason: "summer",
         termYear: 2026,
         startDate: Date.UTC(2026, 4, 18, 0, 0, 0, 0),
