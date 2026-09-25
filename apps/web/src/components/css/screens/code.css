@@ -223,6 +223,71 @@
 .code-files__name { font-family: var(--font-mono); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .code-files__meta { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 
+/* ── origins (instructor review) ──────────────────────────────────────── */
+/* The writing tool's colours exactly — one origin, one colour, everywhere:
+   pasted = warning, from the tutor = info, autocorrect = success. Typed is the
+   default ink, no wash. `provided` (starter code the student didn't write) is
+   deliberately the quietest mark: a neutral wash with no underline, so it
+   recedes rather than reads as a finding. */
+.code-origin { border-radius: 2px; }
+.code-origin--llm { background: var(--status-info-bg); box-shadow: 0 1px 0 var(--status-info-fg); }
+.code-origin--pasted { background: var(--status-warning-bg); box-shadow: 0 1px 0 var(--status-warning-fg); }
+.code-origin--edited { background: var(--status-success-bg); box-shadow: 0 1px 0 var(--status-success-fg); }
+.code-origin--provided { background: var(--surface-sunken); color: var(--text-secondary); }
+
+.code-legend {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; align-items: center;
+  font-size: 0.86rem; color: var(--text-secondary); margin-bottom: var(--space-3);
+}
+.code-legend__item { display: inline-flex; align-items: center; gap: 0.4rem; }
+.code-legend__swatch {
+  display: inline-block; width: 0.95rem; height: 0.75rem; border-radius: 2px;
+  border: 1px solid var(--border);
+}
+.code-legend__swatch.code-origin--human { background: var(--panel); }
+.code-legend__count { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); }
+
+.code-imports { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.code-imports__row { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); }
+.code-imports__meta {
+  display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;
+  padding: 0.45rem 0.7rem; font-size: 0.82rem; color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-faint);
+}
+.code-imports__sample {
+  margin: 0; padding: 0.5rem 0.7rem; font-family: var(--font-mono); font-size: 0.8rem;
+  white-space: pre-wrap; word-break: break-word; max-height: 12rem; overflow: auto;
+}
+.code-imports__note { margin-top: var(--space-3); }
+
+.code-record-note { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 var(--space-3); }
+.code-mode-chip, .code-unsaved {
+  flex: none; font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 0.2rem 0.5rem; border-radius: var(--radius-pill);
+}
+.code-mode-chip { color: var(--text-secondary); border: 1px solid var(--border-strong); }
+
+/* ── the instructor's scratch copy (salmon) ───────────────────────────── */
+/* Salmon marks every surface of a copy that saves nothing, so it can never be
+   mistaken for the student's real notebook: the header, a banner, the pane's
+   edge, and every cell's focus ring. */
+.code-shell--sandbox .code-header {
+  background: var(--salmon-tint);
+  border-bottom-color: var(--salmon-600);
+}
+.code-shell--sandbox .prov-shell-role { color: var(--salmon-ink); }
+.code-shell--sandbox .code-pane { box-shadow: inset 4px 0 0 var(--salmon-600); }
+.code-shell--sandbox .code-cell__input:focus-within {
+  border-color: var(--salmon-600);
+  box-shadow: 0 0 0 2px var(--salmon-tint);
+}
+.code-unsaved { color: var(--salmon-ink); background: var(--white); border: 1px solid var(--salmon-600); }
+.code-sandbox-banner {
+  padding: 0.55rem 1rem; font-size: 0.88rem; line-height: 1.45;
+  background: var(--salmon-tint); color: var(--salmon-ink);
+  border-bottom: 1px solid var(--salmon-600);
+}
+
 /* ── pages ────────────────────────────────────────────────────────────── */
 .code-home__scratch { margin-top: var(--space-6); }
 .code-off-note {

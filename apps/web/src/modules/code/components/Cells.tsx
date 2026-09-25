@@ -4,6 +4,8 @@
 
 import { useState } from "react";
 import type { EditorView } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
+import type { OriginRun } from "@marginalia/provenance";
 import { Markdown } from "../../../Markdown.js";
 import { IconButton } from "../../../components/index.js";
 import { ChevronIcon, PlusIcon, TrashIcon } from "../../../icons.js";
@@ -40,6 +42,11 @@ export interface CellsProps {
   /** Text cells being edited (rendered as source rather than markdown). */
   editingText?: Set<string>;
   onEditText?: (id: string, editing: boolean) => void;
+  /** Origin tracking for a cell's editor (live notebooks in submit mode). */
+  trackingFor?: (cell: Cell) => Extension[] | undefined;
+  /** Origin runs to paint on a cell (review views). When given, text cells
+   *  show their source, so every character's origin is visible. */
+  marksFor?: (cellId: string) => OriginRun[] | undefined;
 }
 
 export function Cells(props: CellsProps) {
@@ -100,10 +107,28 @@ function CellView({
   registerView,
   editingText,
   onEditText,
+  trackingFor,
+  marksFor,
 }: CellsProps & { cell: Cell; index: number; last: boolean }) {
   const rs = runState?.[cell.id];
   const busy = rs?.state === "queued" || rs?.state === "running";
   const [hover, setHover] = useState(false);
+  const marks = marksFor?.(cell.id);
+
+  if (cell.type === "markdown" && marks && readOnly) {
+    // Review with origins on: show the text cell's source so its marks are
+    // visible character by character.
+    return (
+      <section className="code-cell code-cell--text">
+        <div className="code-cell__gutter" aria-hidden />
+        <div className="code-cell__main">
+          <div className="code-cell__input">
+            <CodeEditor initialValue={cell.source} language="markdown" readOnly marks={marks} />
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (cell.type === "markdown") {
     const editing = !readOnly && (editingText?.has(cell.id) ?? false);
@@ -128,6 +153,7 @@ function CellView({
                 onEscape={() => onEditText?.(cell.id, false)}
                 onFocus={() => onFocusCell?.(cell.id)}
                 onView={(v) => registerView?.(cell.id, v)}
+                extensions={trackingFor?.(cell)}
               />
             </div>
           ) : (
@@ -192,6 +218,8 @@ function CellView({
             onRunInPlace={() => onRun?.(cell.id, false)}
             onFocus={() => onFocusCell?.(cell.id)}
             onView={(v) => registerView?.(cell.id, v)}
+            extensions={trackingFor?.(cell)}
+            marks={marks}
           />
         </div>
         {rs?.state === "running" && rs.status && <div className="code-cell__status">{rs.status}</div>}

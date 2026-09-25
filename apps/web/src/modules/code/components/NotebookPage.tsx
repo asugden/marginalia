@@ -9,10 +9,16 @@
 //   │ cells                                 │ │                        │
 //   └───────────────────────────────────────┴─┴────────────────────────┘
 //
-// Two modes share this page:
-//   student — the caller's own notebook (an assignment's, or scratch).
+// Three modes share this page:
+//   student — the caller's own notebook (an assignment's, or scratch). For an
+//             assignment in submit mode, edits are recorded (see
+//             originTracking.ts) and the notebook can be submitted.
 //   starter — an instructor editing an assignment's starter notebook; saves
-//             to the assignment, no tutor, no submit.
+//             to the assignment. The tutor, if on, is a preview that stores
+//             nothing.
+//   sandbox — an instructor's scratch copy of a submission, for debugging.
+//             Runs like any notebook and saves nothing, anywhere. Marked in
+//             salmon so it can't be mistaken for the real thing.
 //
 // Python runs in a worker in this tab (see ../kernel). The page saves the
 // notebook — cells and outputs — to the server on a debounce, and never
@@ -34,19 +40,25 @@ import { relativeTime } from "../../../time.js";
 import {
   ApiError,
   getAssignment,
+  getSubmission,
   isAuthError,
   listMySubmissions,
   openNotebook,
   getNotebook,
+  postEvents,
   redirectToLogin,
   saveNotebook,
   submitNotebook,
   updateAssignment,
+  type AssignmentMode,
   type Cell,
   type CellOutput,
   type CellType,
   type NotebookContent,
+  type OutboundCodeEvent,
 } from "../api.js";
+import { MoveBuffer, type Origin } from "@marginalia/provenance";
+import { noteTutorReply, originTracking, type TrackedCellEvent, type TrackingContext } from "./originTracking.js";
 import { listStoredFiles } from "../kernel/files.js";
 import { Kernel, type KernelStatus } from "../kernel/kernel.js";
 import { Cells, newCellId, type RunState } from "./Cells.js";
@@ -55,6 +67,8 @@ import { appendOutput } from "./Outputs.js";
 import { TutorPanel } from "./TutorPanel.js";
 
 const SAVE_DEBOUNCE_MS = 1_200;
+const EVENTS_FLUSH_MS = 3_000;
+const EVENTS_FLUSH_AT = 50;
 /** Keep a save comfortably under the server's cap (which sits under D1's). */
 const SAVE_BUDGET_BYTES = 1_600_000;
 const SPLIT_KEY = "code.notebookSplit";
@@ -65,16 +79,28 @@ const SPLIT_DEFAULT = 0.66;
 type SaveState = "idle" | "saving" | "saved" | "error";
 type SidePane = "tutor" | "files" | null;
 
+type PageMode = "student" | "starter" | "sandbox";
+
 interface Loaded {
-  mode: "student" | "starter";
-  /** Notebook id (student) or assignment id (starter). */
+  mode: PageMode;
+  /** Notebook id (student), assignment id (starter), or submission id (sandbox). */
   id: string;
   courseId: string;
   title: string;
   content: NotebookContent;
   aiEnabled: boolean;
-  assignment: { title: string; instructions: string; dueAt: number | null } | null;
+  assignment: {
+    title: string;
+    instructions: string;
+    dueAt: number | null;
+    mode?: AssignmentMode;
+  } | null;
   isAssignment: boolean;
+  /** Record edits for the provenance render (student, submit mode). */
+  tracking: boolean;
+  eventSeq: number;
+  /** Sandbox only: whose submission this is a copy of. */
+  copyOf?: { student: string; assignmentId: string };
 }
 
 function loadSplit(): number {
@@ -107,14 +133,25 @@ export function fitForSave(content: NotebookContent): { content: NotebookContent
   return { content: { cells }, trimmed: true };
 }
 
-export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter" }) {
-  const params = useParams<{ courseId: string; notebookId?: string; assignmentId?: string }>();
+export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
+  const params = useParams<{
+    courseId: string;
+    notebookId?: string;
+    assignmentId?: string;
+    submissionId?: string;
+  }>();
   const courseParam = params.courseId ?? null;
   const { active, actingAsStudent } = useActiveCourse(courseParam);
   const [searchParams] = useSearchParams();
   const previewing = actingAsStudent || searchParams.get("preview") === "1";
   const home = `/course/${courseParam}`;
-  const backHref = mode === "starter" ? `${home}/instructor/code` : `${home}/code`;
+  const backHref =
+    mode === "starter"
+      ? `${home}/instructor/code`
+      : mode === "sandbox"
+        ? `${home}/instructor/code/submissions/${params.submissionId}`
+        : `${home}/code`;
+  const sandbox = mode === "sandbox";
 
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -148,6 +185,32 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
   const splitBox = useRef<HTMLDivElement>(null);
   const storageKey = loaded ? (mode === "starter" ? `starter:${loaded.id}` : loaded.id) : "";
 
+  // ── origin tracking ───────────────────────────────────────────────────
+  // One context per page: a shared move buffer (so code moved between cells
+  // keeps its origins) and the tutor text seen so far.
+  const pendingEvents = useRef<OutboundCodeEvent[]>([]);
+  const eventSeq = useRef(0);
+  const eventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eventsInflight = useRef<Promise<void> | null>(null);
+  const flushEventsRef = useRef<() => Promise<void>>(async () => {});
+  const tracking = useRef<TrackingContext | null>(null);
+  if (!tracking.current) {
+    tracking.current = {
+      moves: new MoveBuffer<Origin>(),
+      tutorContributions: [],
+      tutorReplies: [],
+      emit: (events: TrackedCellEvent[]) => {
+        for (const e of events) pendingEvents.current.push({ ...e, clientSeq: ++eventSeq.current });
+        if (pendingEvents.current.length >= EVENTS_FLUSH_AT) void flushEventsRef.current();
+        else if (!eventTimer.current) {
+          eventTimer.current = setTimeout(() => void flushEventsRef.current(), EVENTS_FLUSH_MS);
+        }
+      },
+      onRuns: (cellId, runs) =>
+        setCells((cs) => cs.map((c) => (c.id === cellId ? { ...c, origins: runs } : c))),
+    };
+  }
+
   // ── load ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!courseParam) return;
@@ -163,9 +226,27 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
             courseId: courseParam,
             title: a.title,
             content: a.starter ?? { cells: [] },
-            aiEnabled: false,
-            assignment: { title: a.title, instructions: a.instructions, dueAt: a.dueAt },
+            // The instructor can try the tutor here when students will have it.
+            aiEnabled: a.aiEnabled,
+            assignment: { title: a.title, instructions: a.instructions, dueAt: a.dueAt, mode: a.mode },
             isAssignment: false,
+            tracking: false,
+            eventSeq: 0,
+          };
+        } else if (mode === "sandbox") {
+          const sub = await getSubmission(courseParam, params.submissionId!);
+          l = {
+            mode,
+            id: sub.id,
+            courseId: courseParam,
+            title: sub.assignmentTitle ?? sub.title,
+            content: sub.content,
+            aiEnabled: false,
+            assignment: null,
+            isAssignment: false,
+            tracking: false,
+            eventSeq: 0,
+            copyOf: { student: sub.student.displayName ?? sub.student.email, assignmentId: sub.assignmentId },
           };
         } else {
           const nb = await getNotebook(courseParam, params.notebookId!);
@@ -178,6 +259,8 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
             aiEnabled: nb.aiEnabled,
             assignment: nb.assignment,
             isAssignment: nb.assignmentId !== null,
+            tracking: nb.tracking,
+            eventSeq: nb.eventSeq,
           };
           if (nb.assignmentId) {
             listMySubmissions(courseParam, nb.id)
@@ -189,6 +272,7 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
         const initial = l.content.cells.length
           ? l.content.cells
           : [{ id: newCellId(), type: "code" as const, source: "" }];
+        eventSeq.current = l.eventSeq;
         setLoaded(l);
         setCells(initial);
         setTitle(l.title);
@@ -208,14 +292,14 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
     return () => {
       live = false;
     };
-  }, [courseParam, mode, params.assignmentId, params.notebookId]);
+  }, [courseParam, mode, params.assignmentId, params.notebookId, params.submissionId]);
 
   // ── kernel ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!loaded) return;
     const key = storageKey;
     const k = new Kernel(async (kernel) => {
-      for (const f of await listStoredFiles(key)) {
+      for (const f of sandbox ? [] : await listStoredFiles(key)) {
         try {
           await kernel.writeFile(f.name, f.data);
         } catch {
@@ -234,10 +318,40 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
       k.dispose();
       kernelRef.current = null;
     };
-  }, [loaded, storageKey]);
+  }, [loaded, storageKey, sandbox]);
 
   // ── saving ────────────────────────────────────────────────────────────
+  /** Send buffered edit events. A failed batch stays queued and is retried
+   *  with the next one; the server drops anything it already has. */
+  const flushEvents = useCallback(async (): Promise<void> => {
+    if (eventTimer.current) {
+      clearTimeout(eventTimer.current);
+      eventTimer.current = null;
+    }
+    if (eventsInflight.current) await eventsInflight.current;
+    if (!loaded?.tracking || pendingEvents.current.length === 0) return;
+    const batch = pendingEvents.current.slice(0, 500);
+    const p = (async () => {
+      try {
+        await postEvents(loaded.courseId, loaded.id, batch);
+        pendingEvents.current = pendingEvents.current.slice(batch.length);
+      } catch (e) {
+        if (isAuthError(e)) redirectToLogin();
+        // Keep the batch; the next flush retries it.
+      }
+    })();
+    eventsInflight.current = p;
+    await p;
+    eventsInflight.current = null;
+    if (pendingEvents.current.length > 0 && !eventTimer.current) {
+      eventTimer.current = setTimeout(() => void flushEventsRef.current(), EVENTS_FLUSH_MS);
+    }
+  }, [loaded]);
+  flushEventsRef.current = flushEvents;
+
   const flush = useCallback(async (): Promise<void> => {
+    if (sandbox) return; // a scratch copy saves nothing, anywhere
+    void flushEvents();
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
@@ -271,7 +385,7 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
     inflight.current = p;
     await p;
     inflight.current = null;
-  }, [loaded]);
+  }, [loaded, sandbox, flushEvents]);
 
   const scheduleSave = useCallback(
     (what: "content" | "title" = "content") => {
@@ -284,14 +398,15 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
 
   useEffect(() => {
     const onUnload = (e: BeforeUnloadEvent) => {
-      if (dirty.current.content || dirty.current.title || inflight.current) {
+      if (sandbox) return;
+      if (dirty.current.content || dirty.current.title || inflight.current || pendingEvents.current.length) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, []);
+  }, [sandbox]);
 
   // Save on the way out of the page (in-app navigation).
   useEffect(() => () => void flush(), [flush]);
@@ -441,15 +556,30 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
 
   const setType = useCallback(
     (id: string, type: CellType) => {
-      // Remount the cell's editor so its language changes with it.
-      const fresh = newCellId();
+      // The id is kept, so the cell's edit history (and its origins) carry
+      // across the switch. The editor remounts anyway: code and text cells
+      // render different components.
       updateCells((cs) =>
-        cs.map((c) => (c.id === id ? { id: fresh, type, source: c.source, ...(type === "code" ? { outputs: [] } : {}) } : c)),
+        cs.map((c) =>
+          c.id === id
+            ? { id, type, source: c.source, ...(c.origins ? { origins: c.origins } : {}), ...(type === "code" ? { outputs: [] } : {}) }
+            : c,
+        ),
       );
-      if (type === "markdown") setEditingText((s) => new Set(s).add(fresh));
+      if (type === "markdown") setEditingText((s) => new Set(s).add(id));
     },
     [updateCells],
   );
+
+  const trackingFor = useMemo(() => {
+    if (!loaded?.tracking || mode !== "student") return undefined;
+    const ctx = tracking.current!;
+    return (cell: Cell) => [originTracking(cell.id, cell.origins, cell.source.length, ctx)];
+  }, [loaded, mode]);
+
+  const onTutorReply = useCallback((reply: string) => {
+    noteTutorReply(tracking.current!, reply, cellsRef.current.map((c) => c.source).join("\n"));
+  }, []);
 
   const onEditText = useCallback((id: string, editing: boolean) => {
     setEditingText((s) => {
@@ -473,13 +603,14 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
       body:
         "Your instructor gets a copy of the notebook as it is now, with its outputs" +
         (loaded.aiEnabled ? " and your tutor conversation" : "") +
-        ". You can keep working and submit again. Your instructor sees every submission, newest first. Uploaded files are not included.",
+        ", and sees where its code and text came from: typed, pasted, from the tutor, or provided in the starter. You can keep working and submit again. Uploaded files are not included.",
       confirmLabel: "Submit",
     });
     if (!ok) return;
     setSubmitting(true);
     try {
       await flush();
+      await flushEvents();
       const s = await submitNotebook(loaded.courseId, loaded.id);
       setLastSubmittedAt(s.submittedAt);
       await notify({
@@ -520,7 +651,8 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
   }, [cells, focusCellId]);
 
   // ── render ────────────────────────────────────────────────────────────
-  if (loadError || !loaded) {
+  const notInstructor = sandbox && active !== null && active.role !== "instructor";
+  if (loadError || !loaded || notInstructor) {
     return (
       <div className="ds-staff">
         <header className="ds-staff-top">
@@ -530,9 +662,9 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
           <span className="ds-staff-top__role">Code</span>
         </header>
         <div className="ds-staff-page">
-          {loadError ? (
+          {loadError || notInstructor ? (
             <>
-              <p className="error">{loadError}</p>
+              <p className="error">{notInstructor ? "Scratch copies are for instructors." : loadError}</p>
               <Button variant="subtle" href={backHref}>
                 Back
               </Button>
@@ -550,7 +682,7 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
   const grid = sideOpen ? `${split}fr 6px ${1 - split}fr` : "minmax(0, 1fr)";
 
   return (
-    <div className="prov-shell code-shell no-watermark">
+    <div className={`prov-shell code-shell no-watermark${sandbox ? " code-shell--sandbox" : ""}`}>
       {courseParam && mode === "student" && (
         <header className="app-topbar app-topbar--student prov-appbar">
           <div className="app-topbar__inner">
@@ -568,10 +700,16 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
       {previewing && courseParam && <PreviewBanner courseId={courseParam} courseName={active?.courseName ?? ""} />}
 
       <header className="prov-shell-header code-header">
-        <Link to={backHref} aria-label="Back to Code">
-          <span className="prov-shell-role">{mode === "starter" ? "Starter notebook" : "Code"}</span>
+        <Link to={backHref} aria-label={sandbox ? "Back to the submission" : "Back to Code"}>
+          <span className="prov-shell-role">
+            {mode === "starter" ? "Starter notebook" : sandbox ? "Scratch copy" : "Code"}
+          </span>
         </Link>
-        {mode === "starter" || loaded.isAssignment ? (
+        {sandbox ? (
+          <span className="prov-shell-title code-header__title">
+            {loaded.copyOf?.student} — {title}
+          </span>
+        ) : mode === "starter" || loaded.isAssignment ? (
           <span className="prov-shell-title code-header__title">{title}</span>
         ) : (
           <input
@@ -585,7 +723,18 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
             placeholder="Untitled notebook"
           />
         )}
-        <SaveStatus state={saveState} note={saveNote} />
+        {sandbox ? (
+          <span className="code-unsaved" title="Nothing on this page is saved">
+            Not saved
+          </span>
+        ) : (
+          <SaveStatus state={saveState} note={saveNote} />
+        )}
+        {loaded.assignment?.mode === "practice" && mode === "student" && (
+          <span className="code-mode-chip" title="Practice: there's nothing to submit">
+            Practice
+          </span>
+        )}
         <span className={`code-kernel code-kernel--${kernelStatus}`} title={kernelDetail}>
           <span className="code-kernel__dot" aria-hidden />
           {kernelStatus === "starting" ? "Starting" : kernelStatus === "busy" ? "Running" : kernelStatus === "error" ? "Stopped" : "Ready"}
@@ -601,7 +750,7 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
             Clear outputs
           </Button>
         </span>
-        {loaded.isAssignment && mode === "student" && (
+        {loaded.isAssignment && mode === "student" && loaded.assignment?.mode !== "practice" && (
           <Button variant="primary" size="sm" onClick={() => void submit()} loading={submitting}>
             Submit
           </Button>
@@ -628,6 +777,13 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
         )}
       </header>
 
+      {sandbox && (
+        <div className="code-sandbox-banner" role="note">
+          You're editing a scratch copy of {loaded.copyOf?.student}'s submission. Run and change
+          anything: nothing here is saved, and neither the student nor their submission sees it.
+          Reload to start again from what they submitted.
+        </div>
+      )}
       {kernelStatus === "error" && (
         <div className="code-banner" role="alert">
           {kernelDetail}{" "}
@@ -668,6 +824,12 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
                   )}
                 </div>
               )}
+              {mode === "student" && loaded.tracking && (
+                <p className="code-record-note">
+                  When you submit, your instructor sees where this notebook's code and
+                  text came from: typed, pasted, from the tutor, or provided in the starter.
+                </p>
+              )}
               {mode === "starter" && (
                 <p className="code-starter-note">
                   Students each get their own copy of this notebook the first time
@@ -689,6 +851,7 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
                 registerView={registerView}
                 editingText={editingText}
                 onEditText={onEditText}
+                trackingFor={trackingFor}
               />
             </div>
           </div>
@@ -712,11 +875,16 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
               {side === "tutor" && loaded.aiEnabled && (
                 <TutorPanel
                   courseId={loaded.courseId}
-                  notebookId={loaded.id}
+                  target={
+                    mode === "starter"
+                      ? { kind: "preview", assignmentId: loaded.id }
+                      : { kind: "notebook", notebookId: loaded.id }
+                  }
                   focusCellId={focusCellId}
                   focusLabel={focusLabel}
                   onClearFocus={() => setFocusCellId(null)}
                   beforeSend={flush}
+                  onReply={onTutorReply}
                 />
               )}
               {side === "files" && (
@@ -725,6 +893,7 @@ export function NotebookPage({ mode = "student" }: { mode?: "student" | "starter
                   kernelStatus={kernelStatus}
                   storageKey={storageKey}
                   refreshSignal={filesTick}
+                  persist={!sandbox}
                 />
               )}
             </section>
@@ -750,6 +919,11 @@ function SaveStatus({ state, note }: { state: SaveState; note: string | null }) 
 /** Route wrapper for the instructor's starter-notebook editor. */
 export function StarterNotebookPage() {
   return <NotebookPage mode="starter" />;
+}
+
+/** Route wrapper for an instructor's unsaved scratch copy of a submission. */
+export function SandboxNotebookPage() {
+  return <NotebookPage mode="sandbox" />;
 }
 
 /**

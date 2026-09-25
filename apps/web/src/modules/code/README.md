@@ -13,7 +13,8 @@ The notebook UI, the in-browser Python runtime, and the instructor pages for
 | `/course/:id/instructor/code` | `InstructorCodePage`: author assignments inline | instructor |
 | `/course/:id/instructor/code/:aid` | `RosterPage`: every student, latest submission | instructor |
 | `/course/:id/instructor/code/:aid/starter` | `NotebookPage` in starter mode | instructor |
-| `/course/:id/instructor/code/submissions/:sid` | `SubmissionPage`: read-only | instructor |
+| `/course/:id/instructor/code/submissions/:sid` | `SubmissionPage`: read-only, with origin marks | instructor |
+| `/course/:id/instructor/code/submissions/:sid/scratch` | `NotebookPage` in sandbox mode: runnable, saves nothing, salmon | instructor |
 
 Nothing appears in any nav until the course turns Code on in Settings
 (`codeEnabled`, default off). The Code tab, the student nav item, and the
@@ -46,6 +47,25 @@ matching. **No autocompletion**: `@codemirror/autocomplete`'s extension is not
 installed, so the completion data `lang-python` registers is inert.
 Browser spellcheck and autocorrect are off in cells. Shift+Enter runs and
 advances; Ctrl/Cmd+Enter runs in place.
+
+## Origin tracking (`components/originTracking.ts`)
+
+A CodeMirror extension per cell, on only for a submit-mode assignment. It
+uses the shared rules from `@marginalia/provenance` (one `MoveBuffer` for
+the whole notebook, the tutor-text reversion index, `spliceRuns`) and emits
+events that `NotebookPage` batches to `/events` every 3 s. Each cell keeps its
+live runs in `cell.origins` so a reload restores them. Nothing here is
+authoritative; the server re-derives the render at submission. Students never
+see marks.
+
+## Page modes (`NotebookPage`)
+
+- **student** — the caller's notebook. Tutor if the assignment has it;
+  Submit unless it's practice.
+- **starter** — the instructor's starter editor. The tutor, when on, is a
+  preview that stores nothing.
+- **sandbox** — an instructor's scratch copy of a submission. Saves nothing
+  (no notebook writes, no events, no file storage), marked in salmon.
 
 ## Styling
 

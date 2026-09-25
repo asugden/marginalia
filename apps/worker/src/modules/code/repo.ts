@@ -3,7 +3,9 @@
 // instructor's submission view, which crosses the owner boundary and is
 // gated by role in handlers.ts before it gets here.
 
+import type { CodeEventRow } from "./render.js";
 import type {
+  AssignmentMode,
   CodeAssignmentRow,
   CodeMessageRow,
   CodeNotebookRow,
@@ -15,6 +17,7 @@ const newAssignmentId = () => `casg_${crypto.randomUUID()}`;
 const newNotebookId = () => `cnb_${crypto.randomUUID()}`;
 const newMessageId = () => `cmsg_${crypto.randomUUID()}`;
 const newSubmissionId = () => `csub_${crypto.randomUUID()}`;
+const newEventId = () => `cev_${crypto.randomUUID()}`;
 
 // ── course flag ─────────────────────────────────────────────────────────
 
@@ -76,6 +79,7 @@ export interface AssignmentInput {
   aiEnabled: boolean;
   aiPrompt: string | null;
   dueAt: number | null;
+  mode: AssignmentMode;
 }
 
 export async function createAssignment(
@@ -89,8 +93,8 @@ export async function createAssignment(
     .prepare(
       `INSERT INTO code_assignments
          (id, course_id, title, instructions, starter_json, ai_enabled, ai_prompt,
-          due_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          due_at, mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -101,6 +105,7 @@ export async function createAssignment(
       input.aiEnabled ? 1 : 0,
       input.aiPrompt,
       input.dueAt,
+      input.mode,
       ts,
       ts,
     )
@@ -126,6 +131,7 @@ export async function updateAssignment(
   if (patch.aiEnabled !== undefined) add("ai_enabled", patch.aiEnabled ? 1 : 0);
   if (patch.aiPrompt !== undefined) add("ai_prompt", patch.aiPrompt);
   if (patch.dueAt !== undefined) add("due_at", patch.dueAt);
+  if (patch.mode !== undefined) add("mode", patch.mode);
   if (patch.archived !== undefined) add("archived_at", patch.archived ? now() : null);
   add("updated_at", now());
   await db
@@ -162,7 +168,7 @@ export async function listNotebooks(
   const { results } = await db
     .prepare(
       `SELECT id, course_id, owner_user_id, assignment_id, title, '' AS cells_json,
-              created_at, updated_at
+              NULL AS baseline_json, created_at, updated_at
          FROM code_notebooks
         WHERE course_id = ? AND owner_user_id = ?
         ORDER BY updated_at DESC`,
@@ -209,6 +215,7 @@ export async function createNotebook(
     assignmentId: string | null;
     title: string;
     cellsJson: string;
+    baselineJson: string | null;
   },
 ): Promise<CodeNotebookRow> {
   const id = newNotebookId();
@@ -218,8 +225,9 @@ export async function createNotebook(
   await db
     .prepare(
       `INSERT OR IGNORE INTO code_notebooks
-         (id, course_id, owner_user_id, assignment_id, title, cells_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, course_id, owner_user_id, assignment_id, title, cells_json, baseline_json,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -228,6 +236,7 @@ export async function createNotebook(
       params.assignmentId,
       params.title,
       params.cellsJson,
+      params.baselineJson,
       ts,
       ts,
     )
@@ -312,6 +321,8 @@ export async function commitTurn(
     courseId: string;
     userContent: string;
     assistantContent: string;
+    /** See novelReplyText. */
+    assistantNovelText: string;
     promptHash: string;
     userAt: number;
   },
@@ -329,8 +340,9 @@ export async function commitTurn(
       .bind(newMessageId(), params.notebookId, params.courseId, params.userContent, params.promptHash, params.userAt),
     db
       .prepare(
-        `INSERT INTO code_messages (id, notebook_id, course_id, role, content, prompt_hash, created_at)
-         VALUES (?, ?, ?, 'assistant', ?, ?, ?)`,
+        `INSERT INTO code_messages
+           (id, notebook_id, course_id, role, content, prompt_hash, novel_text, created_at)
+         VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?)`,
       )
       .bind(
         assistantMessageId,
@@ -338,6 +350,7 @@ export async function commitTurn(
         params.courseId,
         params.assistantContent,
         params.promptHash,
+        params.assistantNovelText,
         assistantAt,
       ),
   ]);
@@ -356,6 +369,7 @@ export async function createSubmission(
     title: string;
     cellsJson: string;
     messagesJson: string;
+    renderJson: string | null;
   },
 ): Promise<CodeSubmissionRow> {
   const row: CodeSubmissionRow = {
@@ -367,14 +381,15 @@ export async function createSubmission(
     title: params.title,
     cells_json: params.cellsJson,
     messages_json: params.messagesJson,
+    render_json: params.renderJson,
     created_at: now(),
   };
   await db
     .prepare(
       `INSERT INTO code_submissions
          (id, course_id, assignment_id, notebook_id, owner_user_id, title, cells_json,
-          messages_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          messages_json, render_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.id,
@@ -385,6 +400,7 @@ export async function createSubmission(
       row.title,
       row.cells_json,
       row.messages_json,
+      row.render_json,
       row.created_at,
     )
     .run();
@@ -472,5 +488,79 @@ export async function listRoster(
     )
     .bind(assignmentId, assignmentId, courseId)
     .all<RosterRow>();
+  return results ?? [];
+}
+
+// ── edit events ─────────────────────────────────────────────────────────
+
+export interface InboundCodeEvent {
+  cellId: string;
+  kind: CodeEventRow["kind"];
+  offset: number;
+  length: number;
+  text: string | null;
+  origin: CodeEventRow["origin"];
+  restoredOrigins: string | null;
+  clientSeq: number;
+}
+
+export async function maxEventSeq(db: D1Database, notebookId: string): Promise<number> {
+  const row = await db
+    .prepare(`SELECT MAX(client_seq) AS max_seq FROM code_events WHERE notebook_id = ?`)
+    .bind(notebookId)
+    .first<{ max_seq: number | null }>();
+  return row?.max_seq ?? 0;
+}
+
+/** Append a batch. Events at or below the stored max client_seq are dropped,
+ *  so a retried batch is idempotent. Stamped with server receipt time. */
+export async function appendEvents(
+  db: D1Database,
+  params: { notebookId: string; courseId: string; events: InboundCodeEvent[] },
+): Promise<{ inserted: number; maxClientSeq: number }> {
+  const known = await maxEventSeq(db, params.notebookId);
+  const fresh = params.events.filter((e) => e.clientSeq > known);
+  if (fresh.length === 0) return { inserted: 0, maxClientSeq: known };
+  const at = now();
+  const stmt = db.prepare(
+    `INSERT INTO code_events
+       (id, notebook_id, course_id, cell_id, kind, offset, length, text, origin,
+        restored_origins, client_seq, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  await db.batch(
+    fresh.map((e) =>
+      stmt.bind(
+        newEventId(),
+        params.notebookId,
+        params.courseId,
+        e.cellId,
+        e.kind,
+        e.offset,
+        e.length,
+        e.text,
+        e.origin,
+        e.restoredOrigins,
+        e.clientSeq,
+        at,
+      ),
+    ),
+  );
+  return { inserted: fresh.length, maxClientSeq: fresh[fresh.length - 1]!.clientSeq };
+}
+
+export async function listEvents(
+  db: D1Database,
+  courseId: string,
+  notebookId: string,
+): Promise<CodeEventRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT cell_id, kind, offset, length, text, origin, restored_origins, client_seq, created_at
+         FROM code_events WHERE notebook_id = ? AND course_id = ?
+        ORDER BY client_seq ASC`,
+    )
+    .bind(notebookId, courseId)
+    .all<CodeEventRow>();
   return results ?? [];
 }

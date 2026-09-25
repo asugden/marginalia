@@ -90,6 +90,8 @@ const CodeOpenAssignment = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.OpenAssignmentNotebook })));
 const CodeStarterPage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.StarterNotebookPage })));
+const CodeSandboxPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.SandboxNotebookPage })));
 const CodeInstructorPage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.InstructorCodePage })));
 const CodeRosterPage = lazy(() =>
@@ -285,6 +287,11 @@ const router = createBrowserRouter([
   {
     path: "/course/:courseId/instructor/code/:assignmentId/starter",
     element: lz(<CodeStarterPage />),
+  },
+  // An instructor's unsaved, runnable scratch copy of a submission.
+  {
+    path: "/course/:courseId/instructor/code/submissions/:submissionId/scratch",
+    element: lz(<CodeSandboxPage />),
   },
   // v1.2 legacy: old standalone editor URL → /writing/:id.
   { path: "/course/:courseId/write/:id", element: <LegacyWriteRedirect /> },

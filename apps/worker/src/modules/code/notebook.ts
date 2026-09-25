@@ -2,6 +2,7 @@
 // and turning a notebook into context for the tutor. No D1, no env — so
 // these are testable standalone (see notebook.test.ts).
 
+import type { Origin, OriginRun } from "@marginalia/provenance";
 import type { Cell, CellOutput, NotebookContent } from "./types.js";
 
 /** D1 caps a row near 2 MB. Stay well under it, figures included. */
@@ -45,6 +46,8 @@ export function sanitizeContent(raw: unknown): NotebookContent | string {
     if (typeof cell.source !== "string") return "cell source must be a string";
     if (cell.source.length > MAX_SOURCE_CHARS) return "a cell is too long";
     const out: Cell = { id, type: cell.type, source: cell.source };
+    const origins = sanitizeOrigins(cell.origins, cell.source.length);
+    if (origins) out.origins = origins;
     if (cell.type === "code" && Array.isArray(cell.outputs)) {
       const outputs: CellOutput[] = [];
       for (const o of cell.outputs.slice(0, MAX_OUTPUTS_PER_CELL)) {
@@ -56,6 +59,55 @@ export function sanitizeContent(raw: unknown): NotebookContent | string {
     cells.push(out);
   }
   return { cells };
+}
+
+const ORIGINS: ReadonlySet<string> = new Set<Origin>(["human", "llm", "pasted", "edited", "provided"]);
+const MAX_RUNS_PER_CELL = 2_000;
+
+/**
+ * Keep a cell's live origin runs only if they are well-formed and cover the
+ * source exactly. Anything else is dropped (the cell then reads as unmarked),
+ * not repaired — these are a client-side display aid, and the authoritative
+ * render is recomputed from the event log.
+ */
+function sanitizeOrigins(raw: unknown, sourceLength: number): OriginRun[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_RUNS_PER_CELL) return null;
+  const out: OriginRun[] = [];
+  let total = 0;
+  for (const r of raw) {
+    if (!r || typeof r !== "object") return null;
+    const { origin, length } = r as { origin?: unknown; length?: unknown };
+    if (typeof origin !== "string" || !ORIGINS.has(origin)) return null;
+    if (typeof length !== "number" || !Number.isInteger(length) || length <= 0) return null;
+    out.push({ origin: origin as Origin, length });
+    total += length;
+  }
+  return total === sourceLength ? out : null;
+}
+
+/**
+ * The part of a tutor reply that is new to the student: every line of the
+ * reply except those already present (whitespace-normalized) somewhere in the
+ * notebook when it was sent. Retype detection compares against this, so a
+ * tutor quoting the student's own code back to them can never make that code
+ * read as AI-written.
+ */
+export function novelReplyText(reply: string, content: NotebookContent): string {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+  const existing = new Set<string>();
+  for (const c of content.cells) {
+    for (const line of c.source.split("\n")) {
+      const n = norm(line);
+      if (n) existing.add(n);
+    }
+  }
+  return reply
+    .split("\n")
+    .filter((line) => {
+      const n = norm(line);
+      return n.length > 0 && !existing.has(n);
+    })
+    .join("\n");
 }
 
 function clip(s: unknown, max: number): string {

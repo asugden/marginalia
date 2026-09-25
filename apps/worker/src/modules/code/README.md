@@ -42,15 +42,66 @@ that browser only.
 See `schema.sql`; the migration is `packages/schema/migrations/0024_code_module.sql`.
 
 - `code_assignments`: title, Markdown instructions, starter notebook, tutor
-  switch and optional tutor guidance, optional `due_at`, `archived_at`.
+  switch and optional tutor guidance, optional `due_at`, `mode`
+  (`submit` | `practice`), `archived_at`.
 - `code_notebooks`: one per (student, assignment), or free-standing scratch
-  notebooks with `assignment_id IS NULL`. Cells and outputs as JSON.
+  notebooks with `assignment_id IS NULL`. Cells and outputs as JSON, plus
+  `baseline_json`: the starter text each cell began with.
 - `code_messages`: one tutor thread per notebook. Each row records the hash
-  of the tutor instructions at send time.
+  of the tutor instructions at send time; assistant rows also keep
+  `novel_text`, the reply minus lines already in the notebook.
+- `code_events`: append-only edit log, per cell (submit mode only).
 - `code_submissions`: immutable frozen copies, including a frozen copy of the
-  tutor transcript (so deleting the live notebook cannot rewrite it).
+  tutor transcript (so deleting the live notebook cannot rewrite it) and the
+  origin render (`render_json`).
 
 Every query filters by `course_id`; notebook reads also filter by owner.
+
+## Submission mode
+
+Each assignment is **Submitted** (default) or **Practice**. Practice has no
+Submit button, refuses submissions (`400 practice_mode`), and records
+nothing (`/events` answers `409 not_tracked`). Scratch notebooks are never
+recorded either. Edits are logged only where the log will be read.
+
+## Origins: typed, pasted, from the tutor, provided
+
+The same model as the writing tool, computed by the same code: every cell is
+its own text with its own event log, replayed by
+`@marginalia/provenance#buildRender` when the notebook is submitted. An
+improvement to retype detection there applies here with no change in this
+module. `render.ts` holds only the notebook's policy:
+
+- **provided** — starter text, frozen as `baseline_json` when the student's
+  copy is created and replayed before any event. Never counted as typed.
+- **llm** — a paste of tutor text, typing that exactly reproduces it
+  (client-side reversion), and, server-side, typed text matching a tutor
+  reply's `novel_text` for 40+ characters *and written after that reply*.
+- **pasted** — any other clipboard import. Moving code between this
+  notebook's own cells is a verified-or-counted `move` that keeps origins.
+
+**The tutor-quoting rule.** A tutor often quotes the student's own code back
+to them. Two guards keep that from ever reading as AI-written: the reply's
+lines already in the notebook are excluded from `novel_text`, and the match
+is time-bounded (`after`) so text written before the reply can't be
+attributed to it. Both are pinned by `notebook.test.ts`.
+
+Students never see marks, and a student reading their own submission gets
+the notebook without the render, as in the writing tool. They are told in
+the notebook, and again in the Submit dialog, that their instructor will see
+where the code came from.
+
+The one deliberate difference from the Tiptap tracker: a slow retype of tutor
+text is logged as a delete followed by an `llm_insert` of the same span, so
+replay re-labels it instead of inserting it twice.
+
+## Scratch copies (instructor)
+
+`/course/:id/instructor/code/submissions/:sid/scratch` opens a submission as
+a runnable notebook that saves nothing: no notebook writes, no events, no
+browser storage for files. It is marked in salmon throughout. The student's
+datasets aren't there (they never left the student's browser); the
+instructor can add a copy for the session.
 
 ## Notebook format
 
@@ -79,6 +130,10 @@ side-panel default model (`provenanceDefaultModel`).
 
 There is deliberately no bring-your-own-key path here.
 
+In the starter editor, an instructor can try the tutor on the starter
+notebook (`POST /assignments/:id/tutor-preview`). Nothing is stored; the
+client sends the preview conversation with each turn.
+
 ## Routes
 
 See the header of `routes.ts`. In brief: assignment CRUD and roster
@@ -102,6 +157,8 @@ npx tsx apps/worker/src/modules/code/notebook.test.ts
 ## Not built yet
 
 - Instructor-provided datasets attached to an assignment.
-- Recording where code came from (paste tracking, in the spirit of the
-  provenance module).
+- The provenance audit panel (sessions, gaps, bursts). It is computed and
+  stored per cell in `render_json`, but not yet shown.
+- Feedback on submissions, when the writing tool gets it. It belongs beside
+  the origin model in a shared package, not copied between the modules.
 - Deep-learning frameworks. PyTorch and TensorFlow have no Pyodide build.

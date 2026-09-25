@@ -5,9 +5,13 @@ const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const fetchInit: RequestInit = API_BASE ? { credentials: "include" } : {};
 
+import type { Origin, OriginRun, PasteRecord, ProvenanceAudit } from "@marginalia/provenance";
+export type { Origin, OriginRun };
+
 // ── notebook shape ──────────────────────────────────────────────────────
 
 export type CellType = "code" | "markdown";
+export type AssignmentMode = "submit" | "practice";
 
 export type CellOutput =
   | { type: "stream"; name: "stdout" | "stderr"; text: string }
@@ -27,6 +31,8 @@ export interface Cell {
   type: CellType;
   source: string;
   outputs?: CellOutput[];
+  /** The editor's live origin guess; see the worker's types.ts. */
+  origins?: OriginRun[];
 }
 
 export interface NotebookContent {
@@ -43,6 +49,7 @@ export interface CodeAssignmentDTO {
   aiEnabled: boolean;
   aiPrompt?: string | null;
   dueAt: number | null;
+  mode: AssignmentMode;
   archivedAt: number | null;
   createdAt: number;
   updatedAt: number;
@@ -61,7 +68,28 @@ export interface NotebookDTO extends NotebookSummaryDTO {
   content: NotebookContent;
   createdAt: number;
   aiEnabled: boolean;
-  assignment: { title: string; instructions: string; dueAt: number | null } | null;
+  assignment: {
+    title: string;
+    instructions: string;
+    dueAt: number | null;
+    mode: AssignmentMode;
+  } | null;
+  /** Whether edits are recorded (a submit-mode assignment). */
+  tracking: boolean;
+  /** Highest event client_seq the server holds; the next batch starts above it. */
+  eventSeq: number;
+}
+
+export interface CellRender {
+  runs: OriginRun[];
+  pastes: PasteRecord[];
+  audit: ProvenanceAudit;
+}
+
+export interface SubmissionRender {
+  v: 1;
+  cells: Record<string, CellRender>;
+  totals: Record<Origin, number>;
 }
 
 export interface CodeMessageDTO {
@@ -84,6 +112,8 @@ export interface SubmissionDTO extends SubmissionSummaryDTO {
   content: NotebookContent;
   student: { userId: string; email: string; displayName: string | null };
   messages: CodeMessageDTO[];
+  /** Instructor-only; null for students and for unrecorded copies. */
+  render: SubmissionRender | null;
 }
 
 export interface RosterStudentDTO {
@@ -174,6 +204,7 @@ export interface AssignmentInput {
   aiPrompt?: string | null;
   dueAt?: number | null;
   archived?: boolean;
+  mode?: AssignmentMode;
 }
 
 export async function createAssignment(
@@ -262,7 +293,8 @@ export async function listMessages(courseId: string, notebookId: string): Promis
 
 export interface TutorCallbacks {
   onDelta: (text: string) => void;
-  onDone?: (data: { assistantMessageId: string }) => void;
+  /** `assistantMessageId` is absent for a preview turn, which stores nothing. */
+  onDone?: (data: { assistantMessageId?: string }) => void;
   onError?: (message: string) => void;
   onAuthRequired?: () => void;
 }
@@ -275,14 +307,35 @@ export function streamTutorTurn(
   focusCellId: string | null,
   cb: TutorCallbacks,
 ): () => void {
+  return streamSse(`/api/code/notebooks/${seg(notebookId)}/messages`, { courseId, content, focusCellId }, cb);
+}
+
+/** The instructor's tutor preview on a starter notebook. Nothing is stored,
+ *  so the caller passes the preview conversation so far. */
+export function streamTutorPreview(
+  courseId: string,
+  assignmentId: string,
+  content: string,
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+  focusCellId: string | null,
+  cb: TutorCallbacks,
+): () => void {
+  return streamSse(
+    `/api/code/assignments/${seg(assignmentId)}/tutor-preview`,
+    { courseId, content, history, focusCellId },
+    cb,
+  );
+}
+
+function streamSse(path: string, body: unknown, cb: TutorCallbacks): () => void {
   const ctrl = new AbortController();
   (async () => {
     try {
-      const res = await fetch(apiUrl(`/api/code/notebooks/${seg(notebookId)}/messages`), {
+      const res = await fetch(apiUrl(path), {
         ...fetchInit,
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ courseId, content, focusCellId }),
+        body: JSON.stringify(body),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -330,7 +383,7 @@ function dispatch(frame: string, cb: TutorCallbacks) {
     return;
   }
   if (event === "delta") cb.onDelta((parsed as { text: string }).text);
-  else if (event === "done") cb.onDone?.(parsed as { assistantMessageId: string });
+  else if (event === "done") cb.onDone?.(parsed as { assistantMessageId?: string });
   else if (event === "error") cb.onError?.((parsed as { message: string }).message);
 }
 
@@ -354,4 +407,28 @@ export async function listMySubmissions(courseId: string, notebookId: string): P
 export async function getSubmission(courseId: string, id: string): Promise<SubmissionDTO> {
   const r = await call<{ submission: SubmissionDTO }>(`/api/code/submissions/${seg(id)}${q(courseId)}`);
   return r.submission;
+}
+
+// ── edit events ─────────────────────────────────────────────────────────
+
+export interface OutboundCodeEvent {
+  cellId: string;
+  kind: "insert" | "delete" | "paste" | "llm_insert" | "move";
+  offset: number;
+  length: number;
+  text: string;
+  origin: Origin | null;
+  restoredOrigins?: OriginRun[];
+  clientSeq: number;
+}
+
+export async function postEvents(
+  courseId: string,
+  notebookId: string,
+  events: OutboundCodeEvent[],
+): Promise<{ maxClientSeq: number }> {
+  return call(`/api/code/notebooks/${seg(notebookId)}/events`, {
+    method: "POST",
+    json: { courseId, events },
+  });
 }

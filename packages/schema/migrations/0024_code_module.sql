@@ -38,6 +38,11 @@ CREATE TABLE code_assignments (
   -- NULL = no deadline, so a submission is never late. Lateness is computed
   -- at read time (submitted_at > due_at) and never stored.
   due_at        INTEGER,
+  -- 'submit'   — students hand the notebook in. Origins (typed / pasted /
+  --              from the tutor / provided) are recorded while they work and
+  --              shown to instructors on each submission.
+  -- 'practice' — nothing to hand in, and nothing is recorded.
+  mode          TEXT NOT NULL DEFAULT 'submit',
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   -- Set instead of deleting, so submitted notebooks keep their context.
@@ -58,6 +63,11 @@ CREATE TABLE code_notebooks (
   -- JSON: { cells: [{ id, type: "code"|"markdown", source, outputs? }] }.
   -- Outputs are stored so a reload, and a submission, shows what ran.
   cells_json     TEXT NOT NULL DEFAULT '{"cells":[]}',
+  -- JSON { [cellId]: source } — the starter text each cell began with, frozen
+  -- when the notebook was created. Replayed as origin 'provided' before the
+  -- cell's events, so instructor-supplied code is never counted as typed.
+  -- NULL for a scratch notebook.
+  baseline_json  TEXT,
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL
 );
@@ -79,11 +89,40 @@ CREATE TABLE code_messages (
   role           TEXT NOT NULL,  -- user | assistant
   content        TEXT NOT NULL,
   prompt_hash    TEXT NOT NULL,
+  -- Assistant rows only: the reply minus any line already in the student's
+  -- notebook when it was sent. This is what retype detection compares
+  -- against, so a tutor quoting the student's own code back to them can never
+  -- make that code read as AI-written.
+  novel_text     TEXT,
   created_at     INTEGER NOT NULL
 );
 
 CREATE INDEX idx_code_messages_notebook
   ON code_messages(notebook_id, created_at);
+
+-- Append-only edit log, one row per edit to one cell. The provenance module's
+-- model exactly (see @marginalia/provenance): the client proposes origins as
+-- a live guess, and the render an instructor sees is recomputed from this log
+-- when a notebook is submitted. Only recorded for assignments in 'submit'
+-- mode. Deleted text is kept (it makes replay lossless and feeds move
+-- verification) but is never shown to an instructor.
+CREATE TABLE code_events (
+  id                TEXT PRIMARY KEY,
+  notebook_id       TEXT NOT NULL REFERENCES code_notebooks(id) ON DELETE CASCADE,
+  course_id         TEXT NOT NULL,
+  cell_id           TEXT NOT NULL,
+  kind              TEXT NOT NULL,  -- insert|delete|paste|llm_insert|move
+  offset            INTEGER NOT NULL,
+  length            INTEGER NOT NULL,
+  text              TEXT,
+  origin            TEXT,
+  restored_origins  TEXT,           -- JSON runs, for a move
+  client_seq        INTEGER NOT NULL,
+  created_at        INTEGER NOT NULL
+);
+
+CREATE INDEX idx_code_events_notebook
+  ON code_events(notebook_id, client_seq);
 
 -- A frozen copy of a notebook, submitted against an assignment. Immutable
 -- once written. The roster reads the latest one per student. The tutor
@@ -99,6 +138,10 @@ CREATE TABLE code_submissions (
   cells_json     TEXT NOT NULL,
   -- JSON array of { role, content, createdAt } at submission time.
   messages_json  TEXT NOT NULL DEFAULT '[]',
+  -- JSON { v, cells: { [cellId]: { runs, pastes, audit } } }: the origin
+  -- render, computed from code_events at submission time. NULL when nothing
+  -- was recorded.
+  render_json    TEXT,
   created_at     INTEGER NOT NULL
 );
 

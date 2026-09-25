@@ -8,6 +8,7 @@
 //   PATCH  /api/code/assignments/:id                            edit — INSTRUCTOR
 //   DELETE /api/code/assignments/:id?courseId=                  delete — INSTRUCTOR
 //   GET    /api/code/assignments/:id/roster?courseId=           every student — INSTRUCTOR
+//   POST   /api/code/assignments/:id/tutor-preview              try the tutor on the starter (SSE, nothing stored) — INSTRUCTOR
 //
 // Notebooks (always the caller's own)
 //   GET    /api/code/notebooks?courseId=                        list mine
@@ -17,6 +18,7 @@
 //   DELETE /api/code/notebooks/:id?courseId=                    delete
 //   GET    /api/code/notebooks/:id/messages?courseId=           tutor history
 //   POST   /api/code/notebooks/:id/messages                     tutor turn (SSE)
+//   POST   /api/code/notebooks/:id/events                       append edit events (submit-mode assignments only)
 //   GET    /api/code/notebooks/:id/submissions?courseId=        my submissions
 //   POST   /api/code/notebooks/:id/submissions                  submit a snapshot
 //
@@ -50,6 +52,9 @@ export async function routeCode(
     if (id && parts.length === 5 && sub === "roster" && m === "GET") {
       return h.rosterRoute(env, identity, url, id);
     }
+    if (id && parts.length === 5 && sub === "tutor-preview" && m === "POST") {
+      return h.tutorPreviewRoute(req, env, identity, id);
+    }
   }
 
   if (head === "notebooks") {
@@ -65,6 +70,9 @@ export async function routeCode(
     if (id && parts.length === 5 && sub === "messages") {
       if (m === "GET") return h.listMessagesRoute(env, identity, url, id);
       if (m === "POST") return h.sendMessageRoute(req, env, identity, id);
+    }
+    if (id && parts.length === 5 && sub === "events" && m === "POST") {
+      return h.appendEventsRoute(req, env, identity, id);
     }
     if (id && parts.length === 5 && sub === "submissions") {
       if (m === "GET") return h.listMySubmissionsRoute(env, identity, url, id);

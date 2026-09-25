@@ -13,6 +13,8 @@ import {
   Field,
   Input,
   PageHeader,
+  RadioCard,
+  RadioCardGroup,
   Section,
   Switch,
   Textarea,
@@ -24,6 +26,7 @@ import {
   deleteAssignment,
   listAssignments,
   updateAssignment,
+  type AssignmentMode,
   type CodeAssignmentDTO,
 } from "../api.js";
 import { formatDue } from "./CodeHomePage.js";
@@ -149,6 +152,7 @@ export function InstructorCodePage() {
                     </div>
                     <div className="app-list__sub">
                       {[
+                        a.mode === "practice" ? "Practice" : "Submitted",
                         a.dueAt ? `Due ${formatDue(a.dueAt)}` : "No deadline",
                         a.aiEnabled ? "Tutor on" : "Tutor off",
                         a.archivedAt ? "Archived" : null,
@@ -201,6 +205,7 @@ function AssignmentEditor({
   const [due, setDue] = useState(toLocalInput(assignment?.dueAt ?? null));
   const [aiEnabled, setAiEnabled] = useState(assignment?.aiEnabled ?? false);
   const [aiPrompt, setAiPrompt] = useState(assignment?.aiPrompt ?? "");
+  const [mode, setMode] = useState<AssignmentMode>(assignment?.mode ?? "submit");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,6 +222,7 @@ function AssignmentEditor({
       dueAt: fromLocalInput(due),
       aiEnabled,
       aiPrompt: aiPrompt.trim() || null,
+      mode,
     };
     try {
       onSaved(
@@ -238,6 +244,28 @@ function AssignmentEditor({
       </Field>
       <Field label="Instructions" hint="Shown above the notebook. Markdown and math are supported.">
         <Textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={5} />
+      </Field>
+      <Field label="Mode">
+        <RadioCardGroup inline>
+          <RadioCard
+            name="code-mode"
+            value="submit"
+            title="Submitted"
+            description="Students hand it in. You see where each character came from: typed, pasted, from the tutor, or provided in the starter."
+            selected={mode === "submit"}
+            checked={mode === "submit"}
+            onChange={() => setMode("submit")}
+          />
+          <RadioCard
+            name="code-mode"
+            value="practice"
+            title="Practice"
+            description="Nothing to hand in, and nothing is recorded. Good for in-class exercises."
+            selected={mode === "practice"}
+            checked={mode === "practice"}
+            onChange={() => setMode("practice")}
+          />
+        </RadioCardGroup>
       </Field>
       <Field label="Due" hint="Optional. Late submissions are accepted and shown with their time.">
         <Input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />

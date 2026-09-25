@@ -27,6 +27,7 @@ export function FilesPanel({
   kernelStatus,
   storageKey,
   refreshSignal,
+  persist = true,
 }: {
   kernel: Kernel | null;
   kernelStatus: KernelStatus;
@@ -34,6 +35,9 @@ export function FilesPanel({
   storageKey: string;
   /** Bumped after each run so files a cell wrote appear. */
   refreshSignal: number;
+  /** False for a throwaway session (the instructor's scratch copy): files
+   *  live in Python's memory only and are gone on reload. */
+  persist?: boolean;
 }) {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [stored, setStored] = useState<Set<string>>(new Set());
@@ -43,10 +47,10 @@ export function FilesPanel({
   const ready = kernel !== null && (kernelStatus === "idle" || kernelStatus === "busy");
 
   const refresh = useCallback(async () => {
-    const saved = await listStoredFiles(storageKey);
+    const saved = persist ? await listStoredFiles(storageKey) : [];
     setStored(new Set(saved.map((f) => f.name)));
     if (kernel && ready) setFiles(await kernel.listFiles());
-  }, [kernel, ready, storageKey]);
+  }, [kernel, ready, storageKey, persist]);
 
   useEffect(() => {
     void refresh();
@@ -67,6 +71,7 @@ export function FilesPanel({
         setError(e instanceof Error ? e.message : `Couldn't add ${file.name}`);
         continue;
       }
+      if (!persist) continue;
       const kept = await putStoredFile({
         notebookId: storageKey,
         name: file.name,
@@ -86,7 +91,7 @@ export function FilesPanel({
   async function remove(name: string) {
     if (!kernel) return;
     await kernel.deleteFile(name);
-    await deleteStoredFile(storageKey, name);
+    if (persist) await deleteStoredFile(storageKey, name);
     await refresh();
   }
 
@@ -141,8 +146,10 @@ export function FilesPanel({
         />
       </div>
       <p className="code-files__note">
-        Files stay in this browser. They are not uploaded to the course. Read
-        them by name, for example <code>pd.read_csv("data.csv")</code>.
+        {persist
+          ? "Files stay in this browser. They are not uploaded to the course. "
+          : "The student's own files aren't included: they never left their browser. Add a copy here to reproduce a problem; it's gone when you close this page. "}
+        Read them by name, for example <code>pd.read_csv("data.csv")</code>.
       </p>
       {error && <p className="code-files__error">{error}</p>}
       {!ready ? (

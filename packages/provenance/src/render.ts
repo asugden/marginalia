@@ -141,6 +141,14 @@ const MIN_BURST_CHARS = 60;
 export interface CorpusEntry<O extends string = Origin> {
   text: string;
   origin: O;
+  /**
+   * Only text typed strictly after this moment (ms, server time) can match.
+   * Set it for sources that exist independently of the student's typing —
+   * an AI reply, say — so that text the student wrote *before* the source
+   * existed can never be attributed to it. Absent = no time bound, which is
+   * the right reading for an event in the log (it is its own timestamp).
+   */
+  after?: number;
 }
 
 export interface RenderOptions<O extends string = Origin> {
@@ -256,6 +264,9 @@ function deriveRetyped<O extends string>(
   text: string,
   origins: O[],
   corpus: ReadonlyArray<CorpusEntry<O>>,
+  /** When each position was written (ms), for time-bounded sources. A
+   *  position with no known time never matches a time-bounded source. */
+  writtenAt: ReadonlyArray<number>,
 ): void {
   if (corpus.length === 0 || !text) return;
   // Only text currently attributed to the student's own typing is considered.
@@ -266,8 +277,11 @@ function deriveRetyped<O extends string>(
     { minMatchLength: MIN_RETYPE_MATCH },
   );
   for (const span of spans) {
-    const to = corpus[span.sourceIndex]?.origin ?? ("pasted" as O);
+    const source = corpus[span.sourceIndex];
+    const to = source?.origin ?? ("pasted" as O);
+    const after = source?.after;
     for (let i = span.start; i < span.end && i < origins.length; i++) {
+      if (after !== undefined && !((writtenAt[i] ?? -Infinity) > after)) continue;
       if (origins[i] === "human") origins[i] = to;
     }
   }
@@ -444,7 +458,9 @@ export function buildRender<O extends string = Origin>(
     }
   }
   for (const c of opts.extraCorpus ?? []) if (c.text) corpus.push(c);
-  deriveRetyped(text, finalOrigins, corpus);
+  const timeBySeq = new Map(events.map((e) => [e.clientSeq, e.createdAt]));
+  const writtenAt = finalSeqs.map((s) => timeBySeq.get(s) ?? -Infinity);
+  deriveRetyped(text, finalOrigins, corpus, writtenAt);
 
   return {
     v: RENDER_VERSION,

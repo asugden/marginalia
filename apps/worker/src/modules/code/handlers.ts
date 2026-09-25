@@ -10,6 +10,10 @@
 //      opening it to the class.
 //   2. The AI tutor is per assignment (code_assignments.ai_enabled, default
 //      off). It is enforced here on every turn, not just hidden in the UI.
+//
+// Origins (typed / pasted / from the tutor / provided) are recorded only for
+// assignments in 'submit' mode, and rendered with the writing tool's shared
+// provenance code when a notebook is submitted. See render.ts.
 
 import { ProviderError, type Message as LLMMessage } from "@marginalia/providers";
 import { llmConfigured, provenanceDefaultModel, providerFor } from "../../llm.js";
@@ -27,9 +31,11 @@ import {
   MAX_NOTEBOOK_BYTES,
   buildNotebookContext,
   buildTutorInstructions,
+  novelReplyText,
   promptHash,
   sanitizeContent,
 } from "./notebook.js";
+import { buildSubmissionRender, parseBaseline } from "./render.js";
 import {
   isLate,
   parseContent,
@@ -38,9 +44,12 @@ import {
   toNotebookSummary,
   type CodeAssignmentRow,
   type CodeMessageDTO,
+  type AssignmentMode,
   type CodeNotebookRow,
+  type NotebookContent,
   type NotebookDTO,
   type RosterStudentDTO,
+  type SubmissionRender,
 } from "./types.js";
 
 const MAX_TITLE = 200;
@@ -50,6 +59,16 @@ const MAX_USER_MESSAGE = 8_000;
 const MAX_HISTORY_TURNS = 20;
 const MAX_HISTORY_CHARS = 32_000;
 const MAX_TUTOR_TOKENS = 1_200;
+const MAX_EVENTS_PER_BATCH = 500;
+const MAX_EVENT_TEXT = 50_000;
+const EVENT_KINDS: ReadonlySet<string> = new Set(["insert", "delete", "paste", "llm_insert", "move"]);
+const EVENT_ORIGINS: ReadonlySet<string> = new Set(["human", "llm", "pasted", "edited", "provided"]);
+const CELL_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+function parseMode(v: unknown): AssignmentMode | undefined | "invalid" {
+  if (v === undefined) return undefined;
+  return v === "submit" || v === "practice" ? v : "invalid";
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -174,6 +193,7 @@ interface AssignmentBody {
   aiPrompt?: unknown;
   dueAt?: unknown;
   archived?: unknown;
+  mode?: unknown;
 }
 
 export async function createAssignmentRoute(
@@ -200,6 +220,8 @@ export async function createAssignmentRoute(
       ? body!.aiPrompt.trim().slice(0, MAX_AI_PROMPT)
       : null;
 
+  const mode = parseMode(body!.mode);
+  if (mode === "invalid") return error("mode must be submit or practice", 400);
   const row = await repo.createAssignment(env.DB, courseId, {
     title,
     instructions,
@@ -207,6 +229,7 @@ export async function createAssignmentRoute(
     aiEnabled: body!.aiEnabled === true,
     aiPrompt,
     dueAt: dueAt ?? null,
+    mode: mode ?? "submit",
   });
   await ensureCourseItem(env.DB, {
     courseId,
@@ -256,6 +279,9 @@ export async function updateAssignmentRoute(
   if (dueAt === "invalid") return error("dueAt must be a timestamp or null", 400);
   if (dueAt !== undefined) patch.dueAt = dueAt;
   if (typeof body!.archived === "boolean") patch.archived = body!.archived;
+  const mode = parseMode(body!.mode);
+  if (mode === "invalid") return error("mode must be submit or practice", 400);
+  if (mode !== undefined) patch.mode = mode;
 
   await repo.updateAssignment(env.DB, courseId, id, patch);
   const after = (await repo.getAssignment(env.DB, courseId, id))!;
@@ -322,10 +348,17 @@ export async function rosterRoute(
 
 // ── notebooks ───────────────────────────────────────────────────────────
 
+/** Edits are recorded only for a notebook attached to a submit-mode
+ *  assignment: that is the only place the record is ever read. */
+function isTracked(assignment: CodeAssignmentRow | null): boolean {
+  return assignment !== null && assignment.mode !== "practice";
+}
+
 async function notebookDTO(env: Env, row: CodeNotebookRow): Promise<NotebookDTO> {
   const assignment = row.assignment_id
     ? await repo.getAssignment(env.DB, row.course_id, row.assignment_id)
     : null;
+  const tracking = isTracked(assignment);
   return {
     ...toNotebookSummary(row),
     courseId: row.course_id,
@@ -333,9 +366,33 @@ async function notebookDTO(env: Env, row: CodeNotebookRow): Promise<NotebookDTO>
     createdAt: row.created_at,
     aiEnabled: assignment?.ai_enabled === 1,
     assignment: assignment
-      ? { title: assignment.title, instructions: assignment.instructions, dueAt: assignment.due_at }
+      ? {
+          title: assignment.title,
+          instructions: assignment.instructions,
+          dueAt: assignment.due_at,
+          mode: assignment.mode === "practice" ? "practice" : "submit",
+        }
       : null,
+    tracking,
+    eventSeq: tracking ? await repo.maxEventSeq(env.DB, row.id) : 0,
   };
+}
+
+/**
+ * A student's first copy of a starter notebook. Each cell carries a
+ * `provided` origin, and the starter text is frozen as the notebook's
+ * baseline so the render can replay it before any of the student's edits.
+ * Outputs are copied too: an instructor may want a worked example visible.
+ */
+function copyStarter(starterJson: string): { cellsJson: string; baselineJson: string } {
+  const starter = parseContent(starterJson);
+  const baseline: Record<string, string> = {};
+  const cells = starter.cells.map((c) => {
+    if (c.source) baseline[c.id] = c.source;
+    const { origins: _drop, ...rest } = c;
+    return c.source ? { ...rest, origins: [{ origin: "provided" as const, length: c.source.length }] } : rest;
+  });
+  return { cellsJson: JSON.stringify({ cells }), baselineJson: JSON.stringify(baseline) };
 }
 
 export async function listNotebooksRoute(
@@ -376,12 +433,14 @@ export async function createNotebookRoute(
     }
     const existing = await repo.findAssignmentNotebook(env.DB, courseId, caller.userId, assignment.id);
     if (existing) return json({ notebook: await notebookDTO(env, existing) });
+    const copy = copyStarter(assignment.starter_json);
     const row = await repo.createNotebook(env.DB, {
       courseId,
       ownerUserId: caller.userId,
       assignmentId: assignment.id,
       title: assignment.title,
-      cellsJson: assignment.starter_json,
+      cellsJson: copy.cellsJson,
+      baselineJson: copy.baselineJson,
     });
     return json({ notebook: await notebookDTO(env, row) }, 201);
   }
@@ -392,6 +451,7 @@ export async function createNotebookRoute(
     assignmentId: null,
     title: cleanTitle(body!.title) ?? "Untitled notebook",
     cellsJson: JSON.stringify({ cells: [{ id: "c1", type: "code", source: "" }] }),
+    baselineJson: null,
   });
   return json({ notebook: await notebookDTO(env, row) }, 201);
 }
@@ -550,10 +610,34 @@ export async function sendMessageRoute(
     buildNotebookContext(parseContent(nb.cells_json), focusCellId);
 
   const history = await repo.listMessages(env.DB, courseId, notebookId);
-  const messages = boundedHistory(history, content);
-  const provider = providerFor(env, provenanceDefaultModel(env));
   const userAt = Date.now();
+  return streamTurn(env, boundedHistory(history, content), { instructions, context }, async (reply) => {
+    const { assistantMessageId } = await repo.commitTurn(env.DB, {
+      notebookId,
+      courseId,
+      userContent: content,
+      assistantContent: reply,
+      assistantNovelText: novelReplyText(reply, parseContent(nb.cells_json)),
+      promptHash: hash,
+      userAt,
+    });
+    return { assistantMessageId };
+  });
+}
 
+/**
+ * Stream one tutor turn as SSE (`delta` frames, then `done` or `error`).
+ * `onComplete` runs with the full reply before `done` is sent, and whatever it
+ * returns is merged into the `done` payload — the live tutor stores the turn
+ * there; the instructor's preview stores nothing.
+ */
+function streamTurn(
+  env: Env,
+  messages: LLMMessage[],
+  system: { instructions: string; context: string },
+  onComplete: (reply: string) => Promise<Record<string, unknown>>,
+): Response {
+  const provider = providerFor(env, provenanceDefaultModel(env));
   const encoder = new TextEncoder();
   const abort = new AbortController();
   let raw = "";
@@ -561,9 +645,9 @@ export async function sendMessageRoute(
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        controller.enqueue(encoder.encode(sse("started", { notebookId })));
+        controller.enqueue(encoder.encode(sse("started", {})));
         for await (const chunk of provider.stream(messages, {
-          system: { instructions, context },
+          system,
           maxTokens: MAX_TUTOR_TOKENS,
           signal: abort.signal,
         })) {
@@ -572,15 +656,8 @@ export async function sendMessageRoute(
             controller.enqueue(encoder.encode(sse("delta", { text: chunk.delta })));
           }
         }
-        const { assistantMessageId } = await repo.commitTurn(env.DB, {
-          notebookId,
-          courseId,
-          userContent: content,
-          assistantContent: raw.trim(),
-          promptHash: hash,
-          userAt,
-        });
-        controller.enqueue(encoder.encode(sse("done", { assistantMessageId })));
+        const extra = await onComplete(raw.trim());
+        controller.enqueue(encoder.encode(sse("done", extra)));
         controller.close();
       } catch (err) {
         const message = err instanceof ProviderError ? err.message : "stream failed";
@@ -619,15 +696,26 @@ export async function createSubmissionRoute(
   }
   const assignment = await repo.getAssignment(env.DB, courseId, nb.assignment_id);
   if (!assignment) return error("Assignment not found", 404);
-  const messages = await repo.listMessages(env.DB, courseId, nb.id);
+  if (assignment.mode === "practice") {
+    return error("This assignment is practice: there is nothing to submit", 400, "practice_mode");
+  }
+  const [messages, events] = await Promise.all([
+    repo.listMessages(env.DB, courseId, nb.id),
+    repo.listEvents(env.DB, courseId, nb.id),
+  ]);
+  const content = parseContent(nb.cells_json);
+  // Frozen at submission from the event log, never from the cells' own
+  // client-side origins — the client proposes, the server disposes.
+  const render = buildSubmissionRender(content, parseBaseline(nb.baseline_json), events, messages);
   const row = await repo.createSubmission(env.DB, {
     courseId,
     assignmentId: assignment.id,
     notebookId: nb.id,
     ownerUserId: caller.userId,
     title: nb.title,
-    cellsJson: nb.cells_json,
+    cellsJson: JSON.stringify(stripOrigins(content)),
     messagesJson: JSON.stringify(messages.map(toMessageDTO)),
+    renderJson: JSON.stringify(render),
   });
   return json(
     {
@@ -695,6 +783,12 @@ export async function getSubmissionRoute(
   } catch {
     // A malformed transcript renders as empty rather than failing the view.
   }
+  let render: SubmissionRender | null = null;
+  try {
+    render = row.render_json ? (JSON.parse(row.render_json) as SubmissionRender) : null;
+  } catch {
+    render = null;
+  }
   return json({
     submission: {
       id: row.id,
@@ -710,6 +804,139 @@ export async function getSubmissionRoute(
         displayName: student?.display_name ?? null,
       },
       messages,
+      // The origin render is for instructors. A student reading their own
+      // submission gets the notebook and transcript, not the marks: as in the
+      // writing tool, a student-readable render would tell them exactly what
+      // to rework until it reads clean.
+      render: caller.instructor ? render : null,
     },
   });
+}
+
+/** The submitted copy carries no client-side origin guesses; the render is
+ *  the only record of origins an instructor sees. */
+function stripOrigins(content: NotebookContent): NotebookContent {
+  return { cells: content.cells.map(({ origins: _o, ...c }) => c) };
+}
+
+// ── edit events ─────────────────────────────────────────────────────────
+
+/**
+ * POST /notebooks/:id/events — append a batch of cell edits. Owner only, and
+ * only for a tracked notebook: a practice or scratch notebook's edits are
+ * never recorded, so the endpoint refuses rather than silently storing them.
+ */
+export async function appendEventsRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  notebookId: string,
+): Promise<Response> {
+  const body = (await req.json().catch(() => null)) as { courseId?: string; events?: unknown } | null;
+  const caller = await resolveCaller(env, identity, body?.courseId);
+  if (caller instanceof Response) return caller;
+  const courseId = body!.courseId!;
+  const nb = await repo.getNotebook(env.DB, courseId, caller.userId, notebookId);
+  if (!nb) return error("Notebook not found", 404);
+  const assignment = nb.assignment_id ? await repo.getAssignment(env.DB, courseId, nb.assignment_id) : null;
+  if (!isTracked(assignment)) return error("This notebook is not recorded", 409, "not_tracked");
+
+  const raw = body!.events;
+  if (!Array.isArray(raw)) return error("events must be an array", 400);
+  if (raw.length > MAX_EVENTS_PER_BATCH) return error(`at most ${MAX_EVENTS_PER_BATCH} events per batch`, 413);
+  const events: repo.InboundCodeEvent[] = [];
+  let lastSeq = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const e = raw[i] as Record<string, unknown>;
+    const bad = (m: string) => error(`events[${i}]: ${m}`, 400);
+    if (!e || typeof e !== "object") return bad("must be an object");
+    if (typeof e.cellId !== "string" || !CELL_ID.test(e.cellId)) return bad("cellId is invalid");
+    if (typeof e.kind !== "string" || !EVENT_KINDS.has(e.kind)) return bad("kind is invalid");
+    const int = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0;
+    if (!int(e.offset) || !int(e.length)) return bad("offset and length must be non-negative integers");
+    if (!int(e.clientSeq) || (e.clientSeq as number) <= lastSeq) return bad("clientSeq must increase");
+    lastSeq = e.clientSeq as number;
+    const text = typeof e.text === "string" ? e.text : null;
+    if (text && text.length > MAX_EVENT_TEXT) return error(`events[${i}]: text too large`, 413);
+    const origin = e.origin === null || e.origin === undefined ? null : String(e.origin);
+    if (origin !== null && !EVENT_ORIGINS.has(origin)) return bad("origin is invalid");
+    let restored: string | null = null;
+    if (e.kind === "move" && Array.isArray(e.restoredOrigins)) {
+      const runs = (e.restoredOrigins as unknown[]).filter(
+        (r): r is { origin: string; length: number } =>
+          !!r && typeof r === "object" &&
+          EVENT_ORIGINS.has(String((r as { origin?: unknown }).origin)) &&
+          int((r as { length?: unknown }).length),
+      );
+      restored = runs.length ? JSON.stringify(runs.slice(0, 2_000)) : null;
+    }
+    events.push({
+      cellId: e.cellId,
+      kind: e.kind as repo.InboundCodeEvent["kind"],
+      offset: e.offset as number,
+      length: e.length as number,
+      text,
+      origin: origin as repo.InboundCodeEvent["origin"],
+      restoredOrigins: restored,
+      clientSeq: e.clientSeq as number,
+    });
+  }
+  const result = await repo.appendEvents(env.DB, { notebookId, courseId, events });
+  return json({ ok: true, ...result });
+}
+
+// ── tutor preview (starter editor) ──────────────────────────────────────
+
+/**
+ * POST /assignments/:id/tutor-preview — one tutor turn against the starter
+ * notebook, so an instructor can try the tutor students will get. Nothing is
+ * stored: the client carries the preview conversation itself. Instructors
+ * only, and only when the assignment has the tutor on.
+ */
+export async function tutorPreviewRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  assignmentId: string,
+): Promise<Response> {
+  const body = (await req.json().catch(() => null)) as {
+    courseId?: string;
+    content?: unknown;
+    history?: unknown;
+    focusCellId?: unknown;
+  } | null;
+  const caller = await resolveInstructor(env, identity, body?.courseId);
+  if (caller instanceof Response) return caller;
+  const courseId = body!.courseId!;
+  const content = typeof body!.content === "string" ? body!.content.trim() : "";
+  if (!content) return error("content is required", 400);
+  if (content.length > MAX_USER_MESSAGE) return error(`message exceeds ${MAX_USER_MESSAGE} chars`, 413);
+  const assignment = await repo.getAssignment(env.DB, courseId, assignmentId);
+  if (!assignment) return error("Assignment not found", 404);
+  if (assignment.ai_enabled !== 1) {
+    return error("The tutor is off for this assignment", 403, "ai_disabled");
+  }
+  if (!llmConfigured(env)) {
+    return error("No AI provider is configured for this deployment", 503, "llm_unconfigured");
+  }
+  const history = Array.isArray(body!.history)
+    ? (body!.history as unknown[])
+        .filter(
+          (m): m is { role: "user" | "assistant"; content: string } =>
+            !!m && typeof m === "object" &&
+            ((m as { role?: unknown }).role === "user" || (m as { role?: unknown }).role === "assistant") &&
+            typeof (m as { content?: unknown }).content === "string",
+        )
+        .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_USER_MESSAGE) }))
+    : [];
+  const instructions = buildTutorInstructions({
+    assignmentTitle: assignment.title,
+    assignmentInstructions: assignment.instructions,
+    instructorPrompt: assignment.ai_prompt,
+  });
+  const focusCellId = typeof body!.focusCellId === "string" ? body!.focusCellId : null;
+  const context =
+    "## The student's notebook (as last saved)\n\n" +
+    buildNotebookContext(parseContent(assignment.starter_json), focusCellId);
+  return streamTurn(env, boundedHistory(history, content), { instructions, context }, async () => ({}));
 }

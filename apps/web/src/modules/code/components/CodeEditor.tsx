@@ -17,9 +17,32 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { EditorState, Prec } from "@codemirror/state";
-import { drawSelection, EditorView, keymap, placeholder as cmPlaceholder } from "@codemirror/view";
+import { EditorState, Prec, RangeSetBuilder, type Extension } from "@codemirror/state";
+import {
+  Decoration,
+  drawSelection,
+  EditorView,
+  keymap,
+  placeholder as cmPlaceholder,
+} from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
+import type { OriginRun } from "@marginalia/provenance";
+
+/** Mark every non-human run with its origin class (`code-origin--llm` …). The
+ *  colours are the writing tool's status tokens, set in code.css. */
+function originMarks(runs: OriginRun[], docLength: number): Extension {
+  const builder = new RangeSetBuilder<Decoration>();
+  let pos = 0;
+  for (const r of runs) {
+    const end = Math.min(pos + r.length, docLength);
+    if (r.origin !== "human" && end > pos) {
+      builder.add(pos, end, Decoration.mark({ class: `code-origin code-origin--${r.origin}` }));
+    }
+    pos += r.length;
+    if (pos >= docLength) break;
+  }
+  return EditorView.decorations.of(builder.finish());
+}
 
 const highlight = HighlightStyle.define([
   { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], color: "var(--purple-ink)" },
@@ -60,6 +83,10 @@ export interface CodeEditorProps {
   /** Receives the view on mount and null on unmount, so the notebook can
    *  move focus between cells. */
   onView?: (view: EditorView | null) => void;
+  /** Extra behaviour, e.g. origin tracking. Read once, at mount. */
+  extensions?: Extension[];
+  /** Origin runs to paint (review views). Read once, at mount. */
+  marks?: OriginRun[];
 }
 
 export function CodeEditor({
@@ -74,6 +101,8 @@ export function CodeEditor({
   onFocus,
   onEscape,
   onView,
+  extensions,
+  marks,
 }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   // Handlers change every render; the editor is built once. Read through refs.
@@ -114,6 +143,8 @@ export function CodeEditor({
           }),
           ...(placeholder ? [cmPlaceholder(placeholder)] : []),
           ...(readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
+          ...(extensions ?? []),
+          ...(marks ? [originMarks(marks, initialValue.length)] : []),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) handlers.current.onChange?.(u.state.doc.toString());
             if (u.focusChanged && u.view.hasFocus) handlers.current.onFocus?.();

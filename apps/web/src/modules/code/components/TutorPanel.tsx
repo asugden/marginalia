@@ -13,38 +13,58 @@ import {
   isAuthError,
   listMessages,
   redirectToLogin,
+  streamTutorPreview,
   streamTutorTurn,
   type CodeMessageDTO,
 } from "../api.js";
 
+/** Which conversation the panel is. A student's notebook keeps its thread on
+ *  the server; the instructor's starter preview keeps nothing. */
+export type TutorTarget =
+  | { kind: "notebook"; notebookId: string }
+  | { kind: "preview"; assignmentId: string };
+
 export function TutorPanel({
   courseId,
-  notebookId,
+  target,
   focusLabel,
   focusCellId,
   onClearFocus,
   beforeSend,
+  onReply,
 }: {
   courseId: string;
-  notebookId: string;
+  target: TutorTarget;
   /** "Cell 3" when the student has a cell selected, else null. */
   focusLabel: string | null;
   focusCellId: string | null;
   onClearFocus: () => void;
   /** Flush the notebook save, so the tutor reads what the student sees. */
   beforeSend: () => Promise<void>;
+  /** Every assistant reply, including those loaded from history, so the
+   *  notebook can recognise tutor text if it turns up in a cell. */
+  onReply?: (text: string) => void;
 }) {
-  const [messages, setMessages] = useState<CodeMessageDTO[] | null>(null);
+  const preview = target.kind === "preview";
+  const targetKey = target.kind === "notebook" ? target.notebookId : target.assignmentId;
+  const [messages, setMessages] = useState<CodeMessageDTO[] | null>(preview ? [] : null);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const onReplyRef = useRef(onReply);
+  onReplyRef.current = onReply;
 
   useEffect(() => {
+    if (target.kind !== "notebook") return;
     let live = true;
-    listMessages(courseId, notebookId)
-      .then((m) => live && setMessages(m))
+    listMessages(courseId, target.notebookId)
+      .then((m) => {
+        if (!live) return;
+        setMessages(m);
+        for (const msg of m) if (msg.role === "assistant") onReplyRef.current?.(msg.content);
+      })
       .catch((e) => {
         if (isAuthError(e)) redirectToLogin();
         else if (live) setError(e instanceof Error ? e.message : "Couldn't load the conversation");
@@ -53,7 +73,8 @@ export function TutorPanel({
       live = false;
       abortRef.current?.();
     };
-  }, [courseId, notebookId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, targetKey]);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -73,26 +94,34 @@ export function TutorPanel({
       // Sending still works; the tutor just reads the last successful save.
     }
     let acc = "";
-    abortRef.current = streamTutorTurn(courseId, notebookId, text, focusCellId, {
-      onDelta: (d) => {
+    const callbacks = {
+      onDelta: (d: string) => {
         acc += d;
         setPending(acc);
       },
-      onDone: ({ assistantMessageId }) => {
+      onDone: ({ assistantMessageId }: { assistantMessageId?: string }) => {
+        const reply = acc.trim();
         setMessages((cur) => [
           ...(cur ?? []),
-          { id: assistantMessageId, role: "assistant", content: acc.trim(), createdAt: Date.now() },
+          { id: assistantMessageId ?? `preview_${Date.now()}`, role: "assistant", content: reply, createdAt: Date.now() },
         ]);
+        onReplyRef.current?.(reply);
         setPending(null);
         abortRef.current = null;
       },
-      onError: (m) => {
+      onError: (m: string) => {
         setError(m);
         setPending(null);
         abortRef.current = null;
       },
       onAuthRequired: () => redirectToLogin(),
-    });
+    };
+    if (target.kind === "notebook") {
+      abortRef.current = streamTutorTurn(courseId, target.notebookId, text, focusCellId, callbacks);
+    } else {
+      const history = (messages ?? []).map((m) => ({ role: m.role, content: m.content }));
+      abortRef.current = streamTutorPreview(courseId, target.assignmentId, text, history, focusCellId, callbacks);
+    }
   }
 
   function stop() {
@@ -110,16 +139,16 @@ export function TutorPanel({
   return (
     <div className="prov-chat code-tutor">
       <div className="code-side__head">
-        <span className="code-side__title">Tutor</span>
+        <span className="code-side__title">{preview ? "Tutor preview" : "Tutor"}</span>
       </div>
       <div className="prov-chat-scroll" ref={scroller}>
         {messages === null ? (
           <p className="code-tutor__hint">Loading…</p>
         ) : messages.length === 0 && pending === null ? (
           <p className="code-tutor__hint">
-            Ask about an error, a concept, or what to try next. The tutor can
-            see your notebook and its outputs, but it won't write the
-            assignment for you.
+            {preview
+              ? "Try the tutor your students will get. It reads the starter notebook as last saved, with this assignment's instructions and your guidance. Nothing here is saved or shown to students."
+              : "Ask about an error, a concept, or what to try next. The tutor can see your notebook and its outputs, but it won't write the assignment for you."}
           </p>
         ) : null}
         {messages?.map((m) => <Bubble key={m.id} role={m.role} content={m.content} />)}

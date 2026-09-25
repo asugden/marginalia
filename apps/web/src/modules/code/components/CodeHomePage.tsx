@@ -132,6 +132,7 @@ export function CodeHomePage() {
                   <div className="app-list__sub">
                     {[
                       a.dueAt ? `Due ${formatDue(a.dueAt)}` : "No deadline",
+                      a.mode === "practice" ? "Practice" : null,
                       a.aiEnabled ? "Tutor available" : null,
                       nb ? `Edited ${relativeTime(nb.updatedAt)}` : "Not started",
                     ]

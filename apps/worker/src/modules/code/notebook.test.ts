@@ -8,8 +8,10 @@ import {
   buildNotebookContext,
   buildTutorInstructions,
   DEFAULT_TUTOR_PROMPT,
+  novelReplyText,
   sanitizeContent,
 } from "./notebook.js";
+import { buildSubmissionRender, type CodeEventRow } from "./render.js";
 import type { NotebookContent } from "./types.js";
 
 let failures = 0;
@@ -117,6 +119,37 @@ check("empty notebook is described, not blank", buildNotebookContext({ cells: []
   });
   check("instructor guidance is appended, never substituted", p.startsWith(DEFAULT_TUTOR_PROMPT) && p.includes("Always mention residuals."));
   check("no-solutions floor is present", p.includes("Do not write the solution"));
+}
+
+// ── novel tutor text ────────────────────────────────────────────────────
+
+{
+  const nb: NotebookContent = { cells: [{ id: "a", type: "code", source: "total = 0\nfor v in values:" }] };
+  const reply = "Start from what you have:\ntotal = 0\nfor v in values:\n    total += v * w";
+  const novel = novelReplyText(reply, nb);
+  check("lines the student already wrote are not tutor text", !novel.includes("total = 0") && !novel.includes("for v in values:"));
+  check("lines the tutor added are", novel.includes("total += v * w"));
+}
+
+// ── submission render ───────────────────────────────────────────────────
+
+{
+  const loop = "for price in prices:\n    total = total + price\nprint(total)";
+  const typed = [...loop].map((ch, i): CodeEventRow => ({
+    cell_id: "c", kind: "insert", offset: i, length: 1, text: ch, origin: "human",
+    restored_origins: null, client_seq: i + 1, created_at: 10_000 + i * 200,
+  }));
+  const content: NotebookContent = { cells: [{ id: "s", type: "code", source: "values = [1]" }, { id: "c", type: "code", source: loop }] };
+  const quoted = buildSubmissionRender(content, { s: "values = [1]" }, typed, [
+    { role: "assistant", novel_text: loop, created_at: 60_000 },
+  ]);
+  const s = quoted.cells.s!.runs;
+  check("starter cell renders as provided", s.length === 1 && s[0]!.origin === "provided" && s[0]!.length === 12, s);
+  check("code typed before the tutor echoed it stays typed", quoted.totals.human === loop.length, quoted.totals);
+  const copied = buildSubmissionRender(content, { s: "values = [1]" }, typed, [
+    { role: "assistant", novel_text: loop, created_at: 1_000 },
+  ]);
+  check("code typed out after the tutor gave it is from the tutor", copied.totals.llm === loop.length, copied.totals);
 }
 
 console.log(`\n${checks - failures}/${checks} passed`);
