@@ -67,17 +67,29 @@ export function getAuthProvider(env: Env): AuthProvider | null {
   return null;
 }
 
-function callbackUrl(req: Request): string {
+function callbackUrl(req: Request, env: Env): string {
   const u = new URL(req.url);
-  // Force https on the redirect_uri. The worker echoes back whatever scheme
-  // the browser arrived with, so a plain http:// link would emit an http
-  // redirect_uri and Google (which only has the https URI registered) rejects
-  // it with redirect_uri_mismatch. Cloudflare's "Always Use HTTPS" should
-  // upgrade first, but this makes the worker structurally incapable of
-  // emitting http even if that edge setting is ever off. Localhost stays http
-  // so local dev (http://localhost:8787/auth/callback) keeps working.
-  const scheme = u.hostname === "localhost" ? u.protocol : "https:";
-  return `${scheme}//${u.host}/auth/callback`;
+  // Local dev is decided by ENVIRONMENT, NOT by anything on the request.
+  // Under `wrangler dev` the request is rewritten to the custom domain in
+  // wrangler.toml's `routes`, so a browser hitting http://localhost:8787
+  // arrives here as http://<production-host>/... — the hostname and the port
+  // are both gone. Sniffing req.url for "localhost" therefore never matches,
+  // and the redirect_uri comes out as the production https:// URL, which the
+  // IdP rejects with redirect_uri_mismatch against the registered
+  // http://localhost:<port>/auth/callback.
+  //
+  // DEV_CALLBACK_ORIGIN carries the origin the browser actually used, since
+  // the worker has no way to recover it. Defaults to the conventional wrangler
+  // dev port so the common case needs no configuration.
+  if (env.ENVIRONMENT === "dev") {
+    const origin = env.DEV_CALLBACK_ORIGIN ?? "http://localhost:8787";
+    return `${origin.replace(/\/$/, "")}/auth/callback`;
+  }
+  // Everywhere else: always https, regardless of the scheme the request
+  // arrived with. Cloudflare's "Always Use HTTPS" should upgrade first, but
+  // deciding it here makes the worker structurally incapable of emitting an
+  // http redirect_uri even if that edge setting is ever off.
+  return `https://${u.host}/auth/callback`;
 }
 
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
@@ -190,7 +202,7 @@ async function handleLogin(
   const authUrl = await provider.authorizationUrl({
     state: signed,
     codeChallenge: challenge,
-    redirectUri: callbackUrl(req),
+    redirectUri: callbackUrl(req, env),
   });
   const stateCookie = buildCookie({
     name: OIDC_STATE_COOKIE,
@@ -277,7 +289,7 @@ async function handleCallback(
     identity = await provider.exchangeCode({
       code,
       codeVerifier: state.codeVerifier,
-      redirectUri: callbackUrl(req),
+      redirectUri: callbackUrl(req, env),
     });
   } catch (err) {
     console.error("OIDC exchange failed:", err);

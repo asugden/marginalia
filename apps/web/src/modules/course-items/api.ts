@@ -225,6 +225,30 @@ export function completionLabel(c: ItemCompletionDTO | undefined): string | null
   }
 }
 
+/**
+ * Where an instructor goes to open this item's payload. Lives here rather than
+ * in one page so the Assign list and the dashboard can't drift apart on where
+ * a kind's editor is. Null when the kind has no instructor detail view.
+ */
+export function instructorHref(
+  courseId: string,
+  item: CourseItemDTO,
+): string | null {
+  const base = `/course/${courseId}/instructor`;
+  switch (item.kind) {
+    case "writing":
+      return `${base}/assignments/${item.payloadRef}`;
+    case "agent":
+      return `${base}/agents/${item.payloadRef}`;
+    case "example":
+      return `${base}/assign/examples`;
+    case "code":
+      return `${base}/code/${item.payloadRef}`;
+    default:
+      return null;
+  }
+}
+
 /** Is this item a recommended supplement — offered, but never due? */
 export function isSupplement(item: CourseItemDTO): boolean {
   return item.assignedAt === null && item.dueAt === null;

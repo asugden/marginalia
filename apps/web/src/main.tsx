@@ -11,6 +11,9 @@ import { RootRedirect } from "./pages/RootRedirect.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { LegacyWriteRedirect } from "./pages/LegacyWriteRedirect.js";
 import { ConversationPage } from "./pages/ConversationPage.js";
+// The 404 / error screen. Eager, not lazy: it is the fallback for a failed
+// chunk load, so it must not itself depend on one loading successfully.
+import { NotFoundPage } from "./pages/NotFoundPage.js";
 import { EXAMPLES } from "./examples/registry.js";
 import "./styles.css";
 
@@ -162,7 +165,7 @@ function LegacyAssignmentsExamplesRedirect() {
   return <Navigate to={`/course/${courseId}/instructor/assign/examples`} replace />;
 }
 
-const router = createBrowserRouter([
+const routes = [
   // `/` resolves to the right course-rooted home (or the join prompt).
   { path: "/", element: <RootRedirect /> },
   // v1.0 §2 — explicit picker entry point (deep-linkable from the dashboard's
@@ -353,7 +356,23 @@ const router = createBrowserRouter([
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
     ],
   },
-]);
+
+  // Catch-all. Must stay LAST — React Router ranks `*` below every concrete
+  // path, but keeping it here also makes the ordering obvious to readers.
+  // Without it, a near-miss like /course (vs /courses) fell through to React
+  // Router's built-in error screen and showed developer copy to a student.
+  { path: "*", element: <NotFoundPage /> },
+];
+
+// Every top-level route gets the same errorElement. `path: "*"` only catches
+// URLs that match nothing; a route that matches and then THROWS (a thrown
+// render error, a failed lazy chunk after a deploy swaps the hashed filenames)
+// is a separate case, and it is the one that surfaced React Router's default
+// "you can provide a way better UX than this" screen. NotFoundPage reads
+// useRouteError and switches its copy accordingly.
+const router = createBrowserRouter(
+  routes.map((r) => ({ ...r, errorElement: <NotFoundPage /> })),
+);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

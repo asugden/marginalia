@@ -38,6 +38,7 @@ import { useCourse } from "../../../course/useCourse.js";
 import {
   completionLabel,
   deleteCourseItem,
+  instructorHref,
   isSupplement,
   kindLabel,
   listCourseItems,
@@ -115,22 +116,6 @@ function compareItems(a: CourseItemDTO, b: CourseItemDTO): number {
 
 /** Where a row's title links — each kind's detail surface stays with the
  *  module that owns it. This list is a schedule, not a replacement editor. */
-function detailHref(courseId: string, item: CourseItemDTO): string | null {
-  const base = `/course/${courseId}/instructor`;
-  switch (item.kind) {
-    case "writing":
-      return `${base}/assignments/${item.payloadRef}`;
-    case "agent":
-      return `${base}/agents/${item.payloadRef}`;
-    case "example":
-      return `${base}/assign/examples`;
-    case "code":
-      return `${base}/code/${item.payloadRef}`;
-    default:
-      return null;
-  }
-}
-
 export function AssignPage() {
   const { courseId } = useCourse();
   const [items, setItems] = useState<CourseItemDTO[] | null>(null);
@@ -302,7 +287,7 @@ function ItemRow({
   onUnassign: () => void;
 }) {
   const archived = item.archivedAt !== null;
-  const href = detailHref(courseId, item);
+  const href = instructorHref(courseId, item);
 
   // The instructor's own completion state for their own account. Shown because
   // an instructor previewing an assignment is a normal thing to do, and the

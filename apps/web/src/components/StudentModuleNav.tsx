@@ -74,20 +74,25 @@ export function StudentModuleNav({
         <Wordmark />
       </Link>
       {switcher}
-      <nav className="app-nav app-nav--student" aria-label="Course modules">
-        {modules.map((mod) => (
-          <Link
-            key={mod.id}
-            to={`${home}/${mod.id}`}
-            className={
-              "app-nav__item" +
-              (activeModule === mod.id ? " app-nav__item--active" : "")
-            }
-          >
-            {mod.label}
-          </Link>
-        ))}
-      </nav>
+      {/* Wrapped in .app-navwrap so the nav is the topbar's one flexible,
+          shrinkable item — the shrink invariant that keeps the role switch and
+          sign-out pinned right instead of being pushed off the edge. */}
+      <div className="app-navwrap">
+        <nav className="app-nav app-nav--student" aria-label="Course modules">
+          {modules.map((mod) => (
+            <Link
+              key={mod.id}
+              to={`${home}/${mod.id}`}
+              className={
+                "app-nav__item" +
+                (activeModule === mod.id ? " app-nav__item--active" : "")
+              }
+            >
+              {mod.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
     </>
   );
 }

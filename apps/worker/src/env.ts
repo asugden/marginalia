@@ -79,6 +79,15 @@ export interface Env {
   DEV_AUTH_BYPASS?: string;
   DEV_AUTH_EMAIL?: string;
   /**
+   * Local-dev only. The origin the browser actually uses to reach the worker,
+   * e.g. "http://localhost:8787". Needed because `wrangler dev` rewrites the
+   * request to the custom domain in `routes`, so the worker cannot recover the
+   * real local origin from the request when building the OAuth redirect_uri.
+   * Defaults to http://localhost:8787; set this only when dev runs on a
+   * different port. Must exactly match a redirect URI registered with the IdP.
+   */
+  DEV_CALLBACK_ORIGIN?: string;
+  /**
    * Comma-separated list of allowed Origin values for CORS. Required when the
    * frontend (Pages) is on a different hostname than the Worker. Empty means
    * no CORS headers are emitted — same-origin only.

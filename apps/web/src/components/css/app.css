@@ -59,6 +59,11 @@ html, body { height: 100%; }
   width: 100%; max-width: var(--shell-max, 880px); margin: 0 auto;
   display: flex; align-items: center; gap: 1rem;
   padding: 0 1.5rem;
+  /* A flex item's default min-width:auto refuses to shrink below its content.
+     Without this the nav stays at its full intrinsic width and pushes the
+     actions cluster (role switch, sign-out) off the right edge instead of
+     shrinking. See the shrink invariant on .app-nav below. */
+  min-width: 0;
 }
 /* Legacy modifier retained for callers; the base --shell-max is now the same
    width, so this is a no-op alias. Every topbar shares the one frame. */
@@ -161,7 +166,19 @@ html, body { height: 100%; }
 
 /* Instructor nav tabs live inline in the bar. Underline via box-shadow so the
    active state adds NO height and nothing reflows when it moves (header-jump fix). */
-.app-nav { display: flex; align-items: center; gap: 0.35rem; height: 100%; }
+/* THE TOPBAR SHRINK INVARIANT: navigation shrinks, identity and egress do not.
+   The nav is the only flexible item in the bar (`flex: 1 1 auto; min-width: 0`),
+   so when the bar runs out of room the nav scrolls within itself rather than
+   shoving the actions cluster past the right edge. The role switch and sign-out
+   are `flex: none` and must stay that way — the chrome that gets you OUT of a
+   surface can never be the thing that overflows. `--nav-fade` renders the
+   right-edge gradient that signals scrollable overflow (see .app-nav--fade). */
+.app-nav {
+  display: flex; align-items: center; gap: 0.35rem; height: 100%;
+  flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; scrollbar-width: none;
+}
+.app-nav::-webkit-scrollbar { display: none; }
 .app-nav__item {
   appearance: none; background: none; border: 0; cursor: pointer;
   font-family: var(--font-sans); font-weight: 600; font-size: var(--text-sm);
@@ -173,7 +190,59 @@ html, body { height: 100%; }
 .app-nav__item--active { color: var(--accent); }
 .app-nav__item--active:hover { background: transparent; }
 
-.app-topbar__spacer { flex: 1; }
+/* Scrollable-overflow affordance. A nav that scrolls with a hidden scrollbar
+   gives no hint that items exist past the edge — silently hidden navigation is
+   the failure mode we're fixing, so mask the trailing edge to a fade whenever
+   the nav is actually overflowing. The wrapper carries the mask (a scrolling
+   element can't mask its own overflowing content), and `--nav-fade` is flipped
+   to 1 by .app-nav--fade only when JS measures real overflow, so a nav that
+   fits keeps a hard edge. */
+.app-navwrap { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; height: 100%; }
+.app-navwrap--fade {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent 100%);
+}
+
+/* ---- Banded nav entries (Review ▾ / Build ▾) ----
+   A band with several tabs collapses to one trigger + a menu, so the strip
+   holds four entries instead of ten. The trigger is an .app-nav__item so it
+   sits identically to the plain links beside it; only the chevron differs. */
+.app-navband { position: relative; flex: none; }
+.app-nav__item--band { appearance: none; cursor: pointer; }
+.app-nav__item--band svg { width: 13px; height: 13px; opacity: 0.6; flex: none; }
+/* FIXED, not absolute: .app-nav is a scroll container (`overflow-x: auto`), and
+   an absolutely-positioned child would be clipped by it — the menu rendered
+   but was sheared off at the nav's own box. CourseNav supplies top/left inline
+   from the trigger's measured rect. */
+.app-navband__menu {
+  position: fixed; z-index: 60;
+  min-width: 260px; width: max-content; max-width: min(360px, calc(100vw - 1.5rem));
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); padding: 0.35rem; display: flex; flex-direction: column; gap: 1px;
+}
+.app-navband__opt {
+  appearance: none; cursor: pointer; text-align: left; background: none; border: 0;
+  border-radius: var(--radius-sm); padding: 0.5rem 0.6rem; display: flex; flex-direction: column; gap: 2px;
+}
+.app-navband__opt:hover { background: var(--surface-hover); }
+.app-navband__opt b { font-size: var(--text-sm); font-weight: 600; color: var(--text-strong); }
+/* The tab descriptions are written for the dashboard (100–190 chars), so clamp
+   them to two lines here rather than letting a menu row run to a paragraph. */
+.app-navband__opt span {
+  font-size: var(--text-2xs); color: var(--text-muted); line-height: 1.4;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden;
+}
+.app-navband__opt--active { background: var(--accent-wash); }
+.app-navband__opt--active b { color: var(--accent-ink); }
+
+/* The spacer pushes the actions right in bars with NO nav (admin, picker,
+   join). When a nav is present the nav itself is the flexible item, so the
+   spacer must not compete with it for free space — it collapses to nothing and
+   contributes only the inner gap. */
+.app-topbar__spacer { flex: 1 1 0; min-width: 0; }
+.app-navwrap ~ .app-topbar__spacer, .app-nav ~ .app-topbar__spacer { flex: 0 0 0; }
+/* `flex: none` is load-bearing, not incidental — see the shrink invariant. */
 .app-topbar__actions { display: flex; align-items: center; gap: 0.4rem; flex: none; }
 .app-topbar__divider { width: 1px; height: 1.3rem; background: var(--border-strong); flex: none; margin: 0 0.2rem; }
 .app-id { display: inline-flex; align-items: center; gap: 0.45rem; flex: none; }
@@ -206,6 +275,53 @@ html, body { height: 100%; }
 .app-roles__opt span { font-size: var(--text-2xs); color: var(--text-muted); white-space: nowrap; }
 .app-roles__opt--active { background: var(--accent-wash); }
 .app-roles__opt--active b { color: var(--accent-ink); }
+
+/* ---- Mobile nav sheet + its trigger ----
+   The ☰ trigger and the sheet exist only below 680px; above it the banded nav
+   and the course switcher carry everything, so both stay display:none. */
+.app-burger {
+  display: none;               /* switched on at ≤680 */
+  appearance: none; cursor: pointer; flex: none;
+  align-items: center; justify-content: center;
+  width: 34px; height: 34px; margin-left: -0.35rem;
+  background: none; border: 0; border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.app-burger:hover { background: var(--surface-hover); color: var(--text-strong); }
+.app-burger svg { width: 20px; height: 20px; }
+
+.app-sheet { position: fixed; inset: 0; z-index: 80; }
+.app-sheet__scrim {
+  appearance: none; border: 0; padding: 0; cursor: pointer;
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: rgba(28, 25, 23, 0.42);
+}
+.app-sheet__panel {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: min(86vw, 330px); overflow-y: auto;
+  background: var(--surface-raised); border-right: 1px solid var(--border);
+  box-shadow: var(--shadow-xl); padding: 0.85rem 0.7rem 2rem;
+  display: flex; flex-direction: column; gap: 1.1rem;
+}
+.app-sheet__group { display: flex; flex-direction: column; gap: 1px; }
+.app-sheet__eyebrow {
+  font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); padding: 0.25rem 0.6rem 0.4rem;
+}
+.app-sheet__row {
+  appearance: none; cursor: pointer; text-align: left; background: none; border: 0;
+  border-radius: var(--radius-sm); padding: 0.6rem 0.65rem;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.app-sheet__row:hover { background: var(--surface-hover); }
+.app-sheet__row b { font-size: var(--text-base); font-weight: 600; color: var(--text-strong); }
+.app-sheet__row span {
+  font-size: var(--text-2xs); color: var(--text-muted); line-height: 1.4;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden;
+}
+.app-sheet__row--active { background: var(--accent-wash); }
+.app-sheet__row--active b { color: var(--accent-ink); }
 
 /* ---- Preview banner (instructor viewing as a student) ---- */
 .app-preview {
@@ -353,16 +469,45 @@ select.app-input {
    primitive (components/css/StatTile.css). */
 
 /* Instructor dashboard: quick-action launchpad cards — one link per tool. */
-.app-launch { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; }
-.app-launchcard { display: flex; align-items: center; gap: 0.85rem; text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); padding: 1rem 1.1rem; transition: box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
-.app-launchcard:hover { box-shadow: var(--shadow-sm); border-color: var(--border-strong); }
-.app-launchcard__icon { flex: none; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); background: var(--accent-wash); color: var(--accent-ink); }
-.app-launchcard__icon svg { width: 20px; height: 20px; }
-.app-launchcard__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-.app-launchcard__title { font-weight: 700; font-size: var(--text-sm); color: var(--text-strong); }
-.app-launchcard__meta { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
-.app-launchcard__go { flex: none; color: var(--text-faint); display: inline-flex; transition: color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
-.app-launchcard:hover .app-launchcard__go { color: var(--accent); transform: translateX(2px); }
+/* ---- Instructor dashboard: the dated item lists ----
+   A row is: kind tag · title · absolute date · relative phrase. The grid keeps
+   the four columns aligned down the list so dates and deadlines scan
+   vertically, which is the whole point of a time-ordered page. */
+.app-dash__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.app-dash__row {
+  display: grid; align-items: baseline;
+  grid-template-columns: 5.5rem 1fr auto auto;
+  gap: 0.35rem 0.9rem;
+  padding: 0.6rem 0.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.app-dash__row:last-child { border-bottom: 0; }
+.app-dash__kind {
+  font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint);
+}
+.app-dash__title { min-width: 0; font-size: var(--text-base); color: var(--text-strong); }
+.app-dash__title a { color: inherit; text-decoration: none; }
+.app-dash__title a:hover { color: var(--accent); text-decoration: underline; }
+.app-dash__date {
+  font-family: var(--font-mono); font-size: var(--text-2xs);
+  color: var(--text-muted); white-space: nowrap;
+}
+/* The relative phrase. Overdue takes the accent — the ONE red thing on the
+   page, used as punctuation. It states elapsed days and nothing more: no
+   "at risk", no score, no flag. */
+.app-dash__due {
+  font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap;
+}
+.app-dash__row--overdue .app-dash__due { color: var(--accent); font-weight: 600; }
+/* Supplements are offered, never due — so they read quieter than dated work. */
+.app-dash__list--quiet .app-dash__title { color: var(--text-secondary); }
+.app-dash__empty { color: var(--text-muted); font-size: var(--text-sm); margin: 0; }
+
+/* The dashboard's five "Create …" launch cards were removed with the
+   time-ordered rebuild: they duplicated destinations the banded header already
+   reaches, and four of five were setup-week actions shown all semester. The
+   one create affordance left is the page header's "Assign something". */
 
 /* Generic list rows (agents / voices / collections) */
 .app-list { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
@@ -587,14 +732,17 @@ select.app-input {
 .app-papers__meta i { font-style: normal; color: var(--border-strong); margin: 0 0.4rem; }
 
 /* ============================== Responsive ============================== */
-/* Mid widths (laptops / the preview): instructor nav drops to its own row so
-   the role switch + identity never get clipped. Full mobile compaction is the
-   ≤680 block below. */
-@media (max-width: 1080px) {
+/* Mid widths (laptops / a window shrunk part way): the instructor nav drops to
+   its own row so the role switch + identity never get clipped.
+   1180, not 1080: the bar's fixed items (lockup + course switcher + role switch
+   + sign-out) plus the banded nav need more than 1080px of inner width, so a
+   window sitting in the old 1080–1180 gap was left on one crowded row — the
+   window-shrunk-part-way dead zone. Wrap BEFORE the crowding, not after.
+   Full mobile compaction is the ≤680 block below. */
+@media (max-width: 1180px) {
   .app-topbar--instructor { height: auto; min-height: 60px; }
   .app-topbar--instructor .app-topbar__inner { flex-wrap: wrap; }
-  .app-topbar--instructor .app-nav { order: 10; flex-basis: 100%; width: 100%; overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--border); padding-top: 0.35rem; margin-top: 0.1rem; }
-  .app-topbar--instructor .app-nav::-webkit-scrollbar { display: none; }
+  .app-topbar--instructor .app-navwrap { order: 10; flex-basis: 100%; width: 100%; border-top: 1px solid var(--border); padding-top: 0.35rem; margin-top: 0.1rem; }
 }
 @media (max-width: 920px) {
   .app-home__inner { padding-left: 1.5rem; padding-right: 1.5rem; }
@@ -607,8 +755,8 @@ select.app-input {
   .app-hide-sm { display: none; }
   .app-id__name { display: none; }
   .app-topbar__divider { display: none; }
-  .app-nav { gap: 0.1rem; overflow-x: auto; scrollbar-width: none; }
-  .app-nav::-webkit-scrollbar { display: none; }
+  /* (The nav's own scroll/hidden-scrollbar rules live on .app-nav in the base
+     layer; on mobile the nav is hidden entirely in favour of the sheet.) */
 
   .app-home__inner { padding: 1.75rem 1rem 3rem; }
   .app-head { margin-bottom: 1.5rem; }
@@ -664,26 +812,51 @@ select.app-input {
   .att-table__present, .att-table__head > span:nth-child(3) { display: none; }
   .att-count__num { font-size: 2.6rem; }
 
-  /* Instructor bar → two rows: top row compact, nav on its own scroll strip. */
-  .app-topbar--instructor { height: auto; min-height: 56px; }
-  .app-topbar--instructor .app-topbar__inner { flex-wrap: wrap; padding: 0.45rem 1rem; gap: 0.45rem 0.5rem; }
-  .app-topbar--instructor .app-topbar__spacer { display: none; }
-  .app-topbar--instructor .app-course { flex: 1 1 auto; min-width: 0; }
-  .app-topbar--instructor .app-course__btn { max-width: none; width: 100%; }
-  .app-topbar--instructor .app-nav { order: 10; flex-basis: 100%; width: 100%; border-top: 1px solid var(--border); padding-top: 0.4rem; margin-top: 0.1rem; }
+  /* MOBILE IS ONE ROW. The bar used to wrap to two (compact top + a nav scroll
+     strip below), which ate ~110px of a ~667px viewport and hid the tail of the
+     nav behind an invisible scrollbar. Instead: a single 56px row holding the
+     burger, the lockup, the role switch and sign-out — and everything else
+     moves into the nav sheet, where it is a flat, fully visible list.
+     `--wrap` at 1180 is undone here; this is a different shell, not a squeeze. */
+  .app-topbar--instructor { height: 56px; min-height: 0; }
+  .app-topbar--instructor .app-topbar__inner { flex-wrap: nowrap; padding: 0 1rem; gap: 0.5rem; }
+  .app-topbar--instructor .app-topbar__spacer { flex: 1 1 0; }
+
+  /* The nav strip and the course switcher trigger are the sheet's job now. */
+  .app-topbar--instructor .app-navwrap,
+  .app-topbar--student:not(.prov-appbar) .app-navwrap,
+  .app-topbar--instructor .app-course,
+  .app-topbar--student .app-course { display: none; }
+  /* The agent/editor bar (.prov-appbar) renders no burger — it is a focused
+     surface whose way out is the lockup and, for a previewing instructor, the
+     PreviewBanner. So it KEEPS its inline nav rather than losing both; the nav
+     scrolls with the fade affordance like any other overflowing strip. */
+
+  /* ☰ appears, and takes the lockup's leading position. */
+  .app-burger { display: inline-flex; }
   .app-lockup__role { display: none; }            /* hide "Admin console" label */
 
   /* Dropmenus never wider than the viewport. */
   .app-course__menu, .app-roles__menu { min-width: 0; width: max-content; max-width: calc(100vw - 1.5rem); }
-  /* Role menu: labels only (compact) so it can't run off the left edge. */
+  /* Role menu keeps its detail lines on mobile. They used to be hidden here to
+     stop the menu running off the edge, but "Preview as student" without "See
+     this one course the way its students do" loses the scope promise — the one
+     line that tells an instructor they're seeing ONE course as its students do.
+     Wrapping the detail costs a line; dropping it costs the meaning. */
   .app-roles__menu { right: 0; }
-  .app-roles__opt span { display: none; }
+  .app-roles__opt span { white-space: normal; }
   .app-roles__opt { padding: 0.6rem 0.75rem; }
 
   /* Admin sub-tabs scroll instead of wrapping. */
   .app-subtabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
   .app-subtabs::-webkit-scrollbar { display: none; }
   .app-subtab { white-space: nowrap; }
+
+  /* Dashboard rows: the kind tag leads, title takes the rest, and the two date
+     columns drop to a second line rather than crushing the title. */
+  .app-dash__row { grid-template-columns: 5.5rem 1fr; }
+  .app-dash__date { grid-column: 1; }
+  .app-dash__due { grid-column: 2; justify-self: start; }
 
   /* Join code wraps; code on its own line above the actions. */
   .joincode { flex-wrap: wrap; }

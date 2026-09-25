@@ -180,18 +180,11 @@
 .ds-staff-list__sub { color: var(--text-muted); font-size: var(--text-sm); margin-top: 0.1rem; }
 .ds-staff-list__actions { display: flex; gap: 0.4rem; align-items: center; flex: none; }
 
-/* Mid widths: the instructor bar (lockup + switcher + nav + role switch) gets
-   crowded, so the nav drops to its own scrollable row beneath the bar — the DS
-   .app-topbar--instructor behaviour. */
-@media (max-width: 1080px) {
-  .ds-staff-top--instructor { height: auto; min-height: 60px; flex-wrap: wrap; padding-top: 0.4rem; padding-bottom: 0.4rem; }
-  .ds-staff-top--instructor .ds-staff-nav {
-    order: 10; flex-basis: 100%; width: 100%; height: auto;
-    overflow-x: auto; scrollbar-width: none;
-    border-top: 1px solid var(--border); padding-top: 0.4rem; margin-top: 0.1rem;
-  }
-  .ds-staff-top--instructor .ds-staff-nav::-webkit-scrollbar { display: none; }
-}
+/* The mid-width instructor-bar wrap used to be duplicated here against the
+   pre-bands `.ds-staff-top--instructor` / `.ds-staff-nav` markup, which no
+   component renders any more. The one live rule is the `.app-topbar--instructor`
+   block in app.css — two stylesheets solving the same problem at two different
+   breakpoints is how the 1080–1180 dead zone survived. Keep it in one place. */
 
 @media (max-width: 760px) {
   .ds-staff-page { padding: 1.5rem 1rem 3rem; }
