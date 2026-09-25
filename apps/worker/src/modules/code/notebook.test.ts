@@ -6,8 +6,8 @@
 
 import {
   buildNotebookContext,
-  buildTutorInstructions,
-  DEFAULT_TUTOR_PROMPT,
+  buildChatInstructions,
+  NOTEBOOK_CHAT_RULES,
   novelReplyText,
   sanitizeContent,
 } from "./notebook.js";
@@ -109,26 +109,36 @@ check("empty notebook is described, not blank", buildNotebookContext({ cells: []
   check("over-budget context states what it omitted", /cells omitted for length/.test(ctx));
 }
 
-// ── buildTutorInstructions ──────────────────────────────────────────────
+// ── buildChatInstructions ──────────────────────────────────────────────
 
 {
-  const p = buildTutorInstructions({
+  const p = buildChatInstructions({
+    voiceFragment: "You speak like a patient lab partner.",
     assignmentTitle: "Linear regression",
     assignmentInstructions: "Fit a line.",
     instructorPrompt: "Always mention residuals.",
   });
-  check("instructor guidance is appended, never substituted", p.startsWith(DEFAULT_TUTOR_PROMPT) && p.includes("Always mention residuals."));
+  check("the chosen voice comes first", p.startsWith("You speak like a patient lab partner."));
+  check("the notebook rules follow the voice, whatever it is", p.includes(NOTEBOOK_CHAT_RULES));
+  check("instructor guidance is appended, never substituted", p.includes("Always mention residuals."));
   check("no-solutions floor is present", p.includes("Do not write the solution"));
+  const noVoice = buildChatInstructions({
+    voiceFragment: "",
+    assignmentTitle: "t",
+    assignmentInstructions: "",
+    instructorPrompt: null,
+  });
+  check("the floor holds even with an empty voice", noVoice.startsWith(NOTEBOOK_CHAT_RULES));
 }
 
-// ── novel tutor text ────────────────────────────────────────────────────
+// ── novel AI chat text ────────────────────────────────────────────────────
 
 {
   const nb: NotebookContent = { cells: [{ id: "a", type: "code", source: "total = 0\nfor v in values:" }] };
   const reply = "Start from what you have:\ntotal = 0\nfor v in values:\n    total += v * w";
   const novel = novelReplyText(reply, nb);
-  check("lines the student already wrote are not tutor text", !novel.includes("total = 0") && !novel.includes("for v in values:"));
-  check("lines the tutor added are", novel.includes("total += v * w"));
+  check("lines the student already wrote are not AI chat text", !novel.includes("total = 0") && !novel.includes("for v in values:"));
+  check("lines the AI chat added are", novel.includes("total += v * w"));
 }
 
 // ── submission render ───────────────────────────────────────────────────
@@ -145,11 +155,11 @@ check("empty notebook is described, not blank", buildNotebookContext({ cells: []
   ]);
   const s = quoted.cells.s!.runs;
   check("starter cell renders as provided", s.length === 1 && s[0]!.origin === "provided" && s[0]!.length === 12, s);
-  check("code typed before the tutor echoed it stays typed", quoted.totals.human === loop.length, quoted.totals);
+  check("code typed before the AI chat echoed it stays typed", quoted.totals.human === loop.length, quoted.totals);
   const copied = buildSubmissionRender(content, { s: "values = [1]" }, typed, [
     { role: "assistant", novel_text: loop, created_at: 1_000 },
   ]);
-  check("code typed out after the tutor gave it is from the tutor", copied.totals.llm === loop.length, copied.totals);
+  check("code typed out after the AI chat gave it is from the AI chat", copied.totals.llm === loop.length, copied.totals);
 }
 
 console.log(`\n${checks - failures}/${checks} passed`);

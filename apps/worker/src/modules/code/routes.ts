@@ -8,7 +8,7 @@
 //   PATCH  /api/code/assignments/:id                            edit — INSTRUCTOR
 //   DELETE /api/code/assignments/:id?courseId=                  delete — INSTRUCTOR
 //   GET    /api/code/assignments/:id/roster?courseId=           every student — INSTRUCTOR
-//   POST   /api/code/assignments/:id/tutor-preview              try the tutor on the starter (SSE, nothing stored) — INSTRUCTOR
+//   POST   /api/code/assignments/:id/chat-preview              try the AI chat on the starter (SSE, nothing stored) — INSTRUCTOR
 //
 // Notebooks (always the caller's own)
 //   GET    /api/code/notebooks?courseId=                        list mine
@@ -16,8 +16,8 @@
 //   GET    /api/code/notebooks/:id?courseId=                    fetch
 //   PATCH  /api/code/notebooks/:id                              save title / content
 //   DELETE /api/code/notebooks/:id?courseId=                    delete
-//   GET    /api/code/notebooks/:id/messages?courseId=           tutor history
-//   POST   /api/code/notebooks/:id/messages                     tutor turn (SSE)
+//   GET    /api/code/notebooks/:id/messages?courseId=           chat history
+//   POST   /api/code/notebooks/:id/messages                     chat turn (SSE)
 //   POST   /api/code/notebooks/:id/events                       append edit events (submit-mode assignments only)
 //   GET    /api/code/notebooks/:id/submissions?courseId=        my submissions
 //   POST   /api/code/notebooks/:id/submissions                  submit a snapshot
@@ -52,8 +52,8 @@ export async function routeCode(
     if (id && parts.length === 5 && sub === "roster" && m === "GET") {
       return h.rosterRoute(env, identity, url, id);
     }
-    if (id && parts.length === 5 && sub === "tutor-preview" && m === "POST") {
-      return h.tutorPreviewRoute(req, env, identity, id);
+    if (id && parts.length === 5 && sub === "chat-preview" && m === "POST") {
+      return h.chatPreviewRoute(req, env, identity, id);
     }
   }
 

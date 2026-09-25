@@ -1,5 +1,5 @@
 // Pure helpers for the code module: validating a notebook the client sends,
-// and turning a notebook into context for the tutor. No D1, no env — so
+// and turning a notebook into context for the AI chat. No D1, no env — so
 // these are testable standalone (see notebook.test.ts).
 
 import type { Origin, OriginRun } from "@marginalia/provenance";
@@ -86,10 +86,10 @@ function sanitizeOrigins(raw: unknown, sourceLength: number): OriginRun[] | null
 }
 
 /**
- * The part of a tutor reply that is new to the student: every line of the
+ * The part of a AI reply that is new to the student: every line of the
  * reply except those already present (whitespace-normalized) somewhere in the
  * notebook when it was sent. Retype detection compares against this, so a
- * tutor quoting the student's own code back to them can never make that code
+ * chat quoting the student's own code back to them can never make that code
  * read as AI-written.
  */
 export function novelReplyText(reply: string, content: NotebookContent): string {
@@ -162,9 +162,9 @@ function sanitizeOutput(o: unknown): CellOutput | null {
   }
 }
 
-// ── tutor context ───────────────────────────────────────────────────────
+// ── chat context ───────────────────────────────────────────────────────
 
-/** Budget for the notebook excerpt sent to the tutor on each turn. */
+/** Budget for the notebook excerpt sent to the AI chat on each turn. */
 export const MAX_CONTEXT_CHARS = 24_000;
 const MAX_CONTEXT_OUTPUT_CHARS = 1_500;
 
@@ -189,7 +189,7 @@ function trimMiddle(s: string, max: number): string {
   return `${s.slice(0, half)}\n… (trimmed) …\n${s.slice(-half)}`;
 }
 
-/** One cell as the tutor sees it. Outputs are shown so the tutor can read
+/** One cell as the AI chat sees it. Outputs are shown so the AI chat can read
  *  the student's actual error, trimmed so one noisy cell can't crowd out
  *  the rest. */
 export function describeCell(cell: Cell, n: number, focused: boolean): string {
@@ -203,10 +203,10 @@ export function describeCell(cell: Cell, n: number, focused: boolean): string {
 }
 
 /**
- * The notebook as tutor context. When the whole thing fits the budget it is
+ * The notebook as chat context. When the whole thing fits the budget it is
  * sent whole. Otherwise the focused cell is kept, then cells are added
  * outward from it — nearer cells first — until the budget runs out, and the
- * omission is stated so the tutor doesn't reason about code it cannot see.
+ * omission is stated so the AI chat doesn't reason about code it cannot see.
  */
 export function buildNotebookContext(
   content: NotebookContent,
@@ -245,27 +245,32 @@ export function buildNotebookContext(
 }
 
 /**
- * The built-in tutor instructions. An instructor's per-assignment prompt is
- * appended beneath, never substituted, so the no-solutions floor holds even
- * when an instructor's own text doesn't mention it.
+ * The notebook's fixed rules for the chat. How the chat talks — persona, tone,
+ * method — comes from the voice the instructor chose for the assignment (see
+ * @marginalia/voices); these rules sit beneath any voice and are never
+ * replaced by it, so the no-solutions floor holds whichever voice is chosen
+ * and whatever an instructor's own guidance says.
  */
-export const DEFAULT_TUTOR_PROMPT = `You are a programming tutor beside a student's Python notebook in a course. The notebook runs in the student's browser with numpy, pandas, matplotlib, scikit-learn and scipy available.
+export const NOTEBOOK_CHAT_RULES = `## Where you are
+You are the LLM chat beside a student's Python notebook in a course. The notebook runs in the student's browser with numpy, pandas, matplotlib, scikit-learn and scipy available. You can see the notebook as it was last saved, including outputs and errors. You cannot run code.
 
-Your job is to help the student learn to write and debug the code themselves.
-
+## Rules that apply whatever your voice
 - Do not write the solution to the assignment, and do not rewrite the student's cells for them. If asked to, say so briefly and offer the next step instead.
-- When there is an error, help the student read it: point to the line and the part of the message that matters, and ask what they think it means.
-- Ask one question at a time. Prefer a hint to an explanation, and an explanation to code.
 - Short snippets (a few lines) are fine to illustrate a concept or an API, on a different example than the student's own problem.
-- Be concise. Refer to cells by number ("in cell 3").
-- You can see the notebook as it was last saved, including outputs and errors. You cannot run code.`;
+- When there is an error, point to the line and the part of the message that matters.
+- Refer to cells by number ("in cell 3").`;
 
-export function buildTutorInstructions(params: {
+/** The voice used when an assignment names none, or its voice is gone. */
+export const DEFAULT_VOICE_ID = "socratic";
+
+export function buildChatInstructions(params: {
+  /** The voice's system-prompt fragment: persona, tone, method. */
+  voiceFragment: string;
   assignmentTitle: string;
   assignmentInstructions: string;
   instructorPrompt: string | null;
 }): string {
-  const sections = [DEFAULT_TUTOR_PROMPT];
+  const sections = [params.voiceFragment.trim(), NOTEBOOK_CHAT_RULES].filter(Boolean);
   sections.push(
     `## The assignment\nTitle: ${params.assignmentTitle}\n${params.assignmentInstructions.trim() || "(no written instructions)"}`,
   );
@@ -275,7 +280,7 @@ export function buildTutorInstructions(params: {
   return sections.join("\n\n");
 }
 
-/** Short stable hash of the tutor instructions, recorded on every message. */
+/** Short stable hash of the chat instructions, recorded on every message. */
 export async function promptHash(prompt: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(prompt));
   return [...new Uint8Array(buf)]

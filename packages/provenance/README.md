@@ -29,8 +29,8 @@ when work is submitted: retype detection, move verification, the audit.
 Keep policy in the adapter (`modules/*/render.ts`); keep algorithm here.
 
 - `corpusOrigin` — the origin a retyped match takes. The writing tool maps
-  every import to `pasted`; code maps a tutor import to `llm`.
-- `extraCorpus` — retype sources that are not events, like tutor replies.
+  every import to `pasted`; code maps an AI chat import to `llm`.
+- `extraCorpus` — retype sources that are not events, like AI replies.
   Give each an `after` time: only text typed after the source existed can
   match it, so text written first is never attributed to a source that later
   quoted it.

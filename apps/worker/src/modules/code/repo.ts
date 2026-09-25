@@ -78,6 +78,7 @@ export interface AssignmentInput {
   starterJson: string;
   aiEnabled: boolean;
   aiPrompt: string | null;
+  voiceJson: string | null;
   dueAt: number | null;
   mode: AssignmentMode;
 }
@@ -93,8 +94,8 @@ export async function createAssignment(
     .prepare(
       `INSERT INTO code_assignments
          (id, course_id, title, instructions, starter_json, ai_enabled, ai_prompt,
-          due_at, mode, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          voice_json, due_at, mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -104,6 +105,7 @@ export async function createAssignment(
       input.starterJson,
       input.aiEnabled ? 1 : 0,
       input.aiPrompt,
+      input.voiceJson,
       input.dueAt,
       input.mode,
       ts,
@@ -130,6 +132,7 @@ export async function updateAssignment(
   if (patch.starterJson !== undefined) add("starter_json", patch.starterJson);
   if (patch.aiEnabled !== undefined) add("ai_enabled", patch.aiEnabled ? 1 : 0);
   if (patch.aiPrompt !== undefined) add("ai_prompt", patch.aiPrompt);
+  if (patch.voiceJson !== undefined) add("voice_json", patch.voiceJson);
   if (patch.dueAt !== undefined) add("due_at", patch.dueAt);
   if (patch.mode !== undefined) add("mode", patch.mode);
   if (patch.archived !== undefined) add("archived_at", patch.archived ? now() : null);
@@ -295,7 +298,7 @@ export async function deleteNotebook(
     .run();
 }
 
-// ── tutor messages ──────────────────────────────────────────────────────
+// ── chat messages ──────────────────────────────────────────────────────
 
 export async function listMessages(
   db: D1Database,

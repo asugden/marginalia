@@ -2,7 +2,7 @@
 --
 -- Students write and run Python in cells, entirely in their own browser
 -- (Pyodide, CPython compiled to WebAssembly). The server never executes
--- student code. What it stores is the notebook itself, the optional tutor
+-- student code. What it stores is the notebook itself, the optional chat
 -- conversation beside it, and the snapshots a student submits.
 --
 -- The module is an OPTIONAL extension that defaults OFF. Most courses will
@@ -29,17 +29,23 @@ CREATE TABLE code_assignments (
   instructions  TEXT NOT NULL DEFAULT '',
   -- JSON: { cells: [...] } in the same shape as code_notebooks.cells_json.
   starter_json  TEXT NOT NULL DEFAULT '{"cells":[]}',
-  -- Whether students get the course's AI tutor beside this notebook. Off by
+  -- Whether students get the course's AI chat beside this notebook. Off by
   -- default: the instructor opts each assignment in.
   ai_enabled    INTEGER NOT NULL DEFAULT 0,
-  -- Optional instructor instructions for the tutor on this assignment. NULL
-  -- means the module's built-in coding-tutor prompt.
+  -- Optional instructor instructions for the AI chat on this assignment. NULL
+  -- means the module's built-in coding-chat prompt.
   ai_prompt     TEXT,
+  -- The chat's voice, as a VoiceRef JSON: {"kind":"library","id":…} for a
+  -- built-in voice, or {"kind":"custom-ref","voiceId":…} for one of the
+  -- instructor's own. NULL = the default library voice. Resolved on every
+  -- turn, so editing the voice reaches the next message; each message
+  -- records the hash of the instructions it was answered under.
+  voice_json    TEXT,
   -- NULL = no deadline, so a submission is never late. Lateness is computed
   -- at read time (submitted_at > due_at) and never stored.
   due_at        INTEGER,
   -- 'submit'   — students hand the notebook in. Origins (typed / pasted /
-  --              from the tutor / provided) are recorded while they work and
+  --              from the AI chat / provided) are recorded while they work and
   --              shown to instructors on each submission.
   -- 'practice' — nothing to hand in, and nothing is recorded.
   mode          TEXT NOT NULL DEFAULT 'submit',
@@ -79,9 +85,9 @@ CREATE UNIQUE INDEX idx_code_notebooks_assignment
   ON code_notebooks(course_id, owner_user_id, assignment_id)
   WHERE assignment_id IS NOT NULL;
 
--- The tutor conversation beside a notebook: one continuous thread per
+-- The AI chat conversation beside a notebook: one continuous thread per
 -- notebook. The prompt hash is captured at send time so a later edit to the
--- assignment's tutor instructions never rewrites what was said.
+-- assignment's chat instructions never rewrites what was said.
 CREATE TABLE code_messages (
   id             TEXT PRIMARY KEY,
   notebook_id    TEXT NOT NULL REFERENCES code_notebooks(id) ON DELETE CASCADE,
@@ -91,7 +97,7 @@ CREATE TABLE code_messages (
   prompt_hash    TEXT NOT NULL,
   -- Assistant rows only: the reply minus any line already in the student's
   -- notebook when it was sent. This is what retype detection compares
-  -- against, so a tutor quoting the student's own code back to them can never
+  -- against, so an AI reply quoting the student's own code back to them can never
   -- make that code read as AI-written.
   novel_text     TEXT,
   created_at     INTEGER NOT NULL
@@ -125,7 +131,7 @@ CREATE INDEX idx_code_events_notebook
   ON code_events(notebook_id, client_seq);
 
 -- A frozen copy of a notebook, submitted against an assignment. Immutable
--- once written. The roster reads the latest one per student. The tutor
+-- once written. The roster reads the latest one per student. The AI chat
 -- transcript is frozen alongside it, so deleting the live notebook (which
 -- cascades its messages) cannot rewrite what an instructor was handed.
 CREATE TABLE code_submissions (

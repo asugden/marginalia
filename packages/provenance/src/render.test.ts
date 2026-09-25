@@ -50,7 +50,7 @@ const TUTOR = "for i in range(len(values)):\n    total = total + values[i] * wei
   seq = 0;
   const events = [ev("llm_insert", 0, TUTOR, "llm"), ev("delete", 0, TUTOR, null), ...[...TUTOR].map((ch, i) => ev("insert", i, ch, "human", 200))];
   const r = buildRender(TUTOR, events, { corpusOrigin: (e) => (e.kind === "llm_insert" ? "llm" : "pasted") });
-  check("retyping a deleted tutor paste is marked llm, not pasted", countOrigins(r.runs).llm, TUTOR.length);
+  check("retyping a deleted chat paste is marked llm, not pasted", countOrigins(r.runs).llm, TUTOR.length);
   const w = buildRender(TUTOR, events);
   check("default corpus origin is still pasted (writing-tool behaviour)", countOrigins(w.runs).pasted, TUTOR.length);
 }
@@ -62,14 +62,14 @@ const TUTOR = "for i in range(len(values)):\n    total = total + values[i] * wei
   const typedFirst = [...TUTOR].map((ch, i) => ev("insert", i, ch, "human", 200));
   const replyAt = clock + 10_000;
   const before = buildRender(TUTOR, typedFirst, { extraCorpus: [{ text: TUTOR, origin: "llm", after: replyAt }] });
-  check("code typed BEFORE the tutor said it stays human (a tutor quoting you back)", countOrigins(before.runs).human, TUTOR.length);
+  check("code typed BEFORE the AI chat said it stays human (an AI reply quoting you back)", countOrigins(before.runs).human, TUTOR.length);
 
   seq = 0;
   clock = 1_000_000;
   const replyAt2 = clock;
   const typedAfter = [...TUTOR].map((ch, i) => ev("insert", i, ch, "human", 200));
   const after = buildRender(TUTOR, typedAfter, { extraCorpus: [{ text: TUTOR, origin: "llm", after: replyAt2 }] });
-  check("code typed AFTER the tutor said it is marked llm", countOrigins(after.runs).llm, TUTOR.length);
+  check("code typed AFTER the AI chat said it is marked llm", countOrigins(after.runs).llm, TUTOR.length);
 
   seq = 0;
   const short = "total = 0";

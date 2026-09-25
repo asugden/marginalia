@@ -186,7 +186,7 @@
 .code-table tbody tr:nth-child(even) td { background: var(--surface-sunken); }
 .code-table__shape { font-size: 0.75rem; color: var(--text-muted); padding-top: 0.3rem; }
 
-/* ── side pane (tutor, files) ─────────────────────────────────────────── */
+/* ── side pane (chat, files) ─────────────────────────────────────────── */
 .code-side__head {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--line); background: var(--panel);
@@ -195,10 +195,10 @@
   flex: 1; font: 600 0.78rem var(--font-sans); text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--ink-soft);
 }
-.code-tutor__hint { color: var(--text-muted); font-size: 0.9rem; padding: 0.25rem 0.1rem; }
-.code-tutor__body > :first-child { margin-top: 0; }
-.code-tutor__body > :last-child { margin-bottom: 0; }
-.code-tutor__body pre { overflow-x: auto; font-size: 0.82rem; }
+.code-chat__hint { color: var(--text-muted); font-size: 0.9rem; padding: 0.25rem 0.1rem; }
+.code-chat__body > :first-child { margin-top: 0; }
+.code-chat__body > :last-child { margin-bottom: 0; }
+.code-chat__body pre { overflow-x: auto; font-size: 0.82rem; }
 
 .code-files { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .code-files.is-dragging { background: var(--accent-wash); }
@@ -225,7 +225,7 @@
 
 /* ── origins (instructor review) ──────────────────────────────────────── */
 /* The writing tool's colours exactly — one origin, one colour, everywhere:
-   pasted = warning, from the tutor = info, autocorrect = success. Typed is the
+   pasted = warning, from the AI chat = info, autocorrect = success. Typed is the
    default ink, no wash. `provided` (starter code the student didn't write) is
    deliberately the quietest mark: a neutral wash with no underline, so it
    recedes rather than reads as a finding. */

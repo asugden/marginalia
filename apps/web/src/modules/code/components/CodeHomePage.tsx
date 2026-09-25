@@ -133,7 +133,7 @@ export function CodeHomePage() {
                     {[
                       a.dueAt ? `Due ${formatDue(a.dueAt)}` : "No deadline",
                       a.mode === "practice" ? "Practice" : null,
-                      a.aiEnabled ? "Tutor available" : null,
+                      a.aiEnabled ? "Chat available" : null,
                       nb ? `Edited ${relativeTime(nb.updatedAt)}` : "Not started",
                     ]
                       .filter(Boolean)
@@ -162,7 +162,7 @@ export function CodeHomePage() {
       {notebooks === null ? null : scratch.length === 0 ? (
         <p className="app-empty">
           A scratch notebook is yours to experiment in. It isn't submitted
-          anywhere, and it has no tutor.
+          anywhere, and it has no chat.
         </p>
       ) : (
         <div className="app-list">

@@ -11,6 +11,22 @@ import type { Origin, OriginRun, ProvenanceAudit, PasteRecord } from "@marginali
 export type CellType = "code" | "markdown";
 export type AssignmentMode = "submit" | "practice";
 
+/** The two voice shapes an assignment can store: a built-in library voice,
+ *  or a reference to one of the instructor's own (or shared) voices. */
+export type CodeVoiceRef = { kind: "library"; id: string } | { kind: "custom-ref"; voiceId: string };
+
+export function parseVoiceRef(raw: string | null): CodeVoiceRef | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as { kind?: unknown; id?: unknown; voiceId?: unknown };
+    if (v.kind === "library" && typeof v.id === "string") return { kind: "library", id: v.id };
+    if (v.kind === "custom-ref" && typeof v.voiceId === "string") return { kind: "custom-ref", voiceId: v.voiceId };
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
 export type CellOutput =
   | { type: "stream"; name: "stdout" | "stderr"; text: string }
   /** The repr of a cell's final expression. */
@@ -53,6 +69,7 @@ export interface CodeAssignmentRow {
   starter_json: string;
   ai_enabled: number;
   ai_prompt: string | null;
+  voice_json: string | null;
   due_at: number | null;
   mode: AssignmentMode;
   created_at: number;
@@ -104,9 +121,11 @@ export interface CodeAssignmentDTO {
   title: string;
   instructions: string;
   aiEnabled: boolean;
-  /** Instructor-only. Omitted for students: the tutor's instructions are
+  /** Instructor-only. Omitted for students: the AI chat's instructions are
    *  the instructor's, and a student has no use for them. */
   aiPrompt?: string | null;
+  /** Instructor-only: the chat's voice. Null = the default library voice. */
+  voice?: CodeVoiceRef | null;
   dueAt: number | null;
   mode: AssignmentMode;
   archivedAt: number | null;
@@ -127,7 +146,7 @@ export interface NotebookDTO extends NotebookSummaryDTO {
   courseId: string;
   content: NotebookContent;
   createdAt: number;
-  /** Whether the AI tutor is available beside this notebook. Derived from
+  /** Whether the AI chat is available beside this notebook. Derived from
    *  the assignment; a scratch notebook has none. */
   aiEnabled: boolean;
   /** The assignment's title, instructions, and deadline, for the header. */
@@ -175,7 +194,7 @@ export interface SubmissionDTO extends SubmissionSummaryDTO {
   title: string;
   content: NotebookContent;
   student: { userId: string; email: string; displayName: string | null };
-  /** The tutor conversation as it stood at submission time. */
+  /** The AI chat conversation as it stood at submission time. */
   messages: CodeMessageDTO[];
   /** Null when nothing was recorded (a practice-mode or pre-tracking copy). */
   render: SubmissionRender | null;
@@ -216,7 +235,7 @@ export function toAssignmentDTO(
     instructions: row.instructions,
     aiEnabled: row.ai_enabled === 1,
     mode: row.mode === "practice" ? "practice" : "submit",
-    ...(opts.instructor ? { aiPrompt: row.ai_prompt } : {}),
+    ...(opts.instructor ? { aiPrompt: row.ai_prompt, voice: parseVoiceRef(row.voice_json) } : {}),
     dueAt: row.due_at,
     archivedAt: row.archived_at,
     createdAt: row.created_at,

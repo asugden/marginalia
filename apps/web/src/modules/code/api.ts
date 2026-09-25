@@ -12,6 +12,8 @@ export type { Origin, OriginRun };
 
 export type CellType = "code" | "markdown";
 export type AssignmentMode = "submit" | "practice";
+/** The chat's voice: a built-in library voice, or one of the instructor's. */
+export type CodeVoiceRef = { kind: "library"; id: string } | { kind: "custom-ref"; voiceId: string };
 
 export type CellOutput =
   | { type: "stream"; name: "stdout" | "stderr"; text: string }
@@ -48,6 +50,8 @@ export interface CodeAssignmentDTO {
   instructions: string;
   aiEnabled: boolean;
   aiPrompt?: string | null;
+  /** Instructor-only. Null = the default library voice. */
+  voice?: CodeVoiceRef | null;
   dueAt: number | null;
   mode: AssignmentMode;
   archivedAt: number | null;
@@ -202,6 +206,7 @@ export interface AssignmentInput {
   starter?: NotebookContent;
   aiEnabled?: boolean;
   aiPrompt?: string | null;
+  voice?: CodeVoiceRef | null;
   dueAt?: number | null;
   archived?: boolean;
   mode?: AssignmentMode;
@@ -282,7 +287,7 @@ export async function deleteNotebook(courseId: string, id: string): Promise<void
   await call(`/api/code/notebooks/${seg(id)}${q(courseId)}`, { method: "DELETE" });
 }
 
-// ── tutor ───────────────────────────────────────────────────────────────
+// ── chat ───────────────────────────────────────────────────────────────
 
 export async function listMessages(courseId: string, notebookId: string): Promise<CodeMessageDTO[]> {
   const r = await call<{ messages: CodeMessageDTO[] }>(
@@ -291,7 +296,7 @@ export async function listMessages(courseId: string, notebookId: string): Promis
   return r.messages;
 }
 
-export interface TutorCallbacks {
+export interface ChatCallbacks {
   onDelta: (text: string) => void;
   /** `assistantMessageId` is absent for a preview turn, which stores nothing. */
   onDone?: (data: { assistantMessageId?: string }) => void;
@@ -299,35 +304,35 @@ export interface TutorCallbacks {
   onAuthRequired?: () => void;
 }
 
-/** Stream one tutor turn. Returns an abort function. */
-export function streamTutorTurn(
+/** Stream one chat turn. Returns an abort function. */
+export function streamChatTurn(
   courseId: string,
   notebookId: string,
   content: string,
   focusCellId: string | null,
-  cb: TutorCallbacks,
+  cb: ChatCallbacks,
 ): () => void {
   return streamSse(`/api/code/notebooks/${seg(notebookId)}/messages`, { courseId, content, focusCellId }, cb);
 }
 
-/** The instructor's tutor preview on a starter notebook. Nothing is stored,
+/** The instructor's chat preview on a starter notebook. Nothing is stored,
  *  so the caller passes the preview conversation so far. */
-export function streamTutorPreview(
+export function streamChatPreview(
   courseId: string,
   assignmentId: string,
   content: string,
   history: Array<{ role: "user" | "assistant"; content: string }>,
   focusCellId: string | null,
-  cb: TutorCallbacks,
+  cb: ChatCallbacks,
 ): () => void {
   return streamSse(
-    `/api/code/assignments/${seg(assignmentId)}/tutor-preview`,
+    `/api/code/assignments/${seg(assignmentId)}/chat-preview`,
     { courseId, content, history, focusCellId },
     cb,
   );
 }
 
-function streamSse(path: string, body: unknown, cb: TutorCallbacks): () => void {
+function streamSse(path: string, body: unknown, cb: ChatCallbacks): () => void {
   const ctrl = new AbortController();
   (async () => {
     try {
@@ -368,7 +373,7 @@ function streamSse(path: string, body: unknown, cb: TutorCallbacks): () => void 
   return () => ctrl.abort();
 }
 
-function dispatch(frame: string, cb: TutorCallbacks) {
+function dispatch(frame: string, cb: ChatCallbacks) {
   let event = "message";
   let data = "";
   for (const line of frame.split("\n")) {

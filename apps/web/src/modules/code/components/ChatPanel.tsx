@@ -1,8 +1,8 @@
-// The AI tutor beside a notebook. Present only when the assignment has the
-// tutor turned on; the server enforces the same rule on every turn.
+// The AI chat beside a notebook. Present only when the assignment has the
+// chat turned on; the server enforces the same rule on every turn.
 //
-// There is no "insert into notebook" button on tutor replies, on purpose:
-// the tutor is there to help a student write the code, not to supply it.
+// There is no "insert into notebook" button on AI replies, on purpose:
+// the AI chat is there to help a student write the code, not to supply it.
 // The chat styling is the shared provenance chat pane's, so the two tools
 // read as one product.
 
@@ -13,18 +13,18 @@ import {
   isAuthError,
   listMessages,
   redirectToLogin,
-  streamTutorPreview,
-  streamTutorTurn,
+  streamChatPreview,
+  streamChatTurn,
   type CodeMessageDTO,
 } from "../api.js";
 
 /** Which conversation the panel is. A student's notebook keeps its thread on
  *  the server; the instructor's starter preview keeps nothing. */
-export type TutorTarget =
+export type ChatTarget =
   | { kind: "notebook"; notebookId: string }
   | { kind: "preview"; assignmentId: string };
 
-export function TutorPanel({
+export function NotebookChatPanel({
   courseId,
   target,
   focusLabel,
@@ -34,15 +34,15 @@ export function TutorPanel({
   onReply,
 }: {
   courseId: string;
-  target: TutorTarget;
+  target: ChatTarget;
   /** "Cell 3" when the student has a cell selected, else null. */
   focusLabel: string | null;
   focusCellId: string | null;
   onClearFocus: () => void;
-  /** Flush the notebook save, so the tutor reads what the student sees. */
+  /** Flush the notebook save, so the AI chat reads what the student sees. */
   beforeSend: () => Promise<void>;
   /** Every assistant reply, including those loaded from history, so the
-   *  notebook can recognise tutor text if it turns up in a cell. */
+   *  notebook can recognise AI chat text if it turns up in a cell. */
   onReply?: (text: string) => void;
 }) {
   const preview = target.kind === "preview";
@@ -91,7 +91,7 @@ export function TutorPanel({
     try {
       await beforeSend();
     } catch {
-      // Sending still works; the tutor just reads the last successful save.
+      // Sending still works; the AI chat just reads the last successful save.
     }
     let acc = "";
     const callbacks = {
@@ -117,10 +117,10 @@ export function TutorPanel({
       onAuthRequired: () => redirectToLogin(),
     };
     if (target.kind === "notebook") {
-      abortRef.current = streamTutorTurn(courseId, target.notebookId, text, focusCellId, callbacks);
+      abortRef.current = streamChatTurn(courseId, target.notebookId, text, focusCellId, callbacks);
     } else {
       const history = (messages ?? []).map((m) => ({ role: m.role, content: m.content }));
-      abortRef.current = streamTutorPreview(courseId, target.assignmentId, text, history, focusCellId, callbacks);
+      abortRef.current = streamChatPreview(courseId, target.assignmentId, text, history, focusCellId, callbacks);
     }
   }
 
@@ -137,18 +137,18 @@ export function TutorPanel({
   }
 
   return (
-    <div className="prov-chat code-tutor">
+    <div className="prov-chat code-chat">
       <div className="code-side__head">
-        <span className="code-side__title">{preview ? "Tutor preview" : "Tutor"}</span>
+        <span className="code-side__title">{preview ? "Chat preview" : "Chat"}</span>
       </div>
       <div className="prov-chat-scroll" ref={scroller}>
         {messages === null ? (
-          <p className="code-tutor__hint">Loading…</p>
+          <p className="code-chat__hint">Loading…</p>
         ) : messages.length === 0 && pending === null ? (
-          <p className="code-tutor__hint">
+          <p className="code-chat__hint">
             {preview
-              ? "Try the tutor your students will get. It reads the starter notebook as last saved, with this assignment's instructions and your guidance. Nothing here is saved or shown to students."
-              : "Ask about an error, a concept, or what to try next. The tutor can see your notebook and its outputs, but it won't write the assignment for you."}
+              ? "Try the chat your students will get. It reads the starter notebook as last saved, with this assignment's instructions and your guidance. Nothing here is saved or shown to students."
+              : "Ask about an error, a concept, or what to try next. The chat can see your notebook and its outputs. It won't write the assignment for you."}
           </p>
         ) : null}
         {messages?.map((m) => <Bubble key={m.id} role={m.role} content={m.content} />)}
@@ -175,7 +175,7 @@ export function TutorPanel({
                 void send();
               }
             }}
-            placeholder="Ask the tutor…"
+            placeholder="Ask a question…"
             rows={1}
             disabled={pending !== null}
           />
@@ -205,7 +205,7 @@ export function TutorPanel({
 function Bubble({ role, content, pending }: { role: "user" | "assistant"; content: string; pending?: boolean }) {
   return (
     <div className={`prov-bubble prov-bubble-${role}${pending ? " is-pending" : ""}`}>
-      <div className="prov-bubble-body code-tutor__body">
+      <div className="prov-bubble-body code-chat__body">
         {role === "assistant" ? (content ? <Markdown>{content}</Markdown> : "…") : content}
       </div>
     </div>

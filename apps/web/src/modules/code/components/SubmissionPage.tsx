@@ -1,6 +1,6 @@
 // A submitted notebook, read-only: the cells and outputs exactly as frozen,
-// where each character came from (typed / pasted / from the tutor /
-// provided), and — when the assignment had the tutor on — the conversation as
+// where each character came from (typed / pasted / from the AI chat /
+// provided), and — when the assignment had the AI chat on — the conversation as
 // it stood at submission time. Nothing here runs; outputs render from stored
 // data. "Open a scratch copy" gives the instructor an unsaved, runnable copy.
 //
@@ -20,7 +20,7 @@ import { Cells } from "./Cells.js";
 const ORIGIN_LABEL: Record<Origin, string> = {
   human: "typed",
   pasted: "pasted",
-  llm: "from the tutor",
+  llm: "from LLM",
   provided: "provided in the starter",
   edited: "autocorrect",
 };
@@ -137,7 +137,7 @@ export function SubmissionPage() {
                     <li key={`${p.cell}-${p.seq}`} className="code-imports__row">
                       <div className="code-imports__meta">
                         <span className={`code-legend__swatch code-origin--${p.origin ?? "pasted"}`} aria-hidden />
-                        Cell {p.cell} · {p.origin === "llm" ? "pasted from the tutor" : "pasted"} ·{" "}
+                        Cell {p.cell} · {p.origin === "llm" ? "pasted from the chat" : "pasted"} ·{" "}
                         {p.length.toLocaleString()} characters · {Math.round(p.verbatim * 100)}% still there
                         verbatim · {new Date(p.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                       </div>
@@ -154,11 +154,11 @@ export function SubmissionPage() {
           )}
 
           {sub.messages.length > 0 && (
-            <Section kicker="Tutor conversation" meta={`${sub.messages.length} messages`}>
+            <Section kicker="Chat conversation" meta={`${sub.messages.length} messages`}>
               <div className="code-transcript">
                 {sub.messages.map((m) => (
                   <div key={m.id} className={`prov-bubble prov-bubble-${m.role}`}>
-                    <div className="prov-bubble-body code-tutor__body">
+                    <div className="prov-bubble-body code-chat__body">
                       {m.role === "assistant" ? <Markdown>{m.content}</Markdown> : m.content}
                     </div>
                   </div>

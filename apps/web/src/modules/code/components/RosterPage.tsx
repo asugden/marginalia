@@ -50,8 +50,8 @@ export function RosterPage() {
         scope={
           data
             ? data.assignment.mode === "practice"
-              ? `Practice · tutor ${data.assignment.aiEnabled ? "on" : "off"}. Students have nothing to submit for a practice assignment, so this list stays empty. Switch it to Submitted in the assignment's settings to collect work.`
-              : `${data.assignment.dueAt ? `Due ${formatDue(data.assignment.dueAt)}` : "No deadline"} · tutor ${data.assignment.aiEnabled ? "on" : "off"}. Everyone enrolled is listed, whether or not they've submitted.`
+              ? `Practice · chat ${data.assignment.aiEnabled ? "on" : "off"}. Students have nothing to submit for a practice assignment, so this list stays empty. Switch it to Submitted in the assignment's settings to collect work.`
+              : `${data.assignment.dueAt ? `Due ${formatDue(data.assignment.dueAt)}` : "No deadline"} · chat ${data.assignment.aiEnabled ? "on" : "off"}. Everyone enrolled is listed, whether or not they've submitted.`
             : undefined
         }
       />

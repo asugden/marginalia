@@ -7,8 +7,8 @@
 //   typing                 → human
 //   paste / drop           → pasted, unless it is
 //     · text recently cut or copied inside this notebook → move (origins kept)
-//     · text from a tutor reply                           → llm
-//   typing that reproduces a tutor reply (≥ MIN_REVERSION_LENGTH, exact)
+//     · text from a AI reply                           → llm
+//   typing that reproduces a AI reply (≥ MIN_REVERSION_LENGTH, exact)
 //                          → llm, for the part that matches
 //   undo / redo re-inserting recently removed text → move (origins restored)
 //
@@ -17,7 +17,7 @@
 // sees is recomputed from the log at submission (worker render.ts).
 //
 // The one deliberate difference from the Tiptap tracker: a slow retype of
-// tutor text is logged as a delete of the typed span followed by an
+// AI chat text is logged as a delete of the typed span followed by an
 // llm_insert of the same text, so replay re-labels the span rather than
 // inserting it a second time.
 
@@ -45,36 +45,36 @@ export interface TrackingContext {
   /** One buffer for the whole notebook, so moving code between cells keeps
    *  its origins. */
   moves: MoveBuffer<Origin>;
-  /** Reversion index of tutor text (lines and code blocks). */
-  tutorContributions: string[];
-  /** Normalized full tutor replies, for "was this paste from the tutor?". */
-  tutorReplies: string[];
+  /** Reversion index of AI chat text (lines and code blocks). */
+  chatContributions: string[];
+  /** Normalized full AI replies, for "was this paste from the AI chat?". */
+  chatReplies: string[];
   emit: (events: TrackedCellEvent[]) => void;
   onRuns: (cellId: string, runs: OriginRun[]) => void;
 }
 
 /**
- * Register a tutor reply. Lines already present in the notebook are skipped,
- * so a tutor quoting the student's own code back to them never turns that
+ * Register a AI reply. Lines already present in the notebook are skipped,
+ * so an AI reply quoting the student's own code back to them never turns that
  * code into "AI" when the student next edits it.
  */
-export function noteTutorReply(ctx: TrackingContext, reply: string, notebookText: string): void {
+export function noteChatReply(ctx: TrackingContext, reply: string, notebookText: string): void {
   const norm = (s: string) => normalizeForMatch(s).trim();
   const existing = new Set(notebookText.split("\n").map(norm).filter(Boolean));
-  ctx.tutorReplies.push(norm(reply));
+  ctx.chatReplies.push(norm(reply));
   const push = (text: string) => {
     const n = norm(text);
-    if (n.length < MIN_REVERSION_LENGTH || existing.has(n) || ctx.tutorContributions.includes(n)) return;
-    ctx.tutorContributions.push(n);
+    if (n.length < MIN_REVERSION_LENGTH || existing.has(n) || ctx.chatContributions.includes(n)) return;
+    ctx.chatContributions.push(n);
   };
   for (const line of reply.split("\n")) push(line);
   for (const m of reply.matchAll(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/g)) push(m[1] ?? "");
-  ctx.tutorContributions.sort((a, b) => b.length - a.length);
+  ctx.chatContributions.sort((a, b) => b.length - a.length);
 }
 
-function isFromTutor(ctx: TrackingContext, text: string): boolean {
+function isFromChat(ctx: TrackingContext, text: string): boolean {
   const n = normalizeForMatch(text).trim();
-  return n.length >= MIN_REVERSION_LENGTH && ctx.tutorReplies.some((r) => r.includes(n));
+  return n.length >= MIN_REVERSION_LENGTH && ctx.chatReplies.some((r) => r.includes(n));
 }
 
 function totalLength(runs: OriginRun[]): number {
@@ -120,14 +120,14 @@ export function originTracking(
       }
     }
     if (paste) {
-      const origin: Origin = isFromTutor(ctx, text) ? "llm" : "pasted";
+      const origin: Origin = isFromChat(ctx, text) ? "llm" : "pasted";
       return {
         kind: origin === "llm" ? ("llm_insert" as const) : ("paste" as const),
         origin,
         inserted: [{ origin, length: text.length }],
       };
     }
-    const origin: Origin = isReversion(ctx.tutorContributions, text) ? "llm" : "human";
+    const origin: Origin = isReversion(ctx.chatContributions, text) ? "llm" : "human";
     return { kind: "insert" as const, origin, inserted: [{ origin, length: text.length }] };
   };
 
@@ -171,12 +171,12 @@ export function originTracking(
                 : { text, from: at, to: at + text.length };
             // No contribution is longer than the longest one, so older typed
             // characters can be dropped from the window.
-            const cap = ctx.tutorContributions[0]?.length ?? 0;
+            const cap = ctx.chatContributions[0]?.length ?? 0;
             if (typedRun.text.length > cap + 64) {
               const drop = typedRun.text.length - (cap + 64);
               typedRun = { text: typedRun.text.slice(drop), from: typedRun.from + drop, to: typedRun.to };
             }
-            const match = trailingReversionLength(ctx.tutorContributions, typedRun.text);
+            const match = trailingReversionLength(ctx.chatContributions, typedRun.text);
             if (match > 0) {
               // Re-label the matched tail as llm: remove it, then re-insert
               // the same text as an llm_insert, so replay stays in step.

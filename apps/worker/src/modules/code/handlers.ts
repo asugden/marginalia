@@ -1,17 +1,17 @@
 // Request handlers for the code module.
 //
 // The server never runs student code. Python executes in the student's
-// browser; this module stores notebooks, the tutor conversation, and
-// submitted snapshots, and proxies tutor turns through the LLMProvider.
+// browser; this module stores notebooks, the AI chat conversation, and
+// submitted snapshots, and proxies chat turns through the LLMProvider.
 //
 // Two gates apply throughout:
 //   1. The course must have the module turned on (course_settings.code_enabled,
 //      default off). Instructors pass regardless, so they can author before
 //      opening it to the class.
-//   2. The AI tutor is per assignment (code_assignments.ai_enabled, default
+//   2. The AI chat is per assignment (code_assignments.ai_enabled, default
 //      off). It is enforced here on every turn, not just hidden in the UI.
 //
-// Origins (typed / pasted / from the tutor / provided) are recorded only for
+// Origins (typed / pasted / from the AI chat / provided) are recorded only for
 // assignments in 'submit' mode, and rendered with the writing tool's shared
 // provenance code when a notebook is submitted. See render.ts.
 
@@ -26,11 +26,14 @@ import {
   setArchivedForPayload as setCourseItemArchived,
   setDueForPayload as setCourseItemDue,
 } from "../course-items/sync.js";
+import { findLibraryVoice, LIBRARY } from "@marginalia/voices";
+import * as coreRepo from "../../repo.js";
 import * as repo from "./repo.js";
 import {
   MAX_NOTEBOOK_BYTES,
+  DEFAULT_VOICE_ID,
   buildNotebookContext,
-  buildTutorInstructions,
+  buildChatInstructions,
   novelReplyText,
   promptHash,
   sanitizeContent,
@@ -46,6 +49,8 @@ import {
   type CodeMessageDTO,
   type AssignmentMode,
   type CodeNotebookRow,
+  type CodeVoiceRef,
+  parseVoiceRef,
   type NotebookContent,
   type NotebookDTO,
   type RosterStudentDTO,
@@ -58,12 +63,55 @@ const MAX_AI_PROMPT = 8_000;
 const MAX_USER_MESSAGE = 8_000;
 const MAX_HISTORY_TURNS = 20;
 const MAX_HISTORY_CHARS = 32_000;
-const MAX_TUTOR_TOKENS = 1_200;
+const MAX_CHAT_TOKENS = 1_200;
 const MAX_EVENTS_PER_BATCH = 500;
 const MAX_EVENT_TEXT = 50_000;
 const EVENT_KINDS: ReadonlySet<string> = new Set(["insert", "delete", "paste", "llm_insert", "move"]);
 const EVENT_ORIGINS: ReadonlySet<string> = new Set(["human", "llm", "pasted", "edited", "provided"]);
 const CELL_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Validate a voice from the assignment editor. A library voice must exist; an
+ * instructor's own voice must be one they can use (owned or shared with them),
+ * the same rule the agent editor applies. Returns the JSON to store, null to
+ * clear back to the default, undefined when not supplied, or an error.
+ */
+async function parseVoice(
+  env: Env,
+  raw: unknown,
+  userId: string,
+): Promise<string | null | undefined | Response> {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  const v = raw as { kind?: unknown; id?: unknown; voiceId?: unknown };
+  if (v.kind === "library" && typeof v.id === "string") {
+    if (!LIBRARY.some((l) => l.id === v.id)) return error(`Unknown voice: ${v.id}`, 400);
+    return JSON.stringify({ kind: "library", id: v.id } satisfies CodeVoiceRef);
+  }
+  if (v.kind === "custom-ref" && typeof v.voiceId === "string") {
+    const usable = await coreRepo.findVoiceUsableByUser(env.DB, v.voiceId, userId);
+    if (!usable) return error("Voice not found, or not shared with you", 400);
+    return JSON.stringify({ kind: "custom-ref", voiceId: v.voiceId } satisfies CodeVoiceRef);
+  }
+  return error("voice must be a library voice or one of your own", 400);
+}
+
+/**
+ * The chat's voice text for an assignment, resolved on every turn. A voice
+ * that has since been deleted (or a library id that no longer exists) falls
+ * back to the default library voice rather than failing the student's turn.
+ */
+async function voiceFragment(env: Env, assignment: CodeAssignmentRow): Promise<string> {
+  const ref = parseVoiceRef(assignment.voice_json);
+  if (ref?.kind === "custom-ref") {
+    const row = await coreRepo.findVoiceById(env.DB, ref.voiceId);
+    if (row) return row.system_prompt_fragment;
+  } else if (ref?.kind === "library") {
+    const lib = findLibraryVoice(ref.id);
+    if (lib) return lib.systemPromptFragment;
+  }
+  return findLibraryVoice(DEFAULT_VOICE_ID)?.systemPromptFragment ?? "";
+}
 
 function parseMode(v: unknown): AssignmentMode | undefined | "invalid" {
   if (v === undefined) return undefined;
@@ -194,6 +242,7 @@ interface AssignmentBody {
   dueAt?: unknown;
   archived?: unknown;
   mode?: unknown;
+  voice?: unknown;
 }
 
 export async function createAssignmentRoute(
@@ -222,12 +271,15 @@ export async function createAssignmentRoute(
 
   const mode = parseMode(body!.mode);
   if (mode === "invalid") return error("mode must be submit or practice", 400);
+  const voiceJson = await parseVoice(env, body!.voice, caller.userId);
+  if (voiceJson instanceof Response) return voiceJson;
   const row = await repo.createAssignment(env.DB, courseId, {
     title,
     instructions,
     starterJson,
     aiEnabled: body!.aiEnabled === true,
     aiPrompt,
+    voiceJson: voiceJson ?? null,
     dueAt: dueAt ?? null,
     mode: mode ?? "submit",
   });
@@ -282,6 +334,9 @@ export async function updateAssignmentRoute(
   const mode = parseMode(body!.mode);
   if (mode === "invalid") return error("mode must be submit or practice", 400);
   if (mode !== undefined) patch.mode = mode;
+  const voiceJson = await parseVoice(env, body!.voice, caller.userId);
+  if (voiceJson instanceof Response) return voiceJson;
+  if (voiceJson !== undefined) patch.voiceJson = voiceJson;
 
   await repo.updateAssignment(env.DB, courseId, id, patch);
   const after = (await repo.getAssignment(env.DB, courseId, id))!;
@@ -517,7 +572,7 @@ export async function deleteNotebookRoute(
   return json({ ok: true });
 }
 
-// ── tutor ───────────────────────────────────────────────────────────────
+// ── chat ───────────────────────────────────────────────────────────────
 
 export async function listMessagesRoute(
   env: Env,
@@ -557,9 +612,9 @@ function boundedHistory(
 }
 
 /**
- * POST /notebooks/:id/messages — one tutor turn, streamed as SSE.
+ * POST /notebooks/:id/messages — one chat turn, streamed as SSE.
  *
- * The tutor reads the notebook as last SAVED on the server, not a copy the
+ * The AI chat reads the notebook as last SAVED on the server, not a copy the
  * client sends alongside the message: the client flushes its save before
  * sending, and the server then works from the stored row. That keeps the
  * context honest and means there is one notebook shape to validate.
@@ -590,15 +645,16 @@ export async function sendMessageRoute(
     ? await repo.getAssignment(env.DB, courseId, nb.assignment_id)
     : null;
   // Enforced here, not only by hiding the panel: a scratch notebook has no
-  // tutor, and neither does an assignment the instructor left AI off for.
+  // chat, and neither does an assignment the instructor left AI off for.
   if (!assignment || assignment.ai_enabled !== 1) {
-    return error("The AI tutor is not available for this notebook", 403, "ai_disabled");
+    return error("The AI chat is not available for this notebook", 403, "ai_disabled");
   }
   if (!llmConfigured(env)) {
     return error("No AI provider is configured for this deployment", 503, "llm_unconfigured");
   }
 
-  const instructions = buildTutorInstructions({
+  const instructions = buildChatInstructions({
+    voiceFragment: await voiceFragment(env, assignment),
     assignmentTitle: assignment.title,
     assignmentInstructions: assignment.instructions,
     instructorPrompt: assignment.ai_prompt,
@@ -626,9 +682,9 @@ export async function sendMessageRoute(
 }
 
 /**
- * Stream one tutor turn as SSE (`delta` frames, then `done` or `error`).
+ * Stream one chat turn as SSE (`delta` frames, then `done` or `error`).
  * `onComplete` runs with the full reply before `done` is sent, and whatever it
- * returns is merged into the `done` payload — the live tutor stores the turn
+ * returns is merged into the `done` payload — the live chat stores the turn
  * there; the instructor's preview stores nothing.
  */
 function streamTurn(
@@ -648,7 +704,7 @@ function streamTurn(
         controller.enqueue(encoder.encode(sse("started", {})));
         for await (const chunk of provider.stream(messages, {
           system,
-          maxTokens: MAX_TUTOR_TOKENS,
+          maxTokens: MAX_CHAT_TOKENS,
           signal: abort.signal,
         })) {
           if (chunk.delta) {
@@ -755,7 +811,7 @@ export async function listMySubmissionsRoute(
 }
 
 /**
- * GET /submissions/:id — the frozen notebook plus the tutor conversation as
+ * GET /submissions/:id — the frozen notebook plus the AI chat conversation as
  * it stood at submission time. Readable by the submitting student and by the
  * course's instructors; anyone else gets the same 404 as a bad id.
  */
@@ -885,15 +941,15 @@ export async function appendEventsRoute(
   return json({ ok: true, ...result });
 }
 
-// ── tutor preview (starter editor) ──────────────────────────────────────
+// ── chat preview (starter editor) ──────────────────────────────────────
 
 /**
- * POST /assignments/:id/tutor-preview — one tutor turn against the starter
- * notebook, so an instructor can try the tutor students will get. Nothing is
+ * POST /assignments/:id/chat-preview — one chat turn against the starter
+ * notebook, so an instructor can try the AI chat students will get. Nothing is
  * stored: the client carries the preview conversation itself. Instructors
- * only, and only when the assignment has the tutor on.
+ * only, and only when the assignment has the AI chat on.
  */
-export async function tutorPreviewRoute(
+export async function chatPreviewRoute(
   req: Request,
   env: Env,
   identity: Identity,
@@ -914,7 +970,7 @@ export async function tutorPreviewRoute(
   const assignment = await repo.getAssignment(env.DB, courseId, assignmentId);
   if (!assignment) return error("Assignment not found", 404);
   if (assignment.ai_enabled !== 1) {
-    return error("The tutor is off for this assignment", 403, "ai_disabled");
+    return error("The AI chat is off for this assignment", 403, "ai_disabled");
   }
   if (!llmConfigured(env)) {
     return error("No AI provider is configured for this deployment", 503, "llm_unconfigured");
@@ -929,7 +985,8 @@ export async function tutorPreviewRoute(
         )
         .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_USER_MESSAGE) }))
     : [];
-  const instructions = buildTutorInstructions({
+  const instructions = buildChatInstructions({
+    voiceFragment: await voiceFragment(env, assignment),
     assignmentTitle: assignment.title,
     assignmentInstructions: assignment.instructions,
     instructorPrompt: assignment.ai_prompt,

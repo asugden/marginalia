@@ -71,7 +71,7 @@ export interface PasteRecord<O extends string = Origin> {
   /** 0..1 — how much survives reworded rather than literal. */
   nearMatch: number;
   /** Where the import came from, when the surface distinguishes sources
-   *  (e.g. a paste of the tutor's text vs. from outside). */
+   *  (e.g. a paste of the AI chat's text vs. from outside). */
   origin?: O;
 }
 
@@ -159,7 +159,7 @@ export interface RenderOptions<O extends string = Origin> {
    * AI-sourced text kept distinct maps llm_insert to "llm".
    */
   corpusOrigin?: (ev: LogEvent<O>) => O;
-  /** Further retype sources that are not events — e.g. an AI tutor's replies,
+  /** Further retype sources that are not events — e.g. an AI chat's replies,
    *  which a student can read and type out without ever pasting. */
   extraCorpus?: ReadonlyArray<CorpusEntry<O>>;
   /** Text present before the first event (starter material), with its

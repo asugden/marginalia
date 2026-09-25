@@ -7,12 +7,12 @@
 //
 //   - Starter text replays first as `provided`: instructor-supplied, never
 //     counted as the student's typing.
-//   - An import from the tutor panel stays `llm`, and so does typed text that
+//   - An import from the AI chat panel stays `llm`, and so does typed text that
 //     reproduces it. A clipboard import from anywhere else is `pasted`.
-//   - Tutor replies are also a retype source even if never pasted, but only
+//   - AI replies are also a retype source even if never pasted, but only
 //     their novel lines (see novelReplyText), and only against text typed
 //     after the reply arrived. Code the student wrote first can never be
-//     attributed to a tutor that later quoted it.
+//     attributed to an AI chat that later quoted it.
 
 import {
   buildRender,
@@ -79,7 +79,7 @@ export function buildSubmissionRender(
     byCell.set(e.cell_id, list);
   }
 
-  const tutorCorpus: CorpusEntry[] = messages
+  const chatCorpus: CorpusEntry[] = messages
     .filter((m) => m.role === "assistant" && m.novel_text)
     .map((m) => ({ text: m.novel_text!, origin: "llm" as const, after: m.created_at }));
 
@@ -90,7 +90,7 @@ export function buildSubmissionRender(
     const r = buildRender(cell.source, byCell.get(cell.id) ?? [], {
       baseline: start ? { length: start.length, origin: "provided" } : null,
       corpusOrigin: (e) => (e.kind === "llm_insert" ? "llm" : "pasted"),
-      extraCorpus: tutorCorpus,
+      extraCorpus: chatCorpus,
       importKinds: ["paste", "llm_insert"],
       labelImports: true,
     });

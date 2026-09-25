@@ -2,7 +2,7 @@
 //
 // An assignment is a title, instructions (Markdown), an optional deadline, a
 // starter notebook (edited on its own full-screen page), and one switch that
-// matters more than the rest: whether students get the AI tutor beside it.
+// matters more than the rest: whether students get the AI chat beside it.
 // That switch defaults off. Each row links to its roster, which lists every
 // enrolled student whether or not they have submitted.
 
@@ -16,17 +16,20 @@ import {
   RadioCard,
   RadioCardGroup,
   Section,
+  Select,
   Switch,
   Textarea,
   useConfirm,
 } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
+import { listVoices, type VoiceListing } from "../../../api.js";
 import {
   createAssignment,
   deleteAssignment,
   listAssignments,
   updateAssignment,
   type AssignmentMode,
+  type CodeVoiceRef,
   type CodeAssignmentDTO,
 } from "../api.js";
 import { formatDue } from "./CodeHomePage.js";
@@ -36,6 +39,20 @@ function toLocalInput(ms: number | null): string {
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** The library voice an assignment uses when it names none. */
+const DEFAULT_VOICE = "socratic";
+
+/** Voices as <select> values: `library:<id>` or `custom:<voiceId>`. */
+function voiceKey(ref: CodeVoiceRef | null): string {
+  if (!ref) return `library:${DEFAULT_VOICE}`;
+  return ref.kind === "library" ? `library:${ref.id}` : `custom:${ref.voiceId}`;
+}
+function voiceRef(key: string): CodeVoiceRef {
+  const [kind, ...rest] = key.split(":");
+  const id = rest.join(":");
+  return kind === "custom" ? { kind: "custom-ref", voiceId: id } : { kind: "library", id };
 }
 
 function fromLocalInput(v: string): number | null {
@@ -100,7 +117,7 @@ export function InstructorCodePage() {
       <PageHeader
         eyebrow="Instructor"
         title="Code"
-        scope="Python notebooks that run in each student's browser. Students bring their own data files, which stay on their machine. Turn the AI tutor on per assignment."
+        scope="Python notebooks that run in each student's browser. Students bring their own data files, which stay on their machine. Turn LLM chat on per assignment."
       />
 
       {!codeEnabled && (
@@ -154,7 +171,7 @@ export function InstructorCodePage() {
                       {[
                         a.mode === "practice" ? "Practice" : "Submitted",
                         a.dueAt ? `Due ${formatDue(a.dueAt)}` : "No deadline",
-                        a.aiEnabled ? "Tutor on" : "Tutor off",
+                        a.aiEnabled ? "Chat on" : "Chat off",
                         a.archivedAt ? "Archived" : null,
                       ]
                         .filter(Boolean)
@@ -206,6 +223,17 @@ function AssignmentEditor({
   const [aiEnabled, setAiEnabled] = useState(assignment?.aiEnabled ?? false);
   const [aiPrompt, setAiPrompt] = useState(assignment?.aiPrompt ?? "");
   const [mode, setMode] = useState<AssignmentMode>(assignment?.mode ?? "submit");
+  const [voice, setVoice] = useState<string>(voiceKey(assignment?.voice ?? null));
+  const [voices, setVoices] = useState<VoiceListing | null>(null);
+  useEffect(() => {
+    let live = true;
+    listVoices()
+      .then((v) => live && setVoices(v))
+      .catch(() => live && setVoices({ library: [], owned: [], shared: [] }));
+    return () => {
+      live = false;
+    };
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -222,6 +250,7 @@ function AssignmentEditor({
       dueAt: fromLocalInput(due),
       aiEnabled,
       aiPrompt: aiPrompt.trim() || null,
+      voice: voiceRef(voice),
       mode,
     };
     try {
@@ -251,7 +280,7 @@ function AssignmentEditor({
             name="code-mode"
             value="submit"
             title="Submitted"
-            description="Students hand it in. You see where each character came from: typed, pasted, from the tutor, or provided in the starter."
+            description="Students hand it in. You see where each character came from: typed, pasted, from the LLM chat, or provided in the starter."
             selected={mode === "submit"}
             checked={mode === "submit"}
             onChange={() => setMode("submit")}
@@ -271,14 +300,56 @@ function AssignmentEditor({
         <Input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
       </Field>
       <Switch
-        label="AI tutor beside the notebook"
+        label="LLM chat beside the notebook"
         checked={aiEnabled}
         onChange={(e) => setAiEnabled(e.target.checked)}
       />
       {aiEnabled && (
         <Field
-          label="Guidance for the tutor"
-          hint="Optional. Added to the built-in coding tutor, which already declines to write solutions."
+          label="Voice"
+          hint={
+            <>
+              How the chat talks: the same voices your agents use.{" "}
+              <Link to={`/course/${courseId}/instructor/voices`}>Manage voices</Link>
+            </>
+          }
+        >
+          <Select value={voice} onChange={(e) => setVoice(e.target.value)} disabled={voices === null}>
+            <optgroup label="Library">
+              {(voices?.library.length ? voices.library : [{ id: DEFAULT_VOICE, name: "Socratic", description: "" }]).map(
+                (v) => (
+                  <option key={v.id} value={`library:${v.id}`}>
+                    {v.name}
+                    {v.id === DEFAULT_VOICE ? " (default)" : ""}
+                  </option>
+                ),
+              )}
+            </optgroup>
+            {!!voices?.owned.length && (
+              <optgroup label="Your voices">
+                {voices.owned.map((v) => (
+                  <option key={v.id} value={`custom:${v.id}`}>
+                    {v.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {!!voices?.shared.length && (
+              <optgroup label="Shared with you">
+                {voices.shared.map((v) => (
+                  <option key={v.id} value={`custom:${v.id}`}>
+                    {v.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </Select>
+        </Field>
+      )}
+      {aiEnabled && (
+        <Field
+          label="Guidance for the chat"
+          hint="Optional, for this assignment. Added beneath the voice. Whatever the voice, the chat already declines to write solutions."
         >
           <Textarea
             value={aiPrompt}

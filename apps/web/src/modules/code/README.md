@@ -52,7 +52,7 @@ advances; Ctrl/Cmd+Enter runs in place.
 
 A CodeMirror extension per cell, on only for a submit-mode assignment. It
 uses the shared rules from `@marginalia/provenance` (one `MoveBuffer` for
-the whole notebook, the tutor-text reversion index, `spliceRuns`) and emits
+the whole notebook, the AI chat-text reversion index, `spliceRuns`) and emits
 events that `NotebookPage` batches to `/events` every 3 s. Each cell keeps its
 live runs in `cell.origins` so a reload restores them. Nothing here is
 authoritative; the server re-derives the render at submission. Students never
@@ -60,9 +60,9 @@ see marks.
 
 ## Page modes (`NotebookPage`)
 
-- **student** — the caller's notebook. Tutor if the assignment has it;
+- **student** — the caller's notebook. Chat if the assignment has it;
   Submit unless it's practice.
-- **starter** — the instructor's starter editor. The tutor, when on, is a
+- **starter** — the instructor's starter editor. The AI chat, when on, is a
   preview that stores nothing.
 - **sandbox** — an instructor's scratch copy of a submission. Saves nothing
   (no notebook writes, no events, no file storage), marked in salmon.

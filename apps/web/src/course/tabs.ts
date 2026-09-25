@@ -130,7 +130,7 @@ export const TABS: TabSpec[] = [
     band: "review",
     label: "Code",
     description:
-      "Python notebooks that run in each student's browser. Set coding assignments, choose whether the AI tutor is available, and read what students submit.",
+      "Python notebooks that run in each student's browser. Set coding assignments, choose whether LLM chat is available, and read what students submit.",
     visible: (e) => !!e?.codeEnabled,
   },
   {

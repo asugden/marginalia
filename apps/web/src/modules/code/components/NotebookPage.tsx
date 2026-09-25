@@ -5,7 +5,7 @@
 //   │ student module nav                                               │
 //   │ Code · {title} · {saved} · {python status} · Run all · … · Submit │
 //   ├───────────────────────────────────────┬─┬────────────────────────┤
-//   │ assignment instructions (collapsible) │ │  Tutor | Files          │
+//   │ assignment instructions (collapsible) │ │  Chat | Files          │
 //   │ cells                                 │ │                        │
 //   └───────────────────────────────────────┴─┴────────────────────────┘
 //
@@ -14,7 +14,7 @@
 //             assignment in submit mode, edits are recorded (see
 //             originTracking.ts) and the notebook can be submitted.
 //   starter — an instructor editing an assignment's starter notebook; saves
-//             to the assignment. The tutor, if on, is a preview that stores
+//             to the assignment. The AI chat, if on, is a preview that stores
 //             nothing.
 //   sandbox — an instructor's scratch copy of a submission, for debugging.
 //             Runs like any notebook and saves nothing, anywhere. Marked in
@@ -58,13 +58,13 @@ import {
   type OutboundCodeEvent,
 } from "../api.js";
 import { MoveBuffer, type Origin } from "@marginalia/provenance";
-import { noteTutorReply, originTracking, type TrackedCellEvent, type TrackingContext } from "./originTracking.js";
+import { noteChatReply, originTracking, type TrackedCellEvent, type TrackingContext } from "./originTracking.js";
 import { listStoredFiles } from "../kernel/files.js";
 import { Kernel, type KernelStatus } from "../kernel/kernel.js";
 import { Cells, newCellId, type RunState } from "./Cells.js";
 import { FilesPanel } from "./FilesPanel.js";
 import { appendOutput } from "./Outputs.js";
-import { TutorPanel } from "./TutorPanel.js";
+import { NotebookChatPanel } from "./ChatPanel.js";
 
 const SAVE_DEBOUNCE_MS = 1_200;
 const EVENTS_FLUSH_MS = 3_000;
@@ -77,7 +77,7 @@ const SPLIT_MAX = 0.8;
 const SPLIT_DEFAULT = 0.66;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
-type SidePane = "tutor" | "files" | null;
+type SidePane = "chat" | "files" | null;
 
 type PageMode = "student" | "starter" | "sandbox";
 
@@ -187,7 +187,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
 
   // ── origin tracking ───────────────────────────────────────────────────
   // One context per page: a shared move buffer (so code moved between cells
-  // keeps its origins) and the tutor text seen so far.
+  // keeps its origins) and the AI chat text seen so far.
   const pendingEvents = useRef<OutboundCodeEvent[]>([]);
   const eventSeq = useRef(0);
   const eventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,8 +197,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
   if (!tracking.current) {
     tracking.current = {
       moves: new MoveBuffer<Origin>(),
-      tutorContributions: [],
-      tutorReplies: [],
+      chatContributions: [],
+      chatReplies: [],
       emit: (events: TrackedCellEvent[]) => {
         for (const e of events) pendingEvents.current.push({ ...e, clientSeq: ++eventSeq.current });
         if (pendingEvents.current.length >= EVENTS_FLUSH_AT) void flushEventsRef.current();
@@ -226,7 +226,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
             courseId: courseParam,
             title: a.title,
             content: a.starter ?? { cells: [] },
-            // The instructor can try the tutor here when students will have it.
+            // The instructor can try the AI chat here when students will have it.
             aiEnabled: a.aiEnabled,
             assignment: { title: a.title, instructions: a.instructions, dueAt: a.dueAt, mode: a.mode },
             isAssignment: false,
@@ -276,7 +276,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
         setLoaded(l);
         setCells(initial);
         setTitle(l.title);
-        setSide(l.aiEnabled ? "tutor" : null);
+        setSide(l.aiEnabled ? "chat" : null);
       } catch (e) {
         if (isAuthError(e)) return redirectToLogin();
         if (!live) return;
@@ -577,8 +577,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
     return (cell: Cell) => [originTracking(cell.id, cell.origins, cell.source.length, ctx)];
   }, [loaded, mode]);
 
-  const onTutorReply = useCallback((reply: string) => {
-    noteTutorReply(tracking.current!, reply, cellsRef.current.map((c) => c.source).join("\n"));
+  const onChatReply = useCallback((reply: string) => {
+    noteChatReply(tracking.current!, reply, cellsRef.current.map((c) => c.source).join("\n"));
   }, []);
 
   const onEditText = useCallback((id: string, editing: boolean) => {
@@ -602,8 +602,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
       title: "Submit this notebook?",
       body:
         "Your instructor gets a copy of the notebook as it is now, with its outputs" +
-        (loaded.aiEnabled ? " and your tutor conversation" : "") +
-        ", and sees where its code and text came from: typed, pasted, from the tutor, or provided in the starter. You can keep working and submit again. Uploaded files are not included.",
+        (loaded.aiEnabled ? " and your chat conversation" : "") +
+        ", and sees where its code and text came from: typed, pasted, from the LLM chat, or provided in the starter. You can keep working and submit again. Uploaded files are not included.",
       confirmLabel: "Submit",
     });
     if (!ok) return;
@@ -767,12 +767,12 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
         {loaded.aiEnabled && (
           <button
             type="button"
-            className={"prov-toggle" + (side === "tutor" ? " is-on" : "")}
-            onClick={() => setSide((s) => (s === "tutor" ? null : "tutor"))}
-            aria-pressed={side === "tutor"}
+            className={"prov-toggle" + (side === "chat" ? " is-on" : "")}
+            onClick={() => setSide((s) => (s === "chat" ? null : "chat"))}
+            aria-pressed={side === "chat"}
           >
             <span className="prov-toggle__sw" />
-            Tutor
+            Chat
           </button>
         )}
       </header>
@@ -827,7 +827,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
               {mode === "student" && loaded.tracking && (
                 <p className="code-record-note">
                   When you submit, your instructor sees where this notebook's code and
-                  text came from: typed, pasted, from the tutor, or provided in the starter.
+                  text came from: typed, pasted, from the LLM chat, or provided in the starter.
                 </p>
               )}
               {mode === "starter" && (
@@ -872,8 +872,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
               <span className="prov-divider-grip" aria-hidden />
             </div>
             <section className="prov-chat-pane code-side">
-              {side === "tutor" && loaded.aiEnabled && (
-                <TutorPanel
+              {side === "chat" && loaded.aiEnabled && (
+                <NotebookChatPanel
                   courseId={loaded.courseId}
                   target={
                     mode === "starter"
@@ -884,7 +884,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
                   focusLabel={focusLabel}
                   onClearFocus={() => setFocusCellId(null)}
                   beforeSend={flush}
-                  onReply={onTutorReply}
+                  onReply={onChatReply}
                 />
               )}
               {side === "files" && (
