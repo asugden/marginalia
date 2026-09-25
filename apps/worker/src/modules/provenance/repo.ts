@@ -68,8 +68,8 @@ export async function createDocument(
     .prepare(
       `INSERT INTO provenance_documents
          (id, course_id, owner_user_id, title, body_json,
-          word_count, char_count, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)`,
+          word_count, char_count, event_coords, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, 0, 'text', ?, ?)`,
     )
     .bind(
       id,

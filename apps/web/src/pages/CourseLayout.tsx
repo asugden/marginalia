@@ -27,9 +27,22 @@ import {
 } from "react-router-dom";
 import { getMe, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
-import { TABS, tabForPathname, tabHref } from "../course/tabs.js";
-import { CourseSwitcher, IconButton, RoleSwitch, Wordmark } from "../components/index.js";
-import { SignOutIcon } from "../icons.js";
+import {
+  adminMenuTabs,
+  navGroups,
+  tabForPathname,
+  tabHref,
+} from "../course/tabs.js";
+import {
+  CourseNav,
+  CourseSwitcher,
+  IconButton,
+  NavSheet,
+  RoleSwitch,
+  Wordmark,
+  type NavSheetSection,
+} from "../components/index.js";
+import { MenuIcon, SignOutIcon } from "../icons.js";
 import { signOut } from "../session.js";
 
 export function CourseLayout() {
@@ -39,6 +52,9 @@ export function CourseLayout() {
   const [value, setValue] = useState<CourseContextValue | null>(null);
   const [enrollments, setEnrollments] = useState<MeEnrollment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Mobile nav sheet (≤680). Declared with the other state so it sits above the
+  // error / loading early-returns — hooks must not be conditional.
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Reset the resolved course context synchronously when the URL's `courseId`
   // changes. Without this, switching courses re-renders this layout with the
@@ -74,6 +90,7 @@ export function CourseLayout() {
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
           agentsEnabled: e.agentsEnabled,
+          codeEnabled: e.codeEnabled ?? false,
           termSeason: e.termSeason,
           termYear: e.termYear,
           startDate: e.startDate,
@@ -96,6 +113,12 @@ export function CourseLayout() {
     return () => ctrl.abort();
   }, [load]);
 
+  // Any navigation closes the sheet — including a back/forward that didn't go
+  // through its own onClick.
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [location.pathname]);
+
   if (error) {
     return (
       <div className="ds-staff">
@@ -111,17 +134,59 @@ export function CourseLayout() {
 
   const currentEnrollment = enrollments.find((e) => e.courseId === courseId);
   const currentTab = tabForPathname(location.pathname, courseId);
-  const visibleTabs = TABS.filter((t) => t.visible(currentEnrollment));
+
+  // Mobile sheet contents (≤680, where the nav strip and course switcher are
+  // hidden). The bands are FLATTENED here: on a phone there's room to list
+  // every destination outright, and a menu-inside-a-menu would reintroduce the
+  // hiding this redesign exists to remove. Course admin and "All courses"
+  // follow, so nothing the header used to reach becomes unreachable.
+  const sheetSections: NavSheetSection[] = [
+    ...navGroups(currentEnrollment).map((g) => ({
+      key: g.key,
+      // A band that collapsed to one tab needs no heading above its single row.
+      title: g.items.length > 1 ? g.label : undefined,
+      rows: g.items.map((t) => ({
+        key: t.slug,
+        label: t.label,
+        to: tabHref(t, courseId),
+        active: currentTab?.slug === t.slug,
+      })),
+    })),
+    {
+      key: "course",
+      title: "This Course",
+      rows: [
+        ...adminMenuTabs(currentEnrollment).map((t) => ({
+          key: t.slug,
+          label: t.label,
+          to: tabHref(t, courseId),
+          active: currentTab?.slug === t.slug,
+        })),
+        { key: "all", label: "All Courses", detail: "Your courses", to: "/courses" },
+      ],
+    },
+  ];
 
   return (
     <CourseContext.Provider value={value}>
       {/* DS app shell: locked viewport, one fixed instructor bar, scrolling
           body. The instructor bar carries the lockup, the course switcher, the
-          nav pills (inline, not a separate strip), and the role switch — the
+          banded nav (inline, not a separate strip), and the role switch — the
           DS .app-topbar--instructor layout. */}
       <div className="app">
         <header className="app-topbar app-topbar--wide app-topbar--instructor">
           <div className="app-topbar__inner">
+            {/* ≤680 only (CSS-gated): the nav strip and course switcher are
+                hidden there, and everything they hold moves into the sheet. */}
+            <button
+              type="button"
+              className="app-burger"
+              aria-label="Menu"
+              aria-expanded={sheetOpen}
+              onClick={() => setSheetOpen(true)}
+            >
+              <MenuIcon />
+            </button>
             <Link
               to={`/course/${courseId}/instructor`}
               aria-label="Course home"
@@ -136,26 +201,17 @@ export function CourseLayout() {
               courseName={value.courseName}
               enrollments={enrollments}
               variant="instructor"
+              flags={currentEnrollment}
             />
 
-            {/* Nav pills, inline in the bar (DS .app-nav). */}
-            <nav className="app-nav" aria-label="Course sections">
-              {visibleTabs.map((t) => {
-                const to = tabHref(t, courseId);
-                const active = currentTab?.slug === t.slug;
-                return (
-                  <Link
-                    key={t.slug}
-                    to={to}
-                    className={
-                      "app-nav__item" + (active ? " app-nav__item--active" : "")
-                    }
-                  >
-                    {t.label}
-                  </Link>
-                );
-              })}
-            </nav>
+            {/* The banded nav — Dashboard · Assign · Review ▾ · Build ▾ —
+                inline in the bar. Four entries rather than one pill per tab;
+                see CourseNav for why, and navGroups() for the grouping. */}
+            <CourseNav
+              courseId={courseId}
+              flags={currentEnrollment}
+              activeSlug={currentTab?.slug ?? null}
+            />
 
             <div className="app-topbar__spacer" />
             <div className="app-topbar__actions">
@@ -173,6 +229,12 @@ export function CourseLayout() {
             </div>
           </div>
         </header>
+
+        <NavSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          sections={sheetSections}
+        />
 
         <div className="app__body">
           <Outlet />

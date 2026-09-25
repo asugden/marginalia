@@ -352,6 +352,23 @@ BYO key path: messages POST accepts an `X-Provenance-LLM-Key` header.
 If present, the worker uses it for that request only; it is never
 written to D1, R2, KV, or logs.
 
+## Event coordinates
+
+Replay tracks one origin per character of **plain text**, so edits must be
+logged in plain-text offsets. Documents created since migration 0025
+(`event_coords = 'text'`) are: the tracker re-derives each step's change from
+the shared projection (`@marginalia/provenance` `projection.ts`, walked live in
+`textCoords.ts`), and the render compares the log against that same
+projection. A paragraph break is one `"\n"`, text starts at 0, and a new
+document's log starts empty (the editor creating its first paragraph is the
+first event). Replay therefore lines up by construction: drift is 0.
+
+Older documents (`'pm'`) logged editor positions, where each block boundary
+is two positions. Their logs can't be converted after the fact, so they keep
+the old coordinates and the old projection, and their renders are unchanged.
+Expect small, harmless drift on them (under the viewer's 200-character
+threshold unless a document has hundreds of paragraphs).
+
 ## Invariants
 
 - `edit_events` is append-only. No updates, no deletes (except
@@ -389,8 +406,12 @@ written to D1, R2, KV, or logs.
 - `handlers.ts` — request handlers, including inbound event validation.
 - `repo.ts` — D1 queries scoped to this module's tables, plus the
   `timing_blob` sidecar codec (`encodeSidecar` / `decodeSidecar`).
-- `render.ts` — replay + all mint-time derivation: origins, retype
-  detection, move verification, the paste inventory, and the audit block.
+- `render.ts` — a thin adapter. The mint-time derivation itself (replay,
+  retype detection, move verification, the paste inventory, the audit block)
+  lives in `packages/provenance`, shared with the code module, as do the
+  editor's move buffer and reversion index. Change detection there; this file
+  only maps event rows and holds the writing tool's one policy choice (every
+  retyped import is `pasted`).
 - `render.test.ts` — behavioural checks, `npm test -w apps/worker`.
   Most assert the *absence* of a signal on innocent input; a new
   failure there means a false positive is reaching an instructor.

@@ -248,8 +248,9 @@ export type TurnEvent =
     }
   | { type: "error"; message: string };
 
-/** Options for jsonFetch beyond the standard RequestInit. */
-interface JsonFetchOpts {
+/** Options for jsonFetch beyond the standard RequestInit. Exported because it
+ *  appears in getMe's signature. */
+export interface JsonFetchOpts {
   /**
    * Suppress the automatic redirect-to-sign-in on 401 and let the caller
    * handle it. Set this on any endpoint whose page renders its OWN sign-in
@@ -399,6 +400,10 @@ export interface MeEnrollment {
    *  A real on/off toggle, default ON. When off, agents disappear from both
    *  the instructor nav/dashboard and the student view. */
   agentsEnabled: boolean;
+  /** migration 0024 — whether the code (Python notebooks) module is on for
+   *  this course. Opt-in, default OFF: a course that never turns it on never
+   *  shows it anywhere. */
+  codeEnabled: boolean;
   /** v1.2 (migration 0017) — the semester this course is taught in, or null
    *  when unscheduled. Academic year is derived from (termSeason, termYear)
    *  via course/term.ts. */
@@ -426,8 +431,16 @@ export interface MeResponse {
    *  unauthenticated or not yet claimed. */
   enrollments: MeEnrollment[];
 }
-export function getMe(signal?: AbortSignal) {
-  return jsonFetch<MeResponse>("/api/me", { signal });
+/**
+ * The caller's identity + enrollments.
+ *
+ * `opts` is how a page opts out of the automatic 401 sign-in bounce (see
+ * JsonFetchOpts). The 404 page needs that: it asks who you are only to label
+ * its "back" button, and a signed-out visitor must be allowed to READ the 404
+ * rather than be redirected to the IdP by the page explaining their mistake.
+ */
+export function getMe(signal?: AbortSignal, opts?: JsonFetchOpts) {
+  return jsonFetch<MeResponse>("/api/me", { signal }, opts);
 }
 
 /**
@@ -956,7 +969,7 @@ export function revealCourseTab(
  *  Instructor-only on the server. */
 export function setCourseFeature(
   courseId: string,
-  feature: "attendance" | "agents" | "provenance",
+  feature: "attendance" | "agents" | "provenance" | "code",
   enabled: boolean,
 ) {
   return jsonFetch<{ ok: true }>(

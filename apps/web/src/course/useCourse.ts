@@ -40,6 +40,9 @@ export interface CourseContextValue {
    *  false, the Agents tab drops from the instructor nav/dashboard and agents
    *  drop from the student view (nav + home panel). Default ON. */
   agentsEnabled: boolean;
+  /** migration 0024 — whether the code (Python notebooks) module is on for
+   *  this course. Default OFF. Drives the Code nav item and the Assign menu. */
+  codeEnabled: boolean;
   /** Instance-wide admin flag (from /api/me). Orthogonal to course role —
    *  feeds the topbar RoleSwitch so it can offer the Admin segment. */
   isAdmin: boolean;

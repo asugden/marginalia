@@ -37,6 +37,8 @@ export interface TabVisibilityFlags {
   agentsEnabled?: boolean;
   /** Writing (provenance) module. Drives the Submissions tab. */
   provenanceEnabled?: boolean;
+  /** Code (Python notebooks) module. Default off. Drives the Code tab. */
+  codeEnabled?: boolean;
 }
 
 /**
@@ -122,6 +124,16 @@ export const TABS: TabSpec[] = [
     visible: (e) => e?.provenanceEnabled ?? true,
   },
   {
+    // Coding assignments: authored here, reviewed per assignment from the
+    // same page. Opt-in — absent flag reads as OFF, unlike Writing/Agents.
+    slug: "code",
+    band: "review",
+    label: "Code",
+    description:
+      "Python notebooks that run in each student's browser. Set coding assignments, choose whether LLM chat is available, and read what students submit.",
+    visible: (e) => !!e?.codeEnabled,
+  },
+  {
     slug: "attendance",
     band: "review",
     label: "Attendance",
@@ -197,6 +209,80 @@ export function tabsInBand(
   flags: TabVisibilityFlags | undefined,
 ): TabSpec[] {
   return TABS.filter((t) => t.band === band && t.visible(flags));
+}
+
+/* ── The header nav ────────────────────────────────────────────────────────
+ *
+ * The strip renders BANDS, not the flat tab list. Ten nowrap pills measured
+ * ~850px against ~1050px of inner width once the lockup, course switcher, role
+ * switch and sign-out took their share — the single row never actually fit at
+ * any window size, which is why the role switch was the thing that fell off.
+ *
+ * So the header shows what the model already knew. `tabs.ts` has declared three
+ * bands since the flat strip was retired ("nine flat tabs said nothing about
+ * how the pieces relate"); the header just kept flattening them back. Now:
+ *
+ *   Dashboard · Assign · Review ▾ · Build ▾
+ *
+ * Dashboard and Assign are single destinations and stay direct links. Review
+ * and Build are menus over their member tabs. Settings and People are NOT here
+ * — they're course admin, and they live in the course switcher's menu, which is
+ * already the course-scoped menu. Voices stays under Build but is flagged
+ * `away: true` because it leaves the course entirely (/author/voices).
+ *
+ * A band holding exactly one visible tab renders as a direct link to that tab
+ * rather than a one-item menu — a menu you open to find a single choice is
+ * worse than the link it hides.
+ */
+
+/** One entry in the header strip: either a direct link (`items` length 1, or an
+ *  explicitly single band like Dashboard/Assign) or a dropdown over `items`. */
+export interface NavGroup {
+  /** Stable key — the band, or the slug for a single-tab entry. */
+  key: string;
+  label: string;
+  /** The tabs this entry covers. Length 1 ⇒ render as a direct link. */
+  items: TabSpec[];
+}
+
+/** Bands rendered as their own top-level strip entry, in display order. Assign
+ *  is a real band but has exactly one visible tab, so it falls out as a direct
+ *  link via the length-1 rule — no special-casing needed. */
+const NAV_BANDS: readonly Band[] = ["admin", "assign", "review", "build"];
+
+/** Tabs that are course admin rather than course work. They're reachable from
+ *  the course switcher menu instead of the strip, so the strip stays at four
+ *  entries no matter how many admin surfaces exist. */
+export const ADMIN_MENU_SLUGS: readonly string[] = ["roster", "settings"];
+
+/** Build the header strip: Dashboard, Assign, Review ▾, Build ▾.
+ *  Bands with no visible tabs are dropped entirely. */
+export function navGroups(flags: TabVisibilityFlags | undefined): NavGroup[] {
+  const groups: NavGroup[] = [];
+  for (const band of NAV_BANDS) {
+    // Dashboard is the only `admin` tab in the strip; People and Settings move
+    // to the course menu, so filter them out before the band is assembled.
+    const items = tabsInBand(band, flags).filter(
+      (t) => !ADMIN_MENU_SLUGS.includes(t.slug),
+    );
+    if (items.length === 0) continue;
+    const meta = BANDS.find((b) => b.band === band);
+    groups.push({
+      key: items.length === 1 ? items[0]!.slug : band,
+      // A single-tab band takes the TAB's name, not the band's — "Dashboard",
+      // not "Course"; "Assign" happens to match either way.
+      label: items.length === 1 ? items[0]!.label : (meta?.label ?? band),
+      items,
+    });
+  }
+  return groups;
+}
+
+/** The course-admin tabs, for the course switcher's menu. */
+export function adminMenuTabs(flags: TabVisibilityFlags | undefined): TabSpec[] {
+  return TABS.filter(
+    (t) => ADMIN_MENU_SLUGS.includes(t.slug) && t.visible(flags),
+  );
 }
 
 /** Build the URL a tab links to. Most tabs live under the staff base

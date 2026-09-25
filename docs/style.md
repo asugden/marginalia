@@ -401,7 +401,9 @@ zero (see `palette.ts`).
 greyscale although they are computed: a feature map is an image of the
 drawing as a kernel sees it, and in grey the digit's shadow carries
 through every layer the way it does in the input. Its dense neurons and
-output still take the computed scale. Any further exception is written
+output still take the computed scale. The training example's reconstruction
+stays greyscale for the same reason: it is computed, but it is a picture of
+the digit read side by side with the input it tries to copy. Any further exception is written
 here, with its reason, or it is a bug.
 
 Examples are migrating onto this one at a time; the attention example

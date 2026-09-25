@@ -22,6 +22,8 @@ export interface EditorChange {
 
 interface Props {
   initialContent: JSONContent;
+  /** The document's event-log coordinates (migration 0025). Read at mount. */
+  coords?: "pm" | "text";
   onChange: (change: EditorChange) => void;
   /** Called whenever the tracker observes one or more edits. */
   onEvents?: (events: TrackedEvent[]) => void;
@@ -61,6 +63,7 @@ export function ProvenanceEditor({
   hideMarks = false,
   chatOpen = false,
   onReference,
+  coords = "pm",
 }: Props) {
   // Keep the latest onEvents in a ref so the tracker plugin (configured once
   // at editor construction) always sees the current callback.
@@ -76,6 +79,7 @@ export function ProvenanceEditor({
       OriginMark,
       ProvenanceTracker.configure({
         onEvents: (events) => onEventsRef.current?.(events),
+        coords,
       }),
     ],
     content: initialContent,

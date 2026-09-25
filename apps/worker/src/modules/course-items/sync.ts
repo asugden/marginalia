@@ -162,3 +162,20 @@ export async function syncExampleItems(
     if (!wanted.has(slug)) await repo.deleteItem(db, courseId, item.id);
   }
 }
+
+/**
+ * Follow a payload's due date. Used for code assignments, whose editor is
+ * where an instructor sets the one deadline — so, as with examples, the
+ * payload is the source of truth and the wrapper follows it on every save.
+ */
+export async function setDueForPayload(
+  db: D1Database,
+  courseId: string,
+  kind: ItemKind,
+  payloadRef: string,
+  dueAt: number | null,
+): Promise<void> {
+  const existing = await repo.findItemByPayload(db, courseId, kind, payloadRef);
+  if (!existing || existing.due_at === dueAt) return;
+  await repo.updateItem(db, courseId, existing.id, { dueAt });
+}

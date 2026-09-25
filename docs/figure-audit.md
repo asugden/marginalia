@@ -219,7 +219,8 @@ and the class was deleted). "—" is not started.
 | softmax | done (bars were accent and a literal blue) | HTML figure; faint greys replaced | no SVG | no neurons | done | controls boxes now sunken; temperature not yet the shared pinned bar | none |
 | counting parameters | done (learned only where weights are real; counts in greyscale's no-sign case, as the LLM heads; class hues for naive Bayes; no accent on data) | done | done (all SVGs 1:1) | no neurons | done | done (sunken controls, white readouts) | none |
 | fitting complex shapes | done (new, built to the rules: data ink, fits vermillion, truth a soft grey band, miss curves neutral) | done | done (both SVGs 1:1) | no neurons | done | done (shared pinned bar, sunken controls, white readouts) | none |
-| fastText, training, decision tree, random forest, XGBoost, overview | — | — | — | — | done | — | — |
+| training | done (error on the computed scale, weights sage/plum, reconstruction greyscale: recorded exception) | done | done (curve 1:1) | no neurons | done ("neuron", not "unit") | done (shared pinned bar, sunken boxes) | none |
+| fastText, decision tree, random forest, XGBoost, overview | — | — | — | — | done | — | — |
 
 The **Words** column was swept across every example at once when §13 was
 written; re-check it in each example's pass.

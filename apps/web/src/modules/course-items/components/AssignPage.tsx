@@ -38,6 +38,7 @@ import { useCourse } from "../../../course/useCourse.js";
 import {
   completionLabel,
   deleteCourseItem,
+  instructorHref,
   isSupplement,
   kindLabel,
   listCourseItems,
@@ -115,20 +116,6 @@ function compareItems(a: CourseItemDTO, b: CourseItemDTO): number {
 
 /** Where a row's title links — each kind's detail surface stays with the
  *  module that owns it. This list is a schedule, not a replacement editor. */
-function detailHref(courseId: string, item: CourseItemDTO): string | null {
-  const base = `/course/${courseId}/instructor`;
-  switch (item.kind) {
-    case "writing":
-      return `${base}/assignments/${item.payloadRef}`;
-    case "agent":
-      return `${base}/agents/${item.payloadRef}`;
-    case "example":
-      return `${base}/assign/examples`;
-    default:
-      return null;
-  }
-}
-
 export function AssignPage() {
   const { courseId } = useCourse();
   const [items, setItems] = useState<CourseItemDTO[] | null>(null);
@@ -250,6 +237,9 @@ export function AssignPage() {
  */
 function NewItemControl({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
+  // Code is an opt-in module: it appears in this menu only once the course
+  // has turned it on, so a course that never uses it never sees it.
+  const { codeEnabled } = useCourse();
   return (
     <Dropdown
       value=""
@@ -260,11 +250,13 @@ function NewItemControl({ courseId }: { courseId: string }) {
         { value: "writing", label: "Writing assignment" },
         { value: "agent", label: "Agent" },
         { value: "example", label: "Example" },
+        ...(codeEnabled ? [{ value: "code", label: "Coding assignment" }] : []),
       ]}
       onChange={(v) => {
         const base = `/course/${courseId}/instructor`;
         if (v === "writing") navigate(`${base}/assignments`);
         else if (v === "agent") navigate(`${base}/agents`);
+        else if (v === "code") navigate(`${base}/code`);
         else navigate(`${base}/assign/examples`);
       }}
     />
@@ -295,7 +287,7 @@ function ItemRow({
   onUnassign: () => void;
 }) {
   const archived = item.archivedAt !== null;
-  const href = detailHref(courseId, item);
+  const href = instructorHref(courseId, item);
 
   // The instructor's own completion state for their own account. Shown because
   // an instructor previewing an assignment is a normal thing to do, and the

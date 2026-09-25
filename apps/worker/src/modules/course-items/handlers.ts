@@ -121,11 +121,12 @@ async function resolvePayloads(
   const kinds = new Set(rows.map((r) => r.kind));
   const out = new Map<string, Record<string, unknown>>();
 
-  const [agents, writing, checkpoints, examples] = await Promise.all([
+  const [agents, writing, checkpoints, examples, code] = await Promise.all([
     kinds.has("agent") ? repo.listAgentPayloads(env.DB, courseId) : [],
     kinds.has("writing") ? repo.listWritingPayloads(env.DB, courseId) : [],
     kinds.has("writing") ? repo.listWritingCheckpoints(env.DB, courseId) : [],
     kinds.has("example") ? repo.listExamplePayloads(env.DB, courseId) : [],
+    kinds.has("code") ? repo.listCodePayloads(env.DB, courseId) : [],
   ]);
 
   for (const a of agents) {
@@ -170,6 +171,15 @@ async function resolvePayloads(
     out.set(`example:${e.slug}`, { slug: e.slug, note: e.note });
   }
 
+  for (const c of code) {
+    out.set(`code:${c.id}`, {
+      assignmentId: c.id,
+      title: c.title,
+      aiEnabled: c.ai_enabled === 1,
+      archivedAt: c.archived_at,
+    });
+  }
+
   return out;
 }
 
@@ -196,7 +206,7 @@ async function resolveCompletions(
   const kinds = new Set(rows.map((r) => r.kind));
   const out = new Map<string, ItemCompletionDTO>();
 
-  const [finishedAgents, submittedWriting, doneExamples] = await Promise.all([
+  const [finishedAgents, submittedWriting, doneExamples, submittedCode] = await Promise.all([
     kinds.has("agent")
       ? repo.listFinishedAgentIds(env.DB, courseId, userId)
       : new Set<string>(),
@@ -205,6 +215,9 @@ async function resolveCompletions(
       : new Set<string>(),
     kinds.has("example") || kinds.has("reading")
       ? repo.listCompletedExampleSlugs(env.DB, courseId, userId)
+      : new Set<string>(),
+    kinds.has("code")
+      ? repo.listSubmittedCodeAssignmentIds(env.DB, courseId, userId)
       : new Set<string>(),
   ]);
 
@@ -228,6 +241,12 @@ async function resolveCompletions(
         out.set(row.id, {
           kind: "example",
           markedDone: doneExamples.has(row.payload_ref),
+        });
+        break;
+      case "code":
+        out.set(row.id, {
+          kind: "code",
+          submitted: submittedCode.has(row.payload_ref),
         });
         break;
       case "reading":
@@ -334,7 +353,7 @@ export async function createItemRoute(
   if (instructorOrResp instanceof Response) return instructorOrResp;
 
   if (!isItemKind(body?.kind)) {
-    return errorResponse("kind must be writing, agent, example, or reading", 400);
+    return errorResponse("kind must be writing, agent, example, reading, or code", 400);
   }
   const kind: ItemKind = body.kind;
   if (kind === "reading") {

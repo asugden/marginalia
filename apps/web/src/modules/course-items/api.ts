@@ -5,7 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const fetchInit: RequestInit = API_BASE ? { credentials: "include" } : {};
 
-export type ItemKind = "writing" | "agent" | "example" | "reading";
+export type ItemKind = "writing" | "agent" | "example" | "reading" | "code";
 
 /**
  * Per-kind completion. A discriminated union with a DIFFERENT FIELD NAME per
@@ -22,7 +22,8 @@ export type ItemCompletionDTO =
   | { kind: "writing"; submitted: boolean }
   | { kind: "agent"; finished: boolean }
   | { kind: "example"; markedDone: boolean }
-  | { kind: "reading"; markedDone: boolean };
+  | { kind: "reading"; markedDone: boolean }
+  | { kind: "code"; submitted: boolean };
 
 /** Payload detail, shaped per kind by the worker. Narrow at the use site. */
 export interface AgentPayload {
@@ -195,6 +196,8 @@ export function kindLabel(kind: ItemKind): string {
       return "Example";
     case "reading":
       return "Reading";
+    case "code":
+      return "Code";
   }
 }
 
@@ -217,6 +220,32 @@ export function completionLabel(c: ItemCompletionDTO | undefined): string | null
     case "example":
     case "reading":
       return c.markedDone ? "marked done" : null;
+    case "code":
+      return c.submitted ? "submitted" : null;
+  }
+}
+
+/**
+ * Where an instructor goes to open this item's payload. Lives here rather than
+ * in one page so the Assign list and the dashboard can't drift apart on where
+ * a kind's editor is. Null when the kind has no instructor detail view.
+ */
+export function instructorHref(
+  courseId: string,
+  item: CourseItemDTO,
+): string | null {
+  const base = `/course/${courseId}/instructor`;
+  switch (item.kind) {
+    case "writing":
+      return `${base}/assignments/${item.payloadRef}`;
+    case "agent":
+      return `${base}/agents/${item.payloadRef}`;
+    case "example":
+      return `${base}/assign/examples`;
+    case "code":
+      return `${base}/code/${item.payloadRef}`;
+    default:
+      return null;
   }
 }
 

@@ -99,7 +99,22 @@ export function rng(seed: number): () => number {
  *  identical. Worth knowing that this scale is a real choice, not a detail:
  *  the page's "re-roll" button shows different seeds converging to similar
  *  results, which is the point about initialization that matters. */
-export function initModel(inSize: number, hidden: number, seed: number): Model {
+/** Each pixel's average brightness over the set, 0..1. */
+export function pixelMeans(set: DigitSet): Float32Array {
+  const mean = new Float32Array(set.size);
+  for (let i = 0; i < set.count; i++) {
+    for (let p = 0; p < set.size; p++) mean[p]! += set.images[i * set.size + p]! / set.count;
+  }
+  return mean;
+}
+
+/** Random weights. When `means` is given, each output pixel's bias starts at
+ *  that pixel's average brightness (in the sigmoid's terms), a common
+ *  initialization: otherwise every output starts at 0.5 grey, and the first
+ *  few steps are spent learning only that most pixels are blank, which is
+ *  three quarters of the error and none of the digit. The weights stay
+ *  random either way. */
+export function initModel(inSize: number, hidden: number, seed: number, means?: Float32Array): Model {
   const r = rng(seed);
   const gauss = () => {
     // Box-Muller from the seeded uniform, so initialization is normal and
@@ -120,7 +135,12 @@ export function initModel(inSize: number, hidden: number, seed: number): Model {
     W1,
     b1: new Float32Array(hidden),
     W2,
-    b2: new Float32Array(inSize),
+    b2: means
+      ? Float32Array.from(means, (q) => {
+          const c = Math.min(0.99, Math.max(0.01, q));
+          return Math.log(c / (1 - c));
+        })
+      : new Float32Array(inSize),
   };
 }
 
@@ -256,24 +276,13 @@ export function evaluate(
   return total / count;
 }
 
-/** What one hidden unit responds to, as an image.
- *
- *  The incoming weights of a unit, rescaled to 0..1 for display. This is the
- *  "what did it learn" picture: early on it is noise, and later it is strokes
- *  and blobs that recur across digits. */
+/** What one hidden neuron responds to, as an image: its incoming weights,
+ *  one per pixel, signed. The figure scales them against their own largest
+ *  magnitude and draws them sage (a pixel it looks for) and plum (a pixel it
+ *  looks against). Early on it is noise; later, strokes and blobs that recur
+ *  across digits. */
 export function featureImage(m: Model, unit: number): Float32Array {
-  const off = unit * m.inSize;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (let i = 0; i < m.inSize; i++) {
-    const w = m.W1[off + i]!;
-    if (w < lo) lo = w;
-    if (w > hi) hi = w;
-  }
-  const span = hi - lo || 1;
-  const out = new Float32Array(m.inSize);
-  for (let i = 0; i < m.inSize; i++) out[i] = (m.W1[off + i]! - lo) / span;
-  return out;
+  return m.W1.slice(unit * m.inSize, (unit + 1) * m.inSize);
 }
 
 /** Total learnable parameters. */

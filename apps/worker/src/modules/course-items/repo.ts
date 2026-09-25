@@ -305,6 +305,29 @@ export async function listWritingCheckpoints(
   return results ?? [];
 }
 
+/** Code assignments in a course, for resolving `kind='code'`. */
+export async function listCodePayloads(
+  db: D1Database,
+  courseId: string,
+): Promise<
+  Array<{ id: string; title: string; ai_enabled: number; due_at: number | null; archived_at: number | null }>
+> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, title, ai_enabled, due_at, archived_at
+         FROM code_assignments WHERE course_id = ?`,
+    )
+    .bind(courseId)
+    .all<{
+      id: string;
+      title: string;
+      ai_enabled: number;
+      due_at: number | null;
+      archived_at: number | null;
+    }>();
+  return results ?? [];
+}
+
 /** Curated example slugs in a course, for resolving `kind='example'`.
  *  Note this reads `course_examples` (curation) only — never the usage
  *  aggregate. */
@@ -383,6 +406,22 @@ export async function listSubmittedAssignmentIds(
         WHERE course_id = ? AND user_id = ?
           AND assignment_id IS NOT NULL
           AND revoked_at IS NULL`,
+    )
+    .bind(courseId, userId)
+    .all<{ assignment_id: string }>();
+  return new Set((results ?? []).map((r) => r.assignment_id));
+}
+
+/** Code assignment ids this student has submitted a notebook to. */
+export async function listSubmittedCodeAssignmentIds(
+  db: D1Database,
+  courseId: string,
+  userId: string,
+): Promise<Set<string>> {
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT assignment_id FROM code_submissions
+        WHERE course_id = ? AND owner_user_id = ?`,
     )
     .bind(courseId, userId)
     .all<{ assignment_id: string }>();

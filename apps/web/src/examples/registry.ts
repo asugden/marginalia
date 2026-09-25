@@ -263,6 +263,30 @@ export const EXAMPLES: ExampleSpec[] = [
       })),
     ),
   },
+  {
+    slug: "wiring",
+    title: "Breadboards and Loops",
+    blurb:
+      "Wire a real breadboard: see the connections it hides, light an LED, burn one out, chase a short the long way round, and flip a digital pin by hand. A run of small puzzles, then free play.",
+    tags: ["circuits", "breadboard", "microcontrollers", "interactive"],
+    Page: lazy(() =>
+      import("./wiring/WiringPage.js").then((m) => ({
+        default: m.WiringPage,
+      })),
+    ),
+  },
+  {
+    slug: "code",
+    title: "Reading a Sketch",
+    blurb:
+      "Watch a microcontroller sketch run line by line on a live board: setup once, loop forever, every line coloured by its job, numbers you can drag, and threads from each pin number to its pin. Then hunt real beginner bugs, multiplex two displays and teach a tiny classifier.",
+    tags: ["microcontrollers", "code", "Arduino", "interactive"],
+    Page: lazy(() =>
+      import("./code/CodePage.js").then((m) => ({
+        default: m.CodePage,
+      })),
+    ),
+  },
 ];
 
 export function findExample(slug: string): ExampleSpec | undefined {

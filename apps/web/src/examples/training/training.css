@@ -1,6 +1,7 @@
 /* Training example — layout and figure styling only.
    Surfaces and buttons come from the design system (<Card>, <Button>).
-   The red/blue error image follows the gallery's sign convention. */
+   Figure colours are the shared scales (examples/shared/palette.ts); figure
+   text is examples/shared/figure.css; the bar is examples/shared/controls.css. */
 
 .tr-panel { margin-bottom: 1rem; }
 .tr-h2 {
@@ -25,44 +26,43 @@
   color: var(--text-muted);
   max-width: 78ch;
 }
-.tr-pos { color: var(--accent); }
-.tr-neg { color: #4a6fa5; }
+.tr-pos { color: var(--ml-value-pos-ink); }
+.tr-neg { color: var(--ml-value-neg-ink); }
 
-/* ── Control bar ──────────────────────────────────────────────────── */
-.tr-controls {
+/* ── The pinned bar (shared/controls.css), one line ─────────────── */
+.tr-bar { flex-wrap: wrap; row-gap: 0.4rem; }
+.tr-bar__stats {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-  position: sticky;
-  top: 0.5rem;
-  z-index: 5;
+  align-items: baseline;
+  gap: 1.1rem;
+  margin-left: auto;
 }
-.tr-controls__buttons {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-.tr-controls__stats { display: flex; gap: 1.5rem; }
-.tr-stat { display: flex; flex-direction: column; gap: 0.05rem; }
+.tr-stat { display: flex; align-items: baseline; gap: 0.4rem; }
 .tr-stat__label {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 .tr-stat__val {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 1.35rem;
-  line-height: 1.1;
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
   color: var(--text-strong);
 }
-.tr-stat--hot .tr-stat__val { color: var(--accent); }
+/* The error is the value the curve draws: the computed scale's ink. */
+.tr-stat--error .tr-stat__val { color: var(--ml-value-pos-ink); }
+
+/* A controls box inside a panel: sunken, like the bar (style.md §14). */
+.tr-box {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem 1rem;
+  margin-top: 1.1rem;
+}
 
 /* ── Input / output / error ───────────────────────────────────────── */
 .tr-triptych {
@@ -75,7 +75,7 @@
 .tr-arrow {
   font-family: var(--font-mono);
   font-size: 1.5rem;
-  color: var(--text-faint);
+  color: var(--fig-text-label);
 }
 .tr-grid { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
 .tr-grid__svg {
@@ -84,43 +84,13 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
+.tr-grid__cap .fig-label-sub { max-width: 16ch; line-height: 1.35; }
 .tr-grid__cap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.05rem;
   text-align: center;
-}
-.tr-grid__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-.tr-grid__sub {
-  font-size: var(--text-2xs);
-  color: var(--text-faint);
-  max-width: 14ch;
-  line-height: 1.35;
-}
-
-.tr-picker {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 1.1rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
-}
-.tr-picker__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-  margin-right: 0.3rem;
 }
 
 /* ── Loss curve ───────────────────────────────────────────────────── */
@@ -135,13 +105,11 @@
   align-items: center;
   justify-content: center;
   height: 150px;
-  font-size: var(--text-sm);
-  color: var(--text-faint);
 }
-.tr-curve svg { display: block; width: 100%; height: auto; }
+.tr-curve svg { display: block; max-width: 100%; height: auto; }
 .tr-curve__line {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--ml-value-pos);
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -151,37 +119,27 @@
   justify-content: space-between;
   align-items: baseline;
   padding: 0.3rem 0.2rem 0;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-2xs);
-  color: var(--text-faint);
 }
-.tr-curve__axislabel { text-transform: uppercase; letter-spacing: 0.05em; }
 
+/* Slider row: label · slider · value, then the live commentary. */
 .tr-lr {
   display: grid;
-  grid-template-columns: auto minmax(8rem, 18rem) 1fr;
+  grid-template-columns: auto minmax(8rem, 18rem) 3rem 1fr;
   align-items: center;
   gap: 0.9rem;
-  margin-top: 1rem;
 }
 @media (max-width: 700px) {
-  .tr-lr { grid-template-columns: 1fr; }
+  .tr-lr { grid-template-columns: auto 1fr 3rem; }
+  .tr-lr__hint { grid-column: 1 / -1; }
 }
-.tr-lr label {
-  display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  font-size: var(--text-sm);
-  color: var(--text-body);
-}
+.tr-lr input { width: 100%; }
 .tr-lr__val {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  color: var(--text-strong);
+  font-size: var(--text-sm);
   font-weight: 700;
+  color: var(--text-strong);
 }
-.tr-lr input { width: 100%; }
 .tr-lr__hint { font-size: var(--text-xs); color: var(--text-muted); }
 
 /* ── Learned features ─────────────────────────────────────────────── */

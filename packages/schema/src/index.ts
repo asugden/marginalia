@@ -292,6 +292,10 @@ export interface ProvenanceDocumentRow {
   body_json: string;
   word_count: number;
   char_count: number;
+  /** Coordinate system of this document's event log (migration 0025):
+   *  'text' = offsets into the plain-text projection; 'pm' = legacy editor
+   *  positions, kept for documents created before 0025. */
+  event_coords: "pm" | "text";
   created_at: number;
   updated_at: number;
 }

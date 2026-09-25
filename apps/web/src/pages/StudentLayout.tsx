@@ -30,11 +30,14 @@ import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import {
   CourseSwitcher,
   IconButton,
+  NavSheet,
   PreviewBanner,
   RoleSwitch,
   StudentModuleNav,
+  studentModules,
+  type NavSheetSection,
 } from "../components/index.js";
-import { SignOutIcon, UserIcon } from "../icons.js";
+import { MenuIcon, SignOutIcon, UserIcon } from "../icons.js";
 import { signOut } from "../session.js";
 
 export function StudentLayout() {
@@ -45,6 +48,8 @@ export function StudentLayout() {
   const [enrollments, setEnrollments] = useState<MeEnrollment[]>([]);
   const [identity, setIdentity] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Mobile nav sheet (≤680). Above the early-returns — hooks stay unconditional.
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Fetch /api/me, validate enrollment, and build the context value. Extracted
   // so `refresh` (exposed on the context) can re-run it; the student side rarely
@@ -71,6 +76,7 @@ export function StudentLayout() {
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
           agentsEnabled: e.agentsEnabled,
+          codeEnabled: e.codeEnabled ?? false,
           termSeason: e.termSeason,
           termYear: e.termYear,
           startDate: e.startDate,
@@ -92,6 +98,11 @@ export function StudentLayout() {
     load(ctrl.signal);
     return () => ctrl.abort();
   }, [load]);
+
+  // Any navigation closes the sheet, back/forward included.
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [location.pathname]);
 
   if (error) {
     return (
@@ -131,7 +142,35 @@ export function StudentLayout() {
         ? "agents"
         : seg === "writing"
           ? "writing"
-          : null;
+          : seg === "code"
+            ? "code"
+            : null;
+
+  // Mobile sheet contents (≤680). The student nav is already flat, so it maps
+  // straight across; "All courses" is appended so the switcher's one
+  // destination survives the switcher being hidden.
+  const sheetSections: NavSheetSection[] = [
+    {
+      key: "modules",
+      rows: studentModules(
+        value.provenanceEnabled,
+        value.agentsEnabled,
+        value.codeEnabled,
+      ).map((m) => ({
+        key: m.id,
+        label: m.label,
+        to: `${home}/${m.id}`,
+        active: activeModule === m.id,
+      })),
+    },
+    {
+      key: "course",
+      title: "This Course",
+      rows: [
+        { key: "all", label: "All Courses", detail: "Your courses", to: "/courses" },
+      ],
+    },
+  ];
 
   return (
     <CourseContext.Provider value={value}>
@@ -145,6 +184,19 @@ export function StudentLayout() {
           }
         >
           <div className="app-topbar__inner">
+            {/* ≤680 only (CSS-gated): the module nav and course switcher are
+                hidden there and move wholesale into the sheet. */}
+            {!inAgent && (
+              <button
+                type="button"
+                className="app-burger"
+                aria-label="Menu"
+                aria-expanded={sheetOpen}
+                onClick={() => setSheetOpen(true)}
+              >
+                <MenuIcon />
+              </button>
+            )}
             {/* Lockup + course switcher + module nav. The switcher (between the
                 lockup and the menu items) lets a student with multiple courses
                 jump between them or reach "All courses" — the affordance the
@@ -154,6 +206,7 @@ export function StudentLayout() {
               courseId={courseId}
               provenanceEnabled={value.provenanceEnabled}
               agentsEnabled={value.agentsEnabled}
+              codeEnabled={value.codeEnabled}
               activeModule={activeModule}
               switcher={
                 <CourseSwitcher
@@ -197,6 +250,14 @@ export function StudentLayout() {
             )}
           </div>
         </header>
+
+        {!inAgent && (
+          <NavSheet
+            open={sheetOpen}
+            onClose={() => setSheetOpen(false)}
+            sections={sheetSections}
+          />
+        )}
 
         {previewing && (
           <PreviewBanner courseId={courseId} courseName={value.courseName} />
