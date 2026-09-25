@@ -3,3 +3,4 @@
 export * from "./origins.js";
 export * from "./client.js";
 export * from "./render.js";
+export * from "./projection.js";

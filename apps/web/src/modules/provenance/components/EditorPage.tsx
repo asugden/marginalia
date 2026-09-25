@@ -496,6 +496,7 @@ export function EditorPage() {
           <div className="prov-editor-inner">
             <ProvenanceEditor
               initialContent={(doc.bodyJson as JSONContent | undefined) ?? EMPTY_DOC}
+              coords={doc.eventCoords ?? "pm"}
               onChange={onEditorChange}
               onEvents={onEditorEvents}
               onEditorReady={(ed) => { editorRef.current = ed; }}

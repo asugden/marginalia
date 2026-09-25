@@ -47,6 +47,7 @@ import {
   trailingReversionLength,
 } from "@marginalia/provenance";
 import type { Origin } from "./OriginMark.js";
+import { diffStep, projectRange, textOffsetAt } from "./textCoords.js";
 
 export type TrackedEventKind =
   | "insert"
@@ -91,6 +92,9 @@ export interface TrackedEvent {
    * repaint immediately without waiting for a round trip.
    */
   restoredOrigins?: OriginRun[];
+  /** Internal, never sent: offsets are positions in the transaction's final
+   *  document rather than the step's (the slow-retype re-label). */
+  finalCoords?: true;
 }
 
 /** One run of identical origins, for compact transport of a removed range. */
@@ -109,6 +113,42 @@ const pluginKey = new PluginKey<NextOpHint | null>("provenance-tracker");
 
 export interface ProvenanceTrackerOptions {
   onEvents: (events: TrackedEvent[]) => void;
+  /**
+   * Coordinate system for logged offsets (migration 0025). "text" logs
+   * offsets into the plain-text projection the server replays against; "pm"
+   * is the legacy editor-position system, kept only for documents whose log
+   * already uses it.
+   */
+  coords: "pm" | "text";
+}
+
+/**
+ * Spread a move's restored origins (measured over text characters only) onto
+ * the projected inserted text, whose block breaks are newlines. Newlines take
+ * no origin of their own: they read as typed.
+ */
+function alignRuns(runs: OriginRun[], text: string): OriginRun[] {
+  const out: OriginRun[] = [];
+  const push = (origin: Origin) => {
+    const last = out[out.length - 1];
+    if (last && last.origin === origin) last.length += 1;
+    else out.push({ origin, length: 1 });
+  };
+  let r = 0;
+  let left = runs[0]?.length ?? 0;
+  for (const ch of text) {
+    if (ch === "\n") {
+      push("human");
+      continue;
+    }
+    while (r < runs.length && left === 0) {
+      r++;
+      left = runs[r]?.length ?? 0;
+    }
+    push(r < runs.length ? runs[r]!.origin : "human");
+    left--;
+  }
+  return out;
 }
 
 interface KeystrokeWindow {
@@ -204,7 +244,7 @@ export const ProvenanceTracker = Extension.create<
   name: "provenanceTracker",
 
   addOptions() {
-    return { onEvents: () => undefined };
+    return { onEvents: () => undefined, coords: "pm" as const };
   },
 
   addStorage() {
@@ -288,7 +328,8 @@ export const ProvenanceTracker = Extension.create<
   },
 
   addProseMirrorPlugins() {
-    const { onEvents } = this.options;
+    const { onEvents, coords } = this.options;
+    const textCoords = coords === "text";
     // Same array instance the command mutates — read live during replay so a
     // contribution noted earlier this session is matchable on later retyping.
     const llmContributions = this.storage.llmContributions;
@@ -434,6 +475,10 @@ export const ProvenanceTracker = Extension.create<
         // appendTransaction runs after the user's transaction is applied
         // and lets us add a follow-up transaction with the mark.
         appendTransaction: (transactions, oldState, newState) => {
+          // Every change is logged, including the editor creating a new
+          // document's first paragraph as it loads: in plain-text coordinates
+          // the log starts from an empty text, and replay must see every
+          // change from there.
           const userTrs = transactions.filter((t) => t.docChanged);
           if (userTrs.length === 0) return null;
 
@@ -463,6 +508,9 @@ export const ProvenanceTracker = Extension.create<
               const insertedTo = insertedFrom + sliceSize;
 
               const removedLen = step.to - step.from;
+              // Events this step produces start here; in text coordinates they
+              // are re-derived from the projection once the step is processed.
+              const stepStart = events.length;
               const insertedText = sliceSize > 0
                 ? newState.doc.textBetween(insertedFrom, insertedTo, "\n", "\n")
                 : "";
@@ -729,6 +777,7 @@ export const ProvenanceTracker = Extension.create<
                       length: humanRun.to - reFrom,
                       text: retyped,
                       removedOrigins: originRunsIn(newState.doc, reFrom, humanRun.to, originMarkType),
+                      finalCoords: true,
                     });
                     events.push({
                       kind: "llm_insert",
@@ -736,6 +785,7 @@ export const ProvenanceTracker = Extension.create<
                       length: humanRun.to - reFrom,
                       text: retyped,
                       origin: "llm",
+                      finalCoords: true,
                     });
                     humanRun = null; // consumed; start fresh
                   }
@@ -744,12 +794,67 @@ export const ProvenanceTracker = Extension.create<
                   humanRun = null;
                 }
               }
+
+              if (textCoords) {
+                // Re-express this step's events in plain-text coordinates.
+                // Kind, origin and the rest come from the logic above; only
+                // where the change sits, and what text it moved, is re-derived
+                // — from the same projection the server replays against, so
+                // the two can't disagree about a block boundary.
+                const produced = events.splice(stepStart);
+                const own = produced.find((e) => e.kind !== "delete" && !e.finalCoords);
+                const postStepDoc = tr.docs[i + 1] ?? tr.doc;
+                const map = step.getMap();
+                const d = diffStep(
+                  preStepDoc,
+                  postStepDoc,
+                  step.from,
+                  step.to,
+                  map.map(step.from, -1),
+                  map.map(step.to, 1),
+                  originMarkType,
+                );
+                if (d.removed) {
+                  events.push({
+                    kind: "delete",
+                    offset: d.offset,
+                    length: d.removed.length,
+                    text: d.removed,
+                    removedOrigins: d.removedRuns,
+                  });
+                }
+                if (d.inserted) {
+                  const e: TrackedEvent = {
+                    ...(own ?? { kind: "insert", origin: "human" }),
+                    offset: d.offset,
+                    length: d.inserted.length,
+                    text: d.inserted,
+                  };
+                  if (e.restoredOrigins) e.restoredOrigins = alignRuns(e.restoredOrigins, d.inserted);
+                  events.push(e);
+                }
+                // The slow-retype re-label, positioned in the final document.
+                const relabel = produced.filter((e) => e.finalCoords && e.kind === "delete");
+                for (const r of relabel) {
+                  const span = projectRange(newState.doc, r.offset, r.offset + r.length, originMarkType);
+                  const at = textOffsetAt(newState.doc, r.offset);
+                  events.push({
+                    kind: "delete",
+                    offset: at,
+                    length: span.text.length,
+                    text: span.text,
+                    removedOrigins: span.runs,
+                  });
+                  events.push({ kind: "llm_insert", offset: at, length: span.text.length, text: span.text, origin: "llm" });
+                }
+              }
             }
           }
 
           // Reset the keystroke window once we've consumed it.
           keystroke = null;
 
+          for (const e of events) delete e.finalCoords;
           if (events.length > 0) onEvents(events);
 
           if (didMark) {

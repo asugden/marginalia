@@ -13,6 +13,7 @@
 
 import type { ProvenanceEventRow, ProvenanceOriginRun } from "@marginalia/schema";
 import {
+  projectDocJson,
   buildRender as buildSharedRender,
   RENDER_VERSION,
   type LogEvent,
@@ -63,9 +64,23 @@ function toLogEvent(ev: ProvenanceEventRow): LogEvent<Origin> {
  * but never written into the render; see @marginalia/provenance.
  */
 export function buildRender(text: string, events: ProvenanceEventRow[]): ProvenanceRender {
+  // Either coordinate system replays from an empty document, which is how the
+  // editor starts one; the system only decides which projection the log is
+  // compared against (textForCoords).
   return buildSharedRender<Origin>(text, events.map(toLogEvent), {
     corpusOrigin: () => "pasted",
   });
+}
+
+/**
+ * The text a document's event log is replayed against. A document created
+ * since migration 0025 logs offsets into the shared projection itself, so it
+ * is replayed against exactly that (trailing newlines included — each one is
+ * an addressable position). An older document logged editor positions and
+ * keeps its original projection, so its renders are unchanged.
+ */
+export function textForCoords(doc: unknown, coords: "pm" | "text"): string {
+  return coords === "text" ? projectDocJson(doc) : plainTextFromDoc(doc);
 }
 
 /**
