@@ -715,11 +715,26 @@ export const ProvenanceTracker = Extension.create<
                       originMarkType.create({ origin: "llm", sourceMessageId: null }),
                     );
                     didMark = true;
+                    // The span is already in the document: it was just logged
+                    // as typed. Re-label it as a delete + llm_insert pair so
+                    // replay swaps its origin in place. An llm_insert alone
+                    // would make replay insert the span a second time,
+                    // doubling it and reporting length drift to an instructor
+                    // for an innocent student. Not remembered as a cut: nothing
+                    // left the document.
+                    const retyped = newState.doc.textBetween(reFrom, humanRun.to, "\n", "\n");
+                    events.push({
+                      kind: "delete",
+                      offset: reFrom,
+                      length: humanRun.to - reFrom,
+                      text: retyped,
+                      removedOrigins: originRunsIn(newState.doc, reFrom, humanRun.to, originMarkType),
+                    });
                     events.push({
                       kind: "llm_insert",
                       offset: reFrom,
                       length: humanRun.to - reFrom,
-                      text: newState.doc.textBetween(reFrom, humanRun.to, "\n", "\n"),
+                      text: retyped,
                       origin: "llm",
                     });
                     humanRun = null; // consumed; start fresh
