@@ -24,7 +24,7 @@ and the middle is forced to learn structure, exactly as in the
 ## The arc
 
 1. **Random initialization.** At step 0 the input is a clean digit and the
-   output is grey static, because the weights are random numbers. "Re-roll the
+   output is a noisy smudge, the average digit plus the random weights' noise. "Re-roll the
    dice" draws a fresh seed. Run two different seeds to convergence and they
    land in similar places — which is the useful thing to know about
    initialization, and is shown rather than asserted.
@@ -34,11 +34,11 @@ and the middle is forced to learn structure, exactly as in the
 
 3. **One number, going down.** The loss curve, log-scaled because the
    interesting progress spans orders of magnitude. A step-size slider is
-   exposed with live commentary: measured, lr 3 converges to ~0.026 in 300
-   steps while lr 15 stalls around 0.064, so "too big a step overshoots" is
+   exposed with live commentary: measured, lr 1 falls steadily to ~0.018 in
+   300 steps while lr 15 stalls around 0.05, so "too big a step overshoots" is
    something the student can produce on demand rather than be told.
 
-4. **What the numbers became.** Each hidden unit's 196 incoming weights drawn
+4. **What the numbers became.** Each hidden neuron's 196 incoming weights drawn
    as an image. Static at step 0; strokes, curves and blobs after training.
    Nobody labelled a stroke — the task did it.
 
@@ -55,15 +55,33 @@ next course.
 
 ## Measured behaviour
 
-| hidden | step size | start | 50 steps | 300 steps |
-|-------:|----------:|------:|---------:|----------:|
-| 16     | 3         | 0.232 | 0.037    | **0.026** |
-| 16     | 8         | 0.232 | 0.049    | 0.038     |
-| 32     | 8         | 0.231 | 0.066    | 0.036     |
-| 16     | 15        | 0.232 | 0.077    | 0.064     |
+Each output pixel's bias starts at that pixel's average brightness (the
+weights are random). Starting every output at 0.5 grey instead spends the
+first three steps learning only that most pixels are blank: three quarters of
+the error, none of the digit, and a curve that looks finished at step 3.
 
-300 steps run in ~145 ms, so the animated "Run" is smooth and a lecture demo
-converges in a couple of seconds. Defaults are hidden=16, lr=3, batch=16.
+Error on a fixed 64 digits, hidden=16, seed 1234:
+
+| step size | start | 30 steps | 100 steps | 300 steps |
+|----------:|------:|---------:|----------:|----------:|
+| 1         | 0.053 | 0.043    | 0.027     | **0.018** |
+| 4         | 0.053 | 0.042    | 0.022     | 0.022     |
+| 12        | 0.053 | 0.054    | 0.041     | 0.041     |
+| 20        | 0.053 | 0.062    | 0.058     | 0.065     |
+
+300 steps run in ~145 ms. "Run" defaults to ten steps a second, so the
+reconstruction visibly sharpens and the curve bends while the student
+watches; the **Fast** switch runs four steps a frame, for converging a demo
+in a couple of seconds. Defaults are hidden=16, lr=1, batch=16.
+
+## Colour
+
+| Mark | Kind |
+|---|---|
+| the digit, and the reconstruction | input: paper to ink (the reconstruction is a recorded exception, style.md §11) |
+| the error image | computed, signed: vermillion too much ink, cerulean too little |
+| each neuron's incoming weights | learned, signed: sage and plum, against the neuron's largest weight |
+| the loss curve, and the error readout | computed, non-negative: vermillion |
 
 ## Architecture
 
@@ -71,8 +89,8 @@ converges in a couple of seconds. Defaults are hidden=16, lr=3, batch=16.
   `featureImage` for the learned-weights panel. No ML library: the whole thing
   is ~150 lines, and a framework would hide precisely the intermediates the
   page needs to draw.
-- `DigitGrid.tsx` — a digit as a grid of cells, with a `signed` mode for the
-  error image (red/blue, matching the gallery's weight convention).
+- `DigitGrid.tsx` — a digit as a grid of cells, in the figure scale for what
+  it holds (`input`, `value` for the error, `learned` for weights).
 - `TrainingPage.tsx` — the page, the training loop (rAF-driven, several steps
   per frame), and the loss curve.
 - `digits.json` — 240 images at 14×14, uint8, ~22 KB gzipped. Also copied to

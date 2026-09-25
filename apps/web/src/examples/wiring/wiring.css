@@ -1,0 +1,572 @@
+/* Wiring example — layout and figure styling.
+   Surfaces and buttons come from the design system (<Card>, <Button>).
+   The hardware itself (board, breadboard, parts, jumper colours) is drawn
+   as the physical objects look, so those colours are literal; colour by
+   connection uses the general data-mark hues (docs/style.md §11). */
+
+.wr-page { max-width: 1240px; }
+
+.wr-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .wr-layout { grid-template-columns: 1fr; }
+}
+.wr-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: sticky;
+  top: 1rem;
+}
+@media (max-width: 980px) {
+  .wr-side { position: static; }
+}
+
+.wr-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── The tour card ─────────────────────────────────────────────────── */
+.wr-tour { transition: box-shadow 200ms; }
+.wr-tour--done { box-shadow: 0 0 0 2px var(--green-600), var(--shadow-md); }
+.wr-tour__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+.wr-tour__dot {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+  padding: 0;
+}
+.wr-tour__dot:hover { border-color: var(--accent); }
+.wr-tour__dot--done {
+  background: var(--green-tint);
+  border-color: var(--green-600);
+  color: var(--green-ink);
+}
+.wr-tour__dot--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent, #fff);
+  font-weight: 700;
+}
+.wr-tour__title {
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+  margin: 0.2rem 0 0.4rem;
+}
+.wr-tour__prompt {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 0.8rem;
+}
+.wr-tour__payoff {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--green-ink);
+  background: var(--green-tint);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.75rem;
+  margin: 0 0 0.8rem;
+  animation: wr-rise 300ms ease-out;
+}
+.wr-tour__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.wr-goals {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.wr-goal {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--text-body);
+}
+.wr-goal__box {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.wr-goal--met { color: var(--green-ink); }
+.wr-goal--met .wr-goal__box {
+  background: var(--green-600);
+  border-color: var(--green-600);
+  color: #fff;
+  animation: wr-pop-in 280ms ease-out;
+}
+
+/* ── The readout ───────────────────────────────────────────────────── */
+.wr-readout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.wr-readout__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.wr-readout__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+.wr-readout__why {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+.wr-readout__count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+.wr-status {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.wr-status--ok { color: var(--green-ink); }
+.wr-status--bad { color: var(--salmon-ink); }
+.wr-status--muted { color: var(--text-muted); }
+
+/* A loop read aloud: pin → wire → strip → … */
+.wr-chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.wr-chain__step {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-body);
+}
+.wr-chain__step + .wr-chain__step::before {
+  content: "→";
+  color: var(--text-muted);
+  margin: 0 0.3rem;
+}
+.wr-chain__step--pin {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.wr-chain__step--led,
+.wr-chain__step--resistor,
+.wr-chain__step--button {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+  padding: 0 0.3rem;
+}
+.wr-chain__step--led { color: var(--salmon-ink); font-weight: 700; }
+.wr-chain--bad .wr-chain__step { color: var(--salmon-ink); }
+
+/* ── The stage: controls above the figure ─────────────────────────── */
+.wr-stage { min-width: 0; }
+.wr-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.7rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.wr-controls__row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 2rem;
+}
+.wr-controls__label {
+  flex: none;
+  width: 4.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+.wr-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.wr-controls__switches { gap: 1.25rem; }
+.wr-tip {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-right: 0.4rem;
+}
+.wr-sel-name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-strong);
+  margin-right: 0.4rem;
+}
+.wr-swatches { display: inline-flex; gap: 0.3rem; }
+.wr-swatch {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+}
+.wr-swatch--on { box-shadow: 0 0 0 2px var(--accent); }
+
+.wr-figure {
+  display: flex;
+  justify-content: center;
+}
+.wr-svg {
+  max-width: 100%;
+  height: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wr-tool-wire, .wr-tool-resistor, .wr-tool-led, .wr-tool-button { cursor: crosshair; }
+
+/* ── The development board ────────────────────────────────────────── */
+.wr-pcb { fill: #1c2733; }
+.wr-usb { fill: #b9bec4; stroke: #8b9097; }
+.wr-module { fill: #2a3542; stroke: #11181f; }
+.wr-can { fill: #c9ced3; stroke: #9aa0a6; }
+.wr-can-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  fill: #5c636a;
+  text-anchor: middle;
+  letter-spacing: 0.1em;
+}
+.wr-antenna { fill: none; stroke: #c9a227; stroke-width: 2; }
+.wr-smd-btn { fill: #d8d8d8; stroke: #7d7d7d; }
+.wr-board-tiny {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  fill: #b8c2cc;
+  text-anchor: middle;
+}
+.wr-pwr { fill: #3b1a1a; }
+.wr-pwr--on {
+  fill: #ff4a3a;
+  filter: drop-shadow(0 0 4px #ff4a3a);
+}
+.wr-pin { fill: #111; }
+.wr-pin-hole { fill: #c9a227; }
+.wr-pin-hole--hover { fill: #ffd84d; }
+.wr-pinlabel-bg { fill: transparent; }
+.wr-pinlabel-text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: #e8edf2;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.wr-pinlabel--gpio { cursor: pointer; }
+.wr-pinlabel--gpio .wr-pinlabel-bg { fill: #2c3a48; stroke: #43566a; }
+.wr-pinlabel--gpio:hover .wr-pinlabel-bg { stroke: #ffd84d; }
+.wr-pinlabel--on .wr-pinlabel-bg {
+  fill: #ffcc33;
+  stroke: #ffcc33;
+  filter: drop-shadow(0 0 5px #ffcc33);
+}
+.wr-pinlabel--on .wr-pinlabel-text { fill: #1c2733; font-weight: 700; }
+
+/* ── The breadboard ───────────────────────────────────────────────── */
+.wr-bb { fill: #f4f1ea; stroke: #d6d0c4; }
+.wr-bb-channel { fill: #e6e1d6; }
+.wr-rail-plus { stroke: #d0342c; stroke-width: 1.5; }
+.wr-rail-minus { stroke: #2b62a8; stroke-width: 1.5; }
+.wr-bb-sign {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--fig-text-label);
+  text-anchor: middle;
+}
+.wr-bb-letter,
+.wr-bb-num {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--fig-text-label);
+  text-anchor: middle;
+}
+.wr-hole { fill: #3a3631; stroke: #3a3631; stroke-width: 0.5; }
+.wr-hole--hover { stroke: #ffb000; stroke-width: 2.5; }
+.wr-strip {
+  stroke: #b8b2a6;
+  stroke-width: 11;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+.wr-strip--hover { stroke: #ffcc33; opacity: 1; }
+
+.wr-hover { fill: none; stroke: #ffb000; stroke-width: 2; pointer-events: none; }
+.wr-hover--full { stroke: var(--text-muted); }
+.wr-snap { fill: none; stroke: var(--green-600); stroke-width: 2.5; pointer-events: none; }
+.wr-snap--bad { stroke: var(--salmon-600); }
+.wr-tooltip { fill: #1c2733; opacity: 0.94; }
+.wr-tip-text {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  fill: #fff;
+  text-anchor: middle;
+}
+
+/* ── Parts ────────────────────────────────────────────────────────── */
+.wr-part { cursor: pointer; }
+.wr-part--sel { filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 1px var(--accent)); }
+.wr-wire {
+  fill: none;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+}
+.wr-wire-hit { fill: none; stroke: transparent; stroke-width: 14; }
+.wr-wire--ghost { stroke: var(--text-muted); stroke-dasharray: 5 5; opacity: 0.8; pointer-events: none; }
+.wr-wire-end { fill: #9a9a9a; stroke: #555; stroke-width: 0.8; }
+.wr-leg { fill: none; stroke: #9aa0a6; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wr-leg--ghost { stroke-dasharray: 4 4; pointer-events: none; }
+.wr-leg-handle { fill: transparent; cursor: grab; }
+.wr-leg-handle:hover { fill: rgba(255, 176, 0, 0.25); }
+
+.wr-res-body { fill: #d9c29a; stroke: #b39a6c; stroke-width: 0.8; }
+
+.wr-led { fill: #b8352a; stroke: #7e241c; stroke-width: 1; opacity: 0.85; transition: fill 120ms; }
+.wr-led-light { fill: #ff6a45; stroke: #d03b22; stroke-width: 1; pointer-events: none; }
+.wr-led--burnt { fill: #4a4644; stroke: #222; }
+.wr-led-shine { fill: #fff; opacity: 0.45; pointer-events: none; }
+.wr-led-glow { pointer-events: none; }
+.wr-led-crack { fill: none; stroke: #111; stroke-width: 1.2; pointer-events: none; }
+.wr-led-plus {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  fill: #d0342c;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.wr-btn-body { fill: #2f2f2f; stroke: #111; }
+.wr-btn-tab { fill: #c4c9ce; stroke: #8b9097; stroke-width: 0.6; }
+.wr-btn-leg { stroke: #b0b6bc; stroke-width: 2.2; }
+.wr-btn-rot { transition: transform 280ms cubic-bezier(0.3, 1.4, 0.6, 1); }
+.wr-btn-cap { fill: #585858; stroke: #1b1b1b; transition: r 80ms; }
+.wr-btn-cap--down { fill: #3d3d3d; }
+.wr-btn-pair { stroke: #e0b64a; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+
+/* ── Current and shorts ───────────────────────────────────────────── */
+.wr-flow {
+  fill: none;
+  stroke: #ffd84d;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 11;
+  pointer-events: none;
+  animation: wr-flow 0.8s linear infinite;
+  filter: drop-shadow(0 0 2px rgba(255, 190, 0, 0.9));
+}
+.wr-short {
+  fill: none;
+  stroke: #ff2d1a;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 7 6;
+  pointer-events: none;
+  animation: wr-flow 0.35s linear infinite, wr-pulse 0.7s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 45, 26, 0.8));
+}
+
+/* ── A burning LED ────────────────────────────────────────────────── */
+.wr-pop { pointer-events: none; }
+.wr-pop-ring {
+  fill: none;
+  stroke: #ffcc33;
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wr-ring 500ms ease-out forwards;
+}
+.wr-smoke {
+  fill: #8a8580;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wr-smoke 1.3s ease-out forwards;
+}
+.wr-smoke--2 { animation-delay: 120ms; }
+.wr-smoke--3 { animation-delay: 240ms; }
+
+@keyframes wr-flow { to { stroke-dashoffset: -13; } }
+@keyframes wr-pulse { 50% { opacity: 0.45; } }
+@keyframes wr-flicker { 50% { opacity: 0.8; } }
+@keyframes wr-ring {
+  from { transform: scale(0.6); opacity: 1; }
+  to { transform: scale(3.2); opacity: 0; }
+}
+@keyframes wr-smoke {
+  0% { transform: translateY(0) scale(0.5); opacity: 0.8; }
+  100% { transform: translateY(-26px) scale(1.8); opacity: 0; }
+}
+@keyframes wr-pop-in {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes wr-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wr-flow, .wr-short, .wr-led-glow { animation: none; }
+}
+
+/* On a phone, labels sit above their controls rather than beside them. */
+@media (max-width: 640px) {
+  .wr-controls__row { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+  .wr-controls__label { width: auto; }
+}
+
+/* ── Potentiometer ────────────────────────────────────────────────── */
+.wr-pot-body { fill: #2f6fb3; stroke: #1c4a7c; }
+.wr-pot-knob { cursor: grab; }
+.wr-svg--dragging .wr-pot-knob { cursor: grabbing; }
+.wr-pot-ring { fill: #1c4a7c; }
+.wr-pot-cap { fill: #f2f2ee; stroke: #9aa0a6; }
+.wr-pot-pointer { stroke: #2b2b2b; stroke-width: 2.4; stroke-linecap: round; }
+.wr-pot-knob:hover .wr-pot-cap { fill: #fff6d6; }
+
+/* ── Pin modes on the board ───────────────────────────────────────── */
+.wr-pinlabel--low .wr-pinlabel-bg { stroke: #ffcc33; }
+.wr-pinlabel--high .wr-pinlabel-bg {
+  fill: #ffcc33;
+  stroke: #ffcc33;
+  filter: drop-shadow(0 0 5px #ffcc33);
+}
+.wr-pinlabel--high .wr-pinlabel-text { fill: #1c2733; font-weight: 700; }
+.wr-pinlabel--pwm .wr-pinlabel-bg {
+  fill: #ffcc33;
+  stroke: #ffcc33;
+  fill-opacity: var(--wr-duty, 0.5);
+}
+.wr-pinlabel--pwm .wr-pinlabel-text { fill: #1c2733; font-weight: 700; }
+.wr-pinlabel--pulldown .wr-pinlabel-bg { stroke: #7fb2e5; stroke-dasharray: 2 2; }
+.wr-pinlabel--reads-high .wr-pinlabel-bg { fill: #2b62a8; stroke: #7fb2e5; }
+.wr-pinlabel--floating .wr-pinlabel-bg { animation: wr-float 0.45s steps(2) infinite; }
+.wr-pinlabel--sel .wr-pinlabel-bg { stroke: var(--accent); stroke-width: 2; }
+@keyframes wr-float {
+  0% { fill: #2b62a8; }
+  100% { fill: #2c3a48; }
+}
+
+/* ── Menu, pin panel, meters ──────────────────────────────────────── */
+.wr-tour__menu { display: block; width: 100%; margin: 0.35rem 0 0.7rem; }
+.wr-menu-item { display: flex; flex-direction: column; gap: 0.05rem; }
+.wr-menu-item__group {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.wr-sel-sub { font-weight: 400; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.wr-pinpanel { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.wr-pinpanel__detail { min-height: 1.8rem; }
+.wr-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 0.15rem 0.45rem;
+  color: var(--text-body);
+}
+.wr-range { width: 9rem; }
+.wr-wave path { fill: none; stroke: #c9a227; stroke-width: 1.8; }
+.wr-meter { display: flex; flex-direction: column; gap: 0.3rem; }
+.wr-meter__track { height: 8px; background: var(--surface-sunken); border-radius: var(--radius-pill); overflow: hidden; }
+.wr-meter__fill { height: 100%; background: var(--blue-600); transition: width 80ms; }
+.wr-meter__value { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-secondary); }
+.wr-floating span { animation: wr-blink 0.45s steps(1) infinite; }
+.wr-floating span + span { animation-delay: 0.225s; margin-left: 0.3rem; }
+@keyframes wr-blink { 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) {
+  .wr-pinlabel--floating .wr-pinlabel-bg, .wr-floating span, .wr-btn-rot { animation: none; transition: none; }
+}
+
+/* ── Seven-segment display ────────────────────────────────────────── */
+.wr-seg7-body { fill: #1d1d1f; stroke: #000; }
+.wr-seg { fill: #3a2320; }
+.wr-seg--burnt { fill: #222; stroke: #555; stroke-width: 0.6; }
+.wr-seg-lit {
+  fill: #ff4a2e;
+  filter: drop-shadow(0 0 3px #ff4a2e);
+  pointer-events: none;
+}
+.wr-seg-pin {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  fill: #b8352a;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.wr-seg-pin--gnd { fill: #3d3831; font-size: 11px; }
