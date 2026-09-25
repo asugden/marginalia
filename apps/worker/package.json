@@ -15,6 +15,7 @@
   "dependencies": {
     "@marginalia/auth": "*",
     "@marginalia/backbone": "*",
+    "@marginalia/provenance": "*",
     "@marginalia/providers": "*",
     "@marginalia/schema": "*",
     "@marginalia/text-similarity": "*",
