@@ -53,7 +53,7 @@ function builtinAgentRow(agentId: string, courseId: string): ProvenanceAgentRow 
     updated_at: ts,
   };
 }
-import { buildRender, plainTextFromDoc } from "./render.js";
+import { buildRender, textForCoords } from "./render.js";
 import {
   ensureItem as ensureCourseItem,
   removeItemForPayload as removeCourseItemForPayload,
@@ -1048,7 +1048,7 @@ export async function createSubmissionRoute(
   const events = await repo.allEventsForDocument(env.DB, documentId);
   let text = "";
   try {
-    text = plainTextFromDoc(JSON.parse(doc.body_json));
+    text = textForCoords(JSON.parse(doc.body_json), doc.event_coords);
   } catch {
     text = "";
   }

@@ -40,7 +40,14 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { ReplaceStep, ReplaceAroundStep } from "@tiptap/pm/transform";
 import type { Node as PMNode, MarkType } from "@tiptap/pm/model";
+import {
+  isReversion,
+  MoveBuffer,
+  rememberContribution,
+  trailingReversionLength,
+} from "@marginalia/provenance";
 import type { Origin } from "./OriginMark.js";
+import { diffStep, projectRange, textOffsetAt } from "./textCoords.js";
 
 export type TrackedEventKind =
   | "insert"
@@ -54,9 +61,10 @@ export type TrackedEventKind =
   | "move";
 
 // Reversion: when a student re-types text that exactly matches a chunk of a
-// past LLM contribution this long (or longer), we flip the typed run's origin
-// back to "llm" so suggested wording can't be laundered into "human" by hand.
-const MIN_REVERSION_LENGTH = 12;
+// past LLM contribution MIN_REVERSION_LENGTH long (or longer), we flip the
+// typed run's origin back to "llm" so suggested wording can't be laundered into
+// "human" by hand. The rule and its threshold live in @marginalia/provenance,
+// shared with every other tracked editor.
 
 export interface TrackedEvent {
   kind: TrackedEventKind;
@@ -84,6 +92,9 @@ export interface TrackedEvent {
    * repaint immediately without waiting for a round trip.
    */
   restoredOrigins?: OriginRun[];
+  /** Internal, never sent: offsets are positions in the transaction's final
+   *  document rather than the step's (the slow-retype re-label). */
+  finalCoords?: true;
 }
 
 /** One run of identical origins, for compact transport of a removed range. */
@@ -102,6 +113,42 @@ const pluginKey = new PluginKey<NextOpHint | null>("provenance-tracker");
 
 export interface ProvenanceTrackerOptions {
   onEvents: (events: TrackedEvent[]) => void;
+  /**
+   * Coordinate system for logged offsets (migration 0025). "text" logs
+   * offsets into the plain-text projection the server replays against; "pm"
+   * is the legacy editor-position system, kept only for documents whose log
+   * already uses it.
+   */
+  coords: "pm" | "text";
+}
+
+/**
+ * Spread a move's restored origins (measured over text characters only) onto
+ * the projected inserted text, whose block breaks are newlines. Newlines take
+ * no origin of their own: they read as typed.
+ */
+function alignRuns(runs: OriginRun[], text: string): OriginRun[] {
+  const out: OriginRun[] = [];
+  const push = (origin: Origin) => {
+    const last = out[out.length - 1];
+    if (last && last.origin === origin) last.length += 1;
+    else out.push({ origin, length: 1 });
+  };
+  let r = 0;
+  let left = runs[0]?.length ?? 0;
+  for (const ch of text) {
+    if (ch === "\n") {
+      push("human");
+      continue;
+    }
+    while (r < runs.length && left === 0) {
+      r++;
+      left = runs[r]?.length ?? 0;
+    }
+    push(r < runs.length ? runs[r]!.origin : "human");
+    left--;
+  }
+  return out;
 }
 
 interface KeystrokeWindow {
@@ -137,59 +184,16 @@ declare module "@tiptap/core" {
   }
 }
 
-/** Normalize for reversion matching: collapse runs of whitespace to a single
- *  space so re-typed text that differs only in spacing still matches. */
-function normalizeForMatch(s: string): string {
-  return s.replace(/\s+/g, " ");
-}
-
 // ── Internal clipboard (slice 8 Part 3) ──────────────────────────────────
 //
 // Moving a paragraph is ordinary writing and must not read as importing one.
-// We remember text recently cut or copied *from this document*, with the
-// origins it carried, and restore those origins if it is pasted back.
-//
-// The window is deliberately short: it covers the real interaction (cut,
-// scroll, paste) and little else. A longer window would start absorbing
-// genuine outside pastes that happen to resemble deleted text.
-const CLIP_TTL_MS = 30_000;
-const CLIP_MAX = 8;
-/** Below this length, matching is coincidence-prone and not worth it. */
-const MIN_MOVE_LENGTH = 12;
-
-interface ClipEntry {
-  /** Whitespace-normalized, for tolerant matching. */
-  norm: string;
-  origins: OriginRun[];
-  at: number;
-}
-
-/** Module-scoped so cut/copy handlers and appendTransaction share one buffer. */
-const clipboard: ClipEntry[] = [];
-
-function rememberCut(text: string, origins: OriginRun[]): void {
-  const norm = normalizeForMatch(text).trim();
-  if (norm.length < MIN_MOVE_LENGTH) return;
-  const now = performance.now();
-  // Replace any existing entry for the same text, then bound the buffer.
-  const dupe = clipboard.findIndex((c) => c.norm === norm);
-  if (dupe >= 0) clipboard.splice(dupe, 1);
-  clipboard.push({ norm, origins, at: now });
-  while (clipboard.length > CLIP_MAX) clipboard.shift();
-}
-
-/** Origins for `text` if it was recently cut/copied from this document. */
-function lookupCut(text: string): OriginRun[] | null {
-  const norm = normalizeForMatch(text).trim();
-  if (norm.length < MIN_MOVE_LENGTH) return null;
-  const now = performance.now();
-  for (let i = clipboard.length - 1; i >= 0; i--) {
-    const c = clipboard[i]!;
-    if (now - c.at > CLIP_TTL_MS) continue;
-    if (c.norm === norm) return c.origins;
-  }
-  return null;
-}
+// The shared MoveBuffer (@marginalia/provenance) remembers text recently cut
+// or copied *from this document*, with the origins it carried, so a paste of
+// it restores those origins. Module-scoped so cut/copy handlers and
+// appendTransaction share one buffer.
+const clipboard = new MoveBuffer<Origin>();
+const rememberCut = (text: string, origins: OriginRun[]): void => clipboard.remember(text, origins);
+const lookupCut = (text: string): OriginRun[] | null => clipboard.lookup(text);
 
 /**
  * Read the per-character origins of [from, to) in `doc` as compact runs.
@@ -228,16 +232,6 @@ function originRunsIn(
   return runs;
 }
 
-/** Add a contribution to the reversion index (normalized, deduped,
- *  longest-first), if it clears the minimum length. */
-function rememberContribution(list: string[], text: string): void {
-  const norm = normalizeForMatch(text).trim();
-  if (norm.length < MIN_REVERSION_LENGTH) return;
-  if (list.includes(norm)) return;
-  list.push(norm);
-  list.sort((a, b) => b.length - a.length);
-}
-
 interface ProvenanceTrackerStorage {
   /** Normalized LLM contributions, longest-first, for reversion matching. */
   llmContributions: string[];
@@ -250,7 +244,7 @@ export const ProvenanceTracker = Extension.create<
   name: "provenanceTracker",
 
   addOptions() {
-    return { onEvents: () => undefined };
+    return { onEvents: () => undefined, coords: "pm" as const };
   },
 
   addStorage() {
@@ -334,7 +328,8 @@ export const ProvenanceTracker = Extension.create<
   },
 
   addProseMirrorPlugins() {
-    const { onEvents } = this.options;
+    const { onEvents, coords } = this.options;
+    const textCoords = coords === "text";
     // Same array instance the command mutates — read live during replay so a
     // contribution noted earlier this session is matchable on later retyping.
     const llmContributions = this.storage.llmContributions;
@@ -368,11 +363,7 @@ export const ProvenanceTracker = Extension.create<
     // This matches at event granularity, catching bulk re-insertion
     // (paste→edit, IME, autocomplete). Slow character-by-character retyping is
     // handled separately by the rolling `humanRun` window below.
-    const isLlmReversion = (text: string): boolean => {
-      const norm = normalizeForMatch(text);
-      if (norm.trim().length < MIN_REVERSION_LENGTH) return false;
-      return llmContributions.some((c) => c.includes(norm.trim()));
-    };
+    const isLlmReversion = (text: string): boolean => isReversion(llmContributions, text);
 
     // Slow-retype detection: does the trailing end of the accumulated human run
     // reproduce a remembered LLM contribution? If so, return how many trailing
@@ -380,18 +371,8 @@ export const ProvenanceTracker = Extension.create<
     // suffix (contributions are sorted longest-first) so a fully-retyped
     // sentence re-marks in full, and require MIN_REVERSION_LENGTH so incidental
     // short overlaps ("the model") don't trip it.
-    const trailingLlmMatchLen = (runText: string): number => {
-      const norm = normalizeForMatch(runText).trim();
-      if (norm.length < MIN_REVERSION_LENGTH) return 0;
-      for (const c of llmContributions) {
-        // c is already normalized+trimmed. A retype "launders" when the run
-        // ends with an LLM contribution (they typed up through the end of it).
-        if (norm.endsWith(c) && c.length >= MIN_REVERSION_LENGTH) {
-          return c.length;
-        }
-      }
-      return 0;
-    };
+    const trailingLlmMatchLen = (runText: string): number =>
+      trailingReversionLength(llmContributions, runText);
 
     return [
       new Plugin<NextOpHint | null>({
@@ -494,6 +475,10 @@ export const ProvenanceTracker = Extension.create<
         // appendTransaction runs after the user's transaction is applied
         // and lets us add a follow-up transaction with the mark.
         appendTransaction: (transactions, oldState, newState) => {
+          // Every change is logged, including the editor creating a new
+          // document's first paragraph as it loads: in plain-text coordinates
+          // the log starts from an empty text, and replay must see every
+          // change from there.
           const userTrs = transactions.filter((t) => t.docChanged);
           if (userTrs.length === 0) return null;
 
@@ -523,6 +508,9 @@ export const ProvenanceTracker = Extension.create<
               const insertedTo = insertedFrom + sliceSize;
 
               const removedLen = step.to - step.from;
+              // Events this step produces start here; in text coordinates they
+              // are re-derived from the projection once the step is processed.
+              const stepStart = events.length;
               const insertedText = sliceSize > 0
                 ? newState.doc.textBetween(insertedFrom, insertedTo, "\n", "\n")
                 : "";
@@ -775,12 +763,29 @@ export const ProvenanceTracker = Extension.create<
                       originMarkType.create({ origin: "llm", sourceMessageId: null }),
                     );
                     didMark = true;
+                    // The span is already in the document: it was just logged
+                    // as typed. Re-label it as a delete + llm_insert pair so
+                    // replay swaps its origin in place. An llm_insert alone
+                    // would make replay insert the span a second time,
+                    // doubling it and reporting length drift to an instructor
+                    // for an innocent student. Not remembered as a cut: nothing
+                    // left the document.
+                    const retyped = newState.doc.textBetween(reFrom, humanRun.to, "\n", "\n");
+                    events.push({
+                      kind: "delete",
+                      offset: reFrom,
+                      length: humanRun.to - reFrom,
+                      text: retyped,
+                      removedOrigins: originRunsIn(newState.doc, reFrom, humanRun.to, originMarkType),
+                      finalCoords: true,
+                    });
                     events.push({
                       kind: "llm_insert",
                       offset: reFrom,
                       length: humanRun.to - reFrom,
-                      text: newState.doc.textBetween(reFrom, humanRun.to, "\n", "\n"),
+                      text: retyped,
                       origin: "llm",
+                      finalCoords: true,
                     });
                     humanRun = null; // consumed; start fresh
                   }
@@ -789,12 +794,67 @@ export const ProvenanceTracker = Extension.create<
                   humanRun = null;
                 }
               }
+
+              if (textCoords) {
+                // Re-express this step's events in plain-text coordinates.
+                // Kind, origin and the rest come from the logic above; only
+                // where the change sits, and what text it moved, is re-derived
+                // — from the same projection the server replays against, so
+                // the two can't disagree about a block boundary.
+                const produced = events.splice(stepStart);
+                const own = produced.find((e) => e.kind !== "delete" && !e.finalCoords);
+                const postStepDoc = tr.docs[i + 1] ?? tr.doc;
+                const map = step.getMap();
+                const d = diffStep(
+                  preStepDoc,
+                  postStepDoc,
+                  step.from,
+                  step.to,
+                  map.map(step.from, -1),
+                  map.map(step.to, 1),
+                  originMarkType,
+                );
+                if (d.removed) {
+                  events.push({
+                    kind: "delete",
+                    offset: d.offset,
+                    length: d.removed.length,
+                    text: d.removed,
+                    removedOrigins: d.removedRuns,
+                  });
+                }
+                if (d.inserted) {
+                  const e: TrackedEvent = {
+                    ...(own ?? { kind: "insert", origin: "human" }),
+                    offset: d.offset,
+                    length: d.inserted.length,
+                    text: d.inserted,
+                  };
+                  if (e.restoredOrigins) e.restoredOrigins = alignRuns(e.restoredOrigins, d.inserted);
+                  events.push(e);
+                }
+                // The slow-retype re-label, positioned in the final document.
+                const relabel = produced.filter((e) => e.finalCoords && e.kind === "delete");
+                for (const r of relabel) {
+                  const span = projectRange(newState.doc, r.offset, r.offset + r.length, originMarkType);
+                  const at = textOffsetAt(newState.doc, r.offset);
+                  events.push({
+                    kind: "delete",
+                    offset: at,
+                    length: span.text.length,
+                    text: span.text,
+                    removedOrigins: span.runs,
+                  });
+                  events.push({ kind: "llm_insert", offset: at, length: span.text.length, text: span.text, origin: "llm" });
+                }
+              }
             }
           }
 
           // Reset the keystroke window once we've consumed it.
           keystroke = null;
 
+          for (const e of events) delete e.finalCoords;
           if (events.length > 0) onEvents(events);
 
           if (didMark) {

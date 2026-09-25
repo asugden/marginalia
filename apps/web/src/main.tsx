@@ -79,6 +79,25 @@ const InstructorExamplesPage = lazy(() =>
   import("./modules/examples/index.js").then((m) => ({ default: m.InstructorExamplesPage })));
 const ExampleCourseStrip = lazy(() =>
   import("./modules/examples/index.js").then((m) => ({ default: m.ExampleCourseStrip })));
+// Code module — browser-run Python notebooks. Optional, off by default per
+// course. See apps/web/src/modules/code/README.md. Lazy, so the editor and the
+// Python runtime are only ever downloaded by someone who opens a notebook.
+const CodeHomePage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.CodeHomePage })));
+const CodeNotebookPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.NotebookPage })));
+const CodeOpenAssignment = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.OpenAssignmentNotebook })));
+const CodeStarterPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.StarterNotebookPage })));
+const CodeSandboxPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.SandboxNotebookPage })));
+const CodeInstructorPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.InstructorCodePage })));
+const CodeRosterPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.RosterPage })));
+const CodeSubmissionPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.SubmissionPage })));
 // Attendance module — see apps/web/src/modules/attendance/README.md.
 const AttendanceSessionListPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.SessionListPage })));
@@ -248,6 +267,10 @@ const router = createBrowserRouter([
       { path: "examples", element: lz(<StudentExamplesPage />) },
       { path: "writing", element: lz(<ProvenanceDocumentListPage />) },
       { path: "writing/agents", element: lz(<ProvenanceAgentsPage />) },
+      { path: "code", element: lz(<CodeHomePage />) },
+      // Open-or-create the caller's notebook for an assignment, then redirect
+      // to it. A literal segment, so it can't collide with a notebook id.
+      { path: "code/assignment/:assignmentId", element: lz(<CodeOpenAssignment />) },
       // v1.2 legacy: old /write* course-scoped paths → /writing*.
       { path: "write", element: <LegacyWriteRedirect /> },
       { path: "write/agents", element: <LegacyWriteRedirect suffix="agents" /> },
@@ -257,6 +280,19 @@ const router = createBrowserRouter([
   // chrome), so it mounts as a standalone course-scoped route rather than a
   // StudentLayout child — avoids stacking the student topbar above its header.
   { path: "/course/:courseId/writing/:id", element: lz(<ProvenanceEditorPage />) },
+  // The notebook is a full-screen surface like the writing editor, so it
+  // mounts outside StudentLayout for the same reason.
+  { path: "/course/:courseId/code/:notebookId", element: lz(<CodeNotebookPage />) },
+  // The instructor's starter-notebook editor — same surface, starter mode.
+  {
+    path: "/course/:courseId/instructor/code/:assignmentId/starter",
+    element: lz(<CodeStarterPage />),
+  },
+  // An instructor's unsaved, runnable scratch copy of a submission.
+  {
+    path: "/course/:courseId/instructor/code/submissions/:submissionId/scratch",
+    element: lz(<CodeSandboxPage />),
+  },
   // v1.2 legacy: old standalone editor URL → /writing/:id.
   { path: "/course/:courseId/write/:id", element: <LegacyWriteRedirect /> },
 
@@ -308,6 +344,11 @@ const router = createBrowserRouter([
       // Kept so links made before the bands landed still resolve.
       { path: "assignments/examples", element: <LegacyAssignmentsExamplesRedirect /> },
       { path: "examples", element: <LegacyInstructorExamplesRedirect /> },
+      { path: "code", element: lz(<CodeInstructorPage />) },
+      // `submissions` is a literal segment; assignment ids are server-minted
+      // `casg_<uuid>`, so the two can't collide.
+      { path: "code/submissions/:submissionId", element: lz(<CodeSubmissionPage />) },
+      { path: "code/:assignmentId", element: lz(<CodeRosterPage />) },
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
     ],

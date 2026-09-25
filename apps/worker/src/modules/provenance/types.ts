@@ -86,6 +86,8 @@ export interface ProvenanceDocumentDTO {
   bodyJson: unknown;
   wordCount: number;
   charCount: number;
+  /** How the editor must log offsets for this document; see migration 0025. */
+  eventCoords: "pm" | "text";
   createdAt: number;
   updatedAt: number;
 }
@@ -108,6 +110,7 @@ export function toDocumentDTO(row: ProvenanceDocumentRow): ProvenanceDocumentDTO
     bodyJson: JSON.parse(row.body_json),
     wordCount: row.word_count,
     charCount: row.char_count,
+    eventCoords: row.event_coords === "text" ? "text" : "pm",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

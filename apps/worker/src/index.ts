@@ -58,6 +58,7 @@ import type {
 import { isTermSeason } from "@marginalia/schema";
 import { routeProvenance } from "./modules/provenance/routes.js";
 import { routeAttendance } from "./modules/attendance/routes.js";
+import { routeCode } from "./modules/code/routes.js";
 import { routeExamples } from "./modules/examples/routes.js";
 import { routeCourseItems } from "./modules/course-items/routes.js";
 import {
@@ -297,6 +298,13 @@ async function route(
   // Self-contained module; see apps/worker/src/modules/provenance/README.md.
   if (head === "provenance") {
     const handled = await routeProvenance(req, env, url, identity, parts);
+    if (handled) return handled;
+  }
+
+  // /api/code/* — browser-run Python notebooks with an optional tutor.
+  // Self-contained module; see apps/worker/src/modules/code/README.md.
+  if (head === "code") {
+    const handled = await routeCode(req, env, url, identity, parts);
     if (handled) return handled;
   }
 
@@ -1682,17 +1690,18 @@ async function setFeatureRoute(
     return error("Instructor only", 403);
   }
   const body = (await req.json().catch(() => null)) as {
-    feature?: "attendance" | "agents" | "provenance";
+    feature?: "attendance" | "agents" | "provenance" | "code";
     enabled?: boolean;
   } | null;
   const feature = body?.feature;
   if (
     feature !== "attendance" &&
     feature !== "agents" &&
-    feature !== "provenance"
+    feature !== "provenance" &&
+    feature !== "code"
   ) {
     return error(
-      "feature must be 'attendance', 'agents', or 'provenance'",
+      "feature must be 'attendance', 'agents', 'provenance', or 'code'",
       400,
     );
   }

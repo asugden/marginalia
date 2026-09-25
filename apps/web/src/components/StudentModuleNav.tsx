@@ -25,6 +25,9 @@ export interface StudentModuleNavProps {
   /** Whether the Agents extension is on for this course. Drives the Agents nav
    *  item (default on). */
   agentsEnabled: boolean;
+  /** Whether the optional code (Python notebooks) module is on. Default off,
+   *  so hosts that predate it need not pass it. */
+  codeEnabled?: boolean;
   /** The module currently in view (`"dashboard" | "agents" | "writing"`), or
    *  null when the nav is shown on a surface that isn't a module route (e.g.
    *  the editor) so nothing is highlighted. */
@@ -46,10 +49,12 @@ interface StudentModule {
 export function studentModules(
   provenanceEnabled: boolean,
   agentsEnabled: boolean,
+  codeEnabled = false,
 ): StudentModule[] {
   const mods: StudentModule[] = [{ id: "dashboard", label: "Dashboard" }];
   if (agentsEnabled) mods.push({ id: "agents", label: "Agents" });
   if (provenanceEnabled) mods.push({ id: "writing", label: "Writing" });
+  if (codeEnabled) mods.push({ id: "code", label: "Code" });
   return mods;
 }
 
@@ -57,11 +62,12 @@ export function StudentModuleNav({
   courseId,
   provenanceEnabled,
   agentsEnabled,
+  codeEnabled = false,
   activeModule = null,
   switcher,
 }: StudentModuleNavProps) {
   const home = `/course/${courseId}`;
-  const modules = studentModules(provenanceEnabled, agentsEnabled);
+  const modules = studentModules(provenanceEnabled, agentsEnabled, codeEnabled);
   return (
     <>
       <Link to={`${home}/dashboard`} aria-label="Dashboard" className="app-lockup-link">

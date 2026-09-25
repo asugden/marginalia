@@ -193,6 +193,10 @@ export interface UserEnrollmentRow {
    *  A real on/off toggle, default ON — when off, the Agents tab disappears
    *  from the instructor nav and agents disappear from the student view. */
   agentsEnabled: boolean;
+  /** Whether the code (Python notebooks) module is on for this course
+   *  (migration 0024). Opt-in: default OFF, so a course that never uses it
+   *  never shows it. */
+  codeEnabled: boolean;
   /** v1.2 (migration 0017) — the semester this course is taught in, or null
    *  when unscheduled. Academic year is derived client-side from
    *  (termSeason, termYear). */
@@ -225,7 +229,8 @@ export async function listEnrollmentsForUserEnriched(
               COALESCE(s.show_collections, 1) AS show_collections,
               COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks,
               COALESCE(s.provenance_enabled, 1) AS provenance_enabled,
-              COALESCE(s.agents_enabled, 1) AS agents_enabled
+              COALESCE(s.agents_enabled, 1) AS agents_enabled,
+              COALESCE(s.code_enabled, 0) AS code_enabled
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        LEFT JOIN course_settings s ON s.course_id = e.course_id
@@ -247,6 +252,7 @@ export async function listEnrollmentsForUserEnriched(
       hide_provenance_marks: number;
       provenance_enabled: number;
       agents_enabled: number;
+      code_enabled: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
@@ -262,6 +268,7 @@ export async function listEnrollmentsForUserEnriched(
     hideProvenanceMarks: r.hide_provenance_marks === 1,
     provenanceEnabled: r.provenance_enabled === 1,
     agentsEnabled: r.agents_enabled === 1,
+    codeEnabled: r.code_enabled === 1,
   }));
 }
 
@@ -303,7 +310,7 @@ export async function markCourseFeatureShown(
 export async function setCourseFeature(
   db: D1Database,
   courseId: string,
-  feature: "attendance" | "agents" | "provenance",
+  feature: "attendance" | "agents" | "provenance" | "code",
   enabled: boolean,
 ): Promise<void> {
   const column =
@@ -311,7 +318,9 @@ export async function setCourseFeature(
       ? "show_attendance"
       : feature === "agents"
         ? "agents_enabled"
-        : "provenance_enabled";
+        : feature === "code"
+          ? "code_enabled"
+          : "provenance_enabled";
   await db
     .prepare(
       `INSERT INTO course_settings (course_id, ${column}, updated_at)

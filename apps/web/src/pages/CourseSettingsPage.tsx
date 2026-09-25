@@ -42,6 +42,7 @@ export function CourseSettingsPage() {
     showAttendance,
     agentsEnabled,
     provenanceEnabled,
+    codeEnabled,
     termSeason,
     termYear,
     startDate,
@@ -60,6 +61,7 @@ export function CourseSettingsPage() {
   const [attendanceOn, setAttendanceOn] = useState(showAttendance);
   const [agentsOn, setAgentsOn] = useState(agentsEnabled);
   const [provenanceOn, setProvenanceOn] = useState(provenanceEnabled);
+  const [codeOn, setCodeOn] = useState(codeEnabled);
 
   // Term + date drafts. "" season = unscheduled; "" date = open bound.
   const [seasonDraft, setSeasonDraft] = useState<TermSeason | "">(termSeason ?? "");
@@ -96,7 +98,7 @@ export function CourseSettingsPage() {
   }, [courseId]);
 
   async function toggleFeature(
-    feature: "attendance" | "agents" | "provenance",
+    feature: "attendance" | "agents" | "provenance" | "code",
     next: boolean,
   ) {
     const setLocal =
@@ -104,7 +106,9 @@ export function CourseSettingsPage() {
         ? setAgentsOn
         : feature === "provenance"
           ? setProvenanceOn
-          : setAttendanceOn;
+          : feature === "code"
+            ? setCodeOn
+            : setAttendanceOn;
     setLocal(next);
     setError(null);
     try {
@@ -289,6 +293,22 @@ export function CourseSettingsPage() {
               className="app-switch"
               checked={provenanceOn}
               onChange={(ev) => toggleFeature("provenance", ev.target.checked)}
+            />
+          </label>
+          <label className={"app-module" + (codeOn ? " app-module--on" : "")}>
+            <span className="app-module__main">
+              <b>Code</b>
+              <span>
+                Python notebooks that run in each student’s browser, with
+                plotting and their own datasets. Adds the Code tool for
+                students and the Code tab here. Off unless you turn it on.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="app-switch"
+              checked={codeOn}
+              onChange={(ev) => toggleFeature("code", ev.target.checked)}
             />
           </label>
           <label className={"app-module" + (attendanceOn ? " app-module--on" : "")}>

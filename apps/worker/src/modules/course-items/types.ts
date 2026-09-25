@@ -6,14 +6,16 @@
 // self-report and a server-derived backbone exit render identically, which is
 // the one thing this surface must not do.
 
-/** The four assignable types. `reading` is reserved; nothing creates one yet. */
-export type ItemKind = "writing" | "agent" | "example" | "reading";
+/** The assignable types. `reading` is reserved; nothing creates one yet.
+ *  `code` is a coding notebook assignment (the optional code module). */
+export type ItemKind = "writing" | "agent" | "example" | "reading" | "code";
 
 export const ITEM_KINDS: readonly ItemKind[] = [
   "writing",
   "agent",
   "example",
   "reading",
+  "code",
 ];
 
 export function isItemKind(v: unknown): v is ItemKind {
@@ -46,6 +48,7 @@ export interface CourseItemRow {
  *   agent    `finished`    server-derived — a backbone reached its exit
  *   example  `markedDone`  the student's own claim, opt-in
  *   reading  `markedDone`  the student's own claim, opt-in
+ *   code     `submitted`   an artifact exists that the student submitted
  *
  * A caller cannot accidentally collapse these: there is no shared field name
  * to read, so rendering one requires naming which kind it came from. Do not
@@ -59,7 +62,8 @@ export type ItemCompletionDTO =
   | { kind: "writing"; submitted: boolean }
   | { kind: "agent"; finished: boolean }
   | { kind: "example"; markedDone: boolean }
-  | { kind: "reading"; markedDone: boolean };
+  | { kind: "reading"; markedDone: boolean }
+  | { kind: "code"; submitted: boolean };
 
 /**
  * A wrapper row as the API returns it.

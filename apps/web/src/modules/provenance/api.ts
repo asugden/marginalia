@@ -21,6 +21,8 @@ export interface DocumentDTO {
   bodyJson: unknown;
   wordCount: number;
   charCount: number;
+  /** How this document's edits are logged; see migration 0025. */
+  eventCoords: "pm" | "text";
   createdAt: number;
   updatedAt: number;
 }

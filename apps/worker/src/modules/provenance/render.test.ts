@@ -238,5 +238,80 @@ const LLM_TEXT =
   );
 }
 
+// ── Slow retype of LLM text, re-labelled by the client ─────────────────
+// A student types remembered model wording one keystroke at a time; the
+// tracker re-labels the matched span as llm. The span is already in the
+// document, so the re-label must be a delete + llm_insert pair. The old shape
+// (llm_insert alone) made replay insert the span twice, which reached
+// instructors as length drift on an innocent student's work.
+{
+  const phrase = "one party delegates authority to another";
+  const before = "My view: ";
+  const text = before + phrase;
+  const keystrokes = () => [
+    ev({ kind: "insert", offset: 0, length: before.length, text: before, origin: "human" }),
+    ...typeOut(phrase, 300, before.length),
+  ];
+
+  reset();
+  const fixed = buildRender(text, [
+    ...keystrokes(),
+    ev({ kind: "delete", offset: before.length, length: phrase.length, text: phrase }),
+    ev({ kind: "llm_insert", offset: before.length, length: phrase.length, text: phrase, origin: "llm" }),
+  ]);
+  check("slow retype re-label: no length drift", fixed.audit?.lengthDrift, 0);
+  check("slow retype re-label: the phrase is llm", originCount(fixed, "llm"), phrase.length);
+  check("slow retype re-label: the lead-in stays typed", originCount(fixed, "human"), before.length);
+
+  reset();
+  const old = buildRender(text, [
+    ...keystrokes(),
+    ev({ kind: "llm_insert", offset: before.length, length: phrase.length, text: phrase, origin: "llm" }),
+  ]);
+  check("the old event shape double-counts (why it changed)", old.audit?.lengthDrift, phrase.length);
+}
+
+// ── Plain-text coordinates (migration 0025) ────────────────────────────
+// A document created since 0025 logs offsets into the projection the server
+// replays against. It starts empty; the editor creating its first paragraph is
+// the first event ("\n"), and each paragraph break is one "\n". A
+// multi-paragraph document typed from scratch, with a paste in the middle,
+// must replay with no drift and with every origin on the right characters.
+{
+  reset();
+  const p1 = "Opening line.";
+  const pasted = "An imported sentence.";
+  const p2rest = " My own follow-up.";
+  // Projection of the final doc: two paragraphs, each ending in "\n".
+  const text = `${p1}\n${pasted}${p2rest}\n`;
+  const events = [
+    ev({ kind: "insert", offset: 0, length: 1, text: "\n", origin: "human" }), // first paragraph
+    ...typeOut(p1, 300, 0),
+    ev({ kind: "insert", offset: p1.length, length: 1, text: "\n", origin: "human" }), // Enter
+    ev({ kind: "paste", offset: p1.length + 1, length: pasted.length, text: pasted, origin: "pasted" }),
+    ...typeOut(p2rest, 300, p1.length + 1 + pasted.length),
+  ];
+  const r = buildRender(text, events);
+  check("text coords: multi-paragraph document has no drift", r.audit?.lengthDrift, 0);
+  check("text coords: the paste sits exactly on the pasted sentence", r.runs, [
+    { origin: "human", length: p1.length + 1 },
+    { origin: "pasted", length: pasted.length },
+    { origin: "human", length: p2rest.length + 1 },
+  ]);
+
+  // The same edits logged the old way (editor positions: text starts at 1,
+  // a paragraph break is two positions) against the old projection drift —
+  // which is why new documents no longer log that way.
+  reset();
+  const legacy = [
+    ...typeOut(p1, 300, 1),
+    ev({ kind: "insert", offset: p1.length + 1, length: 2, text: "", origin: "human" }),
+    ev({ kind: "paste", offset: p1.length + 3, length: pasted.length, text: pasted, origin: "pasted" }),
+    ...typeOut(p2rest, 300, p1.length + 3 + pasted.length),
+  ];
+  const old = buildRender(`${p1}\n${pasted}${p2rest}`, legacy);
+  check("legacy coords: the same edits drift (why new documents changed)", (old.audit?.lengthDrift ?? 0) > 0, true);
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures > 0) process.exit(1);
