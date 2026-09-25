@@ -102,7 +102,8 @@ export function CodeHomePage() {
         <h1>Code</h1>
         <p className="app-head__sub">
           Python notebooks that run right here in your browser, with numpy,
-          pandas, matplotlib and scikit-learn ready to import. Nothing to
+          pandas, matplotlib and scikit-learn ready to import, and
+          littletorch for building and training neural networks. Nothing to
           install, and your own data files never leave your computer.
         </p>
       </div>

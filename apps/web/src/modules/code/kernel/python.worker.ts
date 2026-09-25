@@ -28,9 +28,11 @@ interface PyodideAPI {
     readdir(path: string): string[];
     stat(path: string): { size: number; mode: number };
     isFile(mode: number): boolean;
+    mkdirTree(path: string): void;
   };
   runPython(code: string): unknown;
   runPythonAsync(code: string): Promise<unknown>;
+  loadPackage(names: string[], opts?: { messageCallback?: (m: string) => void }): Promise<unknown>;
   loadPackagesFromImports(
     code: string,
     opts?: { messageCallback?: (m: string) => void; errorCallback?: (m: string) => void },
@@ -219,6 +221,26 @@ async def _mg_run(src, count):
         return False
 `;
 
+// Python packages shipped with the notebook itself, bundled at build time as
+// text and written into site-packages on startup, so `import littletorch`
+// works with no download and no install. See packages/littletorch.
+const BUNDLED = import.meta.glob("../../../../../../packages/littletorch/littletorch/**/*.py", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+function installBundledPackages(p: PyodideAPI) {
+  const site = String(p.runPython("import site; site.getsitepackages()[0]"));
+  for (const [path, source] of Object.entries(BUNDLED)) {
+    const rel = path.split("/packages/littletorch/")[1];
+    if (!rel) continue;
+    const target = `${site}/${rel}`;
+    p.FS.mkdirTree(target.slice(0, target.lastIndexOf("/")));
+    p.FS.writeFile(target, new TextEncoder().encode(source));
+  }
+}
+
 async function init(indexURL: string) {
   try {
     const mod = (await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`)) as {
@@ -245,6 +267,7 @@ async function init(indexURL: string) {
       }
     });
     p.runPython(RUNTIME);
+    installBundledPackages(p);
     py = p;
     post({ type: "ready", pythonVersion: String(p.runPython("import sys; sys.version.split()[0]")) });
   } catch (e) {
@@ -264,6 +287,9 @@ async function run(runId: number, code: string, count: number) {
     // Failures here are not fatal: the import itself will raise a normal
     // ModuleNotFoundError the student can read.
     try {
+      // Pyodide can't see a bundled package's own imports, so load what it
+      // needs before a cell that uses it.
+      if (/\blittletorch\b/.test(code)) await py.loadPackage(["numpy"], { messageCallback: () => {} });
       await py.loadPackagesFromImports(code, {
         messageCallback: (m) => {
           if (/^Loading /.test(m)) post({ type: "status", runId, message: m });

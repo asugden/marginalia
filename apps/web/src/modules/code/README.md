@@ -26,6 +26,12 @@ Assign menu's "Coding assignment" entry all key off that one flag.
   the jsDelivr CDN at a pinned version, or `VITE_PYODIDE_BASE` for a
   self-hosted copy. Packages load on first import. `%pip install name` works
   for pure-Python packages from PyPI.
+- **littletorch** (`packages/littletorch`), a small PyTorch-shaped
+  neural-network library on NumPy, is bundled into the worker as source
+  (`import.meta.glob`, about 45 KB) and written into site-packages at
+  startup, so `import littletorch` needs no download. The worker loads NumPy
+  first for any cell that imports it, since Pyodide can't see a bundled
+  package's own imports.
 - The worker's Python runtime runs cells in a private namespace, Jupyter
   style: the last expression is displayed, a trailing `;` hides it,
   `display()` exists, and `plt.show()` emits the figure in order. DataFrames
