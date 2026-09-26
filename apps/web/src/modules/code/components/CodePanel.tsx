@@ -95,12 +95,19 @@ export function CodePanel({ courseId }: { courseId: string }) {
   // Live assignments only; an archived one is no longer set.
   const live = (assignments ?? []).filter((a) => a.archivedAt == null);
 
+  // Nothing assigned (or still loading) → render nothing, like ExamplesPanel.
+  // The dashboard shows a module only when the course has set work in it;
+  // scratch notebooks stay reachable from the Code nav item.
+  if (live.length === 0) return null;
+
   return (
     <section className="app-modpanel app-modpanel--open" data-module="code">
       <div className="app-modpanel__head">
         <div className="app-modpanel__heading">
           <span className="eyebrow">Python notebooks</span>
-          <h2>Code</h2>
+          {/* The full page adds scratch notebooks, which have no other
+              entry point now that Code is off the student top line. */}
+          <h2><Link to={base}>Code</Link></h2>
         </div>
         {live.length > 0 && (
           <span className="app-modpanel__meta">

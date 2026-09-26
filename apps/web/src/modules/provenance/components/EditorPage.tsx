@@ -91,8 +91,6 @@ export function EditorPage() {
   // preview reads role !== "instructor" — which is exactly right: they should
   // get the student experience. So this is only true when genuinely authoring.
   const isInstructor = active?.role === "instructor" && !previewing;
-  const provenanceEnabled = active?.provenanceEnabled ?? true;
-  const agentsEnabled = active?.agentsEnabled ?? true;
 
   // "Hide marks from students" — the persisted course setting (display-only;
   // recording is unaffected). Seeded from /api/me; an instructor flips it with
@@ -396,12 +394,7 @@ export function EditorPage() {
       {courseParam && (
         <header className="app-topbar app-topbar--student prov-appbar">
           <div className="app-topbar__inner">
-            <StudentModuleNav
-              courseId={courseParam}
-              provenanceEnabled={provenanceEnabled}
-              agentsEnabled={agentsEnabled}
-              activeModule="writing"
-            />
+            <StudentModuleNav courseId={courseParam} />
             <div className="app-topbar__spacer" />
           </div>
         </header>

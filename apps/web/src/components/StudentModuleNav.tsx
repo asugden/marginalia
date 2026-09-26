@@ -1,36 +1,31 @@
-// The student module nav — the lockup, an optional course switcher, and one
-// item per student surface. Dashboard is the combined overview (the course
-// root); Agents and Writing are dedicated routes shown only when their
-// extension is on for the course (Agents unless toggled off, Writing when the
-// provenance module is on). As of v1.2 these are real routes, not `#module`
-// hash scroll targets — each item navigates to its own page.
+// The student header nav — the lockup, an optional course switcher, and ONE
+// nav item: Dashboard.
+//
+// It used to list every enabled module (Dashboard · Agents · Writing · Code).
+// That mirrored the module flags, not the student's task, and it diverged
+// from the instructor header, which shows a compact task strip rather than a
+// pill per module. The dashboard is now the student hub: its Due-next strip
+// and module panels carry students into everything the course has actually
+// set, and each panel's heading links to its module's full page, so the
+// dedicated routes (/agents, /writing, /code) stay reachable without a
+// permanent top-line item each.
 //
 // This is the single source of truth for the student nav: the StudentLayout
-// topbar renders it, and so does the standalone provenance editor (which lives
-// outside StudentLayout but still wants the same lockup + way home). The editor
-// passes no switcher.
+// topbar renders it (and the ≤680 sheet maps over studentModules()), and so
+// do the standalone provenance/notebook editors (which live outside
+// StudentLayout but still want the same lockup + way home). The editors pass
+// no switcher.
 //
-// It's presentation-only and context-free — the host passes courseId, the
-// module flags, and (optionally) a course-switcher node — so it works in the
-// editor's context-less route too.
+// It's presentation-only and context-free — the host passes courseId and
+// (optionally) a course-switcher node.
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Wordmark } from "./index.js";
 
 export interface StudentModuleNavProps {
   courseId: string;
-  /** Whether the provenance writing module is on for this course. Drives the
-   *  Writing nav item. */
-  provenanceEnabled: boolean;
-  /** Whether the Agents extension is on for this course. Drives the Agents nav
-   *  item (default on). */
-  agentsEnabled: boolean;
-  /** Whether the optional code (Python notebooks) module is on. Default off,
-   *  so hosts that predate it need not pass it. */
-  codeEnabled?: boolean;
-  /** The module currently in view (`"dashboard" | "agents" | "writing"`), or
-   *  null when the nav is shown on a surface that isn't a module route (e.g.
-   *  the editor) so nothing is highlighted. */
+  /** The module currently in view (`"dashboard"`), or null on surfaces that
+   *  aren't a nav destination (e.g. the editors) so nothing is highlighted. */
   activeModule?: string | null;
   /** Optional course switcher, rendered between the lockup and the nav items.
    *  Present in the StudentLayout topbar; absent in the standalone editor. */
@@ -42,32 +37,20 @@ interface StudentModule {
   label: string;
 }
 
-/** The student surfaces, in order. Dashboard (the overview) is always present;
- *  Agents appears unless the Agents extension is toggled off; Writing appears
- *  only when the course's provenance module is on. Attendance is intentionally
- *  absent (QR-gated, no student history surface yet). */
-export function studentModules(
-  provenanceEnabled: boolean,
-  agentsEnabled: boolean,
-  codeEnabled = false,
-): StudentModule[] {
-  const mods: StudentModule[] = [{ id: "dashboard", label: "Dashboard" }];
-  if (agentsEnabled) mods.push({ id: "agents", label: "Agents" });
-  if (provenanceEnabled) mods.push({ id: "writing", label: "Writing" });
-  if (codeEnabled) mods.push({ id: "code", label: "Code" });
-  return mods;
+/** The student nav destinations, in order — currently just the Dashboard hub.
+ *  Kept as a function (and as the mobile sheet's source) so a future
+ *  destination lands in the topbar and the sheet together. */
+export function studentModules(): StudentModule[] {
+  return [{ id: "dashboard", label: "Dashboard" }];
 }
 
 export function StudentModuleNav({
   courseId,
-  provenanceEnabled,
-  agentsEnabled,
-  codeEnabled = false,
   activeModule = null,
   switcher,
 }: StudentModuleNavProps) {
   const home = `/course/${courseId}`;
-  const modules = studentModules(provenanceEnabled, agentsEnabled, codeEnabled);
+  const modules = studentModules();
   return (
     <>
       <Link to={`${home}/dashboard`} aria-label="Dashboard" className="app-lockup-link">

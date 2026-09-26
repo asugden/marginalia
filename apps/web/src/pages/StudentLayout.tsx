@@ -152,11 +152,7 @@ export function StudentLayout() {
   const sheetSections: NavSheetSection[] = [
     {
       key: "modules",
-      rows: studentModules(
-        value.provenanceEnabled,
-        value.agentsEnabled,
-        value.codeEnabled,
-      ).map((m) => ({
+      rows: studentModules().map((m) => ({
         key: m.id,
         label: m.label,
         to: `${home}/${m.id}`,
@@ -204,9 +200,6 @@ export function StudentLayout() {
                 its own route (Dashboard / Agents / Writing). */}
             <StudentModuleNav
               courseId={courseId}
-              provenanceEnabled={value.provenanceEnabled}
-              agentsEnabled={value.agentsEnabled}
-              codeEnabled={value.codeEnabled}
               activeModule={activeModule}
               switcher={
                 <CourseSwitcher

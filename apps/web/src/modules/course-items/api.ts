@@ -249,6 +249,38 @@ export function instructorHref(
   }
 }
 
+/**
+ * Where a STUDENT goes to act on this item. The student-side parallel of
+ * `instructorHref`, kept beside it for the same reason: the dashboard's
+ * "Due next" strip and any future student list must agree on destinations.
+ *
+ * Writing and agent items land on their module's list page rather than a
+ * per-item surface: a writing assignment is submitted from whichever document
+ * the student chooses in the editor, and an agent may already have a
+ * conversation in progress that only the agents list knows how to resume.
+ */
+export function studentHref(
+  courseId: string,
+  item: CourseItemDTO,
+): string | null {
+  const base = `/course/${courseId}`;
+  switch (item.kind) {
+    case "writing":
+      return `${base}/writing`;
+    case "agent":
+      return `${base}/agents`;
+    case "example":
+      // payloadRef is the example slug; ?c= surfaces the course strip on the
+      // public example page (same link ExamplesPanel builds).
+      return `/examples/${item.payloadRef}?c=${encodeURIComponent(courseId)}`;
+    case "code":
+      // The open-or-create redirect: lands in the student's own notebook.
+      return `${base}/code/assignment/${item.payloadRef}`;
+    default:
+      return null;
+  }
+}
+
 /** Is this item a recommended supplement — offered, but never due? */
 export function isSupplement(item: CourseItemDTO): boolean {
   return item.assignedAt === null && item.dueAt === null;
