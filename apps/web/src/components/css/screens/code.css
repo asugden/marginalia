@@ -78,6 +78,14 @@
 }
 .code-cell__input:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
 .code-cell.is-busy .code-cell__input { border-color: var(--accent-wash-2); }
+/* A cell that has been run and not touched since recedes into the page canvas
+   — it is settled, so it stops asserting itself as an editable surface.
+   Editing it clears the run state and it returns to white: white means "this
+   code hasn't been run as it now stands".
+
+   --bg, not --surface-sunken: that is the docs popup's surface, and a popup
+   opening over a settled cell must not merge into it. */
+.code-cell.is-ran .code-cell__input { background: var(--bg); }
 .code-cell__status {
   font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);
   padding: 0.35rem 0.25rem 0;
@@ -303,3 +311,87 @@
   .code-cell { grid-template-columns: 2.4rem minmax(0, 1fr); }
   .code-insert { margin-left: 2.4rem; }
 }
+
+/* ── text cells read as prose, not code ───────────────────────────────── */
+/* A markdown cell is writing, so its editor uses the body font. CodeMirror's
+   own rule is `.ͼv .cm-scroller { font-family: var(--font-mono) }` — a
+   generated class we can't name safely, and it ties with any single-class
+   selector, resolving by injection order. Scoping through the cell gives us
+   two classes plus the element, which wins outright and survives a refresh. */
+.code-cell--text .cm-editor .cm-scroller {
+  font-family: var(--font-sans);
+  line-height: var(--leading-relaxed);
+}
+.code-cell--text .cm-editor .cm-content {
+  font-family: var(--font-sans);
+}
+
+/* ── documentation popup ──────────────────────────────────────────────── */
+/* Shown when a student opens a library call's parentheses. Reference only:
+   it proposes nothing and never writes to the cell.
+
+   Surfaces follow the app's menus (.app-roles__menu, .app-course__menu):
+   --surface-raised over the sand canvas, one hairline border, the shared
+   shadow. No bespoke colours. */
+/* CodeMirror puts cm-tooltip on the SAME element as our own class — the
+   tooltip's dom IS .code-docs — so `:has(.code-docs)` can never match (an
+   element doesn't contain itself) and the library's `.ͼ2 .cm-tooltip`
+   (specificity 0,2,0) outranks a bare `.code-docs` (0,1,0). Chaining both
+   classes gets us to 0,2,0 and, tying, we win on order. */
+.code-docs.cm-tooltip,
+.code-docs {
+  max-width: 34rem;
+  /* 4px grid, like every other panel. */
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  /* The same surface as the examples' pinned control bar
+     (examples/shared/controls.css): sunken sand, a strong hairline, and the
+     medium shadow. A reference overlay is the same kind of object as those
+     controls, so it should read as the same material. */
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-sans);
+}
+.code-docs__sig {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.code-docs__name { color: var(--text-strong); font-weight: 600; }
+
+/* Required reads as real content; optional recedes. That distinction is the
+   one a student needs at the call site. */
+.code-docs__param--required { color: var(--text-strong); }
+.code-docs__param--optional { color: var(--text-muted); }
+.code-docs__default { color: var(--text-muted); }
+
+/* The argument the cursor is actually in — accent + bold, the app's standard
+   "this one" signal. */
+.code-docs__param--active {
+  color: var(--accent-ink);
+  font-weight: 700;
+  border-radius: var(--radius-xs);
+  background: var(--accent-wash);
+  padding: 0 var(--space-1);
+  margin: 0 calc(var(--space-1) * -1);
+}
+.code-docs__more { color: var(--text-muted); font-style: italic; }
+
+.code-docs__summary {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-strong);
+  font-size: 0.82rem;
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+}
+.code-docs__module {
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+

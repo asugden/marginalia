@@ -70,6 +70,11 @@ export function RoleSwitch({
   const isInstructor = role === "instructor" || actingAsStudent;
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  // A failed switch must SAY so. This used to be a bare try/finally: when the
+  // toggle rejected (a 401 under the local dev-auth bypass, which has no
+  // session row to carry the flag) the navigate() was skipped and nothing
+  // surfaced — the menu simply appeared to do nothing.
+  const [failed, setFailed] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -80,9 +85,9 @@ export function RoleSwitch({
   // the toggle before navigating so the destination page's /api/me already
   // reflects the new role. Admin ⇄ author both run as full instructor.
   async function go(target: RoleSurface, to: string) {
-    setOpen(false);
     if (switching) return;
     setSwitching(true);
+    setFailed(null);
     try {
       // Target is the source of truth: entering the student surface sets the
       // downgrade, anywhere else (Instructor / Admin) clears it. We must NOT
@@ -92,7 +97,12 @@ export function RoleSwitch({
       // still un-stick them. setActingAsStudent is idempotent, so clearing when
       // already cleared is a harmless no-op.
       await setActingAsStudent(target === "student");
+      setOpen(false);
       navigate(to);
+    } catch (e) {
+      // Stay open and show why. Navigating anyway would be worse than doing
+      // nothing: the role never changed, so the destination would lie.
+      setFailed(e instanceof Error ? e.message : "Could not switch role.");
     } finally {
       setSwitching(false);
     }
@@ -172,13 +182,14 @@ export function RoleSwitch({
                   "app-roles__opt" + (active ? " app-roles__opt--active" : "")
                 }
                 disabled={switching}
-                onClick={() => go(o.key, o.to)}
+                onClick={() => void go(o.key, o.to)}
               >
                 <b>{o.label}</b>
                 <span>{o.detail}</span>
               </button>
             );
           })}
+          {failed && <p className="app-roles__error">{failed}</p>}
         </div>
       )}
     </div>

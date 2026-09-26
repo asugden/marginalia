@@ -54,6 +54,51 @@ installed, so the completion data `lang-python` registers is inert.
 Browser spellcheck and autocorrect are off in cells. Shift+Enter runs and
 advances; Ctrl/Cmd+Enter runs in place.
 
+## Documentation popup (`components/docsPopup.ts`)
+
+Typing `(` after a library call shows what that library accepts: its
+parameters, the first paragraph of its docstring, and the defining module.
+This is documentation lookup, not completion — it proposes nothing, inserts
+nothing, and cannot write to the cell, so origin tracking has nothing to
+record and it runs in every mode.
+
+Shaped for beginners rather than for completeness:
+
+- **No type annotations.** A pandas signature's real hints are unions running
+  several lines; the names and defaults carry what a student needs.
+- **Required parameters read differently from optional ones** — full-strength
+  ink versus muted, which is the distinction that matters at a call site.
+- **The parameter the cursor is in is highlighted** in the accent colour.
+  Position decides it, except that a keyword argument (`sep=`) pins it by
+  name. Commas inside strings and nested calls don't miscount.
+- **The list is windowed**: every required parameter, three past the cursor,
+  never fewer than six. Whatever that leaves out is shown as `+N more`, never
+  silently dropped.
+- **No `*` or `/` entries.** Those are separators in Python's rendered
+  signature, not parameters; iterating `.parameters` omits them.
+
+The name is resolved by `inspect.signature` in the live Python namespace
+(`_mg_signature` in the worker runtime), with the docstring's own first line
+as a fallback for C functions that expose no signature — including the
+old-style `f(a, b[, c])` bracket convention for optional arguments. Two
+limits, both of which simply mean no popup rather than an error:
+
+- **Only what's already imported.** The lookup evaluates the name in the
+  running namespace, so `np.linspace` is unknown until some cell has run
+  `import numpy as np`.
+- **Only when Python is idle.** Pyodide is single-threaded; the worker
+  declines the lookup outright while a cell runs, so a popup never makes a
+  student wait behind their own computation.
+
+Only plain dotted names resolve (`np.linspace`, `pd.read_csv`). A call on an
+expression — `df.groupby("a").mean(` — doesn't, since its type isn't knowable
+without running it. Names defined in the notebook are skipped deliberately:
+anything in `__main__` is the student's own code, and this shows what
+libraries expect, not what the student just wrote. Escape dismisses.
+
+Surfaces come from the shared tokens the app's other menus use
+(`--surface-raised`, `--border`, `--shadow-lg`), so it reads as one product.
+
 ## Origin tracking (`components/originTracking.ts`)
 
 A CodeMirror extension per cell, on only for a submit-mode assignment. It

@@ -22,15 +22,21 @@ export interface PreviewBannerProps {
 export function PreviewBanner({ courseId, courseName }: PreviewBannerProps) {
   const navigate = useNavigate();
   const [leaving, setLeaving] = useState(false);
+  // If clearing the downgrade fails, say so rather than silently doing
+  // nothing — this is the instructor's way out, so a dead button strands them.
+  const [failed, setFailed] = useState<string | null>(null);
 
   async function back() {
     if (leaving) return;
     setLeaving(true);
+    setFailed(null);
     try {
       // Clear the downgrade before returning to authoring so the instructor
       // page loads with full instructor powers.
       await setActingAsStudent(false);
       navigate(`/course/${courseId}/instructor`);
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : "Could not leave preview.");
     } finally {
       setLeaving(false);
     }
@@ -43,10 +49,11 @@ export function PreviewBanner({ courseId, courseName }: PreviewBannerProps) {
         <b>Previewing {courseName} as a student.</b> The student&rsquo;s view of
         this course.
       </span>
+      {failed && <span className="app-preview__error">{failed}</span>}
       <button
         type="button"
         className="app-preview__back"
-        onClick={back}
+        onClick={() => void back()}
         disabled={leaving}
       >
         Back to instructor

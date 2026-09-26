@@ -58,6 +58,7 @@ import {
   type OutboundCodeEvent,
 } from "../api.js";
 import { MoveBuffer, type Origin } from "@marginalia/provenance";
+import { docsPopup } from "./docsPopup.js";
 import { noteChatReply, originTracking, type TrackedCellEvent, type TrackingContext } from "./originTracking.js";
 import { listStoredFiles } from "../kernel/files.js";
 import { Kernel, type KernelStatus } from "../kernel/kernel.js";
@@ -276,7 +277,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
         setLoaded(l);
         setCells(initial);
         setTitle(l.title);
-        setSide(l.aiEnabled ? "chat" : null);
+        setSide(null);
       } catch (e) {
         if (isAuthError(e)) return redirectToLogin();
         if (!live) return;
@@ -494,7 +495,10 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
               delete n[id];
               return n;
             }
-            return { ...r, [id]: { state: "done", count: cur && "count" in cur ? cur.count : 0, ok } };
+            return {
+              ...r,
+              [id]: { state: "done", count: cur && "count" in cur ? cur.count : 0, ok, source: cell.source },
+            };
           });
           setFilesTick((n) => n + 1);
           scheduleSave();
@@ -571,11 +575,22 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
     [updateCells],
   );
 
+  // Documentation lookup, in every mode: the popup reads what an imported
+  // library says about itself and can't write to the document, so there's
+  // nothing here that origin tracking needs to know about.
+  const lookupSignature = useCallback(
+    (name: string) => kernelRef.current?.signature(name) ?? Promise.resolve(null),
+    [],
+  );
+
   const trackingFor = useMemo(() => {
-    if (!loaded?.tracking || mode !== "student") return undefined;
-    const ctx = tracking.current!;
-    return (cell: Cell) => [originTracking(cell.id, cell.origins, cell.source.length, ctx)];
-  }, [loaded, mode]);
+    const docs = docsPopup(lookupSignature);
+    const ctx = loaded?.tracking && mode === "student" ? tracking.current! : null;
+    return (cell: Cell) =>
+      ctx
+        ? [originTracking(cell.id, cell.origins, cell.source.length, ctx), docs]
+        : [docs];
+  }, [loaded, mode, lookupSignature]);
 
   const onChatReply = useCallback((reply: string) => {
     noteChatReply(tracking.current!, reply, cellsRef.current.map((c) => c.source).join("\n"));

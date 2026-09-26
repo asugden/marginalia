@@ -1,5 +1,6 @@
 // Code module — browser-run Python notebooks. See ./README.md.
 export { CodeHomePage } from "./components/CodeHomePage.js";
+export { CodePanel } from "./components/CodePanel.js";
 export {
   NotebookPage,
   OpenAssignmentNotebook,

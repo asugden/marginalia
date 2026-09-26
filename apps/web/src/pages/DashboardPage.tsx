@@ -1,14 +1,21 @@
 // Student course dashboard — the course's overview, a stack of its enabled
-// module panels (Agents always; Writing when provenance is on) so they read as
-// peers. This is where the logo and the "Dashboard" nav item land. The focused
+// module panels (Agents when on; Writing when provenance is on; Code when the
+// code module is on; Examples when the course has assigned any) so they read
+// as peers. This is where the logo and the "Dashboard" nav item land. The focused
 // per-module routes (/agents, /writing) hold the full lists; the dashboard is
 // the at-a-glance combined view.
 //
 // Each panel is self-contained: Agents lives in AgentsPanel (shared with the
 // dedicated /agents page); Writing is inline here (its dedicated page is the
-// provenance DocumentListPage). Course id / name / flags come from useCourse()
+// provenance DocumentListPage); Code and Examples live in their own modules'
+// CodePanel / ExamplesPanel.
+//
+// EVERY ENABLED MODULE NEEDS A PANEL HERE. The Code one was missing for a
+// while: the course got a Code nav item and a working /code route, but its
+// assignments never appeared on the course home the way writing ones did. If
+// you add a module with a student surface, add its panel in this stack too. Course id / name / flags come from useCourse()
 // (the shell validated enrollment).
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   createDocument,
@@ -21,6 +28,19 @@ import { relativeTime } from "../time.js";
 import { Button } from "../components/index.js";
 import { AgentsPanel } from "./AgentsPanel.js";
 
+// Lazy: DashboardPage is eagerly bundled (it is the student landing), and the
+// code module drags in the notebook editor and its Python kernel. A course
+// without Code enabled must not pay for that, and one with it enabled can load
+// the panel a beat late.
+const CodePanel = lazy(() =>
+  import("../modules/code/index.js").then((m) => ({ default: m.CodePanel })));
+
+// Examples has no enable flag — it is always on, gated only by whether the
+// instructor assigned any. The panel decides that for itself and renders null
+// when nothing is assigned, so there is no flag to check here.
+const ExamplesPanel = lazy(() =>
+  import("../modules/examples/index.js").then((m) => ({ default: m.ExamplesPanel })));
+
 export function DashboardPage() {
   const {
     courseId,
@@ -28,6 +48,7 @@ export function DashboardPage() {
     role,
     provenanceEnabled,
     agentsEnabled,
+    codeEnabled,
     actingAsStudent,
   } = useCourse();
   const navigate = useNavigate();
@@ -164,6 +185,20 @@ export function DashboardPage() {
             </div>
           </section>
         )}
+
+        {/* ── Code (Python notebooks) — only when the module is enabled ─── */}
+        {codeEnabled && (
+          <Suspense fallback={null}>
+            <CodePanel courseId={courseId} />
+          </Suspense>
+        )}
+
+        {/* ── Examples — assigned ones only; the panel hides itself when the
+            course has assigned none. Browsing every example stays at
+            /examples, which this deliberately does not duplicate. ─────────── */}
+        <Suspense fallback={null}>
+          <ExamplesPanel courseId={courseId} />
+        </Suspense>
 
         {/* No Attendance panel: check-in is QR-gated (a student arrives via a
             scanned session code at /a/:id), and there is no student-facing
