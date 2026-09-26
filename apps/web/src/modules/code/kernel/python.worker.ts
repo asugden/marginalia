@@ -13,7 +13,7 @@
 // cross-origin isolation headers the rest of the app does not send.
 
 import type { CellOutput } from "../api.js";
-import type { FromWorker, ToWorker } from "./protocol.js";
+import type { FromWorker, SignatureInfo, ToWorker } from "./protocol.js";
 
 interface PyProxy {
   destroy(): void;
@@ -164,6 +164,162 @@ def _mg_patch_show():
         def _mg_show(*args, **kwargs):
             _mg_flush_figures()
         plt.show = _mg_show
+
+def _mg_params(sig):
+    """Structured parameters, with type hints dropped.
+
+    Iterating .parameters (rather than str(sig)) is what keeps the bare '*'
+    and '/' markers out: those are rendered separators in the string form,
+    not parameters. They mean nothing to a beginner, so they never appear.
+
+    Annotations are dropped deliberately. A pandas signature's real hints are
+    unions many lines long; for students learning what a function takes, the
+    names and defaults carry all the useful information.
+    """
+    out = []
+    for prm in sig.parameters.values():
+        if prm.name == "self":
+            continue
+        required = prm.default is inspect.Parameter.empty
+        if prm.kind == inspect.Parameter.VAR_POSITIONAL:
+            out.append({"name": "*" + prm.name, "required": False, "default": None,
+                        "variadic": True})
+            continue
+        if prm.kind == inspect.Parameter.VAR_KEYWORD:
+            out.append({"name": "**" + prm.name, "required": False, "default": None,
+                        "variadic": True})
+            continue
+        default = None
+        if not required:
+            try:
+                default = repr(prm.default)
+            except Exception:
+                default = "…"
+            if len(default) > 40:
+                default = default[:39] + "…"
+        out.append({"name": prm.name, "required": required, "default": default,
+                    "variadic": False})
+    return out
+
+def _mg_parse_doc_params(sig_text):
+    """Fallback for C functions: parse names out of a docstring signature.
+
+    Only the shape 'name(a, b=1, *c)' is understood. Defaults are kept as
+    written; '*'/'/' separators are dropped exactly as above.
+    """
+    inner = sig_text.strip()
+    if inner.startswith("(") and inner.endswith(")"):
+        inner = inner[1:-1]
+    # Old-style C docstrings mark optional args with nested brackets, as in
+    # 'datetime(year, month, day[, hour[, minute[, second]]])'. Everything from
+    # the first '[' is optional; strip the brackets and remember where the
+    # optional tail began.
+    opt_from = inner.find("[")
+    if opt_from != -1:
+        inner = inner.replace("[", "").replace("]", "")
+    out = []
+    depth = 0
+    buf = ""
+    parts = []
+    for ch in inner:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    if buf.strip():
+        parts.append(buf)
+    seen = 0
+    for raw in parts:
+        tok = raw.strip()
+        if not tok or tok in ("*", "/", "..."):
+            continue
+        name, eq, default = tok.partition("=")
+        name = name.strip()
+        if not name:
+            continue
+        variadic = name.startswith("*")
+        # Anything that appeared inside the bracket tail is optional, even
+        # without an '=default'.
+        optional_by_bracket = opt_from != -1 and seen >= _mg_bracket_index(sig_text)
+        out.append({
+            "name": name,
+            "required": not eq and not variadic and not optional_by_bracket,
+            "default": (default.strip() or None) if eq else None,
+            "variadic": variadic,
+        })
+        seen += 1
+    return out
+
+def _mg_bracket_index(sig_text):
+    """How many parameters precede the first '[' in a C docstring signature."""
+    head = sig_text[: sig_text.find("[")] if "[" in sig_text else sig_text
+    return max(0, head.count(","))
+
+def _mg_doc_signature(obj, name):
+    """Parameters for a dotted name, or None if it is not a library call.
+
+    Only objects that came from an imported module qualify. Anything the
+    student defined in a cell lives in __main__ and is deliberately skipped:
+    this shows what a library expects, never what the student just wrote.
+    """
+    module = getattr(obj, "__module__", None) or ""
+    if module == "__main__" or module == "builtins" and not inspect.isbuiltin(obj):
+        return None
+    if not callable(obj):
+        return None
+    # For a class the useful parameters are the constructor's. signature()
+    # on the class itself already reports those and omits self; __init__ is
+    # the fallback for classes it can't read directly.
+    candidates = [obj, getattr(obj, "__init__", None)] if inspect.isclass(obj) else [obj]
+    params = None
+    for target in candidates:
+        if target is None:
+            continue
+        try:
+            params = _mg_params(inspect.signature(target))
+            break
+        except (TypeError, ValueError):
+            continue
+    # A bare (*args, **kwargs) is what C types report when they expose no real
+    # signature — useless to a student, so fall through to the docstring.
+    if params is None or all(p["variadic"] for p in params):
+        doc_params = None
+        for line in (inspect.getdoc(obj) or "").strip().splitlines()[:2]:
+            m = re.match(r"^\s*\w+(\(.*\))", line)
+            if m:
+                doc_params = _mg_parse_doc_params(m.group(1))
+                break
+        if doc_params:
+            params = doc_params
+        elif params is None:
+            return None
+    doc = inspect.getdoc(obj) or ""
+    summary = ""
+    for para in doc.split("\n\n"):
+        para = " ".join(para.split())
+        if para:
+            summary = para if len(para) <= 240 else para[:239] + "…"
+            break
+    return {"name": name, "params": params, "summary": summary, "module": module}
+
+def _mg_signature(name):
+    """Resolve a dotted name against the live namespace and describe it."""
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", name or ""):
+        return None
+    try:
+        obj = eval(name, _mg_ns)
+    except Exception:
+        # Not imported yet, or not a plain name. No popup, no error.
+        return None
+    try:
+        return _mg_doc_signature(obj, name)
+    except Exception:
+        return None
 
 def _mg_format_error(e, filename):
     te = traceback.TracebackException.from_exception(e)
@@ -362,6 +518,33 @@ ctx.onmessage = (ev: MessageEvent<ToWorker>) => {
         .map(({ n, st }) => ({ name: n, size: st.size }))
         .sort((a, b) => a.name.localeCompare(b.name));
       post({ type: "reply", reqId: msg.reqId, ok: true, files });
+      return;
+    }
+    case "signature": {
+      // Documentation lookup, not code generation: resolve a name the student
+      // already typed against the modules they already imported. Declined
+      // while a cell is running — Pyodide is single-threaded, and a popup is
+      // never worth making a student wait behind their own computation.
+      if (!py || currentRun !== null) {
+        post({ type: "reply", reqId: msg.reqId, ok: true, signature: null });
+        return;
+      }
+      try {
+        const lookup = py.globals.get("_mg_signature") as ((n: string) => unknown) & Partial<PyProxy>;
+        const res = lookup(msg.name) as { toJs?: (o: { dict_converter: unknown }) => unknown } | null;
+        let info = null;
+        if (res) {
+          const toJs = (res as { toJs?: (o: { dict_converter: unknown }) => unknown }).toJs;
+          info = toJs
+            ? (toJs.call(res, { dict_converter: Object.fromEntries }) as SignatureInfo)
+            : (res as unknown as SignatureInfo);
+          (res as Partial<PyProxy>).destroy?.();
+        }
+        lookup.destroy?.();
+        post({ type: "reply", reqId: msg.reqId, ok: true, signature: info });
+      } catch {
+        post({ type: "reply", reqId: msg.reqId, ok: true, signature: null });
+      }
       return;
     }
     case "readFile": {

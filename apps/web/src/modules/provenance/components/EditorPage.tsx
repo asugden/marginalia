@@ -118,7 +118,7 @@ export function EditorPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [split, setSplit] = useState<number>(() => loadSplit());

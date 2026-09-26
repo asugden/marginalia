@@ -16,7 +16,10 @@ import { Outputs } from "./Outputs.js";
 export type RunState =
   | { state: "queued" }
   | { state: "running"; count: number; status?: string }
-  | { state: "done"; count: number; ok: boolean };
+  /** `source` is what was actually executed, so the cell can tell whether it
+   *  has been edited since — a run result stops describing a cell the moment
+   *  its code changes. */
+  | { state: "done"; count: number; ok: boolean; source: string };
 
 let idCounter = 0;
 /** A cell id matching the server's `[A-Za-z0-9_-]{1,64}`. */
@@ -112,6 +115,9 @@ function CellView({
 }: CellsProps & { cell: Cell; index: number; last: boolean }) {
   const rs = runState?.[cell.id];
   const busy = rs?.state === "queued" || rs?.state === "running";
+  // A cell whose result still matches its code reads as settled (sand); edit
+  // it and it returns to white, because the outputs no longer describe it.
+  const ran = rs?.state === "done" && rs.source === cell.source;
   const [hover, setHover] = useState(false);
   const marks = marksFor?.(cell.id);
 
@@ -188,7 +194,7 @@ function CellView({
 
   return (
     <section
-      className={`code-cell code-cell--code${busy ? " is-busy" : ""}`}
+      className={`code-cell code-cell--code${busy ? " is-busy" : ""}${ran ? " is-ran" : ""}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -218,7 +224,7 @@ function CellView({
             onRunInPlace={() => onRun?.(cell.id, false)}
             onFocus={() => onFocusCell?.(cell.id)}
             onView={(v) => registerView?.(cell.id, v)}
-            extensions={trackingFor?.(cell)}
+            extensions={readOnly ? undefined : trackingFor?.(cell)}
             marks={marks}
           />
         </div>

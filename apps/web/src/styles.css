@@ -49,7 +49,10 @@ progress {
   accent-color: var(--accent);
 }
 
-html { -webkit-text-size-adjust: 100%; }
+/* The canvas itself, so any strip that ends up outside .app (a wrapped
+   instructor topbar, mobile browser chrome, overscroll) paints sand rather
+   than the browser's default white. */
+html { -webkit-text-size-adjust: 100%; background: var(--bg); }
 
 body {
   margin: 0;

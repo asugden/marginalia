@@ -1,10 +1,17 @@
 // One cell's code editor: CodeMirror 6 with Python highlighting and nothing
 // that writes code for the student.
 //
-// Deliberately absent: autocompletion (no @codemirror/autocomplete at all),
+// Deliberately absent: autocompletion (@codemirror/autocomplete is not
+// installed, so the completion data lang-python registers stays inert),
 // inline suggestions, auto-closing brackets, and the browser's own
 // spellcheck/autocorrect. What's left is what a plain code editor does —
 // highlighting, indentation, undo, bracket matching. Students type the code.
+//
+// The one thing that does appear is documentation: opening a library call's
+// parentheses shows the parameters that library documents for itself (see
+// docsPopup.ts). That's a reference the student reads, the same as running
+// help() — it proposes nothing and can't write to the cell — so it doesn't
+// cross the line the paragraph above draws.
 //
 // Colours come from the design tokens, so a branded deploy re-tints it.
 

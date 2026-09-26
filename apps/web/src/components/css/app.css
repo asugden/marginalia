@@ -28,7 +28,13 @@
    structural fix for the runaway outer scroll that dragged the top bar. ---- */
 html, body { height: 100%; }
 .app {
-  height: 100vh;
+  /* min-height, not height: the instructor topbar wraps to two rows at narrow
+     widths (height: auto below), and a fixed 100vh can't grow with it — the
+     extra row pushed content past the painted box and left a bare strip at the
+     bottom. dvh so mobile browser chrome doesn't cause the same gap. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;            /* the page itself never scrolls */
@@ -275,6 +281,14 @@ html, body { height: 100%; }
 .app-roles__opt span { font-size: var(--text-2xs); color: var(--text-muted); white-space: nowrap; }
 .app-roles__opt--active { background: var(--accent-wash); }
 .app-roles__opt--active b { color: var(--accent-ink); }
+/* A failed role switch. Shown inside the open menu, where the click happened,
+   rather than as a toast — the menu stays open on failure. */
+.app-roles__error {
+  margin: 0.2rem 0 0; padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--status-danger-bg); color: var(--status-danger-fg);
+  font-size: var(--text-2xs); line-height: 1.45;
+}
 
 /* ---- Mobile nav sheet + its trigger ----
    The ☰ trigger and the sheet exist only below 680px; above it the banded nav
@@ -331,6 +345,13 @@ html, body { height: 100%; }
 }
 .app-preview svg { width: 16px; height: 16px; flex: none; }
 .app-preview b { font-weight: 700; }
+/* Sits before the back button, which keeps its margin-left:auto pin. */
+.app-preview__error {
+  margin-left: auto; font-size: var(--text-2xs);
+  color: var(--status-danger-fg); background: var(--status-danger-bg);
+  padding: 0.2rem 0.45rem; border-radius: var(--radius-sm);
+}
+.app-preview__error + .app-preview__back { margin-left: 0.5rem; }
 .app-preview__back {
   margin-left: auto; appearance: none; cursor: pointer; background: none; border: 0;
   color: var(--accent-ink); font-family: var(--font-mono); font-size: var(--text-2xs);

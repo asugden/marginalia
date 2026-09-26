@@ -7,7 +7,7 @@
 // the student uploaded are re-mounted from browser storage on restart.
 
 import type { CellOutput } from "../api.js";
-import type { FileInfo, FromWorker, ToWorker } from "./protocol.js";
+import type { FileInfo, FromWorker, SignatureInfo, ToWorker } from "./protocol.js";
 
 export type KernelStatus = "starting" | "idle" | "busy" | "error";
 
@@ -227,6 +227,15 @@ export class Kernel {
   async listFiles(): Promise<FileInfo[]> {
     const r = await this.request({ type: "listFiles" });
     return r.ok ? (r.files ?? []) : [];
+  }
+
+  /** Parameters for a dotted name, or null if it isn't a known library call.
+   *  Never queues: `request` posts straight to the worker, which declines the
+   *  lookup outright while a cell is running. */
+  async signature(name: string): Promise<SignatureInfo | null> {
+    if (this.status !== "idle") return null;
+    const r = await this.request({ type: "signature", name });
+    return r.ok ? (r.signature ?? null) : null;
   }
 
   async readFile(name: string): Promise<ArrayBuffer> {
