@@ -17,6 +17,8 @@ export { RoleSwitch } from "./RoleSwitch.js";
 export { PreviewBanner } from "./PreviewBanner.js";
 export { StudentModuleNav, studentModules } from "./StudentModuleNav.js";
 export { CourseSwitcher } from "./CourseSwitcher.js";
+export { SubmissionHistory } from "./SubmissionHistory.js";
+export type { SubmissionHistoryRow } from "./SubmissionHistory.js";
 export { CourseNav } from "./CourseNav.js";
 export { NavSheet } from "./NavSheet.js";
 export type { NavSheetSection, NavSheetRow } from "./NavSheet.js";

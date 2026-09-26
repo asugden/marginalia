@@ -21,3 +21,18 @@ export function relativeTime(ms: number): string {
     day: "numeric",
   });
 }
+
+/**
+ * "May 12, 4:03 PM" — the exact clock time, used wherever a submission time
+ * sits next to a deadline (the submit dialogs). Students submit against
+ * deadlines, so the precise time matters more than a rounded "2 days ago"
+ * alone, and the two must be comparable at a glance.
+ */
+export function absoluteTime(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}

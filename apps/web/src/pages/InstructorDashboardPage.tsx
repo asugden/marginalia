@@ -39,14 +39,12 @@ import {
   listCourseItems,
   type CourseItemDTO,
 } from "../modules/course-items/api.js";
+import { ItemRows } from "../modules/course-items/components/ItemRows.js";
 import { useCourse } from "../course/useCourse.js";
 import {
-  dueLabel,
   overdueItems,
-  shortDate,
   supplements,
   upcomingItems,
-  type DatedItem,
 } from "../course/dueness.js";
 import {
   formatDateRange,
@@ -162,7 +160,7 @@ export function InstructorDashboardPage() {
       {/* Overdue first — it's the only section that asks for action today. */}
       {overdue.length > 0 && (
         <Section kicker="Overdue">
-          <ItemRows courseId={courseId} rows={overdue} />
+          <ItemRows rows={overdue} hrefFor={(item) => instructorHref(courseId, item)} />
         </Section>
       )}
 
@@ -182,7 +180,7 @@ export function InstructorDashboardPage() {
             <Link to={`${base}/assign`}>See everything assigned</Link>.
           </p>
         ) : (
-          <ItemRows courseId={courseId} rows={upcoming} />
+          <ItemRows rows={upcoming} hrefFor={(item) => instructorHref(courseId, item)} />
         )}
       </Section>
 
@@ -229,40 +227,5 @@ export function InstructorDashboardPage() {
         </div>
       </Section>
     </div>
-  );
-}
-
-/** A dated list: kind, title, absolute date, and the relative phrase. The
- *  phrase is `dueLabel` verbatim — a statement of date arithmetic, with no
- *  risk or concern framing (the no-false-positives rule governs here too). */
-function ItemRows({
-  courseId,
-  rows,
-}: {
-  courseId: string;
-  rows: DatedItem[];
-}) {
-  return (
-    <ul className="app-dash__list">
-      {rows.map((d) => {
-        const href = instructorHref(courseId, d.item);
-        return (
-          <li
-            key={d.item.id}
-            className={
-              "app-dash__row" +
-              (d.bucket === "overdue" ? " app-dash__row--overdue" : "")
-            }
-          >
-            <span className="app-dash__kind">{kindLabel(d.item.kind)}</span>
-            <span className="app-dash__title">
-              {href ? <Link to={href}>{d.item.title}</Link> : d.item.title}
-            </span>
-            <span className="app-dash__date">{shortDate(d.dueAt)}</span>
-            <span className="app-dash__due">{dueLabel(d)}</span>
-          </li>
-        );
-      })}
-    </ul>
   );
 }

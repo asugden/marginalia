@@ -25,7 +25,9 @@ Assign menu's "Coding assignment" entry all key off that one flag.
 - `python.worker.ts` loads Pyodide in a Web Worker from `pyodideIndexURL()`:
   the jsDelivr CDN at a pinned version, or `VITE_PYODIDE_BASE` for a
   self-hosted copy. Packages load on first import. `%pip install name` works
-  for pure-Python packages from PyPI.
+  for pure-Python packages from PyPI. seaborn, which is pure Python but not
+  in the Pyodide distribution, is auto-installed from PyPI (version-pinned)
+  the first time a cell imports it.
 - **littletorch** (`packages/littletorch`), a small PyTorch-shaped
   neural-network library on NumPy, is bundled into the worker as source
   (`import.meta.glob`, about 45 KB) and written into site-packages at

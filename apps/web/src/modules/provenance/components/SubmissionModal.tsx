@@ -26,8 +26,8 @@ import {
   type AssignmentDTO,
   type SubmissionSummary,
 } from "../api.js";
-import { Button, Field, Select, SubLabel, useConfirm } from "../../../components/index.js";
-import { relativeTime } from "../../../time.js";
+import { Button, Field, Select, SubmissionHistory, useConfirm } from "../../../components/index.js";
+import { absoluteTime } from "../../../time.js";
 import { ShareIcon } from "../../../icons.js";
 
 interface Props {
@@ -38,28 +38,6 @@ interface Props {
    *  same rule. */
   canRevoke: boolean;
   onClose: () => void;
-}
-
-/** Exact submission time. Students submit against deadlines, so the precise
- *  clock time matters more here than a rounded "2 days ago" alone. */
-function absoluteTime(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-/** Deadline, in the same face as a submission time — the two sit next to each
- *  other in the late notice and must be comparable at a glance. */
-function formatDeadline(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 /** The <option> value. Both ids travel together because the server requires the
@@ -202,7 +180,7 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
                     {a.checkpoints.map((c) => (
                       <option key={c.id} value={cellKey(a.id, c.id)}>
                         {c.name}
-                        {c.dueAt !== null && ` — due ${formatDeadline(c.dueAt)}`}
+                        {c.dueAt !== null && ` — due ${absoluteTime(c.dueAt)}`}
                       </option>
                     ))}
                   </optgroup>
@@ -216,7 +194,7 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
             )}
             {willBeLate && selected?.checkpoint.dueAt != null && (
               <p className="prov-submit-late" role="status">
-                This is after the {formatDeadline(selected.checkpoint.dueAt)}{" "}
+                This is after the {absoluteTime(selected.checkpoint.dueAt)}{" "}
                 deadline. You can still submit; it will be marked late.
               </p>
             )}
@@ -241,39 +219,24 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
           </p>
         )}
 
-        <div className="prov-submit-history">
-          <SubLabel>Your submissions</SubLabel>
-          {subs === null ? (
-            <p className="muted small prov-share-list-note">Loading…</p>
-          ) : subs.length === 0 ? (
-            <p className="muted small prov-share-list-note">
-              Nothing submitted yet.
-            </p>
-          ) : (
-            <ul className="prov-submit-list">
-              {subs.map((s, i) => (
-                <li
-                  key={s.token}
-                  className={s.revokedAt !== null ? "is-revoked" : undefined}
-                >
-                  <span className="prov-submit-when">
-                    {absoluteTime(s.createdAt)}
-                  </span>
-                  <span className="prov-submit-ago muted small">
-                    {relativeTime(s.createdAt)}
-                    {i === 0 && subs.length > 1 && " · latest"}
-                    {s.revokedAt !== null && " · withdrawn by instructor"}
-                  </span>
-                  {s.canRevoke && s.revokedAt === null && (
-                    <Button variant="danger" size="sm" onClick={() => onRevoke(s.token)}>
-                      Revoke
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <SubmissionHistory
+          rows={
+            subs === null
+              ? null
+              : subs.map((s) => ({
+                  key: s.token,
+                  at: s.createdAt,
+                  dimmed: s.revokedAt !== null,
+                  note: s.revokedAt !== null ? "withdrawn by instructor" : undefined,
+                  action:
+                    s.canRevoke && s.revokedAt === null ? (
+                      <Button variant="danger" size="sm" onClick={() => onRevoke(s.token)}>
+                        Revoke
+                      </Button>
+                    ) : undefined,
+                }))
+          }
+        />
 
         <div className="prov-modal-actions">
           <span className="prov-modal-actions-spacer" />

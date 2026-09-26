@@ -35,6 +35,7 @@ import {
   Wordmark,
 } from "../../../components/index.js";
 import { useActiveCourse } from "../../../course/useActiveCourse.js";
+import { ShareIcon } from "../../../icons.js";
 import { Markdown } from "../../../Markdown.js";
 import { relativeTime } from "../../../time.js";
 import {
@@ -63,6 +64,7 @@ import { noteChatReply, originTracking, type TrackedCellEvent, type TrackingCont
 import { listStoredFiles } from "../kernel/files.js";
 import { Kernel, type KernelStatus } from "../kernel/kernel.js";
 import { Cells, newCellId, type RunState } from "./Cells.js";
+import { SubmitModal } from "./SubmitModal.js";
 import { FilesPanel } from "./FilesPanel.js";
 import { appendOutput } from "./Outputs.js";
 import { NotebookChatPanel } from "./ChatPanel.js";
@@ -171,8 +173,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
   const [filesTick, setFilesTick] = useState(0);
   const [showBrief, setShowBrief] = useState(true);
   const [lastSubmittedAt, setLastSubmittedAt] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const { confirm, notify, dialog } = useConfirm();
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const { confirm, dialog } = useConfirm();
 
   const kernelRef = useRef<Kernel | null>(null);
   const views = useRef(new Map<string, EditorView>());
@@ -611,32 +613,16 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
   }, []);
 
   // ── submit ────────────────────────────────────────────────────────────
-  async function submit() {
-    if (!loaded) return;
-    const ok = await confirm({
-      title: "Submit this notebook?",
-      body:
-        "Your instructor gets a copy of the notebook as it is now, with its outputs" +
-        (loaded.aiEnabled ? " and your chat conversation" : "") +
-        ", and sees where its code and text came from: typed, pasted, from the LLM chat, or provided in the starter. You can keep working and submit again. Uploaded files are not included.",
-      confirmLabel: "Submit",
-    });
-    if (!ok) return;
-    setSubmitting(true);
-    try {
-      await flush();
-      await flushEvents();
-      const s = await submitNotebook(loaded.courseId, loaded.id);
-      setLastSubmittedAt(s.submittedAt);
-      await notify({
-        title: "Submitted",
-        body: s.late ? "Submitted after the deadline. It has been recorded with its time." : "Your instructor has a copy.",
-      });
-    } catch (e) {
-      await notify({ title: "Couldn't submit", body: e instanceof Error ? e.message : "Try again." });
-    } finally {
-      setSubmitting(false);
-    }
+  // The surface (copy, deadline notice, history) is SubmitModal's; this owns
+  // the mechanics: pending cell saves and origin events must be on the server
+  // before the snapshot, or the render would miss the newest edits.
+  async function performSubmit() {
+    if (!loaded) throw new Error("Notebook not loaded");
+    await flush();
+    await flushEvents();
+    const s = await submitNotebook(loaded.courseId, loaded.id);
+    setLastSubmittedAt(s.submittedAt);
+    return s;
   }
 
   // ── divider ───────────────────────────────────────────────────────────
@@ -701,13 +687,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
       {courseParam && mode === "student" && (
         <header className="app-topbar app-topbar--student prov-appbar">
           <div className="app-topbar__inner">
-            <StudentModuleNav
-              courseId={courseParam}
-              provenanceEnabled={active?.provenanceEnabled ?? true}
-              agentsEnabled={active?.agentsEnabled ?? true}
-              codeEnabled={active?.codeEnabled ?? true}
-              activeModule="code"
-            />
+            <StudentModuleNav courseId={courseParam} />
             <div className="app-topbar__spacer" />
           </div>
         </header>
@@ -766,7 +746,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
           </Button>
         </span>
         {loaded.isAssignment && mode === "student" && loaded.assignment?.mode !== "practice" && (
-          <Button variant="primary" size="sm" onClick={() => void submit()} loading={submitting}>
+          <Button variant="subtle" size="sm" icon={<ShareIcon size={16} />} onClick={() => setSubmitOpen(true)}>
             Submit
           </Button>
         )}
@@ -791,6 +771,17 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
           </button>
         )}
       </header>
+
+      {submitOpen && (
+        <SubmitModal
+          courseId={loaded.courseId}
+          notebookId={loaded.id}
+          aiEnabled={loaded.aiEnabled}
+          dueAt={loaded.assignment?.dueAt ?? null}
+          onSubmit={performSubmit}
+          onClose={() => setSubmitOpen(false)}
+        />
+      )}
 
       {sandbox && (
         <div className="code-sandbox-banner" role="note">

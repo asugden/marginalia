@@ -90,7 +90,7 @@ export function ExamplesPanel({ courseId }: { courseId: string }) {
       <div className="app-modpanel__head">
         <div className="app-modpanel__heading">
           <span className="eyebrow">Interactive</span>
-          <h2>Examples</h2>
+          <h2><Link to={`/course/${courseId}/examples`}>Examples</Link></h2>
         </div>
         <span className="app-modpanel__meta">
           {doneCount} of {rows.length} marked complete

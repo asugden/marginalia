@@ -43,6 +43,10 @@ interface PyodideAPI {
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 const HOME = "/home/pyodide";
+// Not in the Pyodide distribution, so it can't ride loadPackagesFromImports;
+// installed from PyPI on first use. Pinned for the same reason as
+// PYODIDE_VERSION: every student in a course runs the same packages.
+const SEABORN_VERSION = "0.13.2";
 let py: PyodideAPI | null = null;
 let currentRun: number | null = null;
 const decoder = new TextDecoder();
@@ -446,6 +450,16 @@ async function run(runId: number, code: string, count: number) {
       // Pyodide can't see a bundled package's own imports, so load what it
       // needs before a cell that uses it.
       if (/\blittletorch\b/.test(code)) await py.loadPackage(["numpy"], { messageCallback: () => {} });
+      // micropip is itself a Pyodide package: anything that will `import
+      // micropip` (a %pip cell, the seaborn install below) needs it fetched
+      // here first — Python-side imports can't trigger the download.
+      if (/^\s*[%!]pip\s/m.test(code) || /\bseaborn\b/.test(code)) {
+        await py.loadPackage(["micropip"], { messageCallback: () => {} });
+      }
+      if (/\bseaborn\b/.test(code) && !py.runPython('"seaborn" in __import__("sys").modules')) {
+        post({ type: "status", runId, message: "Loading seaborn" });
+        await py.runPythonAsync(`import micropip; await micropip.install("seaborn==${SEABORN_VERSION}")`);
+      }
       await py.loadPackagesFromImports(code, {
         messageCallback: (m) => {
           if (/^Loading /.test(m)) post({ type: "status", runId, message: m });

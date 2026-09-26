@@ -1,9 +1,22 @@
-// Student course dashboard — the course's overview, a stack of its enabled
-// module panels (Agents when on; Writing when provenance is on; Code when the
-// code module is on; Examples when the course has assigned any) so they read
-// as peers. This is where the logo and the "Dashboard" nav item land. The focused
+// Student course dashboard — a "Due next" strip on top, then a stack of the
+// course's module panels (Agents, Writing, Code, Examples) so they read as
+// peers. This is where the logo and the "Dashboard" nav item land. The focused
 // per-module routes (/agents, /writing) hold the full lists; the dashboard is
 // the at-a-glance combined view.
+//
+// A PANEL APPEARS ONLY WHEN ITS MODULE HAS CONTENT. An enabled-but-empty
+// module already has a nav item; an empty panel under it on the course home
+// is the same noise twice. So every panel hides itself (or is hidden here)
+// until the course has actually set something in it — the rule ExamplesPanel
+// established. The module remains reachable from the nav either way.
+//
+// THE DUE-NEXT STRIP reuses the instructor dashboard's machinery wholesale:
+// course/dueness.ts buckets `course_items` by deadline, and the shared
+// ItemRows renders the identical row grid — kind · title · date · phrase —
+// with studentHref instead of instructorHref. Completion here is the
+// CALLER'S OWN (the endpoint's contract), which is exactly right on this
+// page: overdue-but-submitted items are dropped (nothing left to act on),
+// and upcoming ones carry their own verb ("submitted", "marked done").
 //
 // Each panel is self-contained: Agents lives in AgentsPanel (shared with the
 // dedicated /agents page); Writing is inline here (its dedicated page is the
@@ -13,16 +26,25 @@
 // EVERY ENABLED MODULE NEEDS A PANEL HERE. The Code one was missing for a
 // while: the course got a Code nav item and a working /code route, but its
 // assignments never appeared on the course home the way writing ones did. If
-// you add a module with a student surface, add its panel in this stack too. Course id / name / flags come from useCourse()
+// you add a module with a student surface, add its panel in this stack too
+// (self-hiding when empty). Course id / name / flags come from useCourse()
 // (the shell validated enrollment).
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   createDocument,
   listDocuments,
   type DocumentSummary,
 } from "../modules/provenance/api.js";
 import { useCourse } from "../course/useCourse.js";
+import {
+  completionLabel,
+  listCourseItems,
+  studentHref,
+  type CourseItemDTO,
+} from "../modules/course-items/api.js";
+import { ItemRows } from "../modules/course-items/components/ItemRows.js";
+import { overdueItems, upcomingItems } from "../course/dueness.js";
 import { ArrowIcon, DocIcon, PencilIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 import { Button } from "../components/index.js";
@@ -63,6 +85,7 @@ export function DashboardPage() {
   const editorSuffix = scoped ? "?preview=1" : "";
 
   const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
+  const [items, setItems] = useState<CourseItemDTO[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creatingDoc, setCreatingDoc] = useState(false);
 
@@ -77,6 +100,39 @@ export function DashboardPage() {
       });
     return () => ctrl.abort();
   }, [courseId]);
+
+  // The combined assigned-work list, for the due-next strip and for deciding
+  // whether the Writing panel has anything set. Best-effort like the rest.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    listCourseItems(courseId, {}, ctrl.signal)
+      .then((i) => setItems(i))
+      .catch(() => {
+        if (!ctrl.signal.aborted) setItems([]);
+      });
+    return () => ctrl.abort();
+  }, [courseId]);
+
+  // One `now` per render so every bucket and label agrees (same rule as the
+  // instructor dashboard). Overdue items the student already completed are
+  // dropped — there is nothing left to act on, and a red "overdue" next to
+  // "submitted" would contradict itself. Upcoming keeps completed rows, with
+  // their own completion verb, so a student sees what's already in.
+  const now = Date.now();
+  const all = items ?? [];
+  const overdue = overdueItems(all, now).filter(
+    (d) => completionLabel(d.item.completion) === null,
+  );
+  const upcoming = upcomingItems(all, now, { limit: 6 });
+  const dueRows = [...overdue, ...upcoming];
+
+  // Writing panel gate: shown when the course has set writing work, or when
+  // this student already has documents to get back to.
+  const hasWritingAssignments = all.some(
+    (i) => i.kind === "writing" && i.archivedAt == null && !i.dangling,
+  );
+  const showWriting =
+    provenanceEnabled && ((docs?.length ?? 0) > 0 || hasWritingAssignments);
 
   async function onNewDocument() {
     if (creatingDoc) return;
@@ -108,11 +164,39 @@ export function DashboardPage() {
       {error && <p className="error">{error}</p>}
 
       <div className="app-modstack">
-        {/* ── Agents — only when the Agents extension is enabled ─────────── */}
-        {agentsEnabled && <AgentsPanel courseId={courseId} />}
+        {/* ── Due next — the cross-module deadline strip, always on top ──── */}
+        {dueRows.length > 0 && (
+          <section
+            className="app-modpanel app-modpanel--open"
+            data-module="due-next"
+          >
+            <div className="app-modpanel__head">
+              <div className="app-modpanel__heading">
+                <span className="eyebrow">This week</span>
+                <h2>Due next</h2>
+              </div>
+              {overdue.length > 0 && (
+                <span className="app-modpanel__meta">
+                  {overdue.length} overdue
+                </span>
+              )}
+            </div>
+            <div className="app-modpanel__body">
+              <ItemRows
+                rows={dueRows}
+                hrefFor={(item) => studentHref(courseId, item)}
+                showCompletion
+              />
+            </div>
+          </section>
+        )}
 
-        {/* ── Writing (provenance) — only when the module is enabled ─────── */}
-        {provenanceEnabled && (
+        {/* ── Agents — enabled AND the course has some ───────────────────── */}
+        {agentsEnabled && <AgentsPanel courseId={courseId} hideWhenEmpty />}
+
+        {/* ── Writing (provenance) — enabled AND there's something to show:
+            assigned writing work, or this student's own documents ────────── */}
+        {showWriting && (
           <section
             className="app-modpanel app-modpanel--open"
             data-module="writing"
@@ -120,7 +204,7 @@ export function DashboardPage() {
             <div className="app-modpanel__head">
               <div className="app-modpanel__heading">
                 <span className="eyebrow">Provenance</span>
-                <h2>Writing</h2>
+                <h2><Link to={`${base}/writing`}>Writing</Link></h2>
               </div>
               {docs && docs.length > 0 && (
                 <span className="app-modpanel__meta">
@@ -186,7 +270,8 @@ export function DashboardPage() {
           </section>
         )}
 
-        {/* ── Code (Python notebooks) — only when the module is enabled ─── */}
+        {/* ── Code (Python notebooks) — enabled AND has live assignments
+            (the panel hides itself; scratch stays on the Code nav item) ──── */}
         {codeEnabled && (
           <Suspense fallback={null}>
             <CodePanel courseId={courseId} />

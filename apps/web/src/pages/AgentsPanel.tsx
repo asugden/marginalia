@@ -6,14 +6,23 @@
 // bootstrap on first paint, then fetches the live agent list. Rows start or
 // continue a conversation exactly as before.
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { listAgents, type AgentSummary } from "../client.js";
 import { logPerf, readBootstrap } from "../bootstrap.js";
 import { ArrowIcon, PlusIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 import { Avatar, Badge, Button, IconButton } from "../components/index.js";
 
-export function AgentsPanel({ courseId }: { courseId: string }) {
+export function AgentsPanel({
+  courseId,
+  hideWhenEmpty = false,
+}: {
+  courseId: string;
+  /** Dashboard mode: render nothing until agents exist, matching the other
+   *  module panels' rule that an empty panel is noise on the course home.
+   *  The dedicated /agents page keeps the explanatory empty state. */
+  hideWhenEmpty?: boolean;
+}) {
   const navigate = useNavigate();
   const base = `/course/${courseId}`;
 
@@ -58,6 +67,10 @@ export function AgentsPanel({ courseId }: { courseId: string }) {
       });
   }, [courseId, initialBoot]);
 
+  // While loading this also renders nothing, so the panel pops in only when
+  // it has rows — the same behavior as ExamplesPanel.
+  if (hideWhenEmpty && (agents === null || agents.length === 0)) return null;
+
   const inProgress =
     agents?.filter((a) => a.lastConversationId !== null && a.lastCompletedAt === null)
       .length ?? 0;
@@ -69,7 +82,9 @@ export function AgentsPanel({ courseId }: { courseId: string }) {
       <div className="app-modpanel__head">
         <div className="app-modpanel__heading">
           <span className="eyebrow">Tutors to talk to</span>
-          <h2>Agents</h2>
+          {/* With the module items gone from the student top line, the panel
+              heading is the way into the module's full page. */}
+          <h2><Link to={`${base}/agents`}>Agents</Link></h2>
         </div>
         {agents && agents.length > 0 && (
           <span className="app-modpanel__meta">
