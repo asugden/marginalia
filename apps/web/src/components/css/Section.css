@@ -16,6 +16,12 @@
      field, a badge, a button — that must sit vertically centred against the
      kicker, not baseline-aligned. */
   display: flex; align-items: center; gap: var(--space-3);
+  /* Wrap, because all three slots resist shrinking: the kicker and the meta
+     are both nowrap, and `actions` holds a real control. On a narrow viewport
+     their combined minimum exceeds the line, and without this the last slot
+     — `actions`, the button you came to press — is the one pushed off the
+     right edge. Wrapping drops it to its own line instead. */
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
   padding-bottom: var(--space-2); margin-bottom: var(--space-5);
 }
@@ -41,6 +47,25 @@
   margin-left: auto; display: flex; align-items: center; gap: var(--space-2);
 }
 .ds-section__meta + .ds-section__actions { margin-left: var(--space-3); }
+
+/* Once the head wraps, `margin-left: auto` would strand a wrapped slot at the
+   far right of its own line, under nothing. Below the phone breakpoint the
+   meta stays beside the kicker (it's short and quiet) and the actions take a
+   full-width line of their own, so the control is reachable with a thumb
+   rather than pinned to a corner. */
+@media (max-width: 680px) {
+  .ds-section__meta { margin-left: auto; }
+  .ds-section__actions,
+  .ds-section__meta + .ds-section__actions {
+    margin-left: 0; width: 100%;
+  }
+  .ds-section__actions > * { flex: 1; }
+  /* `.ds-dropdown` is an inline-flex wrapper around its trigger button, so
+     stretching the wrapper alone would leave the button at its intrinsic
+     width. Stretch both. */
+  .ds-section__actions .ds-dropdown,
+  .ds-section__actions .ds-dropdown__trigger { width: 100%; }
+}
 
 /* Description sits under the rule. No max-width — the page owns the measure. */
 .ds-section__desc {
