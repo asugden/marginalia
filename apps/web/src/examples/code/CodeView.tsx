@@ -8,16 +8,18 @@
 // dragged or clicked to change them while the sketch runs.
 
 import { useRef, type PointerEvent as RPointerEvent } from "react";
+import { Tooltip } from "../../components/index.js";
 import type { Literal, Program, Role } from "./lang.js";
+import { TOOLTIPS } from "./tooltips.js";
 
 export const ROLE_ORDER: Role[] = ["control", "input", "output", "time", "setup", "serial"];
 export const ROLE_INFO: Record<Role, { glyph: string; name: string; hint: string }> = {
-  setup: { glyph: "⚙", name: "Setup", hint: "gets a pin ready" },
-  output: { glyph: "→", name: "Output", hint: "code acts on the board" },
-  input: { glyph: "←", name: "Input", hint: "code reads the board" },
-  control: { glyph: "?", name: "Control", hint: "decides what runs next" },
-  time: { glyph: "◷", name: "Time", hint: "waits or checks the clock" },
-  serial: { glyph: "✉", name: "Serial", hint: "talks to the computer" },
+  setup: { glyph: "⚙", name: "Setup", hint: "Control pins, input, and output" },
+  output: { glyph: "→", name: "Output", hint: "control actuators" },
+  input: { glyph: "←", name: "Input", hint: "read from sensors" },
+  control: { glyph: "?", name: "Control", hint: "decisions in code" },
+  time: { glyph: "◷", name: "Time", hint: "wait or check clock" },
+  serial: { glyph: "✉", name: "Serial", hint: "Print to the computer" },
 };
 
 const KEYWORDS = /^(if|else|while|for|do|return|break|continue|void|const|static|unsigned)\b/;
@@ -194,13 +196,23 @@ function highlight(s: string, key: string): React.ReactNode[] {
       flush();
       const role = CALLS[word];
       const cls = role ? `cd-tok-call cd-tok-call--${role}` : KEYWORDS.test(word) ? "cd-tok-kw" : TYPES.test(word) ? "cd-tok-type" : /^[A-Z][A-Z0-9_]+$/.test(word) ? "cd-tok-const" : "";
+      const token = cls ? (
+        <span key={`${key}w${i}`} className={cls}>
+          {word}
+        </span>
+      ) : (
+        word
+      );
+      // A function's name, followed by "(", gets its tooltip (tooltips.ts).
+      const tip = TOOLTIPS[word];
+      const isCall = /^\s*\(/.test(s.slice(i + word.length));
       out.push(
-        cls ? (
-          <span key={`${key}w${i}`} className={cls}>
-            {word}
-          </span>
+        tip && isCall ? (
+          <Tooltip key={`${key}t${i}`} label={tip} placement="top" className="cd-tip">
+            {token}
+          </Tooltip>
         ) : (
-          word
+          token
         ),
       );
       i += word.length;
@@ -211,6 +223,27 @@ function highlight(s: string, key: string): React.ReactNode[] {
   }
   flush();
   return out;
+}
+
+/** Pixels of drag per power of ten. */
+const PX_PER_DECADE = 60;
+
+/** A whole number dragged `dx` pixels from `v0`, on a scale where each
+ *  PX_PER_DECADE pixels multiplies or divides by ten, so 1000 → 100 and
+ *  5 → 40 are both a short drag. Near zero the scale turns linear, so it
+ *  passes through 0 and 1 cleanly. It lands on a ladder of round values:
+ *  every whole number under 20, then steps of 5 to 100, 10 to 200, 50 to
+ *  1000, and so on. The rungs are far enough apart that a pixel of drag
+ *  never skips one. */
+function dragWhole(v0: number, dx: number): number {
+  const to = (v: number) => Math.sign(v) * Math.log10(1 + Math.abs(v));
+  const from = (u: number) => Math.sign(u) * (10 ** Math.abs(u) - 1);
+  const v = from(to(v0) + dx / PX_PER_DECADE);
+  const mag = Math.abs(v);
+  if (mag < 20) return Math.round(v);
+  const base = 10 ** Math.floor(Math.log10(mag));
+  const step = mag < 2 * base ? base / 10 : base / 2;
+  return Math.round(v / step) * step;
 }
 
 /** A literal you can drag (numbers) or click (HIGH/LOW, true/false). */
@@ -245,9 +278,7 @@ function DragLit({
     const dx = e.clientX - s.x;
     if (Math.abs(dx) < 3 && !s.moved) return;
     s.moved = true;
-    const mag = Math.abs(s.v);
-    const step = lit.isFloat ? 0.1 : mag >= 2000 ? 50 : mag >= 200 ? 10 : mag >= 50 ? 2 : 1;
-    let v = s.v + Math.round(dx / 6) * step;
+    let v = lit.isFloat ? s.v + Math.round(dx / 6) * 0.1 : dragWhole(s.v, dx);
     if (s.v >= 0) v = Math.max(0, v);
     v = lit.isFloat ? Math.round(v * 10) / 10 : Math.round(v);
     onChange(index, v, lit.isFloat ? v.toFixed(1) : String(v));
