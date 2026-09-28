@@ -13,9 +13,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card, Dropdown, Switch, Wordmark } from "../../components/index.js";
+import {
+  Button,
+  Card,
+  Dropdown,
+  Switch,
+  Wordmark,
+} from "../../components/index.js";
 import "../mnist-mlp/digit-recognizer.css";
-import "./wiring.css";
 import {
   analyze,
   describePath,
@@ -28,25 +33,49 @@ import {
 } from "./analyze.js";
 import { Breadboard, type Tool } from "./Breadboard.js";
 import { CHALLENGES, pinsFor, type GoalContext } from "./challenges.js";
+import { DiagramControls, type DiagramMode } from "./Diagram.js";
 import {
   PIN_BY_ID,
   RESISTOR_CHOICES,
   WIRE_COLORS,
   formatOhms,
+  pinAbilities,
+  pinAllows,
   type NodeId,
   type Part,
   type PinState,
   type WireColor,
 } from "./model.js";
+import "./wiring.css";
 
 const TOOLS: Array<{ id: Tool; label: string; hint: string }> = [
-  { id: "wire", label: "Wire", hint: "Drag from one hole to another" },
-  { id: "resistor", label: "Resistor", hint: "Drag from one hole to another" },
-  { id: "led", label: "LED", hint: "Drag from the long leg (+) to the short leg" },
-  { id: "button", label: "Button", hint: "Click near the centre channel" },
-  { id: "pot", label: "Knob", hint: "Click a hole for its left leg; drag the knob to turn it" },
-  { id: "seg7", label: "Display", hint: "Click near the centre channel; X-ray names its legs" },
-  { id: "move", label: "Hand", hint: "Select parts, drag legs, press buttons, turn knobs" },
+  { id: "wire", label: "Wire", hint: "Drag to connect holes/pins" },
+  { id: "resistor", label: "Resistor", hint: "Drag between two holes" },
+  {
+    id: "led",
+    label: "LED",
+    hint: "Drag between two holes from the long leg (+) to the short",
+  },
+  {
+    id: "button",
+    label: "Button",
+    hint: "Place by clicking in the top center",
+  },
+  {
+    id: "pot",
+    label: "Knob",
+    hint: "Click a hole for its center (wiper) leg",
+  },
+  {
+    id: "seg7",
+    label: "Display",
+    hint: "Click near its top center",
+  },
+  {
+    id: "move",
+    label: "Hand",
+    hint: "Select parts, adjust legs, press buttons, turn knobs",
+  },
 ];
 
 export function WiringPage() {
@@ -54,7 +83,9 @@ export function WiringPage() {
   const challenge = CHALLENGES[chIdx]!;
 
   const [parts, setParts] = useState<Part[]>(() => CHALLENGES[0]!.setup());
-  const [pins, setPins] = useState<Map<NodeId, PinState>>(() => pinsFor(CHALLENGES[0]!));
+  const [pins, setPins] = useState<Map<NodeId, PinState>>(() =>
+    pinsFor(CHALLENGES[0]!),
+  );
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [burnt, setBurnt] = useState<Set<string>>(new Set());
   const [popping, setPopping] = useState<Set<string>>(new Set());
@@ -66,11 +97,15 @@ export function WiringPage() {
   const [wireColor, setWireColor] = useState<WireColor | "auto">("auto");
   const [xray, setXray] = useState(false);
   const [netColors, setNetColors] = useState(false);
+  const [diagram, setDiagram] = useState<DiagramMode>("off");
   const [selected, setSelected] = useState<string | null>(null);
   const [revealShort, setRevealShort] = useState(false);
   const showShort = !challenge.hideShortPath || revealShort;
 
-  const circuit: Circuit = useMemo(() => ({ parts, pins, pressed, burnt }), [parts, pins, pressed, burnt]);
+  const circuit: Circuit = useMemo(
+    () => ({ parts, pins, pressed, burnt }),
+    [parts, pins, pressed, burnt],
+  );
   const analysis = useMemo(() => analyze(circuit), [circuit]);
 
   // ── Loading a challenge ──────────────────────────────────────────────
@@ -92,7 +127,9 @@ export function WiringPage() {
   // ── Too much current burns an LED out ────────────────────────────────
 
   useEffect(() => {
-    const burning = analysis.leds.filter((l) => l.status === "burning").map((l) => l.id);
+    const burning = analysis.leds
+      .filter((l) => l.status === "burning")
+      .map((l) => l.id);
     if (!burning.length) return;
     setBurnt((prev) => new Set([...prev, ...burning]));
     setStats((s) => ({ ...s, burned: s.burned + burning.length }));
@@ -115,34 +152,51 @@ export function WiringPage() {
     let changed = false;
     const next = new Set(met);
     challenge.goals.forEach((g, i) => {
-      if (!next.has(i) && g.check(ctx)) next.add(i), (changed = true);
+      if (!next.has(i) && g.check(ctx)) (next.add(i), (changed = true));
     });
     if (!changed) return;
     setMet(next);
-    if (next.size === challenge.goals.length) setFinished((f) => new Set(f).add(challenge.id));
+    if (next.size === challenge.goals.length)
+      setFinished((f) => new Set(f).add(challenge.id));
   }, [analysis, circuit, stats, challenge, met]);
 
-  const complete = challenge.goals.length > 0 && met.size === challenge.goals.length;
+  const complete =
+    challenge.goals.length > 0 && met.size === challenge.goals.length;
 
   // ── Editing ──────────────────────────────────────────────────────────
 
   const selectedPart = parts.find((p) => p.id === selected) ?? null;
-  const selectedPin = selected && PIN_BY_ID.get(selected)?.kind === "gpio" ? selected : null;
+  const selectedPin =
+    selected && PIN_BY_ID.get(selected)?.kind === "gpio" ? selected : null;
 
   const remove = useCallback((id: string) => {
     setParts((ps) => ps.filter((p) => p.id !== id));
-    setBurnt((b) => new Set([...b].filter((x) => x !== id && !x.startsWith(`${id}:`))));
+    setBurnt(
+      (b) => new Set([...b].filter((x) => x !== id && !x.startsWith(`${id}:`))),
+    );
     setSelected(null);
   }, []);
 
   const change = (id: string, patch: Partial<Part>) =>
-    setParts((ps) => ps.map((p) => (p.id === id ? ({ ...p, ...patch } as Part) : p)));
+    setParts((ps) =>
+      ps.map((p) => (p.id === id ? ({ ...p, ...patch } as Part) : p)),
+    );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if ((e.key === "Delete" || e.key === "Backspace") && selected && !PIN_BY_ID.has(selected)) {
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      )
+        return;
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selected &&
+        !PIN_BY_ID.has(selected)
+      ) {
         e.preventDefault();
         remove(selected);
       } else if (e.key === "Escape") setSelected(null);
@@ -151,7 +205,8 @@ export function WiringPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, remove]);
 
-  const setPin = (id: NodeId, s: PinState) => setPins((m) => new Map(m).set(id, s));
+  const setPin = (id: NodeId, s: PinState) =>
+    setPins((m) => new Map(m).set(id, s));
 
   /** Clicking a pin selects it; clicking an OUTPUT pin also flips it, which
    *  is the quickest way to play at being digitalWrite. */
@@ -177,7 +232,11 @@ export function WiringPage() {
     <div className="app">
       <header className="app-topbar app-topbar--wide">
         <div className="app-topbar__inner">
-          <Link to="/examples" className="app-lockup-link" aria-label="Examples">
+          <Link
+            to="/examples"
+            className="app-lockup-link"
+            aria-label="Examples"
+          >
             <Wordmark size="sm" />
           </Link>
           <span className="mnist-crumb">Examples</span>
@@ -189,16 +248,24 @@ export function WiringPage() {
         <div className="mnist-page wr-page">
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
-            <h1>Breadboards and Loops</h1>
+            <h1>Breadboard Secrets</h1>
             <p className="mnist-lede">
-              Every circuit is a loop: out of the power pin, through the thing you want to power, and back to
-              ground. Pick a challenge, or go straight to free play and build whatever you like.
+              Look inside breadboards and start to see how the connections
+              you're making work. Use X-ray to see the hidden wires, Colorize to
+              see how your connections add up, and Diagram to compare it to what
+              engineers draw.
             </p>
           </div>
 
           <div className="wr-layout">
             <div className="wr-side">
-              <TourCard index={chIdx} met={met} finished={finished} complete={complete} onGo={load} />
+              <TourCard
+                index={chIdx}
+                met={met}
+                finished={finished}
+                complete={complete}
+                onGo={load}
+              />
               <Readout
                 analysis={analysis}
                 parts={parts}
@@ -229,48 +296,57 @@ export function WiringPage() {
                 <div className="wr-controls__row">
                   <span className="wr-controls__label">See</span>
                   <div className="wr-controls__buttons wr-controls__switches">
-                    <Switch label="X-ray" checked={xray} onChange={(e) => setXray(e.currentTarget.checked)} />
                     <Switch
-                      label="Colour by connection"
+                      label="X-ray"
+                      checked={xray}
+                      onChange={(e) => setXray(e.currentTarget.checked)}
+                    />
+                    <Switch
+                      label="Colorize"
                       checked={netColors}
                       onChange={(e) => setNetColors(e.currentTarget.checked)}
                     />
+                    <DiagramControls mode={diagram} onChange={setDiagram} />
                   </div>
                 </div>
                 <div className="wr-controls__row wr-controls__row--context">
-                  <span className="wr-controls__label">{selectedPart || selectedPin ? "Selected" : "Tip"}</span>
-                  {selectedPin ? (
-                    <PinPanel
-                      id={selectedPin}
-                      state={pinState(circuit, selectedPin)}
-                      reading={analysis.readings.find((r) => r.id === selectedPin)}
-                      onChange={(s) => {
-                        const prev = pinState(circuit, selectedPin);
-                        if (prev.mode === "OUTPUT" && s.mode === "OUTPUT" && prev.level !== s.level) {
-                          setStats((st) => ({ ...st, toggles: st.toggles + 1 }));
-                        }
-                        setPin(selectedPin, s);
-                      }}
-                    />
-                  ) : selectedPart ? (
+                  <span className="wr-controls__label">
+                    {selectedPart ? "Selected" : "Use"}
+                  </span>
+                  {selectedPart ? (
                     <SelectionActions
                       part={selectedPart}
-                      burnt={[...burnt].some((b) => b === selectedPart.id || b.startsWith(`${selectedPart.id}:`))}
+                      burnt={[...burnt].some(
+                        (b) =>
+                          b === selectedPart.id ||
+                          b.startsWith(`${selectedPart.id}:`),
+                      )}
                       onRemove={() => remove(selectedPart.id)}
                       onChange={(patch) => change(selectedPart.id, patch)}
                       onReplace={() =>
                         setBurnt(
-                          (b) => new Set([...b].filter((x) => x !== selectedPart.id && !x.startsWith(`${selectedPart.id}:`))),
+                          (b) =>
+                            new Set(
+                              [...b].filter(
+                                (x) =>
+                                  x !== selectedPart.id &&
+                                  !x.startsWith(`${selectedPart.id}:`),
+                              ),
+                            ),
                         )
                       }
                     />
                   ) : tool === "wire" ? (
                     <div className="wr-controls__buttons">
-                      <span className="wr-tip">{TOOLS.find((t) => t.id === tool)!.hint}.</span>
+                      <span className="wr-tip">
+                        {TOOLS.find((t) => t.id === tool)!.hint}.
+                      </span>
                       <ColorPicker value={wireColor} onChange={setWireColor} />
                     </div>
                   ) : (
-                    <span className="wr-tip">{TOOLS.find((t) => t.id === tool)!.hint}.</span>
+                    <span className="wr-tip">
+                      {TOOLS.find((t) => t.id === tool)!.hint}.
+                    </span>
                   )}
                 </div>
               </div>
@@ -284,6 +360,7 @@ export function WiringPage() {
                   wireColor={wireColor}
                   xray={xray}
                   netColors={netColors}
+                  diagram={diagram}
                   selected={selected}
                   popping={popping}
                   onSelect={setSelected}
@@ -291,6 +368,37 @@ export function WiringPage() {
                   onChange={change}
                   onPress={press}
                   onPinClick={pinClick}
+                  popover={
+                    selectedPin
+                      ? {
+                          pin: selectedPin,
+                          content: (
+                            <PinPanel
+                              id={selectedPin}
+                              state={pinState(circuit, selectedPin)}
+                              reading={analysis.readings.find(
+                                (r) => r.id === selectedPin,
+                              )}
+                              onClose={() => setSelected(null)}
+                              onChange={(s) => {
+                                const prev = pinState(circuit, selectedPin);
+                                if (
+                                  prev.mode === "OUTPUT" &&
+                                  s.mode === "OUTPUT" &&
+                                  prev.level !== s.level
+                                ) {
+                                  setStats((st) => ({
+                                    ...st,
+                                    toggles: st.toggles + 1,
+                                  }));
+                                }
+                                setPin(selectedPin, s);
+                              }}
+                            />
+                          ),
+                        }
+                      : null
+                  }
                 />
               </div>
             </Card>
@@ -335,7 +443,8 @@ function TourCard({
     <Card padding="md" className={`wr-tour${complete ? " wr-tour--done" : ""}`}>
       <p className="wr-kicker">
         {ch.group}
-        {finished.size > 0 && ` · ${finished.size} of ${CHALLENGES.length - 1} done`}
+        {finished.size > 0 &&
+          ` · ${finished.size} of ${CHALLENGES.length - 1} done`}
       </p>
       <Dropdown
         value={String(index)}
@@ -348,7 +457,10 @@ function TourCard({
       {ch.goals.length > 0 && (
         <ul className="wr-goals">
           {ch.goals.map((g, i) => (
-            <li key={i} className={met.has(i) ? "wr-goal wr-goal--met" : "wr-goal"}>
+            <li
+              key={i}
+              className={met.has(i) ? "wr-goal wr-goal--met" : "wr-goal"}
+            >
               <span className="wr-goal__box" aria-hidden="true">
                 {met.has(i) ? "✓" : ""}
               </span>
@@ -363,7 +475,11 @@ function TourCard({
           Start over
         </Button>
         {next !== null && (
-          <Button size="sm" variant={complete ? "primary" : "ghost"} onClick={() => onGo(next)}>
+          <Button
+            size="sm"
+            variant={complete ? "primary" : "ghost"}
+            onClick={() => onGo(next)}
+          >
             {complete ? "Next" : "Skip"}: {CHALLENGES[next]!.title}
           </Button>
         )}
@@ -394,7 +510,9 @@ function Readout({
       <div className="wr-readout__row">
         <span className="wr-kicker">Board</span>
         {analysis.short ? (
-          <span className="wr-status wr-status--bad">Short circuit: it shut itself off</span>
+          <span className="wr-status wr-status--bad">
+            Short circuit: it shut itself off
+          </span>
         ) : (
           <span className="wr-status wr-status--ok">Powered</span>
         )}
@@ -417,13 +535,16 @@ function Readout({
         <div key={d.id} className="wr-readout__block">
           <div className="wr-readout__row">
             <span className="wr-kicker">{d.name}</span>
-            <span className={`wr-status wr-status--${d.lit.length ? "ok" : d.burnt.length ? "bad" : "muted"}`}>
+            <span
+              className={`wr-status wr-status--${d.lit.length ? "ok" : d.burnt.length ? "bad" : "muted"}`}
+            >
               {d.lit.length ? `Lit: ${d.lit.join(" ")}` : "Dark"}
             </span>
           </div>
           {d.burnt.length > 0 && (
             <p className="wr-readout__why">
-              Burnt out: {d.burnt.join(" ")}. A segment is an LED, and needs a resistor like any other.
+              Burnt out: {d.burnt.join(" ")}. A segment is an LED, and needs a
+              resistor like any other.
             </p>
           )}
         </div>
@@ -431,18 +552,24 @@ function Readout({
       {single.map((l, i) => (
         <div key={l.id} className="wr-readout__block">
           <div className="wr-readout__row">
-            <span className="wr-kicker">{single.length > 1 ? `LED ${i + 1}` : "LED"}</span>
-            <span className={`wr-status wr-status--${statusTone(l)}`}>{statusWord(l)}</span>
+            <span className="wr-kicker">
+              {single.length > 1 ? `LED ${i + 1}` : "LED"}
+            </span>
+            <span className={`wr-status wr-status--${statusTone(l)}`}>
+              {statusWord(l)}
+            </span>
           </div>
           <p className="wr-readout__why">{statusWhy(l)}</p>
-          {l.status === "lit" && l.loop && <Chain steps={describePath(l.loop)} />}
+          {l.status === "lit" && l.loop && (
+            <Chain steps={describePath(l.loop)} />
+          )}
         </div>
       ))}
       {analysis.readings.map((r) => (
         <PinReadout key={r.id} reading={r} />
       ))}
       {!leds.length && !analysis.short && !analysis.readings.length && (
-        <p className="wr-readout__why">Nothing on the board yet.</p>
+        <p className="wr-readout__why">Board is empty.</p>
       )}
       {burned > 0 && (
         <p className="wr-readout__count">
@@ -463,7 +590,9 @@ function displays(leds: LedResult[], parts: Part[]) {
       id: p.id,
       name: shown.length > 1 ? `Display ${i + 1}` : "Display",
       lit: mine.filter((l) => l.status === "lit").map(seg),
-      burnt: mine.filter((l) => l.status === "burnt" || l.status === "burning").map(seg),
+      burnt: mine
+        .filter((l) => l.status === "burnt" || l.status === "burning")
+        .map(seg),
     };
   });
 }
@@ -484,18 +613,25 @@ function PinReadout({ reading }: { reading: PinReading }) {
         )}
       </div>
       {reading.digital === "floating" ? (
-        <p className="wr-readout__why">Connected to nothing, so it picks up noise and reads at random.</p>
+        <p className="wr-readout__why">
+          Unconnected digital pins read noise at random.
+        </p>
       ) : reading.analog !== undefined ? (
         <div className="wr-meter">
           <div className="wr-meter__track">
-            <div className="wr-meter__fill" style={{ width: `${(reading.analog / 4095) * 100}%` }} />
+            <div
+              className="wr-meter__fill"
+              style={{ width: `${(reading.analog / 4095) * 100}%` }}
+            />
           </div>
           <span className="wr-meter__value">
             analogRead <b>{reading.analog}</b> · {reading.volts!.toFixed(2)} V
           </span>
         </div>
       ) : (
-        <p className="wr-readout__why">{reading.volts!.toFixed(2)} V. This pin has no analog reader.</p>
+        <p className="wr-readout__why">
+          {reading.volts!.toFixed(2)} V. This pin cannot read analog voltage.
+        </p>
       )}
     </div>
   );
@@ -514,15 +650,21 @@ function Chain({ steps, bad = false }: { steps: PathStep[]; bad?: boolean }) {
 }
 
 function shortWhy(kind: "supply" | "pin" | "supplies") {
-  if (kind === "pin") return "A pin that's switched on reaches GND, or a pin set LOW, through nothing but wire.";
-  if (kind === "supplies") return "VIN's 5 volts reaches the 3.3 volt pin directly.";
-  return "3V3 reaches GND through nothing but wire. There's no load in the loop.";
+  if (kind === "pin")
+    return "A pin that's set HIGH reaches GND or a pin set LOW.";
+  if (kind === "supplies")
+    return "VIN (5 Volts) reaches 3v3 (3.3 Volts) directly.";
+  return "3v3 reaches GND through a series of wires and nothing else.";
 }
 
 function statusWord(l: LedResult) {
   switch (l.status) {
     case "lit":
-      return l.brightness > 0.85 ? "Lit" : l.brightness > 0.35 ? "Lit, dim" : "Barely lit";
+      return l.brightness > 0.85
+        ? "Lit"
+        : l.brightness > 0.35
+          ? "Dimly lit"
+          : "Barely lit";
     case "burning":
     case "burnt":
       return "Burnt out";
@@ -542,28 +684,28 @@ function statusTone(l: LedResult) {
 function statusWhy(l: LedResult): string {
   switch (l.status) {
     case "lit":
-      return `${l.mA!.toFixed(1)} mA through it. The loop:`;
+      return `${l.mA!.toFixed(1)} mA through it, passing through:`;
     case "burning":
     case "burnt":
-      return "Too much current: nothing in its loop held it back. Select it and press Replace.";
+      return "Too much current burns out an LED (perhaps a current-limiting resistor?). Select the LED and press Replace.";
     case "too-low":
-      return "The loop is closed, but there isn't enough voltage across it to light.";
+      return "There is not enough voltage to light the LED.";
     case "off":
-      return "The board shut off, so nothing gets power.";
+      return "The board is off.";
     case "backwards":
-      return "It's in backwards. The long leg (+) goes toward power.";
+      return "The LED is backwards. The long leg (+) goes to 3v3.";
     case "bypassed":
-      return "Both legs are joined, so power goes around it instead of through it.";
+      return "Both legs are connected to each other.";
     case "no-power":
-      return "It has a way back to GND, but nothing brings power to its long leg (+).";
+      return "The power skips the LED.";
     case "no-return":
-      return "Power reaches it, but its short leg has no way back to GND.";
+      return "Power gets to the LED, but no path to GND.";
     case "pin-off": {
       const label = l.pin ? PIN_BY_ID.get(l.pin)?.label : "the pin";
-      return `The loop runs through ${label}, which isn't switched on. Select ${label} on the board.`;
+      return `The loop passes through ${label}, which is off. Adjust ${label} by selecting it.`;
     }
     default:
-      return "Not connected to power or GND yet.";
+      return "LED is not connected to 3v3 or GND.";
   }
 }
 
@@ -599,12 +741,20 @@ function SelectionActions({
         </Button>
       )}
       {part.kind === "led" && (
-        <Button size="sm" variant="subtle" onClick={() => onChange({ a: part.b, b: part.a })}>
+        <Button
+          size="sm"
+          variant="subtle"
+          onClick={() => onChange({ a: part.b, b: part.a })}
+        >
           Flip
         </Button>
       )}
       {part.kind === "button" && (
-        <Button size="sm" variant="subtle" onClick={() => onChange({ turned: !part.turned })}>
+        <Button
+          size="sm"
+          variant="subtle"
+          onClick={() => onChange({ turned: !part.turned })}
+        >
           Turn 90°
         </Button>
       )}
@@ -644,52 +794,76 @@ function SelectionActions({
   );
 }
 
-/** A pin's mode, as a sketch would set it. */
+/** A pin's mode, as a sketch would set it. Only the modes the real pin
+ *  supports are offered: an input-only pin has no OUTPUT, PWM or pulls. */
 function PinPanel({
   id,
   state,
   reading,
   onChange,
+  onClose,
 }: {
   id: NodeId;
   state: PinState;
   reading?: PinReading;
   onChange: (s: PinState) => void;
+  onClose: () => void;
 }) {
   const pin = PIN_BY_ID.get(id)!;
-  const modes: Array<{ label: string; to: PinState; on: boolean; disabled?: boolean }> = [
-    { label: "INPUT", to: { mode: "INPUT" }, on: state.mode === "INPUT" },
-    { label: "INPUT_PULLDOWN", to: { mode: "INPUT_PULLDOWN" }, on: state.mode === "INPUT_PULLDOWN" },
-    { label: "INPUT_PULLUP", to: { mode: "INPUT_PULLUP" }, on: state.mode === "INPUT_PULLUP" },
-    { label: "OUTPUT", to: { mode: "OUTPUT", level: 0 }, on: state.mode === "OUTPUT", disabled: pin.inputOnly },
-    { label: "PWM", to: { mode: "PWM", duty: 128 }, on: state.mode === "PWM", disabled: pin.inputOnly },
+  const modes: Array<{ label: string; to: PinState }> = [
+    { label: "INPUT", to: { mode: "INPUT" } },
+    { label: "INPUT_PULLDOWN", to: { mode: "INPUT_PULLDOWN" } },
+    { label: "INPUT_PULLUP", to: { mode: "INPUT_PULLUP" } },
+    { label: "OUTPUT", to: { mode: "OUTPUT", level: 0 } },
+    { label: "PWM", to: { mode: "PWM", duty: 128 } },
   ];
   return (
     <div className="wr-pinpanel">
-      <div className="wr-controls__buttons">
+      <div className="wr-pinpanel__head">
         <span className="wr-sel-name">
-          {pin.label} <span className="wr-sel-sub">GPIO {pin.gpio}</span>
+          {pin.label}{" "}
+          <span className="wr-sel-sub">
+            GPIO {pin.gpio} · {pinAbilities(pin).join(", ")}
+          </span>
         </span>
-        {modes.map((m) => (
-          <Button
-            key={m.label}
-            size="sm"
-            variant={m.on ? "primary" : "subtle"}
-            disabled={m.disabled}
-            title={m.disabled ? "This pin can only read" : undefined}
-            onClick={() => !m.on && onChange(m.to)}
-          >
-            {m.label}
-          </Button>
-        ))}
+        <button
+          type="button"
+          className="wr-popover__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </div>
+      <div className="wr-controls__buttons">
+        {modes
+          .filter((m) => pinAllows(pin, m.to.mode))
+          .map((m) => (
+            <Button
+              key={m.label}
+              size="sm"
+              variant={state.mode === m.to.mode ? "primary" : "subtle"}
+              onClick={() => state.mode !== m.to.mode && onChange(m.to)}
+            >
+              {m.label}
+            </Button>
+          ))}
       </div>
       <div className="wr-controls__buttons wr-pinpanel__detail">
         {state.mode === "OUTPUT" && (
           <>
-            <Button size="sm" variant={state.level ? "primary" : "subtle"} onClick={() => onChange({ mode: "OUTPUT", level: 1 })}>
+            <Button
+              size="sm"
+              variant={state.level ? "primary" : "subtle"}
+              onClick={() => onChange({ mode: "OUTPUT", level: 1 })}
+            >
               HIGH
             </Button>
-            <Button size="sm" variant={!state.level ? "primary" : "subtle"} onClick={() => onChange({ mode: "OUTPUT", level: 0 })}>
+            <Button
+              size="sm"
+              variant={!state.level ? "primary" : "subtle"}
+              onClick={() => onChange({ mode: "OUTPUT", level: 0 })}
+            >
               LOW
             </Button>
             <code className="wr-code">
@@ -705,7 +879,9 @@ function PinPanel({
               max={255}
               step={1}
               value={state.duty}
-              onChange={(e) => onChange({ mode: "PWM", duty: parseInt(e.target.value, 10) })}
+              onChange={(e) =>
+                onChange({ mode: "PWM", duty: parseInt(e.target.value, 10) })
+              }
               aria-label="PWM duty"
               className="wr-range"
             />
@@ -715,7 +891,9 @@ function PinPanel({
             </code>
           </>
         )}
-        {(state.mode === "INPUT" || state.mode === "INPUT_PULLDOWN" || state.mode === "INPUT_PULLUP") && (
+        {(state.mode === "INPUT" ||
+          state.mode === "INPUT_PULLDOWN" ||
+          state.mode === "INPUT_PULLUP") && (
           <code className="wr-code">
             {reading
               ? reading.analog !== undefined && reading.digital !== "floating"
@@ -724,7 +902,11 @@ function PinPanel({
               : `pinMode(${pin.gpio}, ${state.mode}); // nothing plugged in`}
           </code>
         )}
-        {pin.inputOnly && <span className="wr-tip">This pin can only read.</span>}
+        {pin.inputOnly && (
+          <span className="wr-tip">
+            Input only: it can read a voltage, never drive one.
+          </span>
+        )}
       </div>
     </div>
   );
@@ -744,13 +926,25 @@ function PwmWave({ duty }: { duty: number }) {
     d += ` L ${x + period} ${h}`;
   }
   return (
-    <svg width={w} height={h + 2} viewBox={`0 0 ${w} ${h + 2}`} className="wr-wave" aria-hidden="true">
+    <svg
+      width={w}
+      height={h + 2}
+      viewBox={`0 0 ${w} ${h + 2}`}
+      className="wr-wave"
+      aria-hidden="true"
+    >
       <path d={d} />
     </svg>
   );
 }
 
-function ColorPicker({ value, onChange }: { value: WireColor | "auto"; onChange: (c: WireColor | "auto") => void }) {
+function ColorPicker({
+  value,
+  onChange,
+}: {
+  value: WireColor | "auto";
+  onChange: (c: WireColor | "auto") => void;
+}) {
   return (
     <span className="wr-swatches" role="radiogroup" aria-label="Wire colour">
       {(Object.keys(WIRE_COLORS) as WireColor[]).map((c) => (

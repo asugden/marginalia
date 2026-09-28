@@ -37,7 +37,7 @@ export const ledOnPin = (label: string) => [
 // ground has a pin of its own. Each line has one resistor, between its pin
 // and the displays, so it protects whichever display is listening.
 //
-//   left display  columns 2–6     right display  columns 20–24
+//   left display  columns 2–5     right display  columns 20–23
 //   segment pins  a D13 · b D12 · c D14 · d D27 · e D26 · f D25 · g D33
 //   ground pins   left D32 · right D4
 
@@ -55,11 +55,11 @@ export const multiplexParts = (): Part[] => [
   // display's segment strip.
   resistor("a8", "a2"), //  g
   resistor("b9", "b3"), //  f
-  resistor("c10", "c5"), // a
-  resistor("d11", "d6"), // b
+  resistor("c10", "c4"), // a
+  resistor("d11", "d5"), // b
   resistor("j8", "j2"), //  e
   resistor("i9", "i3"), //  d
-  resistor("h10", "h5"), // c
+  resistor("h10", "h4"), // c
 ];
 
 /** The same, fully wired: the shared lines and the nine board wires. */
@@ -70,11 +70,11 @@ export const multiplexWired = (): Part[] => {
     // Each segment line carried across to the right display.
     wire("c2", "c20", "green"), // g
     wire("a3", "a21", "green"), // f
-    wire("a5", "a23", "green"), // a
-    wire("a6", "a24", "green"), // b
+    wire("a4", "a22", "green"), // a
+    wire("a5", "a23", "green"), // b
     wire("g2", "g20", "blue"), //  e
     wire("h3", "h21", "blue"), //  d
-    wire("g5", "g23", "blue"), //  c
+    wire("g4", "g22", "blue"), //  c
     // Nine wires to the board.
     wire(pin(s.a), "b10", "yellow"),
     wire(pin(s.b), "b11", "yellow"),
@@ -83,7 +83,7 @@ export const multiplexWired = (): Part[] => {
     wire(pin(s.e), "g8", "yellow"),
     wire(pin(s.f), "a9", "yellow"),
     wire(pin(s.g), "b8", "yellow"),
-    wire(pin(MUX_PINS.left), "a4", "black"),
-    wire(pin(MUX_PINS.right), "a22", "black"),
+    wire(pin(MUX_PINS.left), "j5", "black"),
+    wire(pin(MUX_PINS.right), "j23", "black"),
   ];
 };

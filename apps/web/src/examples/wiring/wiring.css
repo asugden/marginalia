@@ -363,11 +363,12 @@
 .wr-hover--full { stroke: var(--text-muted); }
 .wr-snap { fill: none; stroke: var(--green-600); stroke-width: 2.5; pointer-events: none; }
 .wr-snap--bad { stroke: var(--salmon-600); }
-.wr-tooltip { fill: #1c2733; opacity: 0.94; }
+/* Dark sand: set apart from both the navy board and the pale breadboard. */
+.wr-tooltip { fill: var(--sand-300, #ddd5c5); stroke: var(--sand-400, #c4b9a4); stroke-width: 1; }
 .wr-tip-text {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  fill: #fff;
+  fill: var(--ink-900, #1c1917);
   text-anchor: middle;
 }
 
@@ -570,3 +571,105 @@
   pointer-events: none;
 }
 .wr-seg-pin--gnd { fill: #3d3831; font-size: 11px; }
+/* A white tile behind each leg's name, so it reads over the holes. */
+.wr-seg-pin-bg { fill: #fff; stroke: #d6d0c4; stroke-width: 0.6; pointer-events: none; }
+
+/* ── Diagram mode ─────────────────────────────────────────────────────
+   The board fades back and the circuit is redrawn as a schematic, over the
+   board or pulled into loops around a battery. A diagram's lines are all
+   one ink and one width, and straight; where two unjoined lines cross, one
+   bridges the other. Only fills carry state: a lit LED, a pin's label. */
+.wr-phys { transition: opacity 600ms ease; }
+.wr-phys--gone { opacity: 0; pointer-events: none; }
+
+.wr-dg {
+  --dg-ink: #111;
+  --dg-paper: #fff;
+  --dg-line: 1.8px;
+  pointer-events: none;
+  animation: wr-rise 250ms ease-out;
+}
+.wr-dg--loops .wr-dg-sym,
+.wr-dg--loops .wr-pinlabel--gpio { pointer-events: auto; cursor: pointer; }
+
+.wr-dg-wire,
+.wr-dg-sym-line,
+.wr-dg-rays path,
+.wr-dg-burnt-x,
+.wr-dg-cell {
+  fill: none;
+  stroke: var(--dg-ink);
+  stroke-width: var(--dg-line);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wr-dg-paper { fill: var(--dg-paper); }
+.wr-dg-dot, .wr-dg-arrow { fill: var(--dg-ink); }
+.wr-dg-hit { stroke: transparent; stroke-width: 16; }
+.wr-dg-sym--sel { filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 1px var(--accent)); }
+.wr-dg-led,
+.wr-dg-contact,
+.wr-dg-node circle,
+.wr-dg-open { fill: var(--dg-paper); stroke: var(--dg-ink); stroke-width: var(--dg-line); stroke-linejoin: round; }
+.wr-dg-led--burnt { fill: #6b6763; }
+.wr-dg-led-lit { fill: #ff6a45; }
+.wr-dg-burnt-x { stroke: #fff; }
+.wr-dg-plunger { transition: transform 80ms; }
+.wr-dg-label,
+.wr-dg-bat-label,
+.wr-dg-node text {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  fill: var(--dg-ink);
+}
+.wr-dg-bat-label { font-weight: 700; text-anchor: end; }
+.wr-dg-node text { font-weight: 700; text-anchor: middle; }
+/* 3V3 or GND where a column can't reach the battery (a short, or a part
+   wired backwards between them). */
+.wr-dg-power .wr-pinlabel-bg { fill: var(--dg-paper); stroke: var(--dg-ink); stroke-width: var(--dg-line); }
+.wr-dg-power .wr-pinlabel-text { fill: var(--dg-ink); }
+@media (prefers-reduced-motion: reduce) {
+  .wr-phys, .wr-dg, .wr-dg-plunger { animation: none; transition: none; }
+}
+
+/* ── A pin's controls, in a panel under the pin ─────────────────────────
+   It floats over the figure instead of growing the controls above it, so
+   picking a pin moves nothing on the page. */
+.wr-board-box {
+  position: relative;
+  width: 680px;
+  max-width: 100%;
+}
+.wr-board-box > .wr-svg { display: block; width: 100%; }
+.wr-popover {
+  --wr-pop-w: 21rem;
+  position: absolute;
+  width: min(var(--wr-pop-w), 100%);
+  /* Centred under the pin, but never past either edge of the figure. */
+  left: clamp(0px, calc(var(--wr-pop-x) - min(var(--wr-pop-w), 100%) / 2), calc(100% - min(var(--wr-pop-w), 100%)));
+  margin-top: 6px;
+  z-index: 4;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.6rem 0.7rem 0.65rem;
+  animation: wr-rise 150ms ease-out;
+}
+.wr-pinpanel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.1rem;
+}
+.wr-popover__close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+.wr-popover__close:hover { color: var(--text-strong); }

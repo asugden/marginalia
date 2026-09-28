@@ -26,17 +26,35 @@ gets a paragraph.
 - **A short is a short however far it wanders.** Power that reaches GND
   through wire alone shuts the board off, and the page traces the whole
   path, however long it is.
-- **Pins, the way code sets them.** Select a pin to give it a mode, named as a
-  sketch names it: `INPUT`, `INPUT_PULLDOWN`, `OUTPUT` (click the label to flip
+- **Pins, the way code sets them.** Click a pin to open a panel under it
+  (it floats over the figure, so nothing on the page moves) and give it a
+  mode, named as a sketch names it: `INPUT`, `INPUT_PULLDOWN`, `OUTPUT` (click the label to flip
   it HIGH and LOW) or PWM (a duty slider and its square wave). An input pin
   reads live. `digitalRead` shows HIGH, LOW, or a flicker when the pin is
   floating. `analogRead` shows a 0–4095 meter. The panel shows the matching
   line of code, so a later example can hand the pins to a real sketch.
+- **The pinout, enforced.** A pin offers only what the real one can do, and
+  the code example refuses the same things. GPIO 34–39 (D34, D35, VP, VN)
+  are input only, with no pulls. analogRead works only on ADC1 (D32–D35,
+  VP, VN), because ADC2 stops working whenever Wi-Fi is on. RX0/TX0 (the
+  USB serial line) and RX2/TX2 are serial pins: they take no mode at all.
+  The rules are `pinAllows` and `pinAbilities` in `model.ts`.
 - **Seven-segment displays** are common-ground, each segment an LED to a
   shared ground leg, with the legs named in X-ray. The hardest challenge
   wires two of them with nine wires: shared segment lines, and one ground
   pin per display. The code example's multiplexing sketch then drives
   exactly that circuit.
+- **A diagram is the same circuit.** *Diagram* fades the board behind a
+  sheet of paper and redraws the circuit as a schematic over it: straight
+  black lines of one width that follow the jumpers and the strips inside
+  the board, so a connected group reads as one unbroken line. Symbols sit
+  on their parts, and where two unjoined lines cross, one bridges the
+  other. *Simplify* slides every line and symbol into short loops. Each
+  chain of parts in series becomes a column between the two sides of a
+  battery (3V3 and GND). A chain that starts or ends at a pin dead-ends in
+  that pin's label, and a group shared by several columns gets a numbered
+  junction. A short becomes a loop with nothing in it. As loops, switches
+  still press and output pins still flip.
 - **The potentiometer** is a knob you drag. It dims an LED, as a voltage
   divider or in series, and feeds an analog pin.
 
@@ -68,6 +86,8 @@ constants are round numbers of the right size, not a datasheet.
 | `challenges.ts` | The tour: each challenge is a starting board and a set of goals |
 | `circuits.ts` | Part builders and stock circuits, shared with the code example |
 | `Breadboard.tsx` | The SVG sandbox: drawing, snapping, dragging, pressing |
+| `schematic.ts` | The diagram's two layouts, on the board and as loops, built point for point |
+| `Diagram.tsx` | Draws the diagram at any moment between its layouts, with bridges at crossings |
 | `WiringPage.tsx` | Page state, tour card, readout, controls |
 
 ## The board
@@ -91,8 +111,9 @@ challenges appear in a menu and can be taken in any order.
 
 - PWM is shown averaged. The LED looks dimmer, and the flicker behind that is
   shown only by the square wave in the pin panel.
-- The ESP32's ADC is treated as linear, and ADC2 pins read even with WiFi on.
-  Neither is true of real hardware.
+- The ESP32's ADC is treated as linear, which real hardware is not.
+- RX2/TX2 are free GPIOs on most boards; they are closed off here so a
+  beginner never mixes them up with RX0/TX0.
 - The board sits off the breadboard, with jumper wires to its pins. Plugging
   it straight into the breadboard is not modelled.
 - The figure is drawn at 1:1 at 680 units wide. It works on a phone, but a

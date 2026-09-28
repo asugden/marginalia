@@ -1,7 +1,8 @@
 /* Code example — layout and annotation styling. The board reuses the
    wiring example's styles (wiring.css). Role colours are the general
    data-mark hues (docs/style.md §11): never sage or plum, and never the
-   brand accent, which marks only the running line and selection. */
+   brand accent, which marks only where the sketch is: the running line,
+   the track (setup and the loop ring) and selection. */
 
 .cd-page { max-width: 1440px; }
 
@@ -12,6 +13,16 @@
   --cd-control: var(--amber-600);
   --cd-time: var(--green-600);
   --cd-serial: #00879c;
+  /* The same roles as the code itself colours them: the bars and glyphs
+     beside each line, and in the key, match the call names in the code. */
+  --cd-setup-code: var(--cd-setup);
+  --cd-output-code: var(--salmon-ink);
+  --cd-input-code: var(--blue-ink);
+  --cd-control-code: var(--amber-600);
+  --cd-time-code: var(--green-ink);
+  --cd-serial-code: #00606f;
+  /* The key colour, see-through, for setup() and the loop ring. */
+  --cd-track: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .cd-sketch {
@@ -24,14 +35,7 @@
 @media (max-width: 860px) { .cd-sketch { grid-template-columns: 1fr; } }
 .cd-sketch__pick { display: flex; flex-direction: column; gap: 0.3rem; }
 .cd-sketch__body .wr-tour__prompt { margin-top: 0.2rem; }
-.cd-tries {
-  margin: 0;
-  padding-left: 1.1rem;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-.cd-tries li::marker { content: "→  "; color: var(--text-muted); }
+
 
 .cd-layout {
   position: relative;
@@ -52,11 +56,10 @@
 .cd-track__power { fill: var(--surface); stroke: var(--fig-node-border); stroke-width: 2; }
 .cd-track__power--on { fill: var(--green-600); stroke: var(--green-600); }
 .cd-track__line { stroke: var(--border-strong); stroke-width: 2; }
-.cd-track__setup { fill: color-mix(in srgb, var(--cd-setup) 14%, var(--surface)); stroke: var(--cd-setup); stroke-width: 1.5; transition: opacity 300ms; }
+.cd-track__setup { fill: var(--cd-track); stroke: var(--accent); stroke-width: 1.5; transition: opacity 300ms; }
 .cd-track__setup--done { opacity: 0.4; }
-.cd-track__loop { fill: none; stroke: var(--border-strong); stroke-width: 6; }
-.cd-track__loop--on { stroke: color-mix(in srgb, var(--cd-control) 45%, var(--surface)); }
-.cd-track__arrow { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
+.cd-track__loop { fill: none; stroke: var(--cd-track); stroke-width: 9; }
+.cd-track__loop--on { stroke: color-mix(in srgb, var(--accent) 45%, transparent); }
 .cd-track__label { font-family: var(--font-mono); font-size: 11px; fill: var(--text-body); text-anchor: middle; }
 .cd-track__lap { font-family: var(--font-mono); font-size: 9px; fill: var(--fig-text-label); text-transform: uppercase; }
 .cd-track__lapnum { font-family: var(--font-mono); font-size: 13px; font-weight: 700; fill: var(--text-strong); font-variant-numeric: tabular-nums; }
@@ -80,12 +83,12 @@
   border-left: 3px solid transparent;
   transition: background 120ms, opacity 300ms;
 }
-.cd-role--setup { border-left-color: var(--cd-setup); }
-.cd-role--output { border-left-color: var(--cd-output); }
-.cd-role--input { border-left-color: var(--cd-input); }
-.cd-role--control { border-left-color: var(--cd-control); }
-.cd-role--time { border-left-color: var(--cd-time); }
-.cd-role--serial { border-left-color: var(--cd-serial); }
+.cd-role--setup { border-left-color: var(--cd-setup-code); }
+.cd-role--output { border-left-color: var(--cd-output-code); }
+.cd-role--input { border-left-color: var(--cd-input-code); }
+.cd-role--control { border-left-color: var(--cd-control-code); }
+.cd-role--time { border-left-color: var(--cd-time-code); }
+.cd-role--serial { border-left-color: var(--cd-serial-code); }
 .cd-line--hover { background: var(--surface-sunken); }
 .cd-line--current { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .cd-line--current .cd-num { color: var(--accent); font-weight: 700; }
@@ -93,12 +96,12 @@
 .cd-num { text-align: right; padding-right: 0.6rem; color: var(--fig-text-label); user-select: none; font-size: 11px; }
 .cd-glyphs { display: flex; gap: 1px; user-select: none; }
 .cd-glyph { font-size: 11px; font-weight: 700; width: 1.05rem; text-align: center; }
-.cd-glyph--setup { color: var(--cd-setup); }
-.cd-glyph--output { color: var(--cd-output); }
-.cd-glyph--input { color: var(--cd-input); }
-.cd-glyph--control { color: var(--cd-control); }
-.cd-glyph--time { color: var(--cd-time); }
-.cd-glyph--serial { color: var(--cd-serial); }
+.cd-glyph--setup { color: var(--cd-setup-code); }
+.cd-glyph--output { color: var(--cd-output-code); }
+.cd-glyph--input { color: var(--cd-input-code); }
+.cd-glyph--control { color: var(--cd-control-code); }
+.cd-glyph--time { color: var(--cd-time-code); }
+.cd-glyph--serial { color: var(--cd-serial-code); }
 .cd-text { position: relative; white-space: pre; color: var(--text-body); min-width: 0; }
 .cd-english {
   display: block;
@@ -143,11 +146,11 @@
 .cd-tok-type { color: var(--purple-ink); }
 .cd-tok-const { color: var(--text-strong); }
 .cd-tok-call { font-weight: 700; }
-.cd-tok-call--setup { color: var(--cd-setup); }
-.cd-tok-call--output { color: var(--salmon-ink); }
-.cd-tok-call--input { color: var(--blue-ink); }
-.cd-tok-call--time { color: var(--green-ink); }
-.cd-tok-call--serial { color: #00606f; }
+.cd-tok-call--setup { color: var(--cd-setup-code); }
+.cd-tok-call--output { color: var(--cd-output-code); }
+.cd-tok-call--input { color: var(--cd-input-code); }
+.cd-tok-call--time { color: var(--cd-time-code); }
+.cd-tok-call--serial { color: var(--cd-serial-code); }
 
 .cd-lit {
   cursor: ew-resize;
@@ -185,13 +188,14 @@
 .cd-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 1rem;
+  gap: 0.45rem 1.25rem;
   margin: 0.6rem 0 0;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
-.cd-legend__item { border-left: 3px solid; padding-left: 0.35rem; }
-.cd-legend__item b { color: var(--text-body); margin-right: 0.15rem; }
+.cd-legend__item { border-left: 3px solid; padding-left: 0.4rem; }
+.cd-legend__item .cd-glyph { margin-right: 0.3rem; }
+.cd-legend__item b { color: var(--text-body); margin-right: 0.45rem; }
 
 /* ── Serial monitor ───────────────────────────────────────────────── */
 .cd-serial { margin-top: 0.9rem; }
@@ -211,13 +215,6 @@
 .cd-serial__empty { color: #7f8c99; }
 
 /* ── Pins ─────────────────────────────────────────────────────────── */
-.cd-pins { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.6rem; font-family: var(--font-mono); font-size: 10.5px; }
-.cd-pins--empty { color: var(--text-muted); font-family: inherit; font-size: var(--text-xs); }
-.cd-pin { border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius-xs); padding: 0.1rem 0.4rem; color: var(--text-secondary); }
-.cd-pin--out { border-left-color: var(--cd-output); }
-.cd-pin--in { border-left-color: var(--cd-input); }
-.cd-pin b { color: var(--text-strong); }
-.cd-pin__state { color: var(--text-strong); font-weight: 700; }
 
 /* ── Threads ──────────────────────────────────────────────────────── */
 .cd-threads { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 3; }
