@@ -1,0 +1,21 @@
+-- 0029 — "I'm not interested in generative AI": a per-person preference.
+--
+-- Some instructors want this platform only for its record of where writing
+-- came from, and would rather never see an AI feature. users.genai_opt_out
+-- records that choice. It has two separate effects (apps/worker/src/genai.ts):
+--
+--   * Personal — the instructor's own screens hide Voices, agents, and the AI
+--     controls on Writing and Code. Always, whenever they have opted out.
+--
+--   * Course — a course's AI features are forced off (agents_enabled = 0,
+--     provenance_chat_enabled = 0, every code assignment's ai_enabled = 0) and
+--     the worker refuses to turn them back on — but ONLY when every instructor
+--     on the course has opted out. A co-instructor who wants to teach with
+--     LLMs isn't blocked by one who doesn't.
+--
+-- The course effect is written to course_settings / code_assignments at the
+-- moment a course becomes unanimous, not derived on every read: a derived
+-- "off" would silently restore the old settings the moment a new instructor
+-- joined. Stored, the new instructor merely *can* turn AI back on.
+
+ALTER TABLE users ADD COLUMN genai_opt_out INTEGER NOT NULL DEFAULT 0;

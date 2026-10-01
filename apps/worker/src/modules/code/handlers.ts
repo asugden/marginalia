@@ -19,6 +19,8 @@ import { ProviderError, type Message as LLMMessage } from "@marginalia/providers
 import { llmConfigured, provenanceDefaultModel, providerFor } from "../../llm.js";
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
+import { courseGenaiLocked, GENAI_LOCKED_CODE, GENAI_LOCKED_MESSAGE } from "../../genai.js";
+import { can, isStaff } from "../../permissions.js";
 import {
   ensureItem as ensureCourseItem,
   removeItemForPayload as removeCourseItem,
@@ -56,6 +58,7 @@ import {
   type RosterStudentDTO,
   type SubmissionRender,
 } from "./types.js";
+import type { Origin } from "@marginalia/provenance";
 
 const MAX_TITLE = 200;
 const MAX_INSTRUCTIONS = 20_000;
@@ -131,7 +134,10 @@ const error = (message: string, status: number, code?: string) =>
 interface Caller {
   userId: string;
   role: string;
+  /** May author assignments (permissions.ts "author"). */
   instructor: boolean;
+  /** May see students' submissions (permissions.ts "view_submissions"). */
+  seesSubmissions: boolean;
 }
 
 /**
@@ -149,11 +155,12 @@ async function resolveCaller(
   if (!courseId) return error("courseId is required", 400);
   const role = await repo.enrollmentRole(env.DB, courseId, identity.userId);
   if (!role) return error("Not enrolled in this course", 403);
-  const instructor = role === "instructor";
-  if (!instructor && !(await repo.codeEnabled(env.DB, courseId))) {
+  const instructor = can(role, "author");
+  const seesSubmissions = can(role, "view_submissions");
+  if (!isStaff(role) && !(await repo.codeEnabled(env.DB, courseId))) {
     return error("Code is not turned on for this course", 404, "code_disabled");
   }
-  return { userId: identity.userId, role, instructor };
+  return { userId: identity.userId, role, instructor, seesSubmissions };
 }
 
 async function resolveInstructor(
@@ -164,6 +171,18 @@ async function resolveInstructor(
   const caller = await resolveCaller(env, identity, courseId);
   if (caller instanceof Response) return caller;
   if (!caller.instructor) return error("Instructors only", 403);
+  return caller;
+}
+
+/** Course staff who may read students' submitted work (instructors, TAs). */
+async function resolveSubmissionViewer(
+  env: Env,
+  identity: Identity,
+  courseId: string | null | undefined,
+): Promise<Caller | Response> {
+  const caller = await resolveCaller(env, identity, courseId);
+  if (caller instanceof Response) return caller;
+  if (!caller.seesSubmissions) return error("Course staff only", 403);
   return caller;
 }
 
@@ -199,6 +218,13 @@ function serializeContent(raw: unknown): string | Response {
 
 // ── assignments ─────────────────────────────────────────────────────────
 
+/** Submission fractions for the instructor's list. `byId` is keyed by
+ *  assignment id; an assignment nobody has submitted to is simply absent. */
+interface SubmissionStatsDTO {
+  students: number;
+  byId: Record<string, { submitted: number; onTime: number }>;
+}
+
 export async function listAssignmentsRoute(
   env: Env,
   identity: Identity,
@@ -209,8 +235,24 @@ export async function listAssignmentsRoute(
   if (caller instanceof Response) return caller;
   const includeArchived = caller.instructor && url.searchParams.get("includeArchived") === "1";
   const rows = await repo.listAssignments(env.DB, courseId!, includeArchived);
+  // `stats=1` (course staff): how many real students submitted each
+  // assignment, and how many of them on time — the list's "N of M" figures.
+  let stats: SubmissionStatsDTO | undefined;
+  if (caller.seesSubmissions && url.searchParams.get("stats") === "1") {
+    const [students, counts] = await Promise.all([
+      coreRepo.countRealStudents(env.DB, courseId!),
+      repo.listAssignmentStats(env.DB, courseId!),
+    ]);
+    stats = {
+      students,
+      byId: Object.fromEntries(
+        counts.map((c) => [c.assignment_id, { submitted: c.submitted, onTime: c.on_time }]),
+      ),
+    };
+  }
   return json({
     assignments: rows.map((r) => toAssignmentDTO(r, { instructor: caller.instructor })),
+    ...(stats ? { stats } : {}),
   });
 }
 
@@ -243,6 +285,7 @@ interface AssignmentBody {
   archived?: unknown;
   mode?: unknown;
   voice?: unknown;
+  voiceChoice?: unknown;
 }
 
 export async function createAssignmentRoute(
@@ -254,6 +297,9 @@ export async function createAssignmentRoute(
   const caller = await resolveInstructor(env, identity, body?.courseId);
   if (caller instanceof Response) return caller;
   const courseId = body!.courseId!;
+  if (body!.aiEnabled === true && (await courseGenaiLocked(env.DB, courseId))) {
+    return error(GENAI_LOCKED_MESSAGE, 409, GENAI_LOCKED_CODE);
+  }
 
   const title = cleanTitle(body!.title);
   if (!title) return error("title is required", 400);
@@ -273,6 +319,10 @@ export async function createAssignmentRoute(
   if (mode === "invalid") return error("mode must be submit or practice", 400);
   const voiceJson = await parseVoice(env, body!.voice, caller.userId);
   if (voiceJson instanceof Response) return voiceJson;
+  // `archived: true` on create = start as a draft students can't see, so the
+  // starter notebook can be written and tried before the assignment goes out.
+  // Omitted keeps the old behaviour (published at once).
+  const draft = body!.archived === true;
   const row = await repo.createAssignment(env.DB, courseId, {
     title,
     instructions,
@@ -280,15 +330,17 @@ export async function createAssignmentRoute(
     aiEnabled: body!.aiEnabled === true,
     aiPrompt,
     voiceJson: voiceJson ?? null,
+    voiceChoice: body!.voiceChoice === true,
     dueAt: dueAt ?? null,
     mode: mode ?? "submit",
-  });
+  }, { draft });
   await ensureCourseItem(env.DB, {
     courseId,
     kind: "code",
     payloadRef: row.id,
     title: row.title,
     dueAt: row.due_at,
+    archived: draft,
   });
   return json({ assignment: toAssignmentDTO(row, { instructor: true, withStarter: true }) }, 201);
 }
@@ -303,6 +355,9 @@ export async function updateAssignmentRoute(
   const caller = await resolveInstructor(env, identity, body?.courseId);
   if (caller instanceof Response) return caller;
   const courseId = body!.courseId!;
+  if (body!.aiEnabled === true && (await courseGenaiLocked(env.DB, courseId))) {
+    return error(GENAI_LOCKED_MESSAGE, 409, GENAI_LOCKED_CODE);
+  }
   const before = await repo.getAssignment(env.DB, courseId, id);
   if (!before) return error("Assignment not found", 404);
 
@@ -337,6 +392,7 @@ export async function updateAssignmentRoute(
   const voiceJson = await parseVoice(env, body!.voice, caller.userId);
   if (voiceJson instanceof Response) return voiceJson;
   if (voiceJson !== undefined) patch.voiceJson = voiceJson;
+  if (typeof body!.voiceChoice === "boolean") patch.voiceChoice = body!.voiceChoice;
 
   await repo.updateAssignment(env.DB, courseId, id, patch);
   const after = (await repo.getAssignment(env.DB, courseId, id))!;
@@ -375,14 +431,15 @@ export async function rosterRoute(
   id: string,
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
-  const caller = await resolveInstructor(env, identity, courseId);
+  const caller = await resolveSubmissionViewer(env, identity, courseId);
   if (caller instanceof Response) return caller;
   const assignment = await repo.getAssignment(env.DB, courseId!, id);
   if (!assignment) return error("Assignment not found", 404);
   const rows = await repo.listRoster(env.DB, courseId!, id);
   const students: RosterStudentDTO[] = rows.map((r) => ({
     userId: r.user_id,
-    email: r.email,
+    // The sample student's address is a placeholder on a reserved domain.
+    email: r.is_sample === 1 ? "" : r.email,
     displayName: r.display_name,
     submissionCount: r.submission_count,
     latest:
@@ -392,6 +449,8 @@ export async function rosterRoute(
             assignmentId: id,
             submittedAt: r.submitted_at,
             late: isLate(r.submitted_at, assignment.due_at),
+            title: r.submission_title ?? assignment.title,
+            origins: originTotals(r.render_json),
           }
         : null,
   }));
@@ -399,6 +458,19 @@ export async function rosterRoute(
     assignment: toAssignmentDTO(assignment, { instructor: true }),
     students,
   });
+}
+
+/** A stored render's per-origin character totals, plus their sum. */
+function originTotals(renderJson: string | null): (Record<Origin, number> & { total: number }) | null {
+  if (!renderJson) return null;
+  try {
+    const t = (JSON.parse(renderJson) as SubmissionRender).totals;
+    if (!t) return null;
+    const total = Object.values(t).reduce((a, b) => a + b, 0);
+    return { ...t, total };
+  } catch {
+    return null;
+  }
 }
 
 // ── notebooks ───────────────────────────────────────────────────────────
@@ -420,6 +492,13 @@ async function notebookDTO(env: Env, row: CodeNotebookRow): Promise<NotebookDTO>
     content: parseContent(row.cells_json),
     createdAt: row.created_at,
     aiEnabled: assignment?.ai_enabled === 1,
+    aiVoiceChoice: assignment?.ai_enabled === 1 && assignment.voice_choice === 1,
+    aiVoiceDefault:
+      assignment?.ai_enabled === 1 && assignment.voice_choice === 1
+        ? (parseVoiceRef(assignment.voice_json)?.kind === "library"
+            ? (parseVoiceRef(assignment.voice_json) as { id: string }).id
+            : DEFAULT_VOICE_ID)
+        : null,
     assignment: assignment
       ? {
           title: assignment.title,
@@ -629,6 +708,7 @@ export async function sendMessageRoute(
     courseId?: string;
     content?: unknown;
     focusCellId?: unknown;
+    voiceId?: unknown;
   } | null;
   const caller = await resolveCaller(env, identity, body?.courseId);
   if (caller instanceof Response) return caller;
@@ -653,8 +733,20 @@ export async function sendMessageRoute(
     return error("No AI provider is configured for this deployment", 503, "llm_unconfigured");
   }
 
+  // Voice policy (migration 0027): when the instructor lets students choose,
+  // the request may carry a library voice id and it wins over the assignment's
+  // own voice. LIBRARY voices only — an instructor's custom voices stay
+  // private — and silently ignored when the policy is one-assigned-voice, so a
+  // stale client can't smuggle a different persona in. Each message records
+  // the hash of the instructions it was actually answered under, as always.
+  const chosenVoice =
+    assignment.voice_choice === 1 && typeof body!.voiceId === "string"
+      ? findLibraryVoice(body!.voiceId)
+      : null;
   const instructions = buildChatInstructions({
-    voiceFragment: await voiceFragment(env, assignment),
+    voiceFragment: chosenVoice
+      ? chosenVoice.systemPromptFragment
+      : await voiceFragment(env, assignment),
     assignmentTitle: assignment.title,
     assignmentInstructions: assignment.instructions,
     instructorPrompt: assignment.ai_prompt,
@@ -825,7 +917,7 @@ export async function getSubmissionRoute(
   const caller = await resolveCaller(env, identity, courseId);
   if (caller instanceof Response) return caller;
   const row = await repo.getSubmission(env.DB, courseId!, id);
-  if (!row || (!caller.instructor && row.owner_user_id !== caller.userId)) {
+  if (!row || (!caller.seesSubmissions && row.owner_user_id !== caller.userId)) {
     return error("Submission not found", 404);
   }
   const [assignment, student] = await Promise.all([
@@ -864,7 +956,7 @@ export async function getSubmissionRoute(
       // submission gets the notebook and transcript, not the marks: as in the
       // writing tool, a student-readable render would tell them exactly what
       // to rework until it reads clean.
-      render: caller.instructor ? render : null,
+      render: caller.seesSubmissions ? render : null,
     },
   });
 }
@@ -960,6 +1052,7 @@ export async function chatPreviewRoute(
     content?: unknown;
     history?: unknown;
     focusCellId?: unknown;
+    voiceId?: unknown;
   } | null;
   const caller = await resolveInstructor(env, identity, body?.courseId);
   if (caller instanceof Response) return caller;
@@ -985,8 +1078,14 @@ export async function chatPreviewRoute(
         )
         .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_USER_MESSAGE) }))
     : [];
+  // Instructors previewing a students-choose assignment can try any library
+  // voice, exactly as a student would receive it.
+  const previewVoice =
+    typeof body!.voiceId === "string" ? findLibraryVoice(body!.voiceId) : null;
   const instructions = buildChatInstructions({
-    voiceFragment: await voiceFragment(env, assignment),
+    voiceFragment: previewVoice
+      ? previewVoice.systemPromptFragment
+      : await voiceFragment(env, assignment),
     assignmentTitle: assignment.title,
     assignmentInstructions: assignment.instructions,
     instructorPrompt: assignment.ai_prompt,

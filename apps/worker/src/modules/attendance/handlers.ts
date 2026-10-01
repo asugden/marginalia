@@ -10,6 +10,7 @@
 
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
+import { can, type Capability } from "../../permissions.js";
 import * as coreRepo from "../../repo.js";
 import * as repo from "./repo.js";
 import {
@@ -56,15 +57,22 @@ async function getEnrollmentRole(
   return row?.role ?? null;
 }
 
-async function requireInstructor(
+/** The caller's course role must hold `capability` (see permissions.ts). */
+async function requireCapability(
   env: Env,
   identity: Identity,
   courseId: string,
+  capability: Capability,
 ): Promise<string | Response> {
   const userId = requireUser(identity);
   if (userId instanceof Response) return userId;
   const role = await getEnrollmentRole(env, userId, courseId);
-  if (role !== "instructor") return errorResponse("Instructor only", 403);
+  if (!can(role, capability)) {
+    return errorResponse(
+      capability === "author" ? "Instructor only" : "Course staff only",
+      403,
+    );
+  }
   return userId;
 }
 
@@ -182,7 +190,7 @@ export async function openSessionRoute(
     return errorResponse("courseId is required", 400);
   }
   const courseId = body.courseId;
-  const userIdOrResp = await requireInstructor(env, identity, courseId);
+  const userIdOrResp = await requireCapability(env, identity, courseId, "run_attendance");
   if (userIdOrResp instanceof Response) return userIdOrResp;
 
   const label = (body.label ?? "").trim().slice(0, MAX_LABEL_CHARS);
@@ -206,6 +214,13 @@ export async function openSessionRoute(
     radiusM,
     tokenKeyHex: randomHex(32),
   });
+  // Opening a session finalises every earlier day's flags for this course,
+  // so blank the raw check-in signals (location, fingerprint, device cookie,
+  // IP hash) they were computed from. Best-effort: a failure here must not
+  // block taking attendance.
+  await repo.scrubCheckinDetailsBefore(env.DB, courseId, sessionDate).catch((err) => {
+    console.warn("attendance: scrub of prior check-in details failed:", err);
+  });
   // v1.0 §6 — first session in this course makes the Attendance tab
   // appear on the dashboard. Idempotent on subsequent opens.
   await coreRepo.markCourseFeatureShown(env.DB, courseId, "attendance");
@@ -220,7 +235,7 @@ export async function getSessionRoute(
 ): Promise<Response> {
   const session = await repo.getSession(env.DB, sessionId);
   if (!session) return errorResponse("Session not found", 404);
-  const userIdOrResp = await requireInstructor(env, identity, session.course_id);
+  const userIdOrResp = await requireCapability(env, identity, session.course_id, "run_attendance");
   if (userIdOrResp instanceof Response) return userIdOrResp;
   const rows = await repo.listCheckinsWithUsers(env.DB, sessionId);
   const checkins: CheckinDTO[] = rows.map((r) => ({
@@ -244,7 +259,7 @@ export async function listSessionsRoute(
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const userIdOrResp = await requireInstructor(env, identity, courseId);
+  const userIdOrResp = await requireCapability(env, identity, courseId, "run_attendance");
   if (userIdOrResp instanceof Response) return userIdOrResp;
   const rows = await repo.listSessionsForCourse(env.DB, courseId);
   const sessions: SessionDTO[] = rows.map((r) => rowToSession(r, url.origin));
@@ -258,7 +273,7 @@ export async function closeSessionRoute(
 ): Promise<Response> {
   const session = await repo.getSession(env.DB, sessionId);
   if (!session) return errorResponse("Session not found", 404);
-  const userIdOrResp = await requireInstructor(env, identity, session.course_id);
+  const userIdOrResp = await requireCapability(env, identity, session.course_id, "run_attendance");
   if (userIdOrResp instanceof Response) return userIdOrResp;
   await repo.closeSession(env.DB, sessionId);
   return json({ ok: true });
@@ -274,7 +289,7 @@ export async function getQrTokenRoute(
 ): Promise<Response> {
   const session = await repo.getSession(env.DB, sessionId);
   if (!session) return errorResponse("Session not found", 404);
-  const userIdOrResp = await requireInstructor(env, identity, session.course_id);
+  const userIdOrResp = await requireCapability(env, identity, session.course_id, "run_attendance");
   if (userIdOrResp instanceof Response) return userIdOrResp;
   if (session.closed_at) return errorResponse("Session is closed", 410);
   const now = Date.now();
@@ -295,7 +310,7 @@ export async function exportCsvRoute(
 ): Promise<Response> {
   const session = await repo.getSession(env.DB, sessionId);
   if (!session) return errorResponse("Session not found", 404);
-  const userIdOrResp = await requireInstructor(env, identity, session.course_id);
+  const userIdOrResp = await requireCapability(env, identity, session.course_id, "run_attendance");
   if (userIdOrResp instanceof Response) return userIdOrResp;
   const rows = await repo.listCheckinsWithUsers(env.DB, sessionId);
 

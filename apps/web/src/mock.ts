@@ -17,6 +17,8 @@ import type {
   CollectionSummary,
   ConversationSummary,
   ConversationView,
+  EnrollmentRole,
+  MeResponse,
   TurnEvent,
   VoiceFull,
   VoiceListing,
@@ -468,47 +470,39 @@ export async function refreshCollectionSource(): Promise<{
   return mockNotSupported("Collection source refresh") as never;
 }
 
-export async function getMe(): Promise<{
-  email: string;
-  registered: boolean;
-  userId: string | null;
-  isAdmin: boolean;
-  actingAsStudent: boolean;
-  enrollments: Array<{
-    courseId: string;
-    courseName: string;
-    role: "student" | "instructor";
-    joinedAt: number;
-    showAttendance: boolean;
-    showCollections: boolean;
-    hideProvenanceMarks: boolean;
-    provenanceEnabled: boolean;
-    agentsEnabled: boolean;
-    codeEnabled: boolean;
-    termSeason: "spring" | "summer" | "fall" | null;
-    termYear: number | null;
-    startDate: number | null;
-    endDate: number | null;
-  }>;
-}> {
+export async function getMe(): Promise<MeResponse> {
   return {
     email: "mock@marginalia.local",
     registered: true,
     userId: "user_mock",
     isAdmin: true,
+    canCreateCourses: true,
+    genaiOptOut: false,
     actingAsStudent: false,
+    preview: null,
     enrollments: [
       {
         courseId: "course_demo",
         courseName: "Demo course",
         role: "instructor",
+        capabilities: [
+          "author",
+          "manage_students",
+          "view_submissions",
+          "run_attendance",
+          "manage_staff",
+        ],
         joinedAt: Date.now(),
         showAttendance: true,
         showCollections: true,
         hideProvenanceMarks: false,
         provenanceEnabled: true,
+        provenanceChatEnabled: true,
         agentsEnabled: true,
         codeEnabled: true,
+        genaiLocked: false,
+        codeChatAssignments: 0,
+        writingChatAssignments: 0,
         termSeason: "summer",
         termYear: 2026,
         startDate: Date.UTC(2026, 4, 18, 0, 0, 0, 0),
@@ -520,13 +514,17 @@ export async function getMe(): Promise<{
 
 export async function setActingAsStudent(
   acting: boolean,
-): Promise<{ actingAsStudent: boolean }> {
+  courseId?: string | null,
+): Promise<{ actingAsStudent: boolean; courseId: string | null }> {
   // Mock has no session store; echo back so the UI toggle still round-trips.
-  return { actingAsStudent: acting };
+  return { actingAsStudent: acting, courseId: acting ? (courseId ?? null) : null };
 }
 
-export async function listRoster(): Promise<{ roster: never[] }> {
-  return { roster: [] };
+export async function listRoster(): Promise<{
+  roster: never[];
+  assignableRoles: EnrollmentRole[];
+}> {
+  return { roster: [], assignableRoles: ["student", "ta", "instructor"] };
 }
 export async function addRosterEntry(): Promise<never> {
   return mockNotSupported("Roster add") as never;

@@ -35,11 +35,10 @@ import { Link } from "react-router-dom";
 import { listRoster, listJoinCodes } from "../client.js";
 import {
   instructorHref,
-  kindLabel,
   listCourseItems,
   type CourseItemDTO,
 } from "../modules/course-items/api.js";
-import { ItemRows } from "../modules/course-items/components/ItemRows.js";
+import { ItemRows, UndatedItemRows } from "../modules/course-items/components/ItemRows.js";
 import { useCourse } from "../course/useCourse.js";
 import {
   overdueItems,
@@ -68,7 +67,10 @@ export function InstructorDashboardPage() {
     termYear,
     startDate,
     endDate,
+    capabilities,
   } = useCourse();
+  // A TA sees this dashboard too, but assigns nothing.
+  const authors = capabilities.includes("author");
   const base = `/course/${courseId}/instructor`;
   const [items, setItems] = useState<CourseItemDTO[] | null>(null);
   const [students, setStudents] = useState<number | null>(null);
@@ -88,7 +90,7 @@ export function InstructorDashboardPage() {
       setItems(list.status === "fulfilled" ? list.value : []);
       setStudents(
         roster.status === "fulfilled"
-          ? roster.value.roster.filter((r) => r.role === "student").length
+          ? roster.value.roster.filter((r) => r.role === "student" && !r.isSample).length
           : null,
       );
       setJoinCode(
@@ -132,14 +134,16 @@ export function InstructorDashboardPage() {
         title={courseName}
         scope={dates || "No start/end dates set — this course is always current."}
         actions={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<PlusIcon size={16} />}
-            href={`${base}/assign`}
-          >
-            Assign something
-          </Button>
+          authors ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<PlusIcon size={16} />}
+              href={`${base}/assign`}
+            >
+              Assign something
+            </Button>
+          ) : undefined
         }
       />
 
@@ -167,7 +171,7 @@ export function InstructorDashboardPage() {
       <Section
         kicker="Due next"
         meta={
-          upcoming.length > 0 ? (
+          upcoming.length > 0 && authors ? (
             <Link to={`${base}/assign`}>All assigned</Link>
           ) : undefined
         }
@@ -176,8 +180,13 @@ export function InstructorDashboardPage() {
           <p className="app-dash__empty">Loading…</p>
         ) : upcoming.length === 0 ? (
           <p className="app-dash__empty">
-            Nothing due in the next week.{" "}
-            <Link to={`${base}/assign`}>See everything assigned</Link>.
+            Nothing due in the next week.
+            {authors && (
+              <>
+                {" "}
+                <Link to={`${base}/assign`}>See everything assigned</Link>.
+              </>
+            )}
           </p>
         ) : (
           <ItemRows rows={upcoming} hrefFor={(item) => instructorHref(courseId, item)} />
@@ -191,19 +200,7 @@ export function InstructorDashboardPage() {
           kicker="Also available"
           description="Optional work with no deadline — offered all term, never late."
         >
-          <ul className="app-dash__list app-dash__list--quiet">
-            {extras.map((item) => {
-              const href = instructorHref(courseId, item);
-              return (
-                <li key={item.id} className="app-dash__row">
-                  <span className="app-dash__kind">{kindLabel(item.kind)}</span>
-                  <span className="app-dash__title">
-                    {href ? <Link to={href}>{item.title}</Link> : item.title}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <UndatedItemRows items={extras} hrefFor={(item) => instructorHref(courseId, item)} />
         </Section>
       )}
 

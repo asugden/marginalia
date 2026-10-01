@@ -16,14 +16,26 @@
 // brightness — which is what an eye sees. Slowed down, the flashing shows.
 
 import { analyze, type Analysis, type LedResult } from "../wiring/analyze.js";
-import { ADC_GPIOS, BOARD_PULLUPS, PINS, type NodeId, type Part, type PinState } from "../wiring/model.js";
+import {
+  ADC_GPIOS,
+  BOARD_PULLUPS,
+  PINS,
+  type NodeId,
+  type Part,
+  type PinState,
+} from "../wiring/model.js";
 import { LangError, type Literal, type Program } from "./lang.js";
 import { Machine, type Host, type Step } from "./run.js";
 import type { CodeStats } from "./sketches.js";
 
 export type Speed = "step" | "slow" | "fast" | "real";
 
-const LINE_MS: Record<Speed, number> = { step: 0, slow: 550, fast: 60, real: 0 };
+const LINE_MS: Record<Speed, number> = {
+  step: 0,
+  slow: 550,
+  fast: 60,
+  real: 0,
+};
 /** Simulated cost of one line in real time: tens of microseconds. Slower
  *  than the chip, but fast beside anything a person can do. */
 const LINE_COST = 0.02;
@@ -48,7 +60,9 @@ export interface Missed {
   at: number;
 }
 
-const pinOfGpio = new Map(PINS.filter((p) => p.gpio !== undefined).map((p) => [p.gpio!, p.id]));
+const pinOfGpio = new Map(
+  PINS.filter((p) => p.gpio !== undefined).map((p) => [p.gpio!, p.id]),
+);
 
 export class Runner {
   machine!: Machine;
@@ -65,7 +79,7 @@ export class Runner {
   private snaps = new Map<string, Map<NodeId, PinState>>();
 
   // Time.
-  speed: Speed = "slow";
+  speed: Speed = "step";
   paused = false;
   simMs = 0;
   private waitUntil: number | null = null;
@@ -130,7 +144,23 @@ export class Runner {
     this.wasLit = new Map();
     this.sweep = { armed: false, dirty: false, last: 0 };
     this.stall = { line: 0, since: 0 };
-    this.stats = { simMs: 0, stallMs: 0, ledFlips: 0, seen: {}, lastFloat: 0, readsSinceFloat: 0, cleanSweeps: 0, missed: 0, printed: [] };
+    this.stats = {
+      simMs: 0,
+      stallMs: 0,
+      ledFlips: 0,
+      seen: {},
+      lastFloat: 0,
+      readsSinceFloat: 0,
+      cleanSweeps: 0,
+      missed: 0,
+      printed: [],
+      delays: {},
+      litPins: [],
+      laps: 0,
+      heldLaps: 0,
+      heldMs: 0,
+      overWrites: 0,
+    };
     this.machine = new Machine(this.prog, this.host);
     this.gen = this.machine.run();
   }
@@ -155,7 +185,9 @@ export class Runner {
   }
 
   replace(id: string) {
-    this.burnt = new Set([...this.burnt].filter((b) => b !== id && !b.startsWith(`${id}:`)));
+    this.burnt = new Set(
+      [...this.burnt].filter((b) => b !== id && !b.startsWith(`${id}:`)),
+    );
     this.invalidate();
   }
 
@@ -239,10 +271,15 @@ export class Runner {
     const s = r.value;
     // A loop spinning on one line — waiting, not delaying — is a stall.
     if (s.k === "line" && s.line === this.stall.line) {
-      this.stats.stallMs = Math.max(this.stats.stallMs, this.simMs - this.stall.since);
-    } else this.stall = { line: s.k === "line" ? s.line : 0, since: this.simMs };
+      this.stats.stallMs = Math.max(
+        this.stats.stallMs,
+        this.simMs - this.stall.since,
+      );
+    } else
+      this.stall = { line: s.k === "line" ? s.line : 0, since: this.simMs };
     this.line = s.line;
     if (s.k === "delay") {
+      this.stats.delays[s.line] = s.ms;
       this.waitUntil = this.simMs + s.ms;
       this.delayLine = s.line;
       this.delayStart = this.simMs;
@@ -263,11 +300,16 @@ export class Runner {
   /** How far through the current delay, 0–1, or null. */
   delayProgress(): number | null {
     if (this.waitUntil === null) return null;
-    return this.delayMs <= 0 ? 1 : Math.min(1, (this.simMs - this.delayStart) / this.delayMs);
+    return this.delayMs <= 0
+      ? 1
+      : Math.min(1, (this.simMs - this.delayStart) / this.delayMs);
   }
 
   private fail(e: unknown) {
-    this.error = e instanceof LangError ? e : new LangError(String((e as Error)?.message ?? e), this.line);
+    this.error =
+      e instanceof LangError
+        ? e
+        : new LangError(String((e as Error)?.message ?? e), this.line);
   }
 
   // ── The circuit ──────────────────────────────────────────────────────
@@ -275,14 +317,22 @@ export class Runner {
   private keyOf(pins: Map<NodeId, PinState>) {
     return [...pins.entries()]
       .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([id, s]) => `${id}:${s.mode}${"level" in s ? s.level : ""}${"duty" in s ? s.duty : ""}`)
+      .map(
+        ([id, s]) =>
+          `${id}:${s.mode}${"level" in s ? s.level : ""}${"duty" in s ? s.duty : ""}`,
+      )
       .join("|");
   }
 
   analysis(key = this.key, pins = this.pins): Analysis {
     let a = this.cache.get(key);
     if (!a) {
-      a = analyze({ parts: this.parts, pins: new Map(pins), pressed: this.pressed, burnt: this.burnt });
+      a = analyze({
+        parts: this.parts,
+        pins: new Map(pins),
+        pressed: this.pressed,
+        burnt: this.burnt,
+      });
       this.cache.set(key, a);
       if (this.cache.size > 400) this.cache.clear();
     }
@@ -291,7 +341,10 @@ export class Runner {
 
   private setPin(id: NodeId, s: PinState) {
     const old = this.key;
-    this.weights.set(old, (this.weights.get(old) ?? 0) + (this.simMs - this.lastChange));
+    this.weights.set(
+      old,
+      (this.weights.get(old) ?? 0) + (this.simMs - this.lastChange),
+    );
     this.lastChange = this.simMs;
     this.pins.set(id, s);
     this.key = this.keyOf(this.pins);
@@ -300,7 +353,10 @@ export class Runner {
 
   /** Close the frame: burn what should burn, blend brightness, count flips. */
   private endFrame() {
-    this.weights.set(this.key, (this.weights.get(this.key) ?? 0) + (this.simMs - this.lastChange));
+    this.weights.set(
+      this.key,
+      (this.weights.get(this.key) ?? 0) + (this.simMs - this.lastChange),
+    );
     this.lastChange = this.simMs;
     const current = this.analysis();
 
@@ -316,9 +372,12 @@ export class Runner {
     }
     for (const l of current.leds) if (l.status === "burning") burning.add(l.id);
     if (burning.size) {
-      for (const id of burning) this.burnt.add(id), this.popping.add(id);
+      for (const id of burning) (this.burnt.add(id), this.popping.add(id));
       this.invalidate();
-      globalThis.setTimeout(() => burning.forEach((id) => this.popping.delete(id)), 1400);
+      globalThis.setTimeout(
+        () => burning.forEach((id) => this.popping.delete(id)),
+        1400,
+      );
     }
 
     let leds: LedResult[] = current.leds;
@@ -328,13 +387,22 @@ export class Runner {
       for (const [k, w] of this.weights) {
         const a = frameAnalyses.get(k);
         if (!a) continue;
-        for (const l of a.leds) blend.set(l.id, (blend.get(l.id) ?? 0) + (l.status === "lit" ? l.brightness : 0) * (w / total));
+        for (const l of a.leds)
+          blend.set(
+            l.id,
+            (blend.get(l.id) ?? 0) +
+              (l.status === "lit" ? l.brightness : 0) * (w / total),
+          );
       }
       leds = current.leds.map((l) => {
         // Brightness is perceived roughly as a power of light: an LED lit
         // half the time looks brighter than half as bright.
         const b = Math.pow(blend.get(l.id) ?? 0, 0.6);
-        return b > 0.01 ? { ...l, status: "lit", brightness: b } : l.status === "lit" ? { ...l, brightness: 0, status: "too-low" } : l;
+        return b > 0.01
+          ? { ...l, status: "lit", brightness: b }
+          : l.status === "lit"
+            ? { ...l, brightness: 0, status: "too-low" }
+            : l;
       });
     }
     this.weights = new Map();
@@ -343,9 +411,22 @@ export class Runner {
 
     for (const l of leds) {
       const lit = l.status === "lit";
-      if (this.wasLit.has(l.id) && this.wasLit.get(l.id) !== lit) this.stats.ledFlips++;
+      if (this.wasLit.has(l.id) && this.wasLit.get(l.id) !== lit)
+        this.stats.ledFlips++;
       this.wasLit.set(l.id, lit);
+      const gpio =
+        lit && l.pin ? PINS.find((p) => p.id === l.pin)?.gpio : undefined;
+      if (gpio !== undefined && !this.stats.litPins.includes(gpio))
+        this.stats.litPins.push(gpio);
     }
+    // Laps, and time, with a button held down.
+    const held = this.pressed.size > 0;
+    const lap = this.machine.lap;
+    if (held) {
+      this.stats.heldLaps += Math.max(0, lap - this.stats.laps);
+      this.stats.heldMs += this.simMs - this.stats.simMs;
+    }
+    this.stats.laps = lap;
     this.stats.simMs = this.simMs;
   }
 
@@ -355,7 +436,12 @@ export class Runner {
     const a = this.analysis();
     for (const r of a.readings) {
       const gpio = PINS.find((p) => p.id === r.id)?.gpio;
-      if (gpio === undefined || !this.lastRead.has(gpio) || r.digital === "floating") continue;
+      if (
+        gpio === undefined ||
+        !this.lastRead.has(gpio) ||
+        r.digital === "floating"
+      )
+        continue;
       const v = r.digital === "HIGH" ? 1 : 0;
       if (v !== this.lastRead.get(gpio) && !this.flaggedThisDelay.has(gpio)) {
         this.flaggedThisDelay.add(gpio);
@@ -374,6 +460,17 @@ export class Runner {
     this.io.set(line, list);
   }
 
+  /** A pin the board gives to a serial line: note it and refuse. */
+  private serialPin(gpio: number, line: number) {
+    const p = PINS.find((x) => x.gpio === gpio);
+    if (p?.kind !== "serial") return false;
+    this.notes.set(line, {
+      text: `${p.label} belongs to a serial line. Choose a D pin instead`,
+      at: this.simMs,
+    });
+    return true;
+  }
+
   private label(gpio: number) {
     const id = pinOfGpio.get(gpio);
     return id ? PINS.find((p) => p.id === id)!.label : `GPIO ${gpio}`;
@@ -387,15 +484,38 @@ export class Runner {
       this.mark(line, gpio, "mode");
       const id = pinOfGpio.get(gpio);
       if (!id) {
-        this.notes.set(line, { text: `GPIO ${gpio} isn't on this board's pins`, at: this.simMs });
+        this.notes.set(line, {
+          text: `GPIO ${gpio} isn't on this board's pins`,
+          at: this.simMs,
+        });
         return;
       }
+      if (this.serialPin(gpio, line)) return;
       const p = PINS.find((x) => x.id === id)!;
       if (mode === "OUTPUT" && p.inputOnly) {
-        this.notes.set(line, { text: `${p.label} can only listen, never output`, at: this.simMs });
+        this.notes.set(line, {
+          text: `${p.label} can only listen, never output`,
+          at: this.simMs,
+        });
         return;
       }
-      this.setPin(id, mode === "OUTPUT" ? { mode: "OUTPUT", level: 0 } : ({ mode } as PinState));
+      if (
+        (mode === "INPUT_PULLDOWN" || mode === "INPUT_PULLUP") &&
+        p.inputOnly
+      ) {
+        this.setPin(id, { mode: "INPUT" });
+        this.notes.set(line, {
+          text: `${p.label} canoot use pull resistors, so it stays INPUT and can be noisy`,
+          at: this.simMs,
+        });
+        return;
+      }
+      this.setPin(
+        id,
+        mode === "OUTPUT"
+          ? { mode: "OUTPUT", level: 0 }
+          : ({ mode } as PinState),
+      );
       this.notes.set(line, { text: `${p.label} → ${mode}`, at: this.simMs });
     },
     digitalWrite: (gpio, level, line) => {
@@ -403,27 +523,49 @@ export class Runner {
       const id = pinOfGpio.get(gpio);
       const cur = id ? this.pins.get(id) : undefined;
       if (!id) {
-        this.notes.set(line, { text: `GPIO ${gpio} isn't on this board's pins`, at: this.simMs });
+        this.notes.set(line, {
+          text: `GPIO ${gpio} isn't on this board's pins`,
+          at: this.simMs,
+        });
         return;
       }
+      if (this.serialPin(gpio, line)) return;
       if (!cur || (cur.mode !== "OUTPUT" && cur.mode !== "PWM")) {
-        this.notes.set(line, { text: `${this.label(gpio)} was never set to OUTPUT, so nothing happens`, at: this.simMs });
+        this.notes.set(line, {
+          text: `${this.label(gpio)} was never set to OUTPUT, so nothing happens`,
+          at: this.simMs,
+        });
         return;
       }
       this.setPin(id, { mode: "OUTPUT", level: level ? 1 : 0 });
-      this.notes.set(line, { text: `${this.label(gpio)} → ${level ? "HIGH" : "LOW"}`, at: this.simMs });
+      this.notes.set(line, {
+        text: `${this.label(gpio)} → ${level ? "HIGH" : "LOW"}`,
+        at: this.simMs,
+      });
     },
     analogWrite: (gpio, duty, line) => {
       this.mark(line, gpio, "out");
       const id = pinOfGpio.get(gpio);
-      if (!id) return;
+      if (!id || this.serialPin(gpio, line)) return;
+      if (PINS.find((x) => x.id === id)!.inputOnly) {
+        this.notes.set(line, {
+          text: `${this.label(gpio)} can only listen, never output`,
+          at: this.simMs,
+        });
+        return;
+      }
       // A clean sweep: up from near 0 to a peak near 255 and turning back,
       // with nothing past 255 on the way.
-      if (duty > 255) this.sweep.dirty = true;
+      if (duty > 255) ((this.sweep.dirty = true), this.stats.overWrites++);
       const d = Math.max(0, Math.min(255, Math.round(duty)));
       if (d <= 5) this.sweep = { armed: true, dirty: false, last: d };
       else {
-        if (this.sweep.armed && !this.sweep.dirty && this.sweep.last >= 250 && d < this.sweep.last) {
+        if (
+          this.sweep.armed &&
+          !this.sweep.dirty &&
+          this.sweep.last >= 250 &&
+          d < this.sweep.last
+        ) {
           this.stats.cleanSweeps++;
           this.sweep.armed = false;
         }
@@ -431,12 +573,16 @@ export class Runner {
       }
       this.setPin(id, { mode: "PWM", duty: d });
       this.notes.set(line, {
-        text: duty > 255 ? `${this.label(gpio)} → ${Math.round(duty)}, past 255, so fully on` : `${this.label(gpio)} → on ${d} of 255`,
+        text:
+          duty > 255
+            ? `${this.label(gpio)} → ${Math.round(duty)}, past 255, so fully on`
+            : `${this.label(gpio)} → on ${d} of 255`,
         at: this.simMs,
       });
     },
     digitalRead: (gpio, line) => {
       this.mark(line, gpio, "in");
+      if (this.serialPin(gpio, line)) return 0;
       const v = this.readDigital(gpio);
       this.lastRead.set(gpio, v);
       return v;
@@ -444,9 +590,12 @@ export class Runner {
     analogRead: (gpio, line) => {
       this.mark(line, gpio, "in");
       const id = pinOfGpio.get(gpio);
-      if (!id) return 0;
+      if (!id || this.serialPin(gpio, line)) return 0;
       if (!ADC_GPIOS.has(gpio)) {
-        this.notes.set(line, { text: `${this.label(gpio)} can't measure voltage`, at: this.simMs });
+        this.notes.set(line, {
+          text: `${this.label(gpio)} can't measure voltage here. Use D32-D35, VP or VN`,
+          at: this.simMs,
+        });
         return 0;
       }
       const r = this.analysis().readings.find((x) => x.id === id);
@@ -476,7 +625,13 @@ export class Runner {
     let v: number;
     if (r) {
       floating = r.digital === "floating";
-      v = floating ? (Math.random() < 0.5 ? 1 : 0) : r.digital === "HIGH" ? 1 : 0;
+      v = floating
+        ? Math.random() < 0.5
+          ? 1
+          : 0
+        : r.digital === "HIGH"
+          ? 1
+          : 0;
     } else if (s?.mode === "INPUT_PULLDOWN") v = 0;
     else if (s?.mode === "INPUT_PULLUP" || BOARD_PULLUPS.has(gpio)) v = 1;
     else {

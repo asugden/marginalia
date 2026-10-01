@@ -20,7 +20,7 @@ import {
   type ProvenanceRenderDTO,
   type PublicConversationDTO,
 } from "../api.js";
-import { Button, Wordmark } from "../../../components/index.js";
+import { Button, OriginLegend, Wordmark } from "../../../components/index.js";
 
 export function PublicSubmissionPage() {
   const { token } = useParams<{ token: string }>();
@@ -119,12 +119,7 @@ export function PublicSubmissionPage() {
             </p>
           )}
         </div>
-        <div className="prov-public-legend" aria-label="Word-origin legend">
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-human" /> typed</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-pasted" /> pasted</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-llm" /> from LLM</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-edited" /> autocorrect</span>
-        </div>
+        <OriginLegend />
       </header>
 
       <article className="prov-public-doc">

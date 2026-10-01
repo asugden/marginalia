@@ -12,8 +12,6 @@
 // docs/style.md §"Section headers & dividers".
 
 import { useState, type ReactNode } from "react";
-import { input, learned, magnitude, value } from "../examples/shared/palette.js";
-import "../examples/shared/figure.css";
 import {
   Avatar,
   Badge,
@@ -32,8 +30,8 @@ import {
   RadioCard,
   RadioCardGroup,
   Section,
-  Select,
   SegmentedControl,
+  Select,
   SourcesStrip,
   StatGrid,
   StatTile,
@@ -45,6 +43,13 @@ import {
   Tooltip,
   Wordmark,
 } from "../components/index.js";
+import "../examples/shared/figure.css";
+import {
+  input,
+  learned,
+  magnitude,
+  value,
+} from "../examples/shared/palette.js";
 import {
   ArrowIcon,
   BookIcon,
@@ -67,7 +72,10 @@ import {
   UsersIcon,
 } from "../icons.js";
 
-const COLOR_TOKENS: { group: string; items: { var: string; desc?: string }[] }[] = [
+const COLOR_TOKENS: {
+  group: string;
+  items: { var: string; desc?: string }[];
+}[] = [
   {
     group: "Accent (brand seam)",
     items: [
@@ -137,7 +145,7 @@ const FIGURE_SCALES: {
       { var: "--ml-learned-neg", label: "plum · negative" },
       { var: "--ml-learned-pos", label: "sage · positive" },
     ],
-    note: "Reserved. Sage and plum mean “learned” and nothing else — not a series colour, not a category fill, not a status, in any example.",
+    note: "Reserved. Sage and plum mean “learned” and nothing else — not a series color, not a category fill, not a status, in any example.",
   },
   {
     kind: "computed",
@@ -167,7 +175,12 @@ const FIGURE_SCALES: {
 
 /* The voices figure text speaks in. Rendered with the real classes from
  * examples/shared/figure.css. See docs/style.md §12 "Figure text". */
-const FIGURE_TEXT: { cls: string; sample: string; use: string; spec: string }[] = [
+const FIGURE_TEXT: {
+  cls: string;
+  sample: string;
+  use: string;
+  spec: string;
+}[] = [
   {
     cls: "fig-label",
     sample: "hidden 1",
@@ -224,28 +237,78 @@ function FigureTextSpecimen() {
   const words = ["a", "soggy", "pierogi", "conquered"];
   const vals = [0.12, 0.41, 0.43, 0.04];
   return (
-    <svg className="dsg-figspec" viewBox="0 0 400 190" role="img" aria-label="A specimen figure using every figure text role">
-      <text className="fig-label" x={12} y={30}>attention</text>
-      <text className="fig-label-sub" x={12} y={43}>one head</text>
-      <text className="fig-row" x={12} y={112}>the old way</text>
-      <text className="fig-label-sub" x={12} y={125}>replace the word</text>
-      <text className="fig-label" x={170} y={18}>weight</text>
+    <svg
+      className="dsg-figspec"
+      viewBox="0 0 400 190"
+      role="img"
+      aria-label="A specimen figure using every figure text role"
+    >
+      <text className="fig-label" x={12} y={30}>
+        attention
+      </text>
+      <text className="fig-label-sub" x={12} y={43}>
+        one head
+      </text>
+      <text className="fig-row" x={12} y={112}>
+        the old way
+      </text>
+      <text className="fig-label-sub" x={12} y={125}>
+        replace the word
+      </text>
+      <text className="fig-label" x={170} y={18}>
+        weight
+      </text>
       {words.map((w, i) => {
         const y = 36 + i * 22;
         const on = i === 2;
         return (
           <g key={w} className={on ? undefined : "fig-dim"}>
-            <text className={`fig-word${on ? " fig-on" : ""}`} x={160} y={y + 4} textAnchor="end">{w}</text>
-            <rect x={170} y={y - 5} width={vals[i]! * 200} height={10} rx={3} style={{ fill: "var(--ml-value-pos)" }} />
-            <text className="fig-num" x={176 + vals[i]! * 200} y={y + 4}>{vals[i]!.toFixed(2)}</text>
+            <text
+              className={`fig-word${on ? " fig-on" : ""}`}
+              x={160}
+              y={y + 4}
+              textAnchor="end"
+            >
+              {w}
+            </text>
+            <rect
+              x={170}
+              y={y - 5}
+              width={vals[i]! * 200}
+              height={10}
+              rx={3}
+              style={{ fill: "var(--ml-value-pos)" }}
+            />
+            <text className="fig-num" x={176 + vals[i]! * 200} y={y + 4}>
+              {vals[i]!.toFixed(2)}
+            </text>
           </g>
         );
       })}
-      <line x1={170} y1={132} x2={370} y2={132} style={{ stroke: "var(--border-strong)" }} />
+      <line
+        x1={170}
+        y1={132}
+        x2={370}
+        y2={132}
+        style={{ stroke: "var(--border-strong)" }}
+      />
       {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-        <text key={t} className="fig-tick" x={170 + t * 200} y={146} textAnchor="middle">{t}</text>
+        <text
+          key={t}
+          className="fig-tick"
+          x={170 + t * 200}
+          y={146}
+          textAnchor="middle"
+        >
+          {t}
+        </text>
       ))}
-      <text className="fig-note" x={170} y={172} style={{ fontStyle: "italic" }}>
+      <text
+        className="fig-note"
+        x={170}
+        y={172}
+        style={{ fontStyle: "italic" }}
+      >
         pierogi takes most from greasy and soggy
       </text>
     </svg>
@@ -325,7 +388,7 @@ export function DesignGalleryPage() {
             then apply to the app — no jumping between design and code.
           </p>
           <p className="dsg-note">
-            Colours come from the brand seam: this page shows the active build's
+            Colors come from the brand seam: this page shows the active build's
             accent (neutral editorial-blue by default; a branded deploy re-tints
             it). Neutrals, type, spacing, and radii are fixed system tokens.
           </p>
@@ -367,13 +430,18 @@ export function DesignGalleryPage() {
                 meta="4 indexed"
                 description="Documents this agent can ground its answers in."
               >
-                <p className="muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+                <p
+                  className="muted"
+                  style={{ margin: 0, fontSize: "var(--text-sm)" }}
+                >
                   Section body — the content sits below the rule.
                 </p>
               </Section>
             </div>
 
-            <div className="dsg-sub">Section — title tier (content-heavy pages)</div>
+            <div className="dsg-sub">
+              Section — title tier (content-heavy pages)
+            </div>
             <div className="dsg-specimen">
               <Section
                 title="Course stats"
@@ -389,28 +457,48 @@ export function DesignGalleryPage() {
 
             <div className="dsg-sub">Section — control in the header slot</div>
             <div className="dsg-specimen">
-              <Section kicker="Enrolled" actions={<Input placeholder="Search…" />}>
-                <p className="muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
-                  A live control (search field, button) can sit in the header row.
+              <Section
+                kicker="Enrolled"
+                actions={<Input placeholder="Search…" />}
+              >
+                <p
+                  className="muted"
+                  style={{ margin: 0, fontSize: "var(--text-sm)" }}
+                >
+                  A live control (search field, button) can sit in the header
+                  row.
                 </p>
               </Section>
             </div>
 
-            <div className="dsg-sub">SubLabel — a sub-heading inside a section (no rule)</div>
+            <div className="dsg-sub">
+              SubLabel — a sub-heading inside a section (no rule)
+            </div>
             <div className="dsg-specimen">
               <SubLabel>My voices</SubLabel>
-              <p className="muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+              <p
+                className="muted"
+                style={{ margin: 0, fontSize: "var(--text-sm)" }}
+              >
                 Groups content within a section without adding a competing rule.
               </p>
             </div>
 
-            <div className="dsg-sub">Divider — the one hairline (zone separator)</div>
+            <div className="dsg-sub">
+              Divider — the one hairline (zone separator)
+            </div>
             <div className="dsg-specimen">
-              <p className="muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+              <p
+                className="muted"
+                style={{ margin: 0, fontSize: "var(--text-sm)" }}
+              >
                 Above the rule
               </p>
               <Divider />
-              <p className="muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+              <p
+                className="muted"
+                style={{ margin: 0, fontSize: "var(--text-sm)" }}
+              >
                 Below the rule
               </p>
             </div>
@@ -458,10 +546,20 @@ export function DesignGalleryPage() {
             </div>
             <div className="dsg-sub">Faces &amp; labels</div>
             <div className="dsg-stack">
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: "var(--text-lg)" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "var(--text-lg)",
+                }}
+              >
                 Hanken Grotesk — body &amp; UI &amp; headings
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-md)" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-md)",
+                }}
+              >
                 Space Mono — wordmark, labels, code, numerals
               </span>
               <span className="eyebrow">Eyebrow — mono kicker</span>
@@ -621,7 +719,7 @@ export function DesignGalleryPage() {
                 <Field label="Name" hint="Shown to students.">
                   <Input placeholder="e.g. Derivatives tutor" />
                 </Field>
-                <Field label="Join code" >
+                <Field label="Join code">
                   <Input mono defaultValue="A1B2C3" />
                 </Field>
                 <Field label="Invalid" error="This field is required.">
@@ -694,13 +792,20 @@ export function DesignGalleryPage() {
             <div className="dsg-specimen" style={{ maxWidth: "22rem" }}>
               <OutlineRail
                 steps={[
-                  { title: "Define a derivative", status: "done", meta: "2 turns" },
+                  {
+                    title: "Define a derivative",
+                    status: "done",
+                    meta: "2 turns",
+                  },
                   {
                     title: "Geometric interpretation",
                     status: "current",
                     meta: "In progress",
                   },
-                  { title: "Computing from first principles", status: "upcoming" },
+                  {
+                    title: "Computing from first principles",
+                    status: "upcoming",
+                  },
                   { title: "Common rules", status: "upcoming" },
                 ]}
               />
@@ -710,7 +815,9 @@ export function DesignGalleryPage() {
           {/* ---- Chat -------------------------------------------------- */}
           <Section kicker="Chat">
             <div className="dsg-specimen">
-              <Message role="user">Can you walk me through the chain rule?</Message>
+              <Message role="user">
+                Can you walk me through the chain rule?
+              </Message>
               <Message role="assistant">
                 Sure — let's start with what you already know. What's the
                 derivative of a simple power, like x³?
@@ -742,8 +849,8 @@ export function DesignGalleryPage() {
           {/* ---- Page-level patterns ----------------------------------- */}
           <Section kicker="Page patterns" meta="live product classes">
             <p className="dsg-note" style={{ marginTop: 0 }}>
-              Composite surfaces built from the product stylesheet, shown here so
-              the gallery covers page-level patterns — not just atoms.
+              Composite surfaces built from the product stylesheet, shown here
+              so the gallery covers page-level patterns — not just atoms.
             </p>
 
             <div className="dsg-sub">Empty state</div>
@@ -762,7 +869,9 @@ export function DesignGalleryPage() {
                 </span>
                 <div className="app-list__main">
                   <div className="app-list__title">Derivatives library</div>
-                  <div className="app-list__sub">6 sources · updated 2 days ago</div>
+                  <div className="app-list__sub">
+                    6 sources · updated 2 days ago
+                  </div>
                 </div>
                 <div className="app-list__meta">
                   <Badge tone="neutral">6</Badge>
@@ -793,7 +902,9 @@ export function DesignGalleryPage() {
               </div>
               <div className="att-table__row">
                 <span className="att-table__date">Mar 14</span>
-                <span className="att-table__label">Lecture 14 — Prototyping</span>
+                <span className="att-table__label">
+                  Lecture 14 — Prototyping
+                </span>
                 <span className="att-table__present">28</span>
                 <span className="att-table__present">93%</span>
                 <span className="att-table__actions">
@@ -955,21 +1066,21 @@ export function DesignGalleryPage() {
               </div>
               <p className="dsg-scale__note">
                 The class owns the hue; the mark says the kind. A dot is data, a
-                soft fill is the true distribution, a solid line is a fit, a flat
-                wash is a prediction. Always shown with the class letter too.
+                soft fill is the true distribution, a solid line is a fit, a
+                flat wash is a prediction. Always shown with the class letter
+                too.
               </p>
             </div>
             <p className="dsg-note">
               Helpers: <code>learned()</code>, <code>value()</code>,{" "}
               <code>magnitude()</code>, <code>input()</code> and{" "}
-              <code>classHue()</code> in{" "}
-              <code>examples/shared/palette.ts</code>; tokens under{" "}
-              <code>--ml-</code> in <code>tokens/colors.css</code>. A future
-              example that is not about machine learning takes the general
-              data-mark hues instead — never these.
+              <code>classHue()</code> in <code>examples/shared/palette.ts</code>
+              ; tokens under <code>--ml-</code> in{" "}
+              <code>tokens/colors.css</code>. A future example that is not about
+              machine learning takes the general data-mark hues instead — never
+              these.
             </p>
           </Section>
-
 
           {/* ---- Figure text ------------------------------------------- */}
           <Section kicker="Figure text" meta="examples only">

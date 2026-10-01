@@ -15,8 +15,11 @@ export interface ExternalIdentity {
   subject: string;
   /** Always normalised lowercase. */
   email: string;
-  /** True only if the IdP attests the email is verified. Reject false at the
-   *  worker; see docs/v0.6-plan.md §1. */
+  /** False only if the IdP explicitly asserts the email is unverified
+   *  (`email_verified: false`). True when the IdP attests verification OR
+   *  omits the claim entirely — `email_verified` is optional in OIDC and
+   *  some IdPs (Microsoft Entra ID among them) never mint it. The worker
+   *  rejects false. */
   emailVerified: boolean;
   /** Optional display name; falls back to local-part of email at upsert time. */
   displayName: string | null;
@@ -32,7 +35,16 @@ export interface ExternalIdentity {
 export interface AuthState {
   nonce: string;
   returnTo: string;
-  codeVerifier: string;
+  /**
+   * PKCE verifier. Present ONLY in the copy of the state that lives in the
+   * HttpOnly cookie; the copy sent to the IdP as the `state` query parameter
+   * omits it. The blob is signed, not encrypted, and the `state` parameter
+   * is visible in the authorization URL, IdP logs, browser history and the
+   * callback URL — carrying the verifier there would let anyone who
+   * observes an unredeemed callback URL redeem the code themselves, which is
+   * the authorization-code-injection attack PKCE exists to prevent.
+   */
+  codeVerifier?: string;
   /**
    * Set when this login is the one-shot retry of a callback whose state
    * cookie had gone missing. It rides the signed state (not the query

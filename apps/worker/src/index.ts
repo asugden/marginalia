@@ -25,6 +25,7 @@ import {
   buildPrompt,
   clarityNoteFor,
   cleanReply,
+  createMarkerFilter,
   currentTopic,
   initialState,
   transition,
@@ -36,6 +37,22 @@ import { LIBRARY, type VoiceRef } from "@marginalia/voices";
 import { parseCookies, SESSION_COOKIE } from "@marginalia/auth";
 import type { Env } from "./env.js";
 import { assertProdConfigured, authenticate, type Identity } from "./auth.js";
+import {
+  assignableRoles,
+  can,
+  canAssignRole,
+  canCreateCourses,
+  capabilitiesFor,
+  isEnrollmentRole,
+  type Capability,
+} from "./permissions.js";
+import {
+  courseGenaiLocked,
+  GENAI_LOCKED_CODE,
+  GENAI_LOCKED_MESSAGE,
+  reconcileCourseGenai,
+  reconcileCoursesTaughtBy,
+} from "./genai.js";
 import { handleAuthRoute } from "./authRoutes.js";
 import { scheduled } from "./scheduled.js";
 import * as repo from "./repo.js";
@@ -61,6 +78,7 @@ import { routeAttendance } from "./modules/attendance/routes.js";
 import { routeCode } from "./modules/code/routes.js";
 import { routeExamples } from "./modules/examples/routes.js";
 import { routeCourseItems } from "./modules/course-items/routes.js";
+import { routeOnboarding } from "./modules/onboarding/routes.js";
 import {
   ensureItem as ensureCourseItem,
   removeItemForPayload as removeCourseItemForPayload,
@@ -131,7 +149,10 @@ const json = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
-const error = (message: string, status: number) => json({ error: message }, status);
+// `code` is a stable machine-readable reason for the SPA to branch on; the
+// message is prose for people and may change.
+const error = (message: string, status: number, code?: string) =>
+  json(code ? { error: message, code } : { error: message }, status);
 
 /**
  * Resolve the Origin to allow for this request, or null. We never reflect an
@@ -274,24 +295,44 @@ async function route(
     const enrollmentsRaw = identity.userId
       ? await repo.listEnrollmentsForUserEnriched(env.DB, identity.userId)
       : [];
-    // While acting-as-student, report every instructor enrollment as student
-    // so the SPA's own role-based gating matches what the worker enforces.
-    const enrollments = enrollmentsRaw.map((e) =>
-      downgradeIfActingAsStudent(identity, e),
-    );
+    // While previewing, identity IS the sample student, so these are the
+    // sample student's enrollments — one, as a student.
+    const enrollments = enrollmentsRaw.map((e) => ({
+      ...e,
+      capabilities: capabilitiesFor(e.role),
+    }));
     return json({
       email: identity.email,
       registered: identity.userId !== null,
       userId: identity.userId,
       displayName: identity.displayName,
       isAdmin: identity.isAdmin,
-      // Session-scoped "act as student" downgrade. The SPA uses this to show a
-      // persistent exit affordance; the enrollments above are already
-      // downgraded so per-course role checks agree.
+      // Course creation is a per-person permission (0028); the SPA shows
+      // "New Course" and routes a creator with no courses into onboarding.
+      canCreateCourses: canCreateCourses(identity),
+      // "Not interested in generative AI" (0029) — hides AI features from this
+      // person's own screens; see genai.ts for the course-level effect.
+      genaiOptOut: identity.genaiOptOut,
+      // Previewing a course as its sample student (0030). Everything above
+      // describes the sample student; `preview` names who is really signed
+      // in and which course, for the preview banner and role switch only.
       actingAsStudent: identity.actingAsStudent,
+      preview: identity.preview
+        ? { courseId: identity.preview.courseId, realEmail: identity.preview.realEmail }
+        : null,
       via: identity.via,
       enrollments,
     });
+  }
+
+  // POST /api/me/preferences — { genaiOptOut: boolean }. Personal settings.
+  if (
+    req.method === "POST" &&
+    head === "me" &&
+    tail === "preferences" &&
+    parts.length === 3
+  ) {
+    return setPreferencesRoute(req, env, identity);
   }
 
   // /api/provenance/* — writing tool that tracks word-level origin.
@@ -312,6 +353,13 @@ async function route(
   // Self-contained module; see apps/worker/src/modules/attendance/README.md.
   if (head === "attendance") {
     const handled = await routeAttendance(req, env, url, identity, parts);
+    if (handled) return handled;
+  }
+
+  // /api/onboarding/* — guided-tour progress for course staff. The tour is
+  // built in the web app; see apps/worker/src/modules/onboarding/README.md.
+  if (head === "onboarding") {
+    const handled = await routeOnboarding(req, env, url, identity, parts);
     if (handled) return handled;
   }
 
@@ -463,10 +511,8 @@ async function route(
     return adminRoute(req, env, ctx, url, identity, parts);
   }
 
-  // POST /api/courses — any signed-in user creates a course and becomes its
-  // instructor. Course creation is deliberately NOT admin-gated: an instructor
-  // is simply someone who teaches a course, and the instance's sign-in domain
-  // allowlist already decides who can be here at all.
+  // POST /api/courses — a user allowed to create courses (admin, or
+  // users.can_create_courses) creates one and becomes its instructor.
   if (head === "courses" && req.method === "POST" && parts.length === 2) {
     return createCourseRoute(req, env, identity);
   }
@@ -493,8 +539,8 @@ async function route(
   }
 
   // /api/courses/:courseId/set-feature — instructor toggles an optional
-  // module on or off (v1.1). Bidirectional, unlike reveal-tab: Sources and
-  // Provenance are real on/off toggles (default on); Attendance too.
+  // module on or off (v1.1). Sources and Provenance are real on/off toggles
+  // (default on); Attendance too.
   if (
     head === "courses" &&
     sub === "set-feature" &&
@@ -502,18 +548,6 @@ async function route(
     parts.length === 4
   ) {
     return setFeatureRoute(req, env, identity, tail!);
-  }
-
-  // /api/courses/:courseId/reveal-tab — instructor opts a lazy-reveal
-  // feature (attendance / collections) into the dashboard tab strip
-  // without having to use it first (v1.0 §6 / dashboard "Add a tool").
-  if (
-    head === "courses" &&
-    sub === "reveal-tab" &&
-    req.method === "POST" &&
-    parts.length === 4
-  ) {
-    return revealTabRoute(req, env, identity, tail!);
   }
 
   // /api/join/:code — self-serve enrollment, signed-in users only
@@ -582,33 +616,13 @@ async function resolveUser(
   if (!user) return null;
   const enrollment = await repo.findEnrollment(env.DB, courseId, user.id);
   if (!enrollment) return null;
-  return { user, enrollment: downgradeIfActingAsStudent(identity, enrollment) };
+  return { user, enrollment };
 }
 
-/**
- * "Act as student" is honored at exactly one place: whenever a caller's
- * enrollment role is read for an authorization decision, route it through
- * here first. When the session's acting_as_student flag is set, an
- * instructor's role is reported as `student`, so every downstream gate
- * (requireInstructor, isAuthor, inline `role !== "instructor"`) refuses
- * exactly as it would for a real student — no per-route changes needed.
- * The instructor's real `enrollments` row is untouched; this only rewrites
- * the value the request sees.
- */
-function downgradeIfActingAsStudent<T extends { role: EnrollmentRole }>(
-  identity: Identity,
-  enrollment: T,
-): T {
-  if (identity.actingAsStudent && enrollment.role === "instructor") {
-    return { ...enrollment, role: "student" };
-  }
-  return enrollment;
-}
-
-/** Instructor gate. Used by every author endpoint. v0.6 collapsed the
- *  ta role into instructor — there is no longer a distinct author tier. */
+/** Author gate. Used by every author endpoint; a thin name over the
+ *  permission table so a TA (who authors nothing) is refused here too. */
 function isAuthor(role: string): boolean {
-  return role === "instructor";
+  return can(role, "author");
 }
 
 // ─── voices ────────────────────────────────────────────────────────────────
@@ -1031,7 +1045,7 @@ type BootstrapShape =
       enrollments: Array<{
         courseId: string;
         courseName: string;
-        role: "student" | "instructor";
+        role: EnrollmentRole;
         joinedAt: number;
       }>;
     };
@@ -1354,7 +1368,7 @@ async function deleteAgentRoute(
 
   const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
-  if (resolved.enrollment.role !== "instructor") {
+  if (!isAuthor(resolved.enrollment.role)) {
     return error("Instructor only", 403);
   }
 
@@ -1457,9 +1471,7 @@ async function listDuplicableAgentsRoute(
     env.DB,
     identity.userId,
   );
-  const instructorEnrollments = enrollments.filter(
-    (e) => e.role === "instructor",
-  );
+  const instructorEnrollments = enrollments.filter((e) => isAuthor(e.role));
   // Fan out per course; D1 reads are cheap and the instructor's course
   // count is small (1–5 per the plan).
   const groups = await Promise.all(
@@ -1649,35 +1661,10 @@ async function listCollectionsRoute(
   });
 }
 
-/**
- * v1.0 §6 — opt a lazy-reveal feature into the dashboard tab strip
- * without using it first. Same effect as the implicit flip that happens
- * on first use, but instructor-driven from the dashboard's "Add a tool"
- * affordance. Instructor-only; idempotent.
- */
-async function revealTabRoute(
-  req: Request,
-  env: Env,
-  identity: Identity,
-  courseId: string,
-): Promise<Response> {
-  const resolved = await resolveUser(env, identity, courseId);
-  if (!resolved) return error("Not enrolled in this course", 403);
-  if (!isAuthor(resolved.enrollment.role)) {
-    return error("Instructor only", 403);
-  }
-  const body = (await req.json().catch(() => null)) as {
-    feature?: "attendance" | "collections";
-  } | null;
-  if (body?.feature !== "attendance" && body?.feature !== "collections") {
-    return error("feature must be 'attendance' or 'collections'", 400);
-  }
-  await repo.markCourseFeatureShown(env.DB, courseId, body.feature);
-  return json({ ok: true });
-}
-
 /** POST /api/courses/:courseId/set-feature — instructor toggles an optional
- *  module on/off. Bidirectional counterpart to revealTabRoute. */
+ *  module on/off. (Superseded the one-way v1.0 "reveal-tab" endpoint, which
+ *  had no remaining callers and has been removed; the implicit flip on first
+ *  feature use — repo.markCourseFeatureShown — still exists.) */
 async function setFeatureRoute(
   req: Request,
   env: Env,
@@ -1708,6 +1695,13 @@ async function setFeatureRoute(
   if (typeof body?.enabled !== "boolean") {
     return error("enabled must be a boolean", 400);
   }
+  if (
+    feature === "agents" &&
+    body.enabled &&
+    (await courseGenaiLocked(env.DB, courseId))
+  ) {
+    return error(GENAI_LOCKED_MESSAGE, 409, GENAI_LOCKED_CODE);
+  }
   await repo.setCourseFeature(env.DB, courseId, feature, body.enabled);
   return json({ ok: true });
 }
@@ -1717,11 +1711,9 @@ async function setFeatureRoute(
  *
  * Unlike the admin console's createCourseAdmin (which only mints the course
  * row), this enrolls the caller as the course's instructor and seeds a join
- * code so students can self-enroll immediately. It is open to any signed-in,
- * registered user — instructorship is per-course, and gating creation behind
- * the admin role would mean an admin has to hand-make every instructor's first
- * course. The sign-in allowlist (ALLOWED_EMAIL_DOMAINS) is the real gate on who
- * reaches this code at all.
+ * code so students can self-enroll immediately. Open to admins and to anyone
+ * an admin has allowed to create courses (users.can_create_courses) — not to
+ * every signed-in user, since students sign in too.
  */
 async function createCourseRoute(
   req: Request,
@@ -1737,6 +1729,13 @@ async function createCourseRoute(
     const user = await repo.findUserByEmail(env.DB, DEFAULT_ORG, identity.email);
     if (!user) return error("Sign in required", 401);
     userId = user.id;
+  }
+  if (!canCreateCourses(identity)) {
+    return error(
+      "Your account can't create courses. Ask an admin to allow it.",
+      403,
+      "cannot_create_courses",
+    );
   }
 
   const body = (await req.json().catch(() => null)) as {
@@ -1767,6 +1766,9 @@ async function createCourseRoute(
     userId,
     role: "instructor",
   });
+  // A creator who has opted out of generative AI is the course's only
+  // instructor, so the new course starts with its AI features off.
+  await reconcileCourseGenai(env.DB, course.id);
 
   // Seed a join code so the new course can take students right away. Retry on
   // the rare random-suffix collision, mirroring createJoinCodeRoute.
@@ -1865,7 +1867,7 @@ async function updateCourseRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
+  const gate = await requireCapability(env, identity, courseId, "author");
   if (gate instanceof Response) return gate;
 
   const body = (await req.json().catch(() => null)) as {
@@ -2057,7 +2059,12 @@ async function uploadCollectionSourceRoute(
     bytes,
     filename: file.name,
     kind,
-    contentType: file.type || defaultContentType(kind),
+    // Never persist the client-declared MIME type. The multipart part's
+    // Content-Type is attacker-controlled; storing and later echoing it
+    // (e.g. "text/html") would turn the same-origin file route into a
+    // stored-XSS sink. The kind was derived from the extension above and
+    // is the only thing the serve path should trust.
+    contentType: defaultContentType(kind),
   });
 }
 
@@ -2385,10 +2392,10 @@ async function getSourceFileRoute(
   if (!obj) return error("File missing from R2", 404);
 
   const headers = new Headers();
-  headers.set(
-    "content-type",
-    row.content_type ?? obj.httpMetadata?.contentType ?? "application/octet-stream",
-  );
+  // Derive the MIME type from the validated `kind`, never from the stored
+  // row or R2 metadata: rows written before this check existed may carry a
+  // client-declared type, and this response is same-origin with the SPA.
+  headers.set("content-type", defaultContentType(row.kind));
   // Inline so PDFs/markdown render in the browser; the filename is the
   // download name if the user does choose to save.
   headers.set(
@@ -2445,18 +2452,46 @@ function sanitizeFilename(name: string): string {
 
 // ─── roster (instructor-only course membership management) ────────────────
 
-/** Resolve + require the caller is `instructor` on this course. */
-async function requireInstructor(
+/** Resolve + require the caller's course role holds `capability`. */
+async function requireCapability(
   env: Env,
   identity: Identity,
   courseId: string,
+  capability: Capability,
 ): Promise<{ user: { id: string }; enrollment: { role: string } } | Response> {
   const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
-  if (resolved.enrollment.role !== "instructor") {
-    return error("Instructor only", 403);
+  if (!can(resolved.enrollment.role, capability)) {
+    return error(
+      capability === "author" ? "Instructor only" : "Course staff only",
+      403,
+    );
   }
   return resolved;
+}
+
+/**
+ * Who is acting on a course's roster. Instance admins may manage any course's
+ * people without being enrolled in it (they assign every role, including
+ * instructor); everyone else must hold `manage_students` in the course.
+ */
+async function requireRosterActor(
+  env: Env,
+  identity: Identity,
+  courseId: string,
+): Promise<{ userId: string; role: string | null; isAdmin: boolean } | Response> {
+  if (!identity.userId) return error("Sign in required", 401);
+  const resolved = await resolveUser(env, identity, courseId);
+  const role = resolved?.enrollment.role ?? null;
+  if (identity.isAdmin) {
+    if (!(await repo.findCourseById(env.DB, courseId))) {
+      return error("Course not found", 404);
+    }
+    return { userId: identity.userId, role, isAdmin: true };
+  }
+  if (!resolved) return error("Not enrolled in this course", 403);
+  if (!can(role, "manage_students")) return error("Course staff only", 403);
+  return { userId: identity.userId, role, isAdmin: false };
 }
 
 async function listRosterRoute(
@@ -2464,19 +2499,11 @@ async function listRosterRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  // Parallelize the instructor gate with the roster fetch — same v0.7 §2
-  // pattern as the agent list, but with a role check on top of enrollment.
-  if (!identity.userId) return error("Sign in required", 401);
-  const [enrollmentRaw, roster] = await Promise.all([
-    repo.findEnrollment(env.DB, courseId, identity.userId),
-    repo.listRosterForCourse(env.DB, courseId),
-  ]);
-  if (!enrollmentRaw) return error("Not enrolled in this course", 403);
-  // Route through the same downgrade as resolveUser so "act as student"
-  // hides the roster exactly as it is hidden from a real student.
-  const enrollment = downgradeIfActingAsStudent(identity, enrollmentRaw);
-  if (enrollment.role !== "instructor") return error("Instructor only", 403);
-  return json({ roster });
+  const actor = await requireRosterActor(env, identity, courseId);
+  if (actor instanceof Response) return actor;
+  const roster = await repo.listRosterForCourse(env.DB, courseId);
+  // The SPA offers exactly the roles the server will accept from this caller.
+  return json({ roster, assignableRoles: assignableRoles(actor) });
 }
 
 async function addRosterRoute(
@@ -2485,19 +2512,20 @@ async function addRosterRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
-  if (gate instanceof Response) return gate;
-  // v0.6 dropped the `ta` role (migration 0004). Existing `ta` rows were
-  // migrated to `instructor`; new requests carrying `role:"ta"` 400 here.
+  const actor = await requireRosterActor(env, identity, courseId);
+  if (actor instanceof Response) return actor;
   const body = (await req.json().catch(() => null)) as {
     email?: string;
-    role?: "student" | "instructor";
+    role?: unknown;
   } | null;
   const newEmail = body?.email?.trim().toLowerCase();
   const role = body?.role;
   if (!newEmail || !role) return error("email and role are required", 400);
-  if (role !== "student" && role !== "instructor") {
-    return error("role must be student or instructor", 400);
+  if (!isEnrollmentRole(role)) {
+    return error("role must be student, ta, or instructor", 400);
+  }
+  if (!canAssignRole(actor, role)) {
+    return error(`You can't add someone as ${roleNoun(role)}.`, 403, "role_not_assignable");
   }
   // Cheap sanity check — anything past this is the auth layer's job.
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
@@ -2514,6 +2542,15 @@ async function addRosterRoute(
   const existing = await repo.findEnrollment(env.DB, courseId, target.id);
   if (existing) {
     if (existing.role !== role) {
+      // Re-adding someone changes their role, so it is bounded like a role
+      // change: a TA re-adding an instructor as a student is a demotion.
+      if (!canAssignRole(actor, existing.role)) {
+        return error(
+          `They're already ${roleNoun(existing.role)} here, which you can't change.`,
+          403,
+          "role_not_assignable",
+        );
+      }
       await repo.updateEnrollmentRole(env.DB, courseId, target.id, role);
     }
   } else {
@@ -2523,6 +2560,7 @@ async function addRosterRoute(
       role,
     });
   }
+  await reconcileCourseGenai(env.DB, courseId);
   return json({
     userId: target.id,
     email: target.email,
@@ -2537,16 +2575,24 @@ async function patchRosterRoute(
   courseId: string,
   userId: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
-  if (gate instanceof Response) return gate;
+  const actor = await requireRosterActor(env, identity, courseId);
+  if (actor instanceof Response) return actor;
   const body = (await req.json().catch(() => null)) as {
-    role?: "student" | "instructor";
+    role?: unknown;
   } | null;
-  if (!body?.role || (body.role !== "student" && body.role !== "instructor")) {
-    return error("role must be student or instructor", 400);
+  if (!isEnrollmentRole(body?.role)) {
+    return error("role must be student, ta, or instructor", 400);
   }
-  // Don't lock yourself out: a sole instructor can't demote themselves.
-  if (gate.user.id === userId && body.role !== "instructor") {
+  const newRole = body.role;
+  const current = await repo.findEnrollment(env.DB, courseId, userId);
+  if (!current) return error("Enrollment not found", 404);
+  // Both ends of the change must be roles the actor may assign, so an
+  // instructor can't demote a co-instructor and a TA can't promote anyone.
+  if (!canAssignRole(actor, current.role) || !canAssignRole(actor, newRole)) {
+    return error("You can't make that role change.", 403, "role_not_assignable");
+  }
+  // Don't lock the course out: its last instructor can't be demoted.
+  if (current.role === "instructor" && newRole !== "instructor") {
     const roster = await repo.listRosterForCourse(env.DB, courseId);
     const otherInstructors = roster.filter(
       (r) => r.role === "instructor" && r.userId !== userId,
@@ -2558,10 +2604,9 @@ async function patchRosterRoute(
       );
     }
   }
-  const existing = await repo.findEnrollment(env.DB, courseId, userId);
-  if (!existing) return error("Enrollment not found", 404);
-  await repo.updateEnrollmentRole(env.DB, courseId, userId, body.role);
-  return json({ userId, role: body.role });
+  await repo.updateEnrollmentRole(env.DB, courseId, userId, newRole);
+  await reconcileCourseGenai(env.DB, courseId);
+  return json({ userId, role: newRole });
 }
 
 async function removeRosterRoute(
@@ -2570,11 +2615,11 @@ async function removeRosterRoute(
   courseId: string,
   userId: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
-  if (gate instanceof Response) return gate;
-  // Don't lock yourself out: refuse removing your own instructor enrollment
+  const actor = await requireRosterActor(env, identity, courseId);
+  if (actor instanceof Response) return actor;
+  // Don't lock yourself out: refuse removing your own enrollment
   // (v0.4 §10 explicit rule).
-  if (gate.user.id === userId) {
+  if (actor.userId === userId) {
     return error(
       "Can't remove your own enrollment. Ask another instructor to do it.",
       409,
@@ -2582,8 +2627,54 @@ async function removeRosterRoute(
   }
   const existing = await repo.findEnrollment(env.DB, courseId, userId);
   if (!existing) return error("Enrollment not found", 404);
+  // Removing someone is bounded by the role they hold: a TA removes
+  // students, an instructor removes TAs and students, an admin anyone.
+  if (!canAssignRole(actor, existing.role)) {
+    return error(
+      `You can't remove ${roleNoun(existing.role)} from this course.`,
+      403,
+      "role_not_assignable",
+    );
+  }
+  if (existing.role === "instructor") {
+    const roster = await repo.listRosterForCourse(env.DB, courseId);
+    if (!roster.some((r) => r.role === "instructor" && r.userId !== userId)) {
+      return error("Can't remove the only instructor on this course.", 409);
+    }
+  }
   await repo.deleteEnrollment(env.DB, courseId, userId);
+  await reconcileCourseGenai(env.DB, courseId);
   return json({ userId, removed: true });
+}
+
+/**
+ * POST /api/me/preferences — { genaiOptOut: boolean }.
+ *
+ * Opting out hides AI features from the caller's own screens at once. It
+ * reaches a course only when every instructor there has opted out, so each
+ * course the caller teaches is reconciled. Opting back in never switches
+ * anything on by itself — the instructor turns features on one by one.
+ */
+async function setPreferencesRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+): Promise<Response> {
+  if (!identity.userId) return error("Sign in required", 401);
+  const body = (await req.json().catch(() => null)) as {
+    genaiOptOut?: unknown;
+  } | null;
+  if (typeof body?.genaiOptOut !== "boolean") {
+    return error("genaiOptOut must be a boolean", 400);
+  }
+  await repo.setGenaiOptOut(env.DB, identity.userId, body.genaiOptOut);
+  if (body.genaiOptOut) await reconcileCoursesTaughtBy(env.DB, identity.userId);
+  return json({ genaiOptOut: body.genaiOptOut });
+}
+
+/** "a student" / "a TA" / "an instructor", for refusal messages. */
+function roleNoun(role: EnrollmentRole): string {
+  return role === "instructor" ? "an instructor" : role === "ta" ? "a TA" : "a student";
 }
 
 // ─── join codes (v0.6 §4) ──────────────────────────────────────────────────
@@ -2646,7 +2737,7 @@ async function listJoinCodesRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
+  const gate = await requireCapability(env, identity, courseId, "manage_students");
   if (gate instanceof Response) return gate;
   const rows = await repo.listJoinCodes(env.DB, courseId);
   return json({
@@ -2668,7 +2759,7 @@ async function createJoinCodeRoute(
   identity: Identity,
   courseId: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
+  const gate = await requireCapability(env, identity, courseId, "manage_students");
   if (gate instanceof Response) return gate;
   const body = (await req.json().catch(() => null)) as {
     expiresAt?: number | null;
@@ -2738,7 +2829,7 @@ async function revokeJoinCodeRoute(
   courseId: string,
   code: string,
 ): Promise<Response> {
-  const gate = await requireInstructor(env, identity, courseId);
+  const gate = await requireCapability(env, identity, courseId, "manage_students");
   if (gate instanceof Response) return gate;
   const existing = await repo.findJoinCode(env.DB, code);
   if (!existing || existing.course_id !== courseId) {
@@ -2874,6 +2965,15 @@ async function adminRoute(
     if (req.method === "GET" && parts.length === 4 && idSeg) {
       return getUserAdmin(env, idSeg);
     }
+    // PATCH /api/admin/users/:id { canCreateCourses } (0028)
+    if (req.method === "PATCH" && parts.length === 4 && idSeg) {
+      return patchUserAdmin(req, env, identity, idSeg);
+    }
+  }
+  // POST /api/admin/invite — pre-create a person by email, optionally allow
+  // them to create courses and/or enroll them in a course with any role.
+  if (section === "invite" && req.method === "POST" && parts.length === 3) {
+    return inviteAdmin(req, env, identity);
   }
   if (section === "audit-log" && req.method === "GET" && parts.length === 3) {
     return listAuditLogAdmin(req, env);
@@ -3060,6 +3160,7 @@ async function listUsersAdmin(req: Request, env: Env): Promise<Response> {
       displayName: r.display_name,
       lastSeenAt: r.last_seen_at,
       isAdmin: r.is_admin === 1,
+      canCreateCourses: r.can_create_courses === 1,
       externalProvider: r.external_provider,
       enrollmentCount: r.enrollment_count,
       createdAt: r.created_at,
@@ -3088,6 +3189,7 @@ async function getUserAdmin(env: Env, userId: string): Promise<Response> {
       lastSeenAt: user.last_seen_at,
       createdAt: user.created_at,
       isAdmin: user.is_admin === 1,
+      canCreateCourses: user.can_create_courses === 1,
       externalProvider: user.external_provider,
     },
     enrollments,
@@ -3101,6 +3203,88 @@ async function getUserAdmin(env: Env, userId: string): Promise<Response> {
       createdAt: r.created_at,
     })),
   });
+}
+
+/** PATCH /api/admin/users/:id — { canCreateCourses: boolean }. */
+async function patchUserAdmin(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  userId: string,
+): Promise<Response> {
+  const body = (await req.json().catch(() => null)) as {
+    canCreateCourses?: unknown;
+  } | null;
+  if (typeof body?.canCreateCourses !== "boolean") {
+    return error("canCreateCourses must be a boolean", 400);
+  }
+  const ok = await repo.setCanCreateCourses(env.DB, userId, body.canCreateCourses);
+  if (!ok) return error("User not found", 404);
+  await repo.appendAuditLog(env.DB, {
+    actorId: identity.userId!,
+    action: body.canCreateCourses ? "user.allow_course_creation" : "user.deny_course_creation",
+    targetKind: "user",
+    targetId: userId,
+    payload: null,
+  });
+  return json({ userId, canCreateCourses: body.canCreateCourses });
+}
+
+/**
+ * POST /api/admin/invite — { email, canCreateCourses?, courseId?, role? }
+ *
+ * Invites work by email because sign-in is the institution's own: the person
+ * signs in with their institutional account, and the first sign-in claims the
+ * row created here (see createUser). Nothing bypasses the sign-in domain
+ * allowlist. Admins may give any course role, including instructor.
+ */
+async function inviteAdmin(
+  req: Request,
+  env: Env,
+  identity: Identity,
+): Promise<Response> {
+  const body = (await req.json().catch(() => null)) as {
+    email?: unknown;
+    canCreateCourses?: unknown;
+    courseId?: unknown;
+    role?: unknown;
+  } | null;
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return error("A valid email is required", 400);
+  }
+  const courseId = typeof body?.courseId === "string" && body.courseId ? body.courseId : null;
+  const role = body?.role ?? null;
+  if (courseId && !isEnrollmentRole(role)) {
+    return error("role must be student, ta, or instructor", 400);
+  }
+  if (courseId && !(await repo.findCourseById(env.DB, courseId))) {
+    return error("Course not found", 404);
+  }
+
+  let target = await repo.findUserByEmail(env.DB, DEFAULT_ORG, email);
+  const created = !target;
+  if (!target) target = await repo.createUser(env.DB, { orgId: DEFAULT_ORG, email });
+  if (body?.canCreateCourses === true) {
+    await repo.setCanCreateCourses(env.DB, target.id, true);
+  }
+  if (courseId && isEnrollmentRole(role)) {
+    const existing = await repo.findEnrollment(env.DB, courseId, target.id);
+    if (!existing) {
+      await repo.createEnrollment(env.DB, { courseId, userId: target.id, role });
+    } else if (existing.role !== role) {
+      await repo.updateEnrollmentRole(env.DB, courseId, target.id, role);
+    }
+    await reconcileCourseGenai(env.DB, courseId);
+  }
+  await repo.appendAuditLog(env.DB, {
+    actorId: identity.userId!,
+    action: "user.invite",
+    targetKind: "user",
+    targetId: target.id,
+    payload: { email, canCreateCourses: body?.canCreateCourses === true, courseId, role },
+  });
+  return json({ userId: target.id, email, created }, created ? 201 : 200);
 }
 
 function safeJsonParse(s: string): unknown {
@@ -3183,6 +3367,12 @@ async function startConversation(
   const courseId = agent.course_id;
   const resolved = await resolveUser(env, identity, courseId);
   if (!resolved) return error("Not enrolled in this course", 403);
+  // Agents off (including when every instructor opted out of generative AI,
+  // which writes it off): refuse, not just hide, so a stale link can't reach
+  // one. Authors keep access so they can still build and test.
+  if (!isAuthor(resolved.enrollment.role) && !(await repo.agentsEnabled(env.DB, courseId))) {
+    return error("Agents are turned off for this course", 403, "agents_disabled");
+  }
 
   // Snapshot the definition into the conversation row. If the instructor
   // edits the agent mid-flight, in-progress conversations keep running
@@ -3603,6 +3793,12 @@ async function postMessage(
   // owned. Cheap; D1 indexed lookup.
   const enrollment = await repo.findEnrollment(env.DB, conv.course_id, userId);
   if (!enrollment) return error("Not enrolled in this course", 403);
+  if (
+    !isAuthor(enrollment.role) &&
+    !(await repo.agentsEnabled(env.DB, conv.course_id))
+  ) {
+    return error("Agents are turned off for this course", 403, "agents_disabled");
+  }
 
   // Use the definition snapshot captured at conversation start — not the live
   // agent row — so an instructor edit can't desync state mid-flight.
@@ -3722,17 +3918,21 @@ function streamTurn(params: {
           }
         }
 
+        // The marker can arrive split across chunks; the filter holds back a
+        // possible partial marker until the next chunk settles it.
+        const markerFilter = createMarkerFilter();
         for await (const chunk of provider.stream(llmMessages, {
           system: { instructions: prompt.instructions, context: prompt.context },
           signal: abort.signal,
         })) {
           if (chunk.delta) {
             raw += chunk.delta;
-            controller.enqueue(
-              encoder.encode(sse("delta", { text: stripMarker(chunk.delta) })),
-            );
+            const text = markerFilter.push(chunk.delta);
+            if (text) controller.enqueue(encoder.encode(sse("delta", { text })));
           }
         }
+        const tail = markerFilter.flush();
+        if (tail) controller.enqueue(encoder.encode(sse("delta", { text: tail })));
 
         let nextState: BackboneState | null = state;
         let transitionKind: string = "stay";
@@ -3872,11 +4072,6 @@ function streamTurn(params: {
 /** Server-sent-event frame. */
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-}
-
-/** Drop the advance marker from a streamed delta. */
-function stripMarker(delta: string): string {
-  return delta.replace(/\[ADVANCE\]/g, "");
 }
 
 /**

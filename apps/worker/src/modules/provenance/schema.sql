@@ -97,3 +97,8 @@ CREATE INDEX idx_provenance_checkpoints_assignment
 -- checkpoint.due_at rather than stored):
 --   assignment_id  TEXT
 --   checkpoint_id  TEXT
+
+-- course_settings additionally carries (migration 0026):
+--   provenance_chat_enabled    INTEGER NOT NULL DEFAULT 1  -- LLM chat pane on/off
+--   provenance_locked_agent_id TEXT  -- NULL = students choose; else the ONE
+--                                    -- agent everyone gets (row id or "builtin:<voice>")

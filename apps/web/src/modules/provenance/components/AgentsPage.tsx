@@ -8,7 +8,7 @@ import {
   createAgent,
   deleteAgent,
   getAgent,
-  listAgents,
+  listAgentsWithSettings,
   updateAgent,
   type AgentSummary,
 } from "../api.js";
@@ -29,6 +29,9 @@ export function AgentsPage() {
   const writeBase = `/course/${courseId}/writing`;
 
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
+  // Voice policy (migration 0026): while the instructor has assigned one
+  // voice, personal agents can't be used, so authoring them is paused.
+  const [voiceLocked, setVoiceLocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,8 +43,11 @@ export function AgentsPage() {
   }, [courseId]);
 
   function refresh(cid: string) {
-    listAgents(cid)
-      .then(setAgents)
+    listAgentsWithSettings(cid)
+      .then((listing) => {
+        setAgents(listing.agents);
+        setVoiceLocked(listing.lockedAgentId !== null);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }
 
@@ -102,7 +108,7 @@ export function AgentsPage() {
   return (
     <div className="ds-home__inner">
       <div className="ds-home__head">
-        <span className="eyebrow">Provenance · Agents</span>
+        <span className="eyebrow">Writing · Agents</span>
         <span className="ds-rule" />
         <h1>My agents</h1>
         <p className="ds-home__sub">
@@ -119,16 +125,24 @@ export function AgentsPage() {
           <Button variant="ghost" href={writeBase}>
             Documents
           </Button>
-          <Button
-            variant="primary"
-            icon={<PlusIcon size={16} />}
-            onClick={startCreate}
-          >
-            New agent
-          </Button>
+          {!voiceLocked && (
+            <Button
+              variant="primary"
+              icon={<PlusIcon size={16} />}
+              onClick={startCreate}
+            >
+              New agent
+            </Button>
+          )}
         </span>
       </div>
 
+      {voiceLocked && (
+        <p className="muted small">
+          Your instructor has assigned one chat voice for this course, so
+          personal agents are paused — the chat uses the assigned voice.
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
       {agents === null && <p className="ds-home__muted">Loading…</p>}
 

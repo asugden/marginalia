@@ -11,6 +11,9 @@ export interface DocumentSummary {
   wordCount: number;
   charCount: number;
   updatedAt: number;
+  /** The assignment this document is for. Null for documents written before
+   *  writing was tied to assignments — those keep working as they did. */
+  assignmentId: string | null;
 }
 
 export interface DocumentDTO {
@@ -25,6 +28,8 @@ export interface DocumentDTO {
   eventCoords: "pm" | "text";
   createdAt: number;
   updatedAt: number;
+  /** See DocumentSummary.assignmentId. */
+  assignmentId: string | null;
 }
 
 /**
@@ -97,15 +102,20 @@ export async function listDocuments(
   return body.documents;
 }
 
-export async function createDocument(
+/**
+ * Open the caller's document for an assignment, creating it the first time.
+ * New writing always belongs to an assignment; asking twice returns the same
+ * document.
+ */
+export async function openAssignmentDocument(
   courseId: string,
-  title?: string,
+  assignmentId: string,
 ): Promise<DocumentDTO> {
   const res = await fetch(apiUrl(`/api/provenance/documents`), {
     ...fetchInit,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ courseId, title }),
+    body: JSON.stringify({ courseId, assignmentId }),
   });
   if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { document: DocumentDTO };
@@ -243,14 +253,46 @@ export interface MessageDTO {
   createdAt: number;
 }
 
-export async function listAgents(courseId: string, signal?: AbortSignal): Promise<AgentSummary[]> {
-  const res = await fetch(
-    apiUrl(`/api/provenance/agents?courseId=${encodeURIComponent(courseId)}`),
-    { ...fetchInit, signal },
-  );
+/** The agent list plus the course's chat controls (migration 0026), so the
+ *  chat panel decides picker-vs-locked without a second fetch. For a student
+ *  in a voice-locked course, `agents` is already just the assigned one —
+ *  filtered server-side, not merely hidden here. */
+export interface AgentListing {
+  agents: AgentSummary[];
+  /** Whether the LLM chat is on (for the document asked about, else course). */
+  chatEnabled: boolean;
+  /** Non-null = every student gets this one agent; null = students choose. */
+  lockedAgentId: string | null;
+}
+
+/**
+ * The agents a caller can chat with, plus the chat policy. With `documentId`,
+ * the policy is that document's assignment's; without it, the course-level
+ * policy older documents follow.
+ */
+export async function listAgentsWithSettings(
+  courseId: string,
+  signal?: AbortSignal,
+  documentId?: string,
+): Promise<AgentListing> {
+  const qs = new URLSearchParams({ courseId });
+  if (documentId) qs.set("documentId", documentId);
+  const res = await fetch(apiUrl(`/api/provenance/agents?${qs}`), { ...fetchInit, signal });
   if (!res.ok) throw await apiError(res);
-  const body = (await res.json()) as { agents: AgentSummary[] };
-  return body.agents;
+  const body = (await res.json()) as {
+    agents: AgentSummary[];
+    chatEnabled?: boolean;
+    lockedAgentId?: string | null;
+  };
+  return {
+    agents: body.agents,
+    chatEnabled: body.chatEnabled ?? true,
+    lockedAgentId: body.lockedAgentId ?? null,
+  };
+}
+
+export async function listAgents(courseId: string, signal?: AbortSignal): Promise<AgentSummary[]> {
+  return (await listAgentsWithSettings(courseId, signal)).agents;
 }
 
 export async function getAgent(courseId: string, id: string, signal?: AbortSignal): Promise<AgentDTO> {
@@ -703,17 +745,41 @@ export async function getPublicSubmissionConversations(
 
 // ── Course settings (hide-marks toggle) ─────────────────────────────────
 
-/** Read the course's provenance display settings. Any enrolled user. */
+export interface ProvenanceSettings {
+  hideProvenanceMarks: boolean;
+  /** Whether the writing editor offers the LLM chat pane. Default on. */
+  chatEnabled: boolean;
+  /** Non-null = every student gets this one agent; null = students choose. */
+  lockedAgentId: string | null;
+}
+
+/** Read the course's provenance settings. Any enrolled user. */
 export async function getProvenanceSettings(
   courseId: string,
   signal?: AbortSignal,
-): Promise<{ hideProvenanceMarks: boolean }> {
+): Promise<ProvenanceSettings> {
   const res = await fetch(
     apiUrl(`/api/provenance/settings?courseId=${encodeURIComponent(courseId)}`),
     { ...fetchInit, signal },
   );
   if (!res.ok) throw await apiError(res);
-  return (await res.json()) as { hideProvenanceMarks: boolean };
+  return (await res.json()) as ProvenanceSettings;
+}
+
+/** Set the chat switch and/or the voice policy. Instructor only. Only the
+ *  fields present are written, so the two controls can't clobber each other. */
+export async function setProvenanceChatSettings(
+  courseId: string,
+  patch: { chatEnabled?: boolean; lockedAgentId?: string | null },
+): Promise<{ chatEnabled: boolean; lockedAgentId: string | null }> {
+  const res = await fetch(apiUrl(`/api/provenance/settings`), {
+    ...fetchInit,
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ courseId, ...patch }),
+  });
+  if (!res.ok) throw await apiError(res);
+  return (await res.json()) as { chatEnabled: boolean; lockedAgentId: string | null };
 }
 
 /** Set the "hide marks from students" flag. Instructor only (403 otherwise). */
@@ -754,11 +820,17 @@ export interface AssignmentDTO {
   archivedAt: number | null;
   createdAt: number;
   updatedAt: number;
+  /** Whether students get the LLM chat beside this assignment's documents. */
+  chatEnabled: boolean;
+  /** Null = students choose their chat agent; else the one they all get. */
+  lockedAgentId: string | null;
 }
 
-/** A checkpoint as the editor sends it — no id, since the server replaces the
- *  whole list on save rather than reconciling against stored rows. */
+/** A checkpoint as the editor sends it. An existing checkpoint carries its
+ *  `id` so the server updates it in place and the submissions already made to
+ *  it stay attached; a new one has none. */
 export interface CheckpointInput {
+  id?: string;
   name: string;
   dueAt: number | null;
 }
@@ -779,6 +851,30 @@ export async function listAssignments(
   if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { assignments: AssignmentDTO[] };
   return body.assignments;
+}
+
+/** "N of M submitted" figures for course staff. `byId` is keyed by
+ *  checkpoint id (writing) or assignment id (code); absent = nobody yet. */
+export interface SubmissionStats {
+  /** Real students enrolled — the sample student is not counted. */
+  students: number;
+  byId: Record<string, { submitted: number; onTime: number }>;
+}
+
+/** The instructor's list: every assignment (drafts included) plus
+ *  per-checkpoint submission counts. */
+export async function listAssignmentsWithStats(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<{ assignments: AssignmentDTO[]; stats: SubmissionStats }> {
+  const qs = new URLSearchParams({ courseId, includeArchived: "1", stats: "1" });
+  const res = await fetch(apiUrl(`/api/provenance/assignments?${qs}`), {
+    ...fetchInit,
+    signal,
+  });
+  if (!res.ok) throw await apiError(res);
+  const body = (await res.json()) as { assignments: AssignmentDTO[]; stats?: SubmissionStats };
+  return { assignments: body.assignments, stats: body.stats ?? { students: 0, byId: {} } };
 }
 
 export async function getAssignment(
@@ -802,6 +898,10 @@ export async function createAssignment(params: {
   title: string;
   instructions: string;
   checkpoints: CheckpointInput[];
+  chatEnabled?: boolean;
+  lockedAgentId?: string | null;
+  /** true = start as a draft students can't see; publish later. */
+  archived?: boolean;
 }): Promise<AssignmentDTO> {
   const res = await fetch(apiUrl(`/api/provenance/assignments`), {
     ...fetchInit,
@@ -813,8 +913,8 @@ export async function createAssignment(params: {
   return (await res.json()) as AssignmentDTO;
 }
 
-/** Instructor only. Supplying `checkpoints` replaces the list wholesale;
- *  omitting it leaves the existing checkpoints alone. */
+/** Instructor only. Supplying `checkpoints` makes the stored list match it,
+ *  keyed by id; omitting it leaves the existing checkpoints alone. */
 export async function updateAssignment(
   id: string,
   params: {
@@ -823,6 +923,8 @@ export async function updateAssignment(
     instructions?: string;
     archived?: boolean;
     checkpoints?: CheckpointInput[];
+    chatEnabled?: boolean;
+    lockedAgentId?: string | null;
   },
 ): Promise<AssignmentDTO> {
   const res = await fetch(apiUrl(`/api/provenance/assignments/${encodeURIComponent(id)}`), {

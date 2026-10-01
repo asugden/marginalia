@@ -105,19 +105,32 @@ export const BOARD = {
 const PIN_X0 = 340 - 7 * P;
 export const PIN_ROW_Y = { T: BOARD.y0 + P, B: BOARD.y0 + 10 * P };
 
-export type PinKind = "3v3" | "vin" | "gnd" | "gpio" | "en";
+/** "serial" pins are GPIOs the board has given to a serial line: RX0/TX0
+ *  carry the USB connection to the computer, and RX2/TX2 are printed as the
+ *  second serial port. They are left out of digital work, so a beginner
+ *  never wires a part to one. */
+export type PinKind = "3v3" | "vin" | "gnd" | "gpio" | "en" | "serial";
 
 export interface PinInfo {
   id: NodeId;
   label: string;
   kind: PinKind;
   gpio?: number;
-  /** GPIO 34–39 can read a voltage but cannot drive one. */
+  /** GPIO 34–39 can read a voltage but cannot drive one, and have no
+   *  pull-up or pull-down resistors inside. */
   inputOnly?: boolean;
+  /** Can analogRead. */
+  analog?: boolean;
   side: "T" | "B";
   x: number;
   y: number;
 }
+
+/** Pins that can analogRead: those on the chip's first analog-to-digital
+ *  converter (ADC1). The second (ADC2: GPIO 0, 2, 4, 12–15, 25–27) stops
+ *  working whenever Wi-Fi is on, so, as most pinouts advise, this board
+ *  treats those pins as digital only. */
+export const ADC_GPIOS = new Set([32, 33, 34, 35, 36, 39]);
 
 const TOP_LABELS = ["VIN", "GND", "D13", "D12", "D14", "D27", "D26", "D25", "D33", "D32", "D35", "D34", "VN", "VP", "EN"];
 const BOTTOM_LABELS = ["3V3", "GND", "D15", "D2", "D4", "RX2", "TX2", "D5", "D18", "D19", "D21", "RX0", "TX0", "D22", "D23"];
@@ -130,7 +143,8 @@ function pinFrom(label: string, side: "T" | "B", i: number): PinInfo {
   if (label === "GND") return { ...base, kind: "gnd" };
   if (label === "EN") return { ...base, kind: "en" };
   const gpio = label.startsWith("D") ? Number(label.slice(1)) : NAMED_GPIO[label]!;
-  return { ...base, kind: "gpio", gpio, inputOnly: gpio >= 34 };
+  if (label.startsWith("RX") || label.startsWith("TX")) return { ...base, kind: "serial", gpio };
+  return { ...base, kind: "gpio", gpio, inputOnly: gpio >= 34, analog: ADC_GPIOS.has(gpio) };
 }
 
 export const PINS: PinInfo[] = [
@@ -138,6 +152,23 @@ export const PINS: PinInfo[] = [
   ...BOTTOM_LABELS.map((l, i) => pinFrom(l, "B", i)),
 ];
 export const PIN_BY_ID = new Map(PINS.map((p) => [p.id, p]));
+
+/** What a pin can do, in the words a pinout uses. */
+export function pinAbilities(p: PinInfo): string[] {
+  if (p.kind !== "gpio") return [];
+  const out = ["digital in"];
+  if (!p.inputOnly) out.push("digital out", "PWM");
+  if (p.analog) out.push("analog in");
+  return out;
+}
+
+/** Whether a pin can be set to a mode, as the real chip allows. */
+export function pinAllows(p: PinInfo, mode: PinState["mode"]): boolean {
+  if (p.kind !== "gpio") return false;
+  if (mode === "OUTPUT" || mode === "PWM") return !p.inputOnly;
+  if (mode === "INPUT_PULLDOWN" || mode === "INPUT_PULLUP") return !p.inputOnly;
+  return true;
+}
 /** Look a pin up by its printed label; the first GND if asked for "GND". */
 export const pinId = (label: string, side?: "T" | "B") =>
   PINS.find((p) => p.label === label && (!side || p.side === side))!.id;
@@ -170,6 +201,19 @@ export function nearestNode(x: number, y: number): NodeId | null {
     }
   }
   return best;
+}
+
+/** The control point of a jumper's gentle arc. Symmetric in its ends, so the
+ *  current overlay and the diagram can retrace it in either direction. */
+export function arcControl(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let nx = -dy / len;
+  let ny = dx / len;
+  if (ny > 0 || (ny === 0 && nx > 0)) (nx = -nx), (ny = -ny);
+  const bulge = Math.min(46, 6 + len * 0.16);
+  return { x: (a.x + b.x) / 2 + nx * bulge, y: (a.y + b.y) / 2 + ny * bulge };
 }
 
 /** A short human name for where a node is: "strip 12 a–e", "+ rail". */
@@ -223,9 +267,9 @@ export interface Pot {
 }
 
 /** A common-ground seven-segment display straddling the channel at
- *  columns `col`…`col + 4`. Ten legs: along the top (row e) g f GND a b,
- *  along the bottom (row f) e d GND c dp. Each segment is an LED from its
- *  own leg to the shared ground, and the two GND legs are joined inside. */
+ *  columns `col`…`col + 3`. Eight legs: along the top (row e) g f a b,
+ *  along the bottom (row f) e d c GND. Each segment is an LED from its own
+ *  leg to the one ground leg. There is no decimal point. */
 export interface Seg7 {
   id: string;
   kind: "seg7";
@@ -234,9 +278,11 @@ export interface Seg7 {
 
 export type Part = TwoLeg | Button | Pot | Seg7;
 
-export const SEG_TOP = ["g", "f", "GND", "a", "b"] as const;
-export const SEG_BOTTOM = ["e", "d", "GND", "c", "dp"] as const;
-export const SEGMENTS = ["a", "b", "c", "d", "e", "f", "g", "dp"] as const;
+/** Legs per row, and so the display's width in columns. */
+export const SEG_WIDTH = 4;
+export const SEG_TOP = ["g", "f", "a", "b"] as const;
+export const SEG_BOTTOM = ["e", "d", "c", "GND"] as const;
+export const SEGMENTS = ["a", "b", "c", "d", "e", "f", "g"] as const;
 export type Segment = (typeof SEGMENTS)[number];
 
 export function seg7Legs(p: Seg7): NodeId[] {
@@ -249,7 +295,7 @@ export function segLeg(p: Seg7, s: Segment): NodeId {
   if (t >= 0) return `e${p.col + t}`;
   return `f${p.col + (SEG_BOTTOM as readonly string[]).indexOf(s)}`;
 }
-export const segGround = (p: Seg7): [NodeId, NodeId] => [`e${p.col + 2}`, `f${p.col + 2}`];
+export const segGround = (p: Seg7): NodeId => `f${p.col + SEG_BOTTOM.indexOf("GND")}`;
 
 export const POT_OHMS = 10_000;
 export const RESISTOR_CHOICES = [100, 220, 1_000, 10_000];
@@ -303,8 +349,6 @@ export const DEFAULT_PIN: PinState = { mode: "INPUT" };
  *  boot-mode pin); a button wired from 3V3 to it can never read LOW. */
 export const BOARD_PULLUPS = new Set([5]);
 
-/** Pins wired to the chip's analog-to-digital converter. */
-export const ADC_GPIOS = new Set([0, 2, 4, 12, 13, 14, 15, 25, 26, 27, 32, 33, 34, 35, 36, 39]);
 
 export const WIRE_COLORS = {
   red: "#d0342c",
@@ -315,6 +359,13 @@ export const WIRE_COLORS = {
   orange: "#e0701c",
 } as const;
 export type WireColor = keyof typeof WIRE_COLORS;
+
+// Colours for "Colour by connection".
+// Supply and ground keep the colours a jumper-wire convention already gives
+// them; the rest take the general data-mark hues.
+export const NET_SUPPLY = "var(--salmon-600)";
+export const NET_GROUND = "var(--ink-700, #3d3831)";
+export const NET_HUES = ["var(--purple-600)", "var(--amber-600)", "var(--green-600)", "var(--blue-600)", "#00879c"];
 
 export const PART_NAMES: Record<PartKind, string> = {
   wire: "Wire",

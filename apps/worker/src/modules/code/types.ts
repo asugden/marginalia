@@ -70,6 +70,9 @@ export interface CodeAssignmentRow {
   ai_enabled: number;
   ai_prompt: string | null;
   voice_json: string | null;
+  /** 1 = each student picks their own library voice; 0 = everyone gets the
+   *  assignment's voice (migration 0027). */
+  voice_choice: number;
   due_at: number | null;
   mode: AssignmentMode;
   created_at: number;
@@ -126,6 +129,10 @@ export interface CodeAssignmentDTO {
   aiPrompt?: string | null;
   /** Instructor-only: the chat's voice. Null = the default library voice. */
   voice?: CodeVoiceRef | null;
+  /** Voice policy: true = each student picks their own library voice, false =
+   *  everyone gets the assignment's voice. Not sensitive, so not
+   *  instructor-gated — the student UI needs it to show the picker. */
+  voiceChoice: boolean;
   dueAt: number | null;
   mode: AssignmentMode;
   archivedAt: number | null;
@@ -149,6 +156,13 @@ export interface NotebookDTO extends NotebookSummaryDTO {
   /** Whether the AI chat is available beside this notebook. Derived from
    *  the assignment; a scratch notebook has none. */
   aiEnabled: boolean;
+  /** Voice policy: true = the student picks a library voice in the chat
+   *  header; false = the assignment's voice, no picker. */
+  aiVoiceChoice: boolean;
+  /** When choosing is on: the library voice preselected for this student (the
+   *  assignment's own voice if it is a library one, else the module default).
+   *  Null when the picker is absent. */
+  aiVoiceDefault: string | null;
   /** The assignment's title, instructions, and deadline, for the header. */
   assignment: {
     title: string;
@@ -205,7 +219,14 @@ export interface RosterStudentDTO {
   email: string;
   displayName: string | null;
   /** Latest submission, or null when the student has submitted nothing. */
-  latest: SubmissionSummaryDTO | null;
+  latest:
+    | (SubmissionSummaryDTO & {
+        title: string;
+        /** Characters by origin — the same totals the writing tool's
+         *  submission list shows as its bar. Null when not recorded. */
+        origins: (Record<Origin, number> & { total: number }) | null;
+      })
+    | null;
   submissionCount: number;
 }
 
@@ -234,6 +255,7 @@ export function toAssignmentDTO(
     title: row.title,
     instructions: row.instructions,
     aiEnabled: row.ai_enabled === 1,
+    voiceChoice: row.voice_choice === 1,
     mode: row.mode === "practice" ? "practice" : "submit",
     ...(opts.instructor ? { aiPrompt: row.ai_prompt, voice: parseVoiceRef(row.voice_json) } : {}),
     dueAt: row.due_at,

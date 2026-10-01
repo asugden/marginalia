@@ -14,6 +14,7 @@
 
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
+import { can, type Capability } from "../../permissions.js";
 import * as repo from "./repo.js";
 import { syncExampleItems } from "../course-items/sync.js";
 import {
@@ -88,15 +89,22 @@ async function requireMember(
   return userId;
 }
 
-async function requireInstructor(
+/** The caller's course role must hold `capability` (see permissions.ts). */
+async function requireCapability(
   env: Env,
   identity: Identity,
   courseId: string,
+  capability: Capability,
 ): Promise<string | Response> {
   const userId = requireUser(identity);
   if (userId instanceof Response) return userId;
   const role = await getEnrollmentRole(env, userId, courseId);
-  if (role !== "instructor") return errorResponse("Instructor only", 403);
+  if (!can(role, capability)) {
+    return errorResponse(
+      capability === "author" ? "Instructor only" : "Course staff only",
+      403,
+    );
+  }
   return userId;
 }
 
@@ -154,6 +162,10 @@ export async function usageBeaconRoute(
   // The membership check has served its entire purpose. From here on, the
   // caller is just "someone in this course" and nothing narrower.
 
+  // An instructor previewing as the course's sample student isn't a student
+  // using the example; counting them would inflate a small cohort's numbers.
+  if (identity.actingAsStudent) return new Response(null, { status: 204 });
+
   // UTC day + hour. UTC (rather than the course's local timezone) keeps the
   // bucket key stable no matter where a student travels, and the instructor
   // view labels the axis as UTC rather than silently implying local time.
@@ -192,7 +204,7 @@ export async function listUsageRoute(
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "view_submissions");
   if (instructorOrResp instanceof Response) return instructorOrResp;
 
   const since = new Date(Date.now() - USAGE_WINDOW_DAYS * 86_400_000)
@@ -305,7 +317,7 @@ export async function listCompletionsRoute(
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "view_submissions");
   if (instructorOrResp instanceof Response) return instructorOrResp;
 
   const [students, completions] = await Promise.all([
@@ -340,7 +352,7 @@ export async function getCourseExamplesRoute(
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "author");
   if (instructorOrResp instanceof Response) return instructorOrResp;
   const rows = await repo.listCourseExamples(env.DB, courseId);
   const examples: CourseExampleDTO[] = rows.map(rowToCourseExample);
@@ -377,7 +389,7 @@ export async function putCourseExamplesRoute(
   if (typeof courseId !== "string") {
     return errorResponse("courseId is required", 400);
   }
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "author");
   if (instructorOrResp instanceof Response) return instructorOrResp;
   if (!Array.isArray(body?.examples)) {
     return errorResponse("examples must be an array", 400);

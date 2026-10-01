@@ -12,6 +12,8 @@ CREATE TABLE code_assignments (
   starter_json  TEXT NOT NULL DEFAULT '{"cells":[]}',
   ai_enabled    INTEGER NOT NULL DEFAULT 0,
   ai_prompt     TEXT,
+  voice_json    TEXT,               -- VoiceRef JSON; NULL = default library voice
+  voice_choice  INTEGER NOT NULL DEFAULT 0,  -- 1 = students pick a library voice (0027)
   due_at        INTEGER,
   mode          TEXT NOT NULL DEFAULT 'submit',  -- submit | practice
   created_at    INTEGER NOT NULL,

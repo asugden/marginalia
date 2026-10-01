@@ -204,6 +204,15 @@
   letter-spacing: 0.08em; color: var(--ink-soft);
 }
 .code-chat__hint { color: var(--text-muted); font-size: 0.9rem; padding: 0.25rem 0.1rem; }
+/* The students-choose voice picker in the chat header (assignments with
+   voice_choice on). Compact, so the head row stays one line. */
+.code-chat__voice {
+  flex: none; max-width: 11rem; font: 500 0.78rem var(--font-sans);
+  color: var(--text-secondary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  padding: 0.2rem 0.4rem; cursor: pointer;
+}
+.code-chat__voice:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .code-chat__body > :first-child { margin-top: 0; }
 .code-chat__body > :last-child { margin-bottom: 0; }
 .code-chat__body pre { overflow-x: auto; font-size: 0.82rem; }

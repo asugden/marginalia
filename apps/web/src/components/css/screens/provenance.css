@@ -80,6 +80,8 @@
 .prov-subs__seg.legend-pasted { background: var(--amber-tint); }
 .prov-subs__seg.legend-llm    { background: var(--blue-tint); }
 .prov-subs__seg.legend-edited { background: var(--green-tint); }
+/* Code only: the instructor's starter text. Matches .code-origin--provided. */
+.prov-subs__seg.legend-provided { background: var(--sand-200); }
 
 /* ── Assignments (instructor) ─────────────────────────────────────────── */
 

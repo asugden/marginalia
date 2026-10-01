@@ -17,14 +17,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
 import type { Plugin } from "vite";
+import { parse as parseYaml } from "yaml";
 
 interface BrandConfig {
   page_title?: string;
   /** Header-lockup wordmark text (defaults to page_title). */
   wordmark?: string;
-  /** 0-based offset where the accent-coloured run of the wordmark begins
+  /** 0-based offset where the accent-colored run of the wordmark begins
    *  (default 0 = the start, i.e. a leading prefix). */
   wordmark_accent_start?: number;
   /** How many wordmark characters (from accent_start) are painted in the
@@ -63,14 +63,18 @@ function loadTheme(srcDir: string): BrandConfig {
 
 function buildRootCss(brand: BrandConfig): string {
   const lines: string[] = [];
-  if (brand.primary)           lines.push(`  --brand-primary: ${brand.primary};`);
-  if (brand.primary_dark)      lines.push(`  --brand-primary-dark: ${brand.primary_dark};`);
-  if (brand.font_sans)         lines.push(`  --font-sans: ${brand.font_sans};`);
-  if (brand.font_display)      lines.push(`  --font-display: ${brand.font_display};`);
-  if (brand.font_mono)         lines.push(`  --font-mono: ${brand.font_mono};`);
+  if (brand.primary) lines.push(`  --brand-primary: ${brand.primary};`);
+  if (brand.primary_dark)
+    lines.push(`  --brand-primary-dark: ${brand.primary_dark};`);
+  if (brand.font_sans) lines.push(`  --font-sans: ${brand.font_sans};`);
+  if (brand.font_display)
+    lines.push(`  --font-display: ${brand.font_display};`);
+  if (brand.font_mono) lines.push(`  --font-mono: ${brand.font_mono};`);
   if (brand.watermark_url) {
     lines.push(`  --brand-watermark-url: url("${brand.watermark_url}");`);
-    lines.push(`  --brand-watermark-opacity: ${brand.watermark_opacity ?? 0.03};`);
+    lines.push(
+      `  --brand-watermark-opacity: ${brand.watermark_opacity ?? 0.03};`,
+    );
   }
   if (lines.length === 0) return "";
   // `:root:root` doubles the specificity (0,2,0 instead of 0,1,0) so this
@@ -101,11 +105,15 @@ export function themePlugin(): Plugin {
         define: {
           "import.meta.env.BRAND_PAGE_TITLE": JSON.stringify(title),
           "import.meta.env.BRAND_FOOTER_TEXT": JSON.stringify(
-            b.footer_text ?? "Marginalia · open source under Apache 2.0"
+            b.footer_text ?? "Marginalia · open source under Apache 2.0",
           ),
           "import.meta.env.BRAND_WORDMARK": JSON.stringify(b.wordmark ?? title),
-          "import.meta.env.BRAND_WORDMARK_ACCENT_START": JSON.stringify(b.wordmark_accent_start ?? 0),
-          "import.meta.env.BRAND_WORDMARK_ACCENT_LEN": JSON.stringify(b.wordmark_accent_len ?? 0),
+          "import.meta.env.BRAND_WORDMARK_ACCENT_START": JSON.stringify(
+            b.wordmark_accent_start ?? 0,
+          ),
+          "import.meta.env.BRAND_WORDMARK_ACCENT_LEN": JSON.stringify(
+            b.wordmark_accent_len ?? 0,
+          ),
           "import.meta.env.BRAND_MARK_URL": JSON.stringify(b.mark_url ?? ""),
         },
       };
@@ -118,7 +126,9 @@ export function themePlugin(): Plugin {
         .replace(/%BRAND_FAVICON_URL%/g, faviconUrl);
       const injections: string[] = [];
       if (brand.font_import_url) {
-        injections.push(`<link rel="stylesheet" href="${brand.font_import_url}">`);
+        injections.push(
+          `<link rel="stylesheet" href="${brand.font_import_url}">`,
+        );
       }
       const rootCss = buildRootCss(brand);
       if (rootCss) injections.push(rootCss);
@@ -130,7 +140,10 @@ export function themePlugin(): Plugin {
     handleHotUpdate(ctx) {
       // Reload theme on theme.yaml / theme.default.yaml change so dev
       // server picks up edits without a manual restart.
-      if (ctx.file.endsWith("theme.yaml") || ctx.file.endsWith("theme.default.yaml")) {
+      if (
+        ctx.file.endsWith("theme.yaml") ||
+        ctx.file.endsWith("theme.default.yaml")
+      ) {
         brand = loadTheme(srcDir);
         ctx.server.ws.send({ type: "full-reload" });
       }

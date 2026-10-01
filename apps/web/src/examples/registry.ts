@@ -36,7 +36,7 @@ export interface ExampleSpec {
 export const EXAMPLES: ExampleSpec[] = [
   {
     slug: "machine-learning",
-    title: "What Is Machine Learning",
+    title: "What machine learning is",
     kind: "overview",
     blurb:
       "The shape every problem here shares \u2014 data, features, model, labels, one spreadsheet \u2014 and the single line all the models sit on. Click into the line to reach the rest.",
@@ -61,7 +61,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "activation-function",
-    title: "Activation Functions",
+    title: "Activation functions",
     blurb:
       "One neuron adds up its weighted inputs; the activation decides what it sends on. Widen a network with no activation and it stays a straight line — then bend it, and find out why ReLU beat the more neuron-like sigmoid.",
     tags: ["neural networks", "ReLU", "sigmoid", "neuroscience", "interactive"],
@@ -73,7 +73,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "complex-shapes",
-    title: "Fitting Complex Shapes",
+    title: "Fitting complex shapes",
     blurb:
       "Build a curve from steps, the way a tree does, or from bends, the way ReLU neurons do. Draw any shape and buy it parameters until the model follows \u2014 then fit a day of noisy traffic and watch the extra parameters chase the noise.",
     tags: ["parameters", "overfitting", "trees", "ReLU", "interactive"],
@@ -121,7 +121,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "svm",
-    title: "Support Vector Machines",
+    title: "Support vector machines",
     blurb:
       "Draw a straight line between two classes and leave the widest street you can, then let an SVM find the widest one. See which points hold the line in place.",
     tags: ["classification", "SVM", "margin", "interactive"],
@@ -145,7 +145,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "random-forest",
-    title: "Random Forest",
+    title: "Random forest -- parallel trees",
     blurb:
       "Reveal a forest one tree at a time. Watch where the trees agree and where they argue, dog by dog, and how the vote lands better than any single tree.",
     tags: ["ensembles", "random forest", "bagging", "interactive"],
@@ -157,7 +157,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "gradient-boosting",
-    title: "XGBoost",
+    title: "Gradient boosting -- serial trees",
     blurb:
       "The same trees stacked top to bottom instead of side by side. Each round is fitted to the last round's mistakes, so the order is the model \u2014 watch the residuals shrink, then watch it overfit.",
     tags: ["ensembles", "boosting", "XGBoost", "interactive"],
@@ -205,7 +205,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "language-models",
-    title: "Large Language Models",
+    title: "Large language models",
     blurb:
       "From a Markov chain of words to a language model: tokens in, one token out, one pass per word. Then many transformer blocks in series, drawn at the real shapes of 2026's open models.",
     tags: ["Markov chains", "tokenizers", "transformers", "LLMs", "scale", "interactive"],
@@ -265,7 +265,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "wiring",
-    title: "Breadboards and Loops",
+    title: "Breadboard Secrets",
     blurb:
       "Wire a real breadboard: see the connections it hides, light an LED, burn one out, chase a short the long way round, and flip a digital pin by hand. A run of small puzzles, then free play.",
     tags: ["circuits", "breadboard", "microcontrollers", "interactive"],
@@ -277,7 +277,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "code",
-    title: "Reading a Sketch",
+    title: "Arduino Code",
     blurb:
       "Watch a microcontroller sketch run line by line on a live board: setup once, loop forever, every line coloured by its job, numbers you can drag, and threads from each pin number to its pin. Then hunt real beginner bugs, multiplex two displays and teach a tiny classifier.",
     tags: ["microcontrollers", "code", "Arduino", "interactive"],

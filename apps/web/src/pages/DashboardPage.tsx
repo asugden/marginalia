@@ -32,7 +32,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  createDocument,
   listDocuments,
   type DocumentSummary,
 } from "../modules/provenance/api.js";
@@ -45,7 +44,7 @@ import {
 } from "../modules/course-items/api.js";
 import { ItemRows } from "../modules/course-items/components/ItemRows.js";
 import { overdueItems, upcomingItems } from "../course/dueness.js";
-import { ArrowIcon, DocIcon, PencilIcon } from "../icons.js";
+import { ArrowIcon, DocIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
 import { Button } from "../components/index.js";
 import { AgentsPanel } from "./AgentsPanel.js";
@@ -67,27 +66,19 @@ export function DashboardPage() {
   const {
     courseId,
     courseName,
-    role,
     provenanceEnabled,
     agentsEnabled,
     codeEnabled,
-    actingAsStudent,
   } = useCourse();
   const navigate = useNavigate();
   const base = `/course/${courseId}`;
-  // "Preview as student" is true either because an instructor is on their own
-  // course root, or because the act-as-student downgrade is active (in which
-  // case `role` already reads `student`). Either way, frame this as a preview.
-  const scoped = role === "instructor" || actingAsStudent;
-  // Editor links carry ?preview=1 as a belt-and-suspenders signal for the
-  // standalone editor. (The editor also reads the act-as-student flag directly,
-  // so this is a legacy fallback; harmless to keep.)
-  const editorSuffix = scoped ? "?preview=1" : "";
+  // No preview-specific copy here: a preview runs as the course's sample
+  // student, so this page must render exactly what a student sees. The
+  // preview banner above it is the only thing that says "preview".
 
   const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
   const [items, setItems] = useState<CourseItemDTO[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [creatingDoc, setCreatingDoc] = useState(false);
 
   // Writing module data. Best-effort: a failed load leaves the panel empty
   // rather than blocking the whole dashboard.
@@ -119,7 +110,18 @@ export function DashboardPage() {
   // "submitted" would contradict itself. Upcoming keeps completed rows, with
   // their own completion verb, so a student sees what's already in.
   const now = Date.now();
-  const all = items ?? [];
+  // Respect the course's module toggles: an item whose module is off would
+  // link to a surface this student can't see, so it doesn't belong in the
+  // strip. Examples are always live — they're public pages, not a module.
+  const all = (items ?? []).filter((i) =>
+    i.kind === "writing"
+      ? provenanceEnabled
+      : i.kind === "agent"
+        ? agentsEnabled
+        : i.kind === "code"
+          ? codeEnabled
+          : true,
+  );
   const overdue = overdueItems(all, now).filter(
     (d) => completionLabel(d.item.completion) === null,
   );
@@ -134,30 +136,15 @@ export function DashboardPage() {
   const showWriting =
     provenanceEnabled && ((docs?.length ?? 0) > 0 || hasWritingAssignments);
 
-  async function onNewDocument() {
-    if (creatingDoc) return;
-    setCreatingDoc(true);
-    try {
-      const doc = await createDocument(courseId);
-      navigate(`${base}/writing/${doc.id}${editorSuffix}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't start a document");
-      setCreatingDoc(false);
-    }
-  }
-
   return (
     <div className="app-home__inner">
       <div className="app-head">
-        <span className="eyebrow">
-          {scoped ? "Course preview" : courseName || "Course"}
-        </span>
+        <span className="eyebrow">{courseName || "Course"}</span>
         <span className="app-rule" />
         <h1>{courseName}</h1>
         <p className="app-head__sub">
-          {scoped
-            ? "The student’s view of this course — every module it has turned on."
-            : "Each one is set up by your instructor — it’ll tell you up front how it works and what it’s for, then lead you through it."}
+          Each one is set up by your instructor — it’ll tell you up front how it
+          works and what it’s for, then lead you through it.
         </p>
       </div>
 
@@ -203,7 +190,7 @@ export function DashboardPage() {
           >
             <div className="app-modpanel__head">
               <div className="app-modpanel__heading">
-                <span className="eyebrow">Provenance</span>
+                <span className="eyebrow">Your documents</span>
                 <h2><Link to={`${base}/writing`}>Writing</Link></h2>
               </div>
               {docs && docs.length > 0 && (
@@ -219,15 +206,6 @@ export function DashboardPage() {
                   typed, pasted, or generated — so you can share the history of
                   your work.
                 </p>
-                <Button
-                  variant="primary"
-                  icon={<PencilIcon size={16} />}
-                  onClick={onNewDocument}
-                  loading={creatingDoc}
-                  disabled={creatingDoc}
-                >
-                  New document
-                </Button>
               </div>
               {docs === null ? (
                 <p className="app-empty">Loading…</p>
@@ -240,10 +218,10 @@ export function DashboardPage() {
                   {docs.map((d) => (
                     <li key={d.id}>
                       <a
-                        href={`${base}/writing/${d.id}${editorSuffix}`}
+                        href={`${base}/writing/${d.id}`}
                         onClick={(e) => {
                           e.preventDefault();
-                          navigate(`${base}/writing/${d.id}${editorSuffix}`);
+                          navigate(`${base}/writing/${d.id}`);
                         }}
                       >
                         <span className="app-papers__ic" aria-hidden>

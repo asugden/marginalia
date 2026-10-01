@@ -105,6 +105,9 @@ export async function createItem(
     assignedAt: number | null;
     dueAt: number | null;
     note: string | null;
+    /** Set when the payload starts as a draft, so the wrapper is never live
+     *  for a moment before it is hidden. */
+    archivedAt?: number | null;
   },
 ): Promise<CourseItemRow> {
   const now = Date.now();
@@ -114,7 +117,7 @@ export async function createItem(
       `INSERT INTO course_items
          (id, course_id, kind, payload_ref, title, ord,
           assigned_at, due_at, note, archived_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -126,6 +129,7 @@ export async function createItem(
       params.assignedAt,
       params.dueAt,
       params.note,
+      params.archivedAt ?? null,
       now,
       now,
     )

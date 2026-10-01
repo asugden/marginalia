@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { claimJoinCode, getMe } from "../client.js";
+import { claimJoinCode, getMe, isStaffRole } from "../client.js";
 import { readBootstrap } from "../bootstrap.js";
 import { Button, Field, Input, IconButton, Wordmark } from "../components/index.js";
 import { SignOutIcon } from "../icons.js";
@@ -57,10 +57,14 @@ export function RootRedirect() {
           setRes({
             kind: "to",
             path:
-              only.role === "instructor"
+              isStaffRole(only.role)
                 ? `/course/${only.courseId}/instructor`
                 : `/course/${only.courseId}/dashboard`,
           });
+        } else if (m.canCreateCourses && !m.isAdmin) {
+          // Someone invited to create courses, with none yet: the join-code
+          // prompt is a student's dead end. Send them to set up a course.
+          setRes({ kind: "to", path: "/welcome" });
         } else if (m.isAdmin) {
           // A pure admin (no course enrollments) has nowhere to be *sent*
           // among courses, but they aren't an unenrolled student either —

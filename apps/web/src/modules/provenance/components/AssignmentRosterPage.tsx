@@ -1,50 +1,55 @@
-// Instructor-side assignment roster —
-// /course/:id/instructor/assignments/:assignmentId.
+// Instructor-side writing assignment page —
+// /course/:id/instructor/submissions/writing/:assignmentId (formerly
+// instructor/assignments/:assignmentId, which redirects here).
 //
-// One row per enrolled student, one column per checkpoint. The point of the
-// page is the students who AREN'T in the submissions list: that page can only
-// show what exists, so someone who submitted nothing simply doesn't appear on
-// it. Here they have a row with empty cells, which is the state an instructor
-// actually needs to see.
+// Every submission to this assignment, across all its checkpoints, shown
+// exactly as submissions look everywhere else (the shared SubmissionCards).
+// Review ▸ Submissions links each CHECKPOINT to its own page (CheckpointPage);
+// this page is the whole assignment at once — where Assign ▸ Writing's rows
+// open, and where old links land. Below, the
+// students who haven't submitted anything to it yet.
 //
-// Every cell states a fact and stops there: a date, or nothing yet. "LATE" is a
-// timestamp compared against a deadline — computed on each load from the
-// checkpoint's current due date, never stored — so moving a deadline moves the
-// label with it. There is deliberately no summary column, no count of misses,
-// and nothing that turns a row red. The instructor reads the grid and draws
-// their own conclusions; see the module README's "no false positives" rule.
+// Every line states a fact and stops there. "LATE" is a timestamp compared
+// against a deadline, recomputed on each load from the checkpoint's current
+// due date. There is deliberately no count of misses and nothing that turns
+// a name red; see the module README's "no false positives" rule.
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
-import { getAssignmentRoster, type AssignmentRoster } from "../api.js";
-import { PageHeader, Section, Input } from "../../../components/index.js";
+import {
+  getAssignmentRoster,
+  listCourseSubmissions,
+  type AssignmentRoster,
+  type CourseSubmissionSummary,
+} from "../api.js";
+import { Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
+import { groupByDocument, toCardGroup } from "./SubmissionsPage.js";
 import { formatDue } from "./AssignmentsPage.js";
-
-/** Submission time, in the same face the student sees in the submit modal. */
-function formatSubmitted(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 export function AssignmentRosterPage() {
   const { courseId } = useCourse();
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const [roster, setRoster] = useState<AssignmentRoster | null>(null);
+  const [subs, setSubs] = useState<CourseSubmissionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!assignmentId) return;
     setRoster(null);
+    setSubs(null);
     setError(null);
     const ctrl = new AbortController();
-    getAssignmentRoster(courseId, assignmentId, ctrl.signal)
-      .then((r) => { if (!ctrl.signal.aborted) setRoster(r); })
+    Promise.all([
+      getAssignmentRoster(courseId, assignmentId, ctrl.signal),
+      listCourseSubmissions(courseId, ctrl.signal),
+    ])
+      .then(([r, all]) => {
+        if (ctrl.signal.aborted) return;
+        setRoster(r);
+        setSubs(all.filter((s) => s.assignmentId === assignmentId));
+      })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
         setError(e instanceof Error ? e.message : "Load failed");
@@ -52,110 +57,120 @@ export function AssignmentRosterPage() {
     return () => ctrl.abort();
   }, [courseId, assignmentId]);
 
-  const filtered = useMemo(() => {
-    if (!roster) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return roster.students;
-    return roster.students.filter(
-      (s) =>
-        s.email.toLowerCase().includes(q) ||
-        (s.displayName ?? "").toLowerCase().includes(q),
-    );
-  }, [roster, query]);
+  const q = query.trim().toLowerCase();
+  const matches = (name: string | null, email: string, title = "") =>
+    !q ||
+    email.toLowerCase().includes(q) ||
+    (name ?? "").toLowerCase().includes(q) ||
+    title.toLowerCase().includes(q);
 
-  const checkpoints = roster?.assignment.checkpoints ?? [];
+  const groups = useMemo(
+    () =>
+      groupByDocument(subs ?? []).filter((g) =>
+        matches(g.studentName, g.studentEmail, g.title),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subs, q],
+  );
+  const notYet = useMemo(
+    () =>
+      (roster?.students ?? []).filter(
+        (s) => s.cells.every((c) => !c.token) && matches(s.displayName, s.email),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [roster, q],
+  );
+
+  const loading = roster === null || subs === null;
 
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Instructor · Provenance"
+        eyebrow="Instructor · Writing submissions"
         title={roster?.assignment.title ?? "Assignment"}
-        scope="Everyone enrolled, and what they've submitted to each checkpoint. Students who haven't submitted are listed too — that's the whole point of this view."
+        scope="Everything students have submitted to this assignment, and who hasn't submitted yet."
       />
 
       <p className="muted small">
-        <Link to={`/course/${courseId}/instructor/assignments`}>← All writing assignments</Link>
+        <Link to={`/course/${courseId}/instructor/submissions`}>← All submissions</Link> ·{" "}
+        <Link to={`/course/${courseId}/instructor/assignments`}>Edit in Assign ▸ Writing</Link>
       </p>
 
       {error && <p className="error">{error}</p>}
 
+      {/* Each checkpoint also has its own page, the way the list shows them.
+          Only offered when there is more than one — a single checkpoint is
+          just the assignment. */}
+      {roster && roster.assignment.checkpoints.length > 1 && (
+        <Section kicker="Checkpoints">
+          <div className="app-list">
+            {roster.assignment.checkpoints.map((c) => (
+              <div className="app-list__row" key={c.id}>
+                <div className="app-list__main">
+                  <div className="app-list__title">
+                    <Link
+                      to={`/course/${courseId}/instructor/submissions/writing/${roster.assignment.id}/${c.id}`}
+                    >
+                      {c.name}
+                    </Link>
+                  </div>
+                  <div className="app-list__sub">
+                    {c.dueAt === null ? "No deadline" : `Due ${formatDue(c.dueAt)}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
       <Section
-        kicker="Roster"
-        meta={
-          roster === null
-            ? undefined
-            : `${roster.students.length} student${roster.students.length === 1 ? "" : "s"} · ${checkpoints.length} checkpoint${checkpoints.length === 1 ? "" : "s"}`
-        }
+        kicker="Submitted"
+        meta={loading ? undefined : `${groups.length} document${groups.length === 1 ? "" : "s"}`}
         actions={
           <Input
             type="search"
-            placeholder="Filter by student…"
+            placeholder="Filter by student or title…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ width: "16rem", maxWidth: "40vw" }}
           />
         }
       >
-        {roster === null ? (
+        {loading ? (
           <p className="muted">Loading…</p>
-        ) : roster.students.length === 0 ? (
-          <p className="muted">
-            No students enrolled in this course yet.
-          </p>
-        ) : filtered.length === 0 ? (
-          <p className="muted">Nothing matches that filter.</p>
+        ) : groups.length === 0 ? (
+          <p className="muted">{q ? "Nothing matches that filter." : "Nothing submitted yet."}</p>
         ) : (
-          <div className="prov-roster__scroll">
-            <table className="prov-roster">
-              <thead>
-                <tr>
-                  <th scope="col">Student</th>
-                  {checkpoints.map((c) => (
-                    <th scope="col" key={c.id}>
-                      <span className="prov-roster__cp-name">{c.name}</span>
-                      <span className="prov-roster__cp-due muted small">
-                        {formatDue(c.dueAt)}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s) => (
-                  <tr key={s.userId}>
-                    <th scope="row">
-                      <span className="prov-roster__who">
-                        {s.displayName || s.email}
-                      </span>
-                      {s.displayName && (
-                        <span className="prov-roster__email muted small">{s.email}</span>
-                      )}
-                    </th>
-                    {s.cells.map((cell) => (
-                      <td
-                        key={cell.checkpointId}
-                        className={cell.token ? undefined : "is-empty"}
-                      >
-                        {cell.token && cell.submittedAt !== null ? (
-                          <Link to={`/s/${cell.token}`} className="prov-roster__hit">
-                            <span aria-hidden>✓</span>{" "}
-                            {formatSubmitted(cell.submittedAt)}
-                            {cell.late && (
-                              <span className="prov-roster__late"> LATE</span>
-                            )}
-                          </Link>
-                        ) : (
-                          <span className="prov-roster__miss">— not yet</span>
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SubmissionCards
+            groups={groups.map((g) =>
+              toCardGroup(g, {
+                context: "checkpoint",
+                checkpointCounts: new Map([
+                  [assignmentId!, roster?.assignment.checkpoints.length ?? 1],
+                ]),
+                checkpointDue: new Map(
+                  (roster?.assignment.checkpoints ?? []).map((c) => [c.id, c.dueAt]),
+                ),
+              }),
+            )}
+          />
         )}
       </Section>
+
+      {!loading && notYet.length > 0 && (
+        <Section kicker="Not submitted yet" meta={`${notYet.length}`}>
+          <div className="app-list">
+            {notYet.map((s) => (
+              <div className="app-list__row prov-subs__row" key={s.userId}>
+                <div className="app-list__main">
+                  <div className="app-list__sub">{s.displayName || s.email}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

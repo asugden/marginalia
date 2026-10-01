@@ -189,6 +189,10 @@ export interface UserEnrollmentRow {
    *  A real on/off toggle, default ON — when off, students don't see the
    *  writing tool at all. */
   provenanceEnabled: boolean;
+  /** Whether the writing editor offers the LLM chat pane (migration 0026).
+   *  Default ON. Course-level: a writing document attaches to an assignment
+   *  only at submission time, so there is no per-assignment hook. */
+  provenanceChatEnabled: boolean;
   /** Whether the Agents extension is enabled for this course (migration 0018).
    *  A real on/off toggle, default ON — when off, the Agents tab disappears
    *  from the instructor nav and agents disappear from the student view. */
@@ -197,6 +201,14 @@ export interface UserEnrollmentRow {
    *  (migration 0024). Opt-in: default OFF, so a course that never uses it
    *  never shows it. */
   codeEnabled: boolean;
+  /** 0029 — every instructor has opted out of generative AI, so the course's
+   *  AI features are off and can't be turned on. */
+  genaiLocked: boolean;
+  /** Live code assignments with the AI chat on — lets an opted-out
+   *  instructor in a mixed course see that students have it. */
+  codeChatAssignments: number;
+  /** Live writing assignments with the chat on (0033). */
+  writingChatAssignments: number;
   /** v1.2 (migration 0017) — the semester this course is taught in, or null
    *  when unscheduled. Academic year is derived client-side from
    *  (termSeason, termYear). */
@@ -229,8 +241,23 @@ export async function listEnrollmentsForUserEnriched(
               COALESCE(s.show_collections, 1) AS show_collections,
               COALESCE(s.hide_provenance_marks, 0) AS hide_provenance_marks,
               COALESCE(s.provenance_enabled, 1) AS provenance_enabled,
+              COALESCE(s.provenance_chat_enabled, 1) AS provenance_chat_enabled,
               COALESCE(s.agents_enabled, 1) AS agents_enabled,
-              COALESCE(s.code_enabled, 0) AS code_enabled
+              COALESCE(s.code_enabled, 0) AS code_enabled,
+              -- 0029: every instructor on the course has opted out of
+              -- generative AI, so its AI features are locked off.
+              (SELECT CASE WHEN COUNT(*) > 0
+                            AND COUNT(*) = SUM(u2.genai_opt_out)
+                           THEN 1 ELSE 0 END
+                 FROM enrollments e2 JOIN users u2 ON u2.id = e2.user_id
+                WHERE e2.course_id = e.course_id AND e2.role = 'instructor')
+                AS genai_locked,
+              (SELECT COUNT(*) FROM code_assignments ca
+                WHERE ca.course_id = e.course_id AND ca.ai_enabled = 1
+                  AND ca.archived_at IS NULL) AS code_chat_assignments,
+              (SELECT COUNT(*) FROM provenance_assignments pa
+                WHERE pa.course_id = e.course_id AND pa.chat_enabled = 1
+                  AND pa.archived_at IS NULL) AS writing_chat_assignments
        FROM enrollments e
        JOIN courses c ON c.id = e.course_id
        LEFT JOIN course_settings s ON s.course_id = e.course_id
@@ -251,8 +278,12 @@ export async function listEnrollmentsForUserEnriched(
       show_collections: number;
       hide_provenance_marks: number;
       provenance_enabled: number;
+      provenance_chat_enabled: number;
       agents_enabled: number;
       code_enabled: number;
+      genai_locked: number;
+      code_chat_assignments: number;
+      writing_chat_assignments: number;
     }>();
   return (results ?? []).map((r) => ({
     courseId: r.course_id,
@@ -267,9 +298,27 @@ export async function listEnrollmentsForUserEnriched(
     showCollections: r.show_collections === 1,
     hideProvenanceMarks: r.hide_provenance_marks === 1,
     provenanceEnabled: r.provenance_enabled === 1,
+    provenanceChatEnabled: r.provenance_chat_enabled === 1,
     agentsEnabled: r.agents_enabled === 1,
     codeEnabled: r.code_enabled === 1,
+    genaiLocked: r.genai_locked === 1,
+    codeChatAssignments: r.code_chat_assignments,
+    writingChatAssignments: r.writing_chat_assignments,
   }));
+}
+
+/** Whether the Agents extension is on for a course (0018; missing row = on).
+ *  Chat endpoints check this so a stale link can't reach an agent the
+ *  course has turned off. */
+export async function agentsEnabled(
+  db: D1Database,
+  courseId: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT agents_enabled FROM course_settings WHERE course_id = ?`)
+    .bind(courseId)
+    .first<{ agents_enabled: number }>();
+  return row ? row.agents_enabled === 1 : true;
 }
 
 /**
@@ -410,6 +459,9 @@ export interface RosterEntry {
   role: EnrollmentRole;
   joinedAt: number;
   lastSeenAt: number | null;
+  /** 0030 — the course's sample student (previewing identity), not a person.
+   *  Shown with a badge; left out of student counts. */
+  isSample: boolean;
 }
 
 /**
@@ -423,7 +475,7 @@ export async function listRosterForCourse(
   const { results } = await db
     .prepare(
       `SELECT u.id AS user_id, u.email, u.display_name, u.last_seen_at,
-              e.role, e.created_at AS joined_at
+              u.is_sample, e.role, e.created_at AS joined_at
        FROM enrollments e
        JOIN users u ON u.id = e.user_id
        WHERE e.course_id = ?
@@ -437,6 +489,7 @@ export async function listRosterForCourse(
       last_seen_at: number | null;
       role: EnrollmentRole;
       joined_at: number;
+      is_sample: number;
     }>();
   return (results ?? []).map((r) => ({
     userId: r.user_id,
@@ -445,6 +498,7 @@ export async function listRosterForCourse(
     role: r.role,
     joinedAt: r.joined_at,
     lastSeenAt: r.last_seen_at,
+    isSample: r.is_sample === 1,
   }));
 }
 
@@ -468,6 +522,10 @@ export async function createUser(
     external_subject: null,
     email_verified_at: null,
     is_admin: 0,
+    can_create_courses: 0,
+    genai_opt_out: 0,
+    is_sample: 0,
+    sample_course_id: null,
   };
   await db
     .prepare(
@@ -477,6 +535,84 @@ export async function createUser(
     .bind(row.id, row.org_id, row.email, row.display_name, row.created_at)
     .run();
   return row;
+}
+
+/**
+ * 0030 — the course's sample student, created on first use. A real users row
+ * (is_sample = 1) enrolled as `student`, so previewing as it exercises every
+ * code path exactly as a student would. Its email is on the reserved
+ * `.invalid` domain, so no sign-in can ever claim the row.
+ *
+ * INSERT OR IGNORE on both writes makes two concurrent first previews safe:
+ * the unique index on sample_course_id lets exactly one row exist.
+ */
+export async function getOrCreateSampleStudent(
+  db: D1Database,
+  courseId: string,
+): Promise<UserRow | null> {
+  const course = await findCourseById(db, courseId);
+  if (!course) return null;
+  const existing = await db
+    .prepare(`SELECT * FROM users WHERE sample_course_id = ?`)
+    .bind(courseId)
+    .first<UserRow>();
+  let user = existing;
+  if (!user) {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO users
+           (id, org_id, email, display_name, created_at, is_sample, sample_course_id)
+         VALUES (?, ?, ?, 'Sample Student', ?, 1, ?)`,
+      )
+      .bind(
+        id("user"),
+        course.org_id,
+        `sample-student.${courseId}@sample.invalid`,
+        now(),
+        courseId,
+      )
+      .run();
+    user = await db
+      .prepare(`SELECT * FROM users WHERE sample_course_id = ?`)
+      .bind(courseId)
+      .first<UserRow>();
+    if (!user) return null;
+  }
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO enrollments (id, course_id, user_id, role, created_at)
+       VALUES (?, ?, ?, 'student', ?)`,
+    )
+    .bind(id("enr"), courseId, user.id, now())
+    .run();
+  return user;
+}
+
+/** 0029 — record the "not interested in generative AI" preference. Callers
+ *  must reconcile the user's courses afterwards (genai.ts). */
+export async function setGenaiOptOut(
+  db: D1Database,
+  userId: string,
+  optOut: boolean,
+): Promise<void> {
+  await db
+    .prepare(`UPDATE users SET genai_opt_out = ? WHERE id = ?`)
+    .bind(optOut ? 1 : 0, userId)
+    .run();
+}
+
+/** 0028 — grant or withdraw a user's permission to create courses. Admin
+ *  only at the route; admins create courses regardless of this flag. */
+export async function setCanCreateCourses(
+  db: D1Database,
+  userId: string,
+  allowed: boolean,
+): Promise<boolean> {
+  const res = await db
+    .prepare(`UPDATE users SET can_create_courses = ? WHERE id = ?`)
+    .bind(allowed ? 1 : 0, userId)
+    .run();
+  return (res.meta?.changes ?? 0) > 0;
 }
 
 export async function createEnrollment(
@@ -2156,7 +2292,7 @@ export async function listUsersForAdmin(
       `SELECT u.*, (SELECT COUNT(*) FROM enrollments e WHERE e.user_id = u.id)
                   AS enrollment_count
          FROM users u
-        WHERE u.org_id = ?
+        WHERE u.org_id = ? AND u.is_sample = 0
         ORDER BY u.created_at DESC
         LIMIT ? OFFSET ?`,
     )
@@ -2241,4 +2377,22 @@ export async function deleteCourseCascade(
     collectionIds: (colRows ?? []).map((r) => r.id),
     sourceIds: (srcRows ?? []).map((r) => r.id),
   };
+}
+
+/**
+ * How many real students a course has — enrolled as `student`, excluding the
+ * course's sample student (a preview identity, migration 0030). The
+ * denominator for "N of M submitted" on the instructor's assignment lists.
+ */
+export async function countRealStudents(db: D1Database, courseId: string): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n
+         FROM enrollments e
+         JOIN users u ON u.id = e.user_id
+        WHERE e.course_id = ? AND e.role = 'student' AND COALESCE(u.is_sample, 0) = 0`,
+    )
+    .bind(courseId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
 }

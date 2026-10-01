@@ -15,6 +15,7 @@ import {
   SESSION_COOKIE,
   touchSession,
 } from "@marginalia/auth";
+import type { UserRow } from "@marginalia/schema";
 import type { Env } from "./env.js";
 import * as repo from "./repo.js";
 
@@ -27,13 +28,22 @@ export interface Identity {
   email: string;
   displayName: string | null;
   isAdmin: boolean;
+  /** users.can_create_courses (0028). Admins may create courses regardless;
+   *  use permissions.canCreateCourses() rather than reading this alone. */
+  canCreateCourses: boolean;
+  /** users.genai_opt_out (0029): hide AI features from this person's own
+   *  screens. Reaches a course only when all its instructors opted out. */
+  genaiOptOut: boolean;
   /**
-   * Session-scoped "act as student" downgrade (migration 0016). When true,
-   * resolveUser() reports the caller's per-course role as `student`, so an
-   * instructor experiences their own course exactly as a student would.
-   * Always false on the dev bypass (no session row to carry it).
+   * True while previewing a course as its sample student (0030). The identity
+   * fields above then describe the SAMPLE STUDENT, not the person signed in —
+   * every endpoint answers exactly as it would for a student. Only preview
+   * chrome should look at `preview` below.
    */
   actingAsStudent: boolean;
+  /** Who is really signed in while previewing, and which course. Null when
+   *  not previewing. Read by /api/me and the act-as route, nothing else. */
+  preview: { realUserId: string; realEmail: string; courseId: string } | null;
   /** Which mechanism authenticated this request. */
   via: "session" | "dev";
 }
@@ -73,12 +83,21 @@ export async function authenticate(
   ) {
     const email = env.DEV_AUTH_EMAIL.toLowerCase();
     const user = await repo.findUserByEmail(env.DB, DEFAULT_ORG, email);
+    // The dev bypass has no session row, so a preview rides a cookie instead.
+    const devPreview = parseCookies(req.headers.get("cookie"))[DEV_PREVIEW_COOKIE];
+    if (user && devPreview) {
+      const sample = await loadSample(env, devPreview);
+      if (sample) return sampleIdentity(sample, user, "dev");
+    }
     return {
       userId: user?.id ?? null,
       email,
       displayName: user?.display_name ?? null,
       isAdmin: user?.is_admin === 1,
+      canCreateCourses: user?.can_create_courses === 1,
+      genaiOptOut: user?.genai_opt_out === 1,
       actingAsStudent: false,
+      preview: null,
       via: "dev",
     };
   }
@@ -95,12 +114,21 @@ export async function authenticate(
       touchSession(env.DB, session, sessionTtlMs(env), SESSION_IDLE_WRITE_MS).catch(
         (e) => console.warn("touchSession failed:", e),
       );
+      // Previewing: authenticate as the course's sample student. A stale or
+      // tampered pointer (not a sample row) falls through to the real user.
+      if (session.acting_as_user_id) {
+        const sample = await loadSample(env, session.acting_as_user_id);
+        if (sample) return sampleIdentity(sample, user, "session");
+      }
       return {
         userId: user.id,
         email: user.email,
         displayName: user.display_name,
         isAdmin: user.is_admin === 1,
-        actingAsStudent: session.acting_as_student === 1,
+        canCreateCourses: user.can_create_courses === 1,
+        genaiOptOut: user.genai_opt_out === 1,
+        actingAsStudent: false,
+        preview: null,
         via: "session",
       };
     }
@@ -109,6 +137,39 @@ export async function authenticate(
   }
 
   return null;
+}
+
+/** Dev-bypass stand-in for sessions.acting_as_user_id (no session row). */
+export const DEV_PREVIEW_COOKIE = "marginalia_dev_preview";
+
+/** A sample-student row by id, or null if the id isn't one. */
+async function loadSample(env: Env, userId: string): Promise<UserRow | null> {
+  const row = await repo.findUserById(env.DB, userId);
+  return row && row.is_sample === 1 && row.sample_course_id ? row : null;
+}
+
+/** The identity a preview runs under: the sample student, with no admin or
+ *  course-creation powers and no personal preferences of the real user. */
+function sampleIdentity(
+  sample: UserRow,
+  real: { id: string; email: string },
+  via: Identity["via"],
+): Identity {
+  return {
+    userId: sample.id,
+    email: sample.email,
+    displayName: sample.display_name,
+    isAdmin: false,
+    canCreateCourses: false,
+    genaiOptOut: false,
+    actingAsStudent: true,
+    preview: {
+      realUserId: real.id,
+      realEmail: real.email,
+      courseId: sample.sample_course_id!,
+    },
+    via,
+  };
 }
 
 /**

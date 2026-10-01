@@ -25,6 +25,9 @@ import type {
 } from "@marginalia/schema";
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
+import { courseGenaiLocked, GENAI_LOCKED_CODE, GENAI_LOCKED_MESSAGE } from "../../genai.js";
+import { can, type Capability } from "../../permissions.js";
+import { countRealStudents } from "../../repo.js";
 import * as repo from "./repo.js";
 
 // Built-in provenance chat voices — synthesized from the shared voice library
@@ -103,7 +106,7 @@ function resolveModelChoice(
   role: string,
 ): string | null | undefined | Response {
   if (requested === undefined) return undefined;
-  if (role !== "instructor") {
+  if (!can(role, "author")) {
     return error("Only instructors can choose the model", 403);
   }
   if (requested === null) return null;
@@ -140,8 +143,9 @@ const json = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
-const error = (message: string, status: number) =>
-  json({ error: message }, status);
+// `code` is a stable machine-readable reason for the SPA to branch on.
+const error = (message: string, status: number, code?: string) =>
+  json(code ? { error: message, code } : { error: message }, status);
 
 function requireUser(identity: Identity): string | Response {
   if (!identity.userId) return error("Sign in required", 401);
@@ -219,16 +223,37 @@ export async function createDocumentRoute(
   if (userId instanceof Response) return userId;
   const body = (await req.json().catch(() => null)) as {
     courseId?: string;
+    assignmentId?: string;
     title?: string;
   } | null;
   if (!body?.courseId) return error("courseId required", 400);
-  const title = (body.title ?? "Untitled").trim().slice(0, MAX_TITLE_CHARS) || "Untitled";
+  // New writing belongs to an assignment (0032). Documents created before
+  // that stay free-standing and keep working; only creation needs one.
+  if (!body.assignmentId) {
+    return error("assignmentId required — new writing belongs to an assignment", 400);
+  }
   const enrollmentError = await requireEnrollment(env, userId, body.courseId);
   if (enrollmentError) return enrollmentError;
+  const assignment = await repo.getAssignment(env.DB, body.courseId, body.assignmentId);
+  if (!assignment || assignment.archived_at !== null) {
+    return error("Assignment not found", 404);
+  }
+  // Open-or-create: a student has one document per assignment, so asking
+  // again returns the one they already started.
+  const existing = await repo.findDocumentForAssignment(
+    env.DB,
+    body.courseId,
+    userId,
+    body.assignmentId,
+  );
+  if (existing) return json({ document: toDocumentDTO(existing) });
+  const title =
+    (body.title ?? assignment.title).trim().slice(0, MAX_TITLE_CHARS) || "Untitled";
   const row = await repo.createDocument(env.DB, {
     courseId: body.courseId,
     ownerUserId: userId,
     title,
+    assignmentId: body.assignmentId,
   });
   return json({ document: toDocumentDTO(row) }, 201);
 }
@@ -503,15 +528,28 @@ export async function getSettingsRoute(
   if (enrollmentError) return enrollmentError;
   const row = await env.DB
     .prepare(
-      `SELECT COALESCE(hide_provenance_marks, 0) AS hide_provenance_marks
+      `SELECT COALESCE(hide_provenance_marks, 0) AS hide_provenance_marks,
+              COALESCE(provenance_chat_enabled, 1) AS chat_enabled,
+              provenance_locked_agent_id AS locked_agent_id
        FROM course_settings WHERE course_id = ?`,
     )
     .bind(courseId)
-    .first<{ hide_provenance_marks: number }>();
-  return json({ hideProvenanceMarks: (row?.hide_provenance_marks ?? 0) === 1 });
+    .first<{
+      hide_provenance_marks: number;
+      chat_enabled: number;
+      locked_agent_id: string | null;
+    }>();
+  return json({
+    hideProvenanceMarks: (row?.hide_provenance_marks ?? 0) === 1,
+    chatEnabled: (row?.chat_enabled ?? 1) === 1,
+    lockedAgentId: row?.locked_agent_id ?? null,
+  });
 }
 
-/** PATCH /settings — instructor-only toggle of provenance display settings. */
+/** PATCH /settings — instructor-only. Accepts any subset of the provenance
+ *  course settings: the display toggle (hideProvenanceMarks), the chat switch
+ *  (chatEnabled), and the voice policy (lockedAgentId — null means students
+ *  choose; an id locks every student to that one agent). */
 export async function updateSettingsRoute(
   req: Request,
   env: Env,
@@ -521,19 +559,69 @@ export async function updateSettingsRoute(
   if (userId instanceof Response) return userId;
   const body = (await req.json().catch(() => null)) as {
     courseId?: string;
-    hideProvenanceMarks?: boolean;
+    hideProvenanceMarks?: unknown;
+    chatEnabled?: unknown;
+    lockedAgentId?: unknown;
   } | null;
   if (!body?.courseId) return error("courseId required", 400);
-  if (typeof body.hideProvenanceMarks !== "boolean") {
-    return error("hideProvenanceMarks (boolean) required", 400);
+  const hasHide = body.hideProvenanceMarks !== undefined;
+  const hasChat = body.chatEnabled !== undefined;
+  const hasLock = body.lockedAgentId !== undefined;
+  if (!hasHide && !hasChat && !hasLock) {
+    return error(
+      "hideProvenanceMarks, chatEnabled, or lockedAgentId required",
+      400,
+    );
+  }
+  if (hasHide && typeof body.hideProvenanceMarks !== "boolean") {
+    return error("hideProvenanceMarks must be a boolean", 400);
+  }
+  if (hasChat && typeof body.chatEnabled !== "boolean") {
+    return error("chatEnabled must be a boolean", 400);
+  }
+  if (hasLock && body.lockedAgentId !== null && typeof body.lockedAgentId !== "string") {
+    return error("lockedAgentId must be an agent id or null", 400);
   }
   const enrollment = await loadEnrollment(env, userId, body.courseId);
   if (enrollment instanceof Response) return enrollment;
-  if (enrollment.role !== "instructor") {
+  if (!can(enrollment.role, "author")) {
     return error("Only instructors can change this setting", 403);
   }
-  await repo.setHideProvenanceMarks(env.DB, body.courseId, body.hideProvenanceMarks);
-  return json({ hideProvenanceMarks: body.hideProvenanceMarks });
+  // Every instructor opted out of generative AI: the chat stays off.
+  if (body.chatEnabled === true && (await courseGenaiLocked(env.DB, body.courseId))) {
+    return error(GENAI_LOCKED_MESSAGE, 409, GENAI_LOCKED_CODE);
+  }
+  // A locked agent must actually resolve — a builtin library voice or a
+  // COURSE-DEFAULT agent row. A personal agent can't be the course's voice:
+  // other students couldn't even read its name.
+  if (hasLock && typeof body.lockedAgentId === "string") {
+    const agent =
+      builtinAgentRow(body.lockedAgentId, body.courseId) ??
+      (await repo.getAgent(env.DB, body.courseId, body.lockedAgentId));
+    if (!agent) return error("Agent not found", 404);
+    if (agent.owner_user_id !== null) {
+      return error("Only a course-default agent can be assigned to everyone", 400);
+    }
+  }
+  if (hasHide) {
+    await repo.setHideProvenanceMarks(
+      env.DB,
+      body.courseId,
+      body.hideProvenanceMarks as boolean,
+    );
+  }
+  if (hasChat || hasLock) {
+    await repo.setChatSettings(env.DB, body.courseId, {
+      ...(hasChat ? { chatEnabled: body.chatEnabled as boolean } : {}),
+      ...(hasLock ? { lockedAgentId: body.lockedAgentId as string | null } : {}),
+    });
+  }
+  const chat = await repo.getChatSettings(env.DB, body.courseId);
+  return json({
+    ...(hasHide ? { hideProvenanceMarks: body.hideProvenanceMarks } : {}),
+    chatEnabled: chat.chatEnabled,
+    lockedAgentId: chat.lockedAgentId,
+  });
 }
 
 // ─── Agents ─────────────────────────────────────────────────────────────
@@ -547,9 +635,22 @@ export async function listAgentsRoute(
   if (userId instanceof Response) return userId;
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const enrollmentError = await requireEnrollment(env, userId, courseId);
-  if (enrollmentError) return enrollmentError;
-  const rows = await repo.listAgentsForUser(env.DB, courseId, userId);
+  const enrollment = await loadEnrollment(env, userId, courseId);
+  if (enrollment instanceof Response) return enrollment;
+  // With ?documentId=, the policy of that document's assignment (0033);
+  // without, the course-level policy (documents from before 0032).
+  const chat = await repo.getChatPolicy(env.DB, courseId, url.searchParams.get("documentId"));
+  let rows = await repo.listAgentsForUser(env.DB, courseId, userId);
+  // Voice policy (migration 0026): when the instructor has assigned one agent,
+  // a student's list IS that agent — filtered here, not just hidden in the UI,
+  // so no client can offer a choice the course doesn't have. Instructors keep
+  // the full list (they need it to pick the assigned voice, and to test).
+  if (chat.lockedAgentId !== null && !can(enrollment.role, "author")) {
+    const locked =
+      rows.find((r) => r.id === chat.lockedAgentId) ??
+      builtinAgentRow(chat.lockedAgentId, courseId);
+    rows = locked ? [locked] : [];
+  }
   // `models` drives the author-side model picker: the deployment's configured
   // choices, plus which one applies when none is chosen. Empty when the
   // deployment configured no list, in which case the UI shows no picker and
@@ -558,6 +659,11 @@ export async function listAgentsRoute(
     agents: rows.map((r) => toAgentSummary(r, userId)),
     models: modelChoices(env),
     defaultModel: provenanceDefaultModel(env) ?? null,
+    // Chat controls ride along so the panel needs no second fetch. A student
+    // whose course locks the voice sees exactly one agent above; these fields
+    // tell the UI why, and whether to offer chat at all.
+    chatEnabled: chat.chatEnabled,
+    lockedAgentId: chat.lockedAgentId,
   });
 }
 
@@ -611,8 +717,20 @@ export async function createAgentRoute(
   const enrollment = await loadEnrollment(env, userId, body.courseId);
   if (enrollment instanceof Response) return enrollment;
   const wantsDefault = body.courseDefault === true;
-  if (wantsDefault && enrollment.role !== "instructor") {
+  if (wantsDefault && !can(enrollment.role, "author")) {
     return error("Only instructors can create course-default agents", 403);
+  }
+  // While the course locks everyone to one assigned voice, a personal agent
+  // could never be used — refuse loudly rather than let a student author
+  // something the chat will silently ignore.
+  if (!wantsDefault && !can(enrollment.role, "author")) {
+    const chat = await repo.getChatSettings(env.DB, body.courseId);
+    if (chat.lockedAgentId !== null) {
+      return error(
+        "Your instructor has assigned one chat voice for this course, so personal agents are off",
+        403,
+      );
+    }
   }
   // Model selection is instructor-only, and validated against the deployment's
   // configured list: it decides what the institution is billed for, so it isn't
@@ -652,7 +770,7 @@ export async function updateAgentRoute(
   if (!existing) return error("Agent not found", 404);
   // Course defaults: instructor only. Personal: owner only.
   if (existing.owner_user_id === null) {
-    if (enrollment.role !== "instructor") return error("Instructor only", 403);
+    if (!can(enrollment.role, "author")) return error("Instructor only", 403);
   } else if (existing.owner_user_id !== userId) {
     return error("Agent not found", 404);
   }
@@ -694,7 +812,7 @@ export async function deleteAgentRoute(
   const existing = await repo.getAgent(env.DB, courseId, agentId);
   if (!existing) return error("Agent not found", 404);
   if (existing.owner_user_id === null) {
-    if (enrollment.role !== "instructor") return error("Instructor only", 403);
+    if (!can(enrollment.role, "author")) return error("Instructor only", 403);
   } else if (existing.owner_user_id !== userId) {
     return error("Agent not found", 404);
   }
@@ -738,8 +856,23 @@ export async function createConversationRoute(
   if (!body?.courseId || !body.agentId) {
     return error("courseId, agentId required", 400);
   }
-  const enrollmentError = await requireEnrollment(env, userId, body.courseId);
-  if (enrollmentError) return enrollmentError;
+  const enrollment = await loadEnrollment(env, userId, body.courseId);
+  if (enrollment instanceof Response) return enrollment;
+  // Chat controls (migration 0026), enforced where the conversation is born
+  // rather than only hidden in the UI. The switch binds everyone — an
+  // instructor who wants to test flips it back on in Settings. The voice lock
+  // binds students only; instructors may open any agent to try it.
+  const chat = await repo.getChatPolicy(env.DB, body.courseId, documentId);
+  if (!chat.chatEnabled) {
+    return error("The LLM chat is turned off for this assignment", 403);
+  }
+  if (
+    chat.lockedAgentId !== null &&
+    !can(enrollment.role, "author") &&
+    body.agentId !== chat.lockedAgentId
+  ) {
+    return error("Your instructor has assigned one chat voice for this assignment", 403);
+  }
   const doc = await repo.getDocument(env.DB, body.courseId, userId, documentId);
   if (!doc) return error("Document not found", 404);
   // A "builtin:" agent id resolves to a synthesized library voice (e.g. the
@@ -861,6 +994,13 @@ export async function sendMessageRoute(
   if (!conv) return error("Conversation not found", 404);
   if (conv.course_id !== body.courseId) {
     return error("Conversation not in this course", 403);
+  }
+  // The chat switch gates every turn, not only new conversations — turning
+  // chat off must also silence threads that already exist. Per document:
+  // its assignment's switch, or the course's for a pre-0032 document.
+  const chatSettings = await repo.getChatPolicy(env.DB, body.courseId, conv.document_id);
+  if (!chatSettings.chatEnabled) {
+    return error("The LLM chat is turned off for this assignment", 403);
   }
 
   const history = await repo.listMessages(env.DB, conversationId);
@@ -1040,7 +1180,21 @@ export async function createSubmissionRoute(
   // absent — a checkpoint without its assignment would leave the submission
   // half-attached, and an assignment without a checkpoint has no deadline to
   // read. Omitting them entirely is the unattached path, unchanged.
-  const attach = await resolveAttachment(env, body.courseId, body.assignmentId, body.checkpointId);
+  // A document written for an assignment (0032) submits to that assignment
+  // and no other. Free-standing documents from before keep the old choice:
+  // any assignment, or none.
+  if (doc.assignment_id !== null) {
+    if (!body.checkpointId) return error("checkpointId required for this document", 400);
+    if (body.assignmentId && body.assignmentId !== doc.assignment_id) {
+      return error("This document belongs to a different assignment", 400);
+    }
+  }
+  const attach = await resolveAttachment(
+    env,
+    body.courseId,
+    doc.assignment_id ?? body.assignmentId,
+    body.checkpointId,
+  );
   if (attach instanceof Response) return attach;
 
   // Build the frozen render from the authoritative event log + the doc's
@@ -1143,7 +1297,7 @@ export async function listSubmissionsRoute(
   // writing with an instructor they can't quietly un-share it — so only an
   // instructor may revoke. The client hides the Revoke control accordingly and
   // revokeSubmissionRoute enforces the same rule.
-  const canRevoke = enrollment.role === "instructor";
+  const canRevoke = can(enrollment.role, "author");
   return json({
     submissions: rows.map((r) => ({
       token: r.token,
@@ -1175,8 +1329,8 @@ export async function listCourseSubmissionsRoute(
   if (!courseId) return error("courseId is required", 400);
   const enrollment = await loadEnrollment(env, userId, courseId);
   if (enrollment instanceof Response) return enrollment;
-  if (enrollment.role !== "instructor") {
-    return error("Instructors only", 403);
+  if (!can(enrollment.role, "view_submissions")) {
+    return error("Course staff only", 403);
   }
   const rows = await repo.listSubmissionsForCourse(env.DB, courseId);
   return json({
@@ -1268,7 +1422,7 @@ export async function revokeSubmissionRoute(
   if (!sub || sub.user_id !== userId) return error("Submission not found", 404);
   const enrollment = await loadEnrollment(env, userId, sub.course_id);
   if (enrollment instanceof Response) return enrollment;
-  if (enrollment.role !== "instructor") {
+  if (!can(enrollment.role, "author")) {
     return error("Student share links can't be revoked", 403);
   }
   const ok = await repo.revokeSubmission(env.DB, token, userId);
@@ -1306,7 +1460,7 @@ async function requireSubmissionInstructor(
   // Deliberately 404, not 403: a 403 would tell a probing student the token is
   // real, and the whole point is to remove the oracle.
   if (enrollment instanceof Response) return error("This link is no longer available", 404);
-  if (enrollment.role !== "instructor") {
+  if (!can(enrollment.role, "view_submissions")) {
     return error("This link is no longer available", 404);
   }
   return row;
@@ -1383,7 +1537,10 @@ function parseCheckpoints(raw: unknown): repo.CheckpointInput[] | Response {
   }
   const out: repo.CheckpointInput[] = [];
   for (const item of raw) {
-    const { name, dueAt } = (item ?? {}) as { name?: unknown; dueAt?: unknown };
+    const { id, name, dueAt } = (item ?? {}) as { id?: unknown; name?: unknown; dueAt?: unknown };
+    if (id !== undefined && id !== null && typeof id !== "string") {
+      return error("A checkpoint id must be a string", 400);
+    }
     if (typeof name !== "string" || !name.trim()) {
       return error("Each checkpoint needs a name", 400);
     }
@@ -1399,20 +1556,25 @@ function parseCheckpoints(raw: unknown): repo.CheckpointInput[] | Response {
       }
       due = Math.trunc(dueAt);
     }
-    out.push({ name: name.trim(), dueAt: due });
+    // An id that isn't this assignment's is ignored by the repo (treated as
+    // new), so a client can't move another assignment's checkpoint.
+    out.push({ ...(typeof id === "string" && id ? { id } : {}), name: name.trim(), dueAt: due });
   }
   return out;
 }
 
-/** Gate an instructor-only assignment action; returns the courseId or a Response. */
-async function requireInstructor(
+/** Gate an assignment action on a capability; returns null or a Response. */
+async function requireCapability(
   env: Env,
   userId: string,
   courseId: string,
+  capability: Capability,
 ): Promise<Response | null> {
   const enrollment = await loadEnrollment(env, userId, courseId);
   if (enrollment instanceof Response) return enrollment;
-  if (enrollment.role !== "instructor") return error("Instructors only", 403);
+  if (!can(enrollment.role, capability)) {
+    return error(capability === "author" ? "Instructors only" : "Course staff only", 403);
+  }
   return null;
 }
 
@@ -1437,7 +1599,7 @@ export async function listAssignmentsRoute(
   if (enrollment instanceof Response) return enrollment;
 
   const includeArchived =
-    url.searchParams.get("includeArchived") === "1" && enrollment.role === "instructor";
+    url.searchParams.get("includeArchived") === "1" && can(enrollment.role, "author");
   const assignments = await repo.listAssignments(env.DB, courseId, { includeArchived });
   // One query for every checkpoint in the course, bucketed here — the
   // alternative is a query per assignment on a page that lists all of them.
@@ -1448,8 +1610,27 @@ export async function listAssignmentsRoute(
     if (bucket) bucket.push(c);
     else byAssignment.set(c.assignment_id, [c]);
   }
+  // `stats=1` (course staff): per-CHECKPOINT counts of real students who
+  // submitted, and who did so on time. Keyed by checkpoint id because the
+  // instructor list shows each checkpoint as its own row.
+  let stats:
+    | { students: number; byId: Record<string, { submitted: number; onTime: number }> }
+    | undefined;
+  if (url.searchParams.get("stats") === "1" && can(enrollment.role, "view_submissions")) {
+    const [students, counts] = await Promise.all([
+      countRealStudents(env.DB, courseId),
+      repo.listCheckpointStats(env.DB, courseId),
+    ]);
+    stats = {
+      students,
+      byId: Object.fromEntries(
+        counts.map((c) => [c.checkpoint_id, { submitted: c.submitted, onTime: c.on_time }]),
+      ),
+    };
+  }
   return json({
     assignments: assignments.map((a) => toAssignmentDTO(a, byAssignment.get(a.id) ?? [])),
+    ...(stats ? { stats } : {}),
   });
 }
 
@@ -1485,10 +1666,17 @@ export async function createAssignmentRoute(
     title?: string;
     instructions?: string;
     checkpoints?: unknown;
+    chatEnabled?: unknown;
+    lockedAgentId?: unknown;
+    /** true = create as a draft, hidden from students until published. */
+    archived?: unknown;
   } | null;
   if (!body?.courseId) return error("courseId is required", 400);
-  const gate = await requireInstructor(env, userId, body.courseId);
+  const gate = await requireCapability(env, userId, body.courseId, "author");
   if (gate) return gate;
+  const chat = await parseChatFields(env, body.courseId, body);
+  if (chat instanceof Response) return chat;
+  const draft = body.archived === true;
 
   const title = (body.title ?? "").trim();
   if (!title) return error("title is required", 400);
@@ -1507,6 +1695,8 @@ export async function createAssignmentRoute(
     title,
     instructions,
     checkpoints,
+    ...chat,
+    draft,
   });
   // Put it on the Assign list. Dateless: the checkpoints carry the deadlines,
   // and the Assign row shows them inline from the payload.
@@ -1515,15 +1705,54 @@ export async function createAssignmentRoute(
     kind: "writing",
     payloadRef: row.id,
     title: row.title,
+    archived: draft,
   });
   const saved = await repo.listCheckpoints(env.DB, row.id);
   return json(toAssignmentDTO(row, saved), 201);
 }
 
 /**
+ * Validate an assignment's chat fields (0033). `lockedAgentId` must resolve to
+ * a builtin library voice or a COURSE-DEFAULT agent — a personal agent can't
+ * be everyone's voice. Turning the chat on is refused while every instructor
+ * has opted out of generative AI.
+ */
+async function parseChatFields(
+  env: Env,
+  courseId: string,
+  body: { chatEnabled?: unknown; lockedAgentId?: unknown },
+): Promise<{ chatEnabled?: boolean; lockedAgentId?: string | null } | Response> {
+  const out: { chatEnabled?: boolean; lockedAgentId?: string | null } = {};
+  if (body.chatEnabled !== undefined) {
+    if (typeof body.chatEnabled !== "boolean") return error("chatEnabled must be a boolean", 400);
+    if (body.chatEnabled && (await courseGenaiLocked(env.DB, courseId))) {
+      return error(GENAI_LOCKED_MESSAGE, 409, GENAI_LOCKED_CODE);
+    }
+    out.chatEnabled = body.chatEnabled;
+  }
+  if (body.lockedAgentId !== undefined) {
+    if (body.lockedAgentId !== null && typeof body.lockedAgentId !== "string") {
+      return error("lockedAgentId must be an agent id or null", 400);
+    }
+    if (typeof body.lockedAgentId === "string") {
+      const agent =
+        builtinAgentRow(body.lockedAgentId, courseId) ??
+        (await repo.getAgent(env.DB, courseId, body.lockedAgentId));
+      if (!agent) return error("Agent not found", 404);
+      if (agent.owner_user_id !== null) {
+        return error("Only a course-default agent can be assigned to everyone", 400);
+      }
+    }
+    out.lockedAgentId = body.lockedAgentId as string | null;
+  }
+  return out;
+}
+
+/**
  * PATCH /assignments/:id — edit. Instructor only.
  *
- * Supplying `checkpoints` replaces the list wholesale (see `updateAssignment`);
+ * Supplying `checkpoints` makes the list match, reconciled by id so existing
+ * submissions stay attached (see `updateAssignment`);
  * omitting it edits only the title/instructions/archived fields.
  */
 export async function updateAssignmentRoute(
@@ -1540,10 +1769,14 @@ export async function updateAssignmentRoute(
     instructions?: string;
     archived?: boolean;
     checkpoints?: unknown;
+    chatEnabled?: unknown;
+    lockedAgentId?: unknown;
   } | null;
   if (!body?.courseId) return error("courseId is required", 400);
-  const gate = await requireInstructor(env, userId, body.courseId);
+  const gate = await requireCapability(env, userId, body.courseId, "author");
   if (gate) return gate;
+  const chat = await parseChatFields(env, body.courseId, body);
+  if (chat instanceof Response) return chat;
 
   let title: string | undefined;
   if (body.title !== undefined) {
@@ -1570,6 +1803,7 @@ export async function updateAssignmentRoute(
     instructions: body.instructions,
     archived: body.archived,
     checkpoints,
+    ...chat,
   });
   if (!row) return error("Assignment not found", 404);
   // Keep the Assign wrapper in step: follow a rename unless the instructor
@@ -1604,7 +1838,7 @@ export async function deleteAssignmentRoute(
   if (userId instanceof Response) return userId;
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const gate = await requireInstructor(env, userId, courseId);
+  const gate = await requireCapability(env, userId, courseId, "author");
   if (gate) return gate;
   const deleted = await repo.deleteAssignment(env.DB, courseId, assignmentId);
   if (!deleted) return error("Assignment not found", 404);
@@ -1635,7 +1869,7 @@ export async function assignmentRosterRoute(
   if (userId instanceof Response) return userId;
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
-  const gate = await requireInstructor(env, userId, courseId);
+  const gate = await requireCapability(env, userId, courseId, "view_submissions");
   if (gate) return gate;
 
   const assignment = await repo.getAssignment(env.DB, courseId, assignmentId);
@@ -1654,7 +1888,9 @@ export async function assignmentRosterRoute(
     if (!student) {
       student = {
         userId: r.user_id,
-        email: r.student_email,
+        // The sample student's address is a placeholder on a reserved domain,
+        // not anyone's email — its name ("Sample Student") says who it is.
+        email: r.is_sample === 1 ? "" : r.student_email,
         displayName: r.student_name,
         cells: [],
       };

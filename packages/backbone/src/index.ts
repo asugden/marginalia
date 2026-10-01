@@ -1,6 +1,7 @@
 export * from "./types.js";
 export {
   ADVANCE_MARKER,
+  createMarkerFilter,
   cleanReply,
   currentTopic,
   llmRequestedAdvance,

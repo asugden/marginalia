@@ -35,6 +35,7 @@ import {
   StatGrid,
   StatTile,
 } from "../components/index.js";
+import { RestartTour } from "../modules/onboarding/components/RestartTour.js";
 
 export function CourseSettingsPage() {
   const {
@@ -42,7 +43,11 @@ export function CourseSettingsPage() {
     showAttendance,
     agentsEnabled,
     provenanceEnabled,
+    writingChatAssignments,
     codeEnabled,
+    genaiOptOut,
+    genaiLocked,
+    codeChatAssignments,
     termSeason,
     termYear,
     startDate,
@@ -88,7 +93,7 @@ export function CourseSettingsPage() {
             : 0,
         students:
           roster.status === "fulfilled"
-            ? roster.value.roster.filter((r) => r.role === "student").length
+            ? roster.value.roster.filter((r) => r.role === "student" && !r.isSample).length
             : 0,
       });
     });
@@ -129,8 +134,10 @@ export function CourseSettingsPage() {
 
   /** Fill the date inputs with the generic default window for the drafted term.
    *  Available only once a season + year are chosen. */
+  // Note the empty-string check: Number("") is 0, which Number.isInteger
+  // happily accepts — a blank year used to produce year-0 term dates.
   function useTermDefaults() {
-    if (seasonDraft === "" || !Number.isInteger(Number(yearDraft))) return;
+    if (seasonDraft === "" || yearDraft.trim() === "" || !Number.isInteger(Number(yearDraft))) return;
     const d = defaultTermDates(seasonDraft, Number(yearDraft));
     setStartDraft(msToDateInput(d.start));
     setEndDraft(msToDateInput(d.end));
@@ -143,7 +150,7 @@ export function CourseSettingsPage() {
     let termYearVal: number | null = null;
     if (wantsTerm) {
       const year = Number(yearDraft);
-      if (seasonDraft === "" || !Number.isInteger(year)) {
+      if (seasonDraft === "" || yearDraft.trim() === "" || !Number.isInteger(year)) {
         setError("Pick a season and a year for the term, or clear both.");
         return;
       }
@@ -189,8 +196,12 @@ export function CourseSettingsPage() {
       {/* 1 — Course Stats */}
       <Section title="Course Stats" description="What’s in this course right now.">
         <StatGrid>
-          <StatTile value={n(stats?.agents)} label="Agents" />
-          <StatTile value={n(stats?.libraries)} label="Libraries" />
+          {!genaiOptOut && (
+            <>
+              <StatTile value={n(stats?.agents)} label="Agents" />
+              <StatTile value={n(stats?.libraries)} label="Libraries" />
+            </>
+          )}
           <StatTile value={n(stats?.students)} label="Enrolled" />
         </StatGrid>
       </Section>
@@ -243,7 +254,11 @@ export function CourseSettingsPage() {
             variant="ghost"
             className="app-termedit__btn"
             onClick={useTermDefaults}
-            disabled={seasonDraft === "" || !Number.isInteger(Number(yearDraft))}
+            disabled={
+              seasonDraft === "" ||
+              yearDraft.trim() === "" ||
+              !Number.isInteger(Number(yearDraft))
+            }
           >
             Use term dates
           </Button>
@@ -264,25 +279,34 @@ export function CourseSettingsPage() {
         title="Resources & Extensions"
         description="Turn an extension off to remove it from this course’s nav and the students’ view."
       >
+        {genaiOptOut && !genaiLocked && (
+          <GenaiInUseNote
+            agents={agentsEnabled}
+            writingChats={provenanceEnabled ? writingChatAssignments : 0}
+            codeChats={codeEnabled ? codeChatAssignments : 0}
+          />
+        )}
         <div className="app-modules">
-          <label className={"app-module" + (agentsOn ? " app-module--on" : "")}>
-            <span className="app-module__main">
-              <b>Agents</b>
-              <span>
-                AI tutors students chat with, each with its own voice. Adds the
-                Agents tab and shows agents to students.
+          {!genaiOptOut && (
+            <label className={"app-module" + (agentsOn ? " app-module--on" : "")}>
+              <span className="app-module__main">
+                <b>Agents</b>
+                <span>
+                  AI chats students talk to, each with its own voice. Adds the
+                  Agents tab and shows agents to students.
+                </span>
               </span>
-            </span>
-            <input
-              type="checkbox"
-              className="app-switch"
-              checked={agentsOn}
-              onChange={(ev) => toggleFeature("agents", ev.target.checked)}
-            />
-          </label>
+              <input
+                type="checkbox"
+                className="app-switch"
+                checked={agentsOn}
+                onChange={(ev) => toggleFeature("agents", ev.target.checked)}
+              />
+            </label>
+          )}
           <label className={"app-module" + (provenanceOn ? " app-module--on" : "")}>
             <span className="app-module__main">
-              <b>Provenance writing</b>
+              <b>Writing</b>
               <span>
                 A writing space that records where every word came from. Adds the
                 Writing tool for students.
@@ -325,6 +349,41 @@ export function CourseSettingsPage() {
           </label>
         </div>
       </Section>
+
+      <RestartTour courseId={courseId} />
     </div>
+  );
+}
+
+/**
+ * For an instructor who opted out of generative AI, in a course where a
+ * co-instructor hasn't: the AI controls are hidden from them, but what their
+ * students actually have is a fact they should see. Read-only, no controls.
+ */
+function GenaiInUseNote({
+  agents,
+  writingChats,
+  codeChats,
+}: {
+  agents: boolean;
+  writingChats: number;
+  codeChats: number;
+}) {
+  const on: string[] = [];
+  if (agents) on.push("agents");
+  if (writingChats > 0) {
+    on.push(`chat on ${writingChats} writing assignment${writingChats === 1 ? "" : "s"}`);
+  }
+  if (codeChats > 0) {
+    on.push(`chat on ${codeChats} coding assignment${codeChats === 1 ? "" : "s"}`);
+  }
+  if (on.length === 0) return null;
+  const list =
+    on.length === 1 ? on[0] : `${on.slice(0, -1).join(", ")} and ${on[on.length - 1]}`;
+  return (
+    <p className="muted small">
+      You&rsquo;ve opted out of generative AI, so its controls are hidden. A
+      co-instructor has it on here: students have {list}.
+    </p>
   );
 }

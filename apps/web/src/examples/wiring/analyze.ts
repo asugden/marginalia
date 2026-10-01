@@ -166,8 +166,7 @@ function buildEdges(c: Circuit): { edges: Edge[]; resists: Resist[]; leds: LedEl
       resists.push({ a: l, b: w, ohms: Math.max(1, p.turn * POT_OHMS) });
       resists.push({ a: w, b: r, ohms: Math.max(1, (1 - p.turn) * POT_OHMS) });
     } else if (p.kind === "seg7") {
-      const [g1, g2] = segGround(p);
-      edges.push({ from: g1, to: g2, kind: "internal", partId: p.id });
+      const g1 = segGround(p);
       for (const s of SEGMENTS) {
         const el = { id: `${p.id}:${s}`, a: segLeg(p, s), b: g1 };
         leds.push(el);
@@ -364,7 +363,8 @@ export function analyze(c: Circuit): Analysis {
     };
     for (const p of inputPins) {
       const s = pinState(c, p.id);
-      const pulled = s.mode !== "INPUT" || BOARD_PULLUPS.has(p.gpio!);
+      // GPIO 34–39 have no pulls inside; a pull mode on one does nothing.
+      const pulled = (s.mode !== "INPUT" && !p.inputOnly) || BOARD_PULLUPS.has(p.gpio!);
       const floating = !reachesFixed(p.id) && !pulled;
       const v = floating ? null : (volts.get(netOf(p.id)) ?? 0);
       readings.push({
@@ -408,8 +408,8 @@ function solve(
     if (p.kind !== "gpio") continue;
     const s = pinState(c, p.id);
     if (drives(s)) continue;
-    if (s.mode === "INPUT_PULLDOWN") pulls.push({ id: p.id, v: 0, r: PULL_R });
-    if (s.mode === "INPUT_PULLUP") pulls.push({ id: p.id, v: V3, r: PULL_R });
+    if (s.mode === "INPUT_PULLDOWN" && !p.inputOnly) pulls.push({ id: p.id, v: 0, r: PULL_R });
+    if (s.mode === "INPUT_PULLUP" && !p.inputOnly) pulls.push({ id: p.id, v: V3, r: PULL_R });
     if (BOARD_PULLUPS.has(p.gpio!)) pulls.push({ id: p.id, v: V3, r: BOARD_PULL_R });
   }
 

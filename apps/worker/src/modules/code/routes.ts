@@ -2,8 +2,8 @@
 // first path segment after /api/ is "code".
 //
 // Assignments
-//   GET    /api/code/assignments?courseId=[&includeArchived=1]  list
-//   POST   /api/code/assignments                                create — INSTRUCTOR
+//   GET    /api/code/assignments?courseId=[&includeArchived=1][&stats=1]  list (+ submission counts, staff)
+//   POST   /api/code/assignments                                create — INSTRUCTOR (archived:true = draft)
 //   GET    /api/code/assignments/:id?courseId=                  fetch with starter
 //   PATCH  /api/code/assignments/:id                            edit — INSTRUCTOR
 //   DELETE /api/code/assignments/:id?courseId=                  delete — INSTRUCTOR

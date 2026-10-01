@@ -5,14 +5,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Input, PageHeader, Section } from "../../../components/index.js";
+import { Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
 import { getRoster, type CodeAssignmentDTO, type RosterStudentDTO } from "../api.js";
 import { formatDue } from "./CodeHomePage.js";
-
-function formatSubmitted(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 export function RosterPage() {
   const { courseId } = useCourse();
@@ -41,11 +37,14 @@ export function RosterPage() {
       : all;
   }, [data, query]);
   const submitted = (data?.students ?? []).filter((s) => s.latest).length;
+  // Submissions look the same everywhere: the shared cards, as in Writing.
+  const submittedRows = students.filter((s) => s.latest);
+  const notYet = students.filter((s) => !s.latest);
 
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Instructor · Code"
+        eyebrow="Instructor · Code submissions"
         title={data?.assignment.title ?? "Assignment"}
         scope={
           data
@@ -56,12 +55,13 @@ export function RosterPage() {
         }
       />
       <p className="muted small">
-        <Link to={base}>← All coding assignments</Link>
+        <Link to={`/course/${courseId}/instructor/submissions`}>← All submissions</Link> ·{" "}
+        <Link to={base}>Edit in Assign ▸ Code</Link>
       </p>
       {error && <p className="error">{error}</p>}
 
       <Section
-        kicker="Students"
+        kicker="Submitted"
         meta={data ? `${submitted} of ${data.students.length} submitted` : undefined}
         actions={
           <Input
@@ -76,43 +76,45 @@ export function RosterPage() {
           <p className="muted">Loading…</p>
         ) : data.students.length === 0 ? (
           <p className="muted">No students are enrolled yet.</p>
+        ) : submittedRows.length === 0 ? (
+          <p className="muted">{query.trim() ? "Nothing matches that filter." : "Nothing submitted yet."}</p>
         ) : (
-          <div className="prov-roster__scroll">
-            <table className="prov-roster">
-              <thead>
-                <tr>
-                  <th scope="col">Student</th>
-                  <th scope="col">Latest submission</th>
-                  <th scope="col">Submissions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr key={s.userId}>
-                    <th scope="row">
-                      <span className="prov-roster__who">{s.displayName ?? s.email}</span>
-                      {s.displayName && <span className="prov-roster__email muted small">{s.email}</span>}
-                    </th>
-                    {s.latest ? (
-                      <td>
-                        <Link className="prov-roster__hit" to={`${base}/submissions/${s.latest.id}`}>
-                          {formatSubmitted(s.latest.submittedAt)}
-                        </Link>
-                        {s.latest.late && <span className="prov-roster__late"> LATE</span>}
-                      </td>
-                    ) : (
-                      <td className="is-empty">
-                        <span className="prov-roster__miss">Not submitted</span>
-                      </td>
-                    )}
-                    <td className={s.submissionCount ? "" : "is-empty"}>{s.submissionCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SubmissionCards
+            groups={submittedRows.map((s) => ({
+              key: s.userId,
+              title: s.latest!.title,
+              who: s.displayName || s.email,
+              entries: [
+                {
+                  key: s.latest!.id,
+                  href: `${base}/submissions/${s.latest!.id}`,
+                  at: s.latest!.submittedAt,
+                  late: s.latest!.late,
+                  lateByMs:
+                    s.latest!.late && data.assignment.dueAt !== null
+                      ? s.latest!.submittedAt - data.assignment.dueAt
+                      : null,
+                  origins: s.latest!.origins,
+                },
+              ],
+            }))}
+          />
         )}
       </Section>
+
+      {data !== null && notYet.length > 0 && (
+        <Section kicker="Not submitted yet" meta={`${notYet.length}`}>
+          <div className="app-list">
+            {notYet.map((s) => (
+              <div className="app-list__row prov-subs__row" key={s.userId}>
+                <div className="app-list__main">
+                  <div className="app-list__sub">{s.displayName || s.email}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

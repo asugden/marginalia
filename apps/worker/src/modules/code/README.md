@@ -127,6 +127,16 @@ voice. It's resolved on every turn, so editing a voice reaches the next
 message; a deleted voice falls back to the default rather than failing a
 student's turn.
 
+**Voice policy** (`code_assignments.voice_choice`, migration 0027, default 0).
+When 1, each student picks their own voice from a select in the chat header
+instead of everyone getting the assignment's voice. LIBRARY voices only — an
+instructor's custom voices stay private — and the request's `voiceId` is
+validated against the library and silently ignored when the policy is
+one-assigned-voice, so a stale client can't smuggle a different persona in.
+The assignment's own voice (when it's a library one) is the picker's default.
+The Writing module offers the same pair of decisions at course level
+(`provenance_chat_enabled` / `provenance_locked_agent_id`, migration 0026).
+
 `buildChatInstructions` puts the voice first (persona, tone, method), then
 `NOTEBOOK_CHAT_RULES` (where the chat is, what it can see, and the
 no-solutions floor), then the assignment and any instructor guidance. The

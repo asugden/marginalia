@@ -54,37 +54,62 @@ export async function getDocument(
     .first<ProvenanceDocumentRow>();
 }
 
+/** The caller's document for an assignment, if they've started one (0032). */
+export async function findDocumentForAssignment(
+  db: D1Database,
+  courseId: string,
+  ownerUserId: string,
+  assignmentId: string,
+): Promise<ProvenanceDocumentRow | null> {
+  return db
+    .prepare(
+      `SELECT * FROM provenance_documents
+        WHERE course_id = ? AND owner_user_id = ? AND assignment_id = ?`,
+    )
+    .bind(courseId, ownerUserId, assignmentId)
+    .first<ProvenanceDocumentRow>();
+}
+
+/**
+ * Open-or-create the caller's document for an assignment. INSERT OR IGNORE
+ * against the (owner, assignment) unique index makes two tabs opening the
+ * same assignment at once land on one document rather than two.
+ */
 export async function createDocument(
   db: D1Database,
   params: {
     courseId: string;
     ownerUserId: string;
     title: string;
+    assignmentId: string;
   },
 ): Promise<ProvenanceDocumentRow> {
   const now = Date.now();
-  const id = newId();
   await db
     .prepare(
-      `INSERT INTO provenance_documents
+      `INSERT OR IGNORE INTO provenance_documents
          (id, course_id, owner_user_id, title, body_json,
-          word_count, char_count, event_coords, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, 0, 'text', ?, ?)`,
+          word_count, char_count, event_coords, created_at, updated_at,
+          assignment_id)
+       VALUES (?, ?, ?, ?, ?, 0, 0, 'text', ?, ?, ?)`,
     )
     .bind(
-      id,
+      newId(),
       params.courseId,
       params.ownerUserId,
       params.title,
       EMPTY_DOC,
       now,
       now,
+      params.assignmentId,
     )
     .run();
-  const row = await db
-    .prepare(`SELECT * FROM provenance_documents WHERE id = ?`)
-    .bind(id)
-    .first<ProvenanceDocumentRow>();
+  const row = await findDocumentForAssignment(
+    db,
+    params.courseId,
+    params.ownerUserId,
+    params.assignmentId,
+  );
   if (!row) throw new Error("createDocument: row not found after insert");
   return row;
 }
@@ -853,6 +878,95 @@ export async function setHideProvenanceMarks(
     .run();
 }
 
+/** The writing editor's chat controls (migration 0026). Course-level because a
+ *  document attaches to an assignment only at submission time — there is no
+ *  assignment to hang a switch on while the student writes. */
+export interface ProvenanceChatSettings {
+  /** Whether the editor offers the LLM chat pane at all. Default on. */
+  chatEnabled: boolean;
+  /** NULL = students choose their agent (course defaults + personal).
+   *  Non-null = the one agent every student gets: a provenance_agents row id
+   *  or a "builtin:<voice>" library id. */
+  lockedAgentId: string | null;
+}
+
+export async function getChatSettings(
+  db: D1Database,
+  courseId: string,
+): Promise<ProvenanceChatSettings> {
+  const row = await db
+    .prepare(
+      `SELECT COALESCE(provenance_chat_enabled, 1) AS chat_enabled,
+              provenance_locked_agent_id AS locked_agent_id
+       FROM course_settings WHERE course_id = ?`,
+    )
+    .bind(courseId)
+    .first<{ chat_enabled: number; locked_agent_id: string | null }>();
+  return {
+    chatEnabled: (row?.chat_enabled ?? 1) === 1,
+    lockedAgentId: row?.locked_agent_id ?? null,
+  };
+}
+
+/**
+ * The chat policy for one document (0033): a document written for an
+ * assignment follows that assignment; a document from before 0032 (no
+ * assignment) follows the course-level settings it always did. Null
+ * `documentId` = the course-level policy.
+ */
+export async function getChatPolicy(
+  db: D1Database,
+  courseId: string,
+  documentId: string | null,
+): Promise<ProvenanceChatSettings> {
+  if (documentId) {
+    const row = await db
+      .prepare(
+        `SELECT a.chat_enabled, a.locked_agent_id
+           FROM provenance_documents d
+           JOIN provenance_assignments a ON a.id = d.assignment_id
+          WHERE d.id = ? AND d.course_id = ?`,
+      )
+      .bind(documentId, courseId)
+      .first<{ chat_enabled: number; locked_agent_id: string | null }>();
+    if (row) {
+      return { chatEnabled: row.chat_enabled === 1, lockedAgentId: row.locked_agent_id };
+    }
+  }
+  return getChatSettings(db, courseId);
+}
+
+/** Partial upsert of the chat controls — only the fields present in `patch`
+ *  are written, so flipping the switch never clobbers the voice policy and
+ *  vice versa. Same INSERT … ON CONFLICT shape as setHideProvenanceMarks. */
+export async function setChatSettings(
+  db: D1Database,
+  courseId: string,
+  patch: { chatEnabled?: boolean; lockedAgentId?: string | null },
+): Promise<void> {
+  const cols: string[] = [];
+  const values: (string | number | null)[] = [];
+  if (patch.chatEnabled !== undefined) {
+    cols.push("provenance_chat_enabled");
+    values.push(patch.chatEnabled ? 1 : 0);
+  }
+  if (patch.lockedAgentId !== undefined) {
+    cols.push("provenance_locked_agent_id");
+    values.push(patch.lockedAgentId);
+  }
+  if (cols.length === 0) return;
+  const updates = cols.map((c) => `${c} = excluded.${c}`).join(", ");
+  await db
+    .prepare(
+      `INSERT INTO course_settings (course_id, ${cols.join(", ")}, updated_at)
+       VALUES (?${", ?".repeat(cols.length)}, ?)
+       ON CONFLICT(course_id) DO UPDATE
+         SET ${updates}, updated_at = excluded.updated_at`,
+    )
+    .bind(courseId, ...values, Date.now())
+    .run();
+}
+
 // ── Assignments + checkpoints ───────────────────────────────────────────
 //
 // An assignment names a piece of writing; its checkpoints are the moments it
@@ -869,6 +983,9 @@ const newCheckpointId = () => `pcp_${crypto.randomUUID()}`;
 
 /** A checkpoint as authored: name, order, optional deadline. */
 export interface CheckpointInput {
+  /** An existing checkpoint's id, when editing. Kept so submissions already
+   *  made to it stay attached; absent = a new checkpoint. */
+  id?: string;
   name: string;
   /** Epoch ms, or null for "no deadline" — such a checkpoint is never late. */
   dueAt: number | null;
@@ -948,6 +1065,10 @@ export async function createAssignment(
     title: string;
     instructions: string;
     checkpoints: CheckpointInput[];
+    chatEnabled?: boolean;
+    lockedAgentId?: string | null;
+    /** Start hidden from students (archived_at set), to publish later. */
+    draft?: boolean;
   },
 ): Promise<ProvenanceAssignmentRow> {
   const now = Date.now();
@@ -956,10 +1077,21 @@ export async function createAssignment(
     db
       .prepare(
         `INSERT INTO provenance_assignments
-           (id, course_id, title, instructions, created_at, updated_at, archived_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+           (id, course_id, title, instructions, created_at, updated_at, archived_at,
+            chat_enabled, locked_agent_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, params.courseId, params.title, params.instructions, now, now),
+      .bind(
+        id,
+        params.courseId,
+        params.title,
+        params.instructions,
+        now,
+        now,
+        params.draft ? now : null,
+        params.chatEnabled ? 1 : 0,
+        params.lockedAgentId ?? null,
+      ),
     ...checkpointInserts(db, id, params.checkpoints),
   ];
   await db.batch(stmts);
@@ -987,17 +1119,18 @@ function checkpointInserts(
 }
 
 /**
- * Update an assignment's fields and, when `checkpoints` is supplied, replace
- * its checkpoint list wholesale.
+ * Update an assignment's fields and, when `checkpoints` is supplied, make its
+ * checkpoint list match the one given.
  *
- * Replace-not-merge is deliberate: the editor sends the full ordered list, and
- * reconciling adds/removes/reorders against stored ids would be a lot of
- * machinery for a handful of rows. The cost is that editing a checkpoint mints
- * a new id, so submissions already attached to the old one keep pointing at a
- * row that no longer exists — which is why `checkpoint_id` carries no FK and
- * the roster treats an unresolvable id as simply unattached. Omitting
- * `checkpoints` leaves the existing ones alone, which is the path the
- * title/instructions edit takes.
+ * Checkpoints are reconciled BY ID, not replaced. Submissions point at a
+ * checkpoint id, so re-minting ids on every edit (as this once did) detached
+ * every earlier submission the moment an instructor moved a deadline. Now an
+ * incoming checkpoint carrying a known id is updated in place (name, due date,
+ * position); one without an id is inserted; a stored one the list no longer
+ * names is deleted. Only that last case leaves submissions pointing at a
+ * missing checkpoint — `checkpoint_id` carries no FK, and the instructor's
+ * uncategorized list is where such submissions still show. Omitting
+ * `checkpoints` leaves the existing ones alone.
  */
 export async function updateAssignment(
   db: D1Database,
@@ -1008,6 +1141,8 @@ export async function updateAssignment(
     instructions?: string;
     archived?: boolean;
     checkpoints?: CheckpointInput[];
+    chatEnabled?: boolean;
+    lockedAgentId?: string | null;
   },
 ): Promise<ProvenanceAssignmentRow | null> {
   const existing = await getAssignment(db, courseId, assignmentId);
@@ -1027,6 +1162,14 @@ export async function updateAssignment(
     sets.push("archived_at = ?");
     binds.push(patch.archived ? Date.now() : null);
   }
+  if (patch.chatEnabled !== undefined) {
+    sets.push("chat_enabled = ?");
+    binds.push(patch.chatEnabled ? 1 : 0);
+  }
+  if (patch.lockedAgentId !== undefined) {
+    sets.push("locked_agent_id = ?");
+    binds.push(patch.lockedAgentId);
+  }
 
   const stmts: D1PreparedStatement[] = [];
   if (sets.length > 0) {
@@ -1044,14 +1187,38 @@ export async function updateAssignment(
     );
   }
   if (patch.checkpoints !== undefined) {
-    stmts.push(
-      db
-        .prepare(
-          `DELETE FROM provenance_assignment_checkpoints WHERE assignment_id = ?`,
-        )
-        .bind(assignmentId),
-      ...checkpointInserts(db, assignmentId, patch.checkpoints),
+    const stored = new Set((await listCheckpoints(db, assignmentId)).map((c) => c.id));
+    const kept = new Set(
+      patch.checkpoints.map((c) => c.id).filter((id): id is string => !!id && stored.has(id)),
     );
+    for (const id of stored) {
+      if (!kept.has(id)) {
+        stmts.push(
+          db
+            .prepare(
+              `DELETE FROM provenance_assignment_checkpoints WHERE id = ? AND assignment_id = ?`,
+            )
+            .bind(id, assignmentId),
+        );
+      }
+    }
+    const update = db.prepare(
+      `UPDATE provenance_assignment_checkpoints
+          SET ord = ?, name = ?, due_at = ?
+        WHERE id = ? AND assignment_id = ?`,
+    );
+    const insert = db.prepare(
+      `INSERT INTO provenance_assignment_checkpoints
+         (id, assignment_id, ord, name, due_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    patch.checkpoints.forEach((c, i) => {
+      stmts.push(
+        c.id && kept.has(c.id)
+          ? update.bind(i, c.name, c.dueAt, c.id, assignmentId)
+          : insert.bind(newCheckpointId(), assignmentId, i, c.name, c.dueAt),
+      );
+    });
   }
   if (stmts.length > 0) await db.batch(stmts);
   return getAssignment(db, courseId, assignmentId);
@@ -1101,6 +1268,8 @@ export interface AssignmentRosterRow {
   user_id: string;
   student_email: string;
   student_name: string | null;
+  /** 0030 — the course's sample student (a preview identity). */
+  is_sample: number;
   /** Null on the synthetic row a student with no submissions still produces. */
   checkpoint_id: string | null;
   token: string | null;
@@ -1139,6 +1308,7 @@ export async function listAssignmentRoster(
       `SELECT e.user_id,
               u.email        AS student_email,
               u.display_name AS student_name,
+              u.is_sample,
               s.checkpoint_id,
               s.token,
               s.created_at,
@@ -1190,4 +1360,46 @@ export async function attachSubmission(
     )
     .bind(assignmentId, checkpointId, token)
     .run();
+}
+
+/** Per-checkpoint submission counts, for the instructor's assignment list. */
+export interface CheckpointStatsRow {
+  checkpoint_id: string;
+  /** Real students with at least one live submission to this checkpoint. */
+  submitted: number;
+  /** …of whom at least one submission landed by the deadline (or there is no
+   *  deadline). Resubmitting late never undoes an on-time submission. */
+  on_time: number;
+}
+
+/**
+ * One row per checkpoint in the course that has any live submission. Counts
+ * only real students (enrolled as `student`, not the sample student), so the
+ * fraction reads against the same denominator as `countRealStudents`.
+ */
+export async function listCheckpointStats(
+  db: D1Database,
+  courseId: string,
+): Promise<CheckpointStatsRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.id AS checkpoint_id,
+              COUNT(DISTINCT s.user_id) AS submitted,
+              COUNT(DISTINCT CASE WHEN c.due_at IS NULL OR s.created_at <= c.due_at
+                                  THEN s.user_id END) AS on_time
+         FROM provenance_assignment_checkpoints c
+         JOIN provenance_assignments a ON a.id = c.assignment_id AND a.course_id = ?
+         JOIN provenance_submissions s
+              ON s.checkpoint_id = c.id
+             AND s.assignment_id = a.id
+             AND s.course_id = a.course_id
+             AND s.revoked_at IS NULL
+         JOIN enrollments e
+              ON e.user_id = s.user_id AND e.course_id = a.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.user_id AND COALESCE(u.is_sample, 0) = 0
+        GROUP BY c.id`,
+    )
+    .bind(courseId)
+    .all<CheckpointStatsRow>();
+  return results ?? [];
 }

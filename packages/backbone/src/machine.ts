@@ -37,13 +37,52 @@ export function llmRequestedAdvance(rawReply: string): boolean {
   return rawReply.includes(ADVANCE_MARKER);
 }
 
-/** Remove the advance marker before showing the reply to the student. */
+/** Remove the advance marker before showing the reply to the student —
+ *  wherever the model put it, not only on a line of its own (models don't
+ *  always follow the "own line" instruction, and detection above doesn't
+ *  require it either). */
 export function cleanReply(rawReply: string): string {
   return rawReply
+    .split(ADVANCE_MARKER)
+    .join("")
     .split("\n")
-    .filter((line) => line.trim() !== ADVANCE_MARKER)
+    .map((line) => line.replace(/[ \t]+$/, ""))
     .join("\n")
     .trim();
+}
+
+/**
+ * Strips the advance marker from a reply that arrives in pieces. A stream can
+ * split the marker across chunks ("[ADV" + "ANCE]"), where per-chunk
+ * stripping sees neither half as the marker and shows it to the student. So
+ * any tail that could be the start of the marker is held back until the next
+ * chunk settles it; `flush()` releases whatever is left at the end.
+ */
+export function createMarkerFilter(): {
+  push: (delta: string) => string;
+  flush: () => string;
+} {
+  let pending = "";
+  return {
+    push(delta: string): string {
+      const text = (pending + delta).split(ADVANCE_MARKER).join("");
+      // Longest suffix of `text` that is a proper prefix of the marker.
+      let hold = 0;
+      for (let n = Math.min(ADVANCE_MARKER.length - 1, text.length); n > 0; n--) {
+        if (ADVANCE_MARKER.startsWith(text.slice(-n))) {
+          hold = n;
+          break;
+        }
+      }
+      pending = text.slice(text.length - hold);
+      return text.slice(0, text.length - hold);
+    },
+    flush(): string {
+      const out = pending;
+      pending = "";
+      return out;
+    },
+  };
 }
 
 /**

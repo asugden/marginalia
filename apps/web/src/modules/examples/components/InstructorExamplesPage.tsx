@@ -19,7 +19,6 @@
 // deliberately does not support. See the worker module README.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import { EXAMPLES, findExample } from "../../../examples/registry.js";
 import {
@@ -49,22 +48,16 @@ export function InstructorExamplesPage() {
   const [panel, setPanel] = useState<Panel>("assign");
 
   return (
-    <div className="ds-staff-page">
+    <div className="app-page">
       <PageHeader
-        eyebrow="Instructor · Assignments"
+        eyebrow="Instructor · Assign"
         title="Examples"
         scope="Pick interactive examples for this course. The example pages themselves stay public and identical for everyone — assigning one adds it to your students' list, it doesn't lock anyone out."
       />
 
-      {/* Same back-link idiom the assignment roster uses — both are detail
-          surfaces hanging off the one Assignments list. */}
-      <p className="muted small">
-        <Link to={`/course/${courseId}/instructor/assign`}>← Assign</Link>
-      </p>
-
       <SegmentedControl
         options={[
-          { value: "assign", label: "Assign" },
+          { value: "assign", label: "Assigned" },
           { value: "usage", label: "Usage" },
           { value: "completion", label: "Completion" },
         ]}
@@ -226,7 +219,7 @@ function AssignPanel({ courseId }: { courseId: string }) {
                   </div>
                   <div className="app-list__meta ex-assign__order">
                     <Button
-                      variant="ghost"
+                      variant="subtle"
                       size="sm"
                       onClick={() => move(i, -1)}
                       disabled={i === 0}
@@ -235,7 +228,7 @@ function AssignPanel({ courseId }: { courseId: string }) {
                       ↑
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="subtle"
                       size="sm"
                       onClick={() => move(i, 1)}
                       disabled={i === draft.length - 1}
@@ -243,7 +236,7 @@ function AssignPanel({ courseId }: { courseId: string }) {
                     >
                       ↓
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => toggle(d.slug)}>
+                    <Button variant="subtle" size="sm" onClick={() => toggle(d.slug)}>
                       Remove
                     </Button>
                   </div>

@@ -90,6 +90,9 @@ export interface ProvenanceDocumentDTO {
   eventCoords: "pm" | "text";
   createdAt: number;
   updatedAt: number;
+  /** The assignment this document is for; null for documents written before
+   *  documents were tied to assignments (0032). */
+  assignmentId: string | null;
 }
 
 /** Compact shape for list views. */
@@ -99,6 +102,7 @@ export interface ProvenanceDocumentSummary {
   wordCount: number;
   charCount: number;
   updatedAt: number;
+  assignmentId: string | null;
 }
 
 export function toDocumentDTO(row: ProvenanceDocumentRow): ProvenanceDocumentDTO {
@@ -113,6 +117,7 @@ export function toDocumentDTO(row: ProvenanceDocumentRow): ProvenanceDocumentDTO
     eventCoords: row.event_coords === "text" ? "text" : "pm",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    assignmentId: row.assignment_id ?? null,
   };
 }
 
@@ -123,6 +128,7 @@ export function toDocumentSummary(row: ProvenanceDocumentRow): ProvenanceDocumen
     wordCount: row.word_count,
     charCount: row.char_count,
     updatedAt: row.updated_at,
+    assignmentId: row.assignment_id ?? null,
   };
 }
 
@@ -228,6 +234,10 @@ export interface AssignmentDTO {
   archivedAt: number | null;
   createdAt: number;
   updatedAt: number;
+  /** 0033 — whether students get the LLM chat beside this assignment. */
+  chatEnabled: boolean;
+  /** 0033 — null = students choose their chat agent; else the one they get. */
+  lockedAgentId: string | null;
 }
 
 export function toCheckpointDTO(row: ProvenanceAssignmentCheckpointRow): CheckpointDTO {
@@ -247,6 +257,8 @@ export function toAssignmentDTO(
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    chatEnabled: row.chat_enabled === 1,
+    lockedAgentId: row.locked_agent_id ?? null,
   };
 }
 

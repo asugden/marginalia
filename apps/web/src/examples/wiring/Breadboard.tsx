@@ -5,8 +5,15 @@
 // the SVG snaps the pointer to the nearest one. Parts are elements, so they
 // can be selected, pressed, turned, and dragged by their legs.
 
-import { useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as RPointerEvent,
+  type ReactNode,
+} from "react";
 import { pinState, type Analysis, type Circuit, type Edge } from "./analyze.js";
+import { Diagram, pinLabelClasses, type DiagramMode } from "./Diagram.js";
 import {
   BB_X0,
   BB_X1,
@@ -17,13 +24,20 @@ import {
   COLS,
   HOLES,
   MAIN_ROWS,
+  NET_GROUND,
+  NET_HUES,
+  NET_SUPPLY,
   P,
   PINS,
   PIN_BY_ID,
+  SEG_BOTTOM,
+  SEG_TOP,
+  SEG_WIDTH,
   STRIPS,
   VIEW_H,
   VIEW_W,
   WIRE_COLORS,
+  arcControl,
   buttonLegs,
   colX,
   holeInfo,
@@ -31,10 +45,9 @@ import {
   legsOf,
   nearestNode,
   nodeXY,
+  pinAbilities,
   potLegs,
   rowY,
-  SEG_BOTTOM,
-  SEG_TOP,
   seg7Legs,
   type Button,
   type MainRow,
@@ -46,8 +59,16 @@ import {
   type TwoLeg,
   type WireColor,
 } from "./model.js";
+import { buildDiagram } from "./schematic.js";
 
-export type Tool = "move" | "wire" | "resistor" | "led" | "button" | "pot" | "seg7";
+export type Tool =
+  | "move"
+  | "wire"
+  | "resistor"
+  | "led"
+  | "button"
+  | "pot"
+  | "seg7";
 
 export interface BreadboardProps {
   circuit: Circuit;
@@ -58,6 +79,8 @@ export interface BreadboardProps {
   wireColor: WireColor | "auto";
   xray: boolean;
   netColors: boolean;
+  /** Draw the circuit as a diagram, over the board or pulled into loops. */
+  diagram?: DiagramMode;
   /** A part id or a pin id. */
   selected: string | null;
   popping: ReadonlySet<string>;
@@ -66,22 +89,40 @@ export interface BreadboardProps {
   onChange: (id: string, patch: Partial<Part>) => void;
   onPress: (id: string, down: boolean) => void;
   onPinClick: (id: NodeId) => void;
+  /** Controls for a pin, shown in a panel under that pin on the board, so
+   *  nothing around the figure moves when a pin is picked. */
+  popover?: { pin: NodeId; content: ReactNode } | null;
 }
 
 type XY = { x: number; y: number };
 
 type Drag =
-  | { mode: "new"; kind: "wire" | "resistor" | "led"; from: NodeId; x: number; y: number }
-  | { mode: "leg"; id: string; end: "a" | "b"; fixed: NodeId; x: number; y: number }
+  | {
+      mode: "new";
+      kind: "wire" | "resistor" | "led";
+      from: NodeId;
+      x: number;
+      y: number;
+    }
+  | {
+      mode: "leg";
+      id: string;
+      end: "a" | "b";
+      fixed: NodeId;
+      x: number;
+      y: number;
+    }
   /** Moving a button, potentiometer or display by one of its legs. */
   | { mode: "shift"; id: string; leg: number; x: number; y: number }
-  | { mode: "knob"; id: string; x0: number; y0: number; turn0: number; x: number; y: number };
-
-// Colours by connection. Supply and ground keep the colours a jumper-wire
-// convention already gives them; the rest take the general data-mark hues.
-const NET_SUPPLY = "var(--salmon-600)";
-const NET_GROUND = "var(--ink-700, #3d3831)";
-const NET_HUES = ["var(--purple-600)", "var(--amber-600)", "var(--green-600)", "var(--blue-600)", "#00879c"];
+  | {
+      mode: "knob";
+      id: string;
+      x0: number;
+      y0: number;
+      turn0: number;
+      x: number;
+      y: number;
+    };
 
 /** Capture the pointer so a drag keeps its events when it leaves the element.
  *  Throws for a pointer the browser no longer tracks; the drag works without
@@ -98,19 +139,6 @@ let partSeq = 0;
 const newId = (k: string) => `${k}-u${++partSeq}`;
 
 // ── Geometry helpers ────────────────────────────────────────────────────
-
-/** The control point of a jumper's gentle arc. Symmetric in its ends, so the
- *  current overlay can retrace it in either direction. */
-function arcControl(a: XY, b: XY): XY {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  let nx = -dy / len;
-  let ny = dx / len;
-  if (ny > 0 || (ny === 0 && nx > 0)) (nx = -nx), (ny = -ny);
-  const bulge = Math.min(46, 6 + len * 0.16);
-  return { x: (a.x + b.x) / 2 + nx * bulge, y: (a.y + b.y) / 2 + ny * bulge };
-}
 
 /** Where an LED or resistor body sits: its legs' midpoint, nudged off the
  *  line so the legs read as bent wire. */
@@ -129,8 +157,15 @@ function edgeSegment(e: Edge, parts: Map<string, Part>): string {
     const c = arcControl(nodeXY(part.a), nodeXY(part.b));
     return `Q ${c.x} ${c.y} ${to.x} ${to.y}`;
   }
-  if ((e.kind === "led" || e.kind === "resistor") && (part?.kind === "led" || part?.kind === "resistor")) {
-    const body = bodyAt(nodeXY(part.a), nodeXY(part.b), e.kind === "led" ? 16 : 6);
+  if (
+    (e.kind === "led" || e.kind === "resistor") &&
+    (part?.kind === "led" || part?.kind === "resistor")
+  ) {
+    const body = bodyAt(
+      nodeXY(part.a),
+      nodeXY(part.b),
+      e.kind === "led" ? 16 : 6,
+    );
     return `L ${body.x} ${body.y} L ${to.x} ${to.y}`;
   }
   return `L ${to.x} ${to.y}`;
@@ -146,6 +181,9 @@ function pathD(path: Edge[], parts: Map<string, Part>): string {
 
 export function Breadboard(props: BreadboardProps) {
   const { circuit, analysis, tool, xray, netColors, selected, popping } = props;
+  const diagramMode = props.diagram ?? "off";
+  // As loops, the board is out of sight: nothing on it can be edited.
+  const loops = diagramMode === "loops";
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<NodeId | null>(null);
 
@@ -171,13 +209,16 @@ export function Breadboard(props: BreadboardProps) {
     });
 
   // Where a button or pot would land if dropped now.
-  const shifted = (d: Extract<Drag, { mode: "shift" }>, part: Button | Pot | Seg7): Button | Pot | Seg7 | null => {
+  const shifted = (
+    d: Extract<Drag, { mode: "shift" }>,
+    part: Button | Pot | Seg7,
+  ): Button | Pot | Seg7 | null => {
     const n = nearestNode(d.x, d.y);
     const h = n ? holeInfo(n) : undefined;
     if (!h || isRail(h.row)) return null;
     if (part.kind === "seg7") {
-      const col = h.col - (d.leg % 5);
-      if (col < 1 || col > COLS - 4) return null;
+      const col = h.col - (d.leg % SEG_WIDTH);
+      if (col < 1 || col > COLS - SEG_WIDTH + 1) return null;
       const next = { ...part, col };
       return freeFor(seg7Legs(next), part.id) ? next : null;
     }
@@ -197,7 +238,11 @@ export function Breadboard(props: BreadboardProps) {
   const parts = useMemo(() => {
     if (!drag) return circuit.parts;
     return circuit.parts.map((p) => {
-      if (drag.mode === "shift" && drag.id === p.id && (p.kind === "button" || p.kind === "pot" || p.kind === "seg7")) {
+      if (
+        drag.mode === "shift" &&
+        drag.id === p.id &&
+        (p.kind === "button" || p.kind === "pot" || p.kind === "seg7")
+      ) {
         return shifted(drag, p) ?? p;
       }
       if (drag.mode === "knob" && drag.id === p.id && p.kind === "pot") {
@@ -208,13 +253,21 @@ export function Breadboard(props: BreadboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circuit.parts, drag]);
   const partMap = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
+  const diagram = useMemo(
+    () =>
+      diagramMode === "off"
+        ? null
+        : buildDiagram(parts, analysis, props.showShort),
+    [diagramMode, parts, analysis, props.showShort],
+  );
 
   // Nets worth a colour: the ones something is plugged into.
   const netColor = useMemo(() => {
     const m = new Map<number, string>();
     let k = 0;
     const used = new Set<number>();
-    for (const p of circuit.parts) for (const l of legsOf(p)) used.add(analysis.netOf(l));
+    for (const p of circuit.parts)
+      for (const l of legsOf(p)) used.add(analysis.netOf(l));
     for (const n of [...used].sort((x, y) => x - y)) {
       if (analysis.supplyNets.has(n)) m.set(n, NET_SUPPLY);
       else if (analysis.groundNets.has(n)) m.set(n, NET_GROUND);
@@ -236,27 +289,46 @@ export function Breadboard(props: BreadboardProps) {
   // ── Background pointer handling ──────────────────────────────────────
 
   const onPointerDown = (e: RPointerEvent<SVGSVGElement>) => {
+    if (loops) {
+      props.onSelect(null);
+      return;
+    }
     const { x, y } = toSvg(e);
     const node = nearestNode(x, y);
     const h = node ? holeInfo(node) : undefined;
     if (tool === "button") {
       if (h && !isRail(h.row)) {
-        const b: Button = { id: newId("btn"), kind: "button", col: Math.max(1, Math.min(COLS - 2, h.col - 1)), turned: false };
-        if (freeFor(buttonLegs(b))) props.onAdd(b), props.onSelect(b.id);
+        const b: Button = {
+          id: newId("btn"),
+          kind: "button",
+          col: Math.max(1, Math.min(COLS - 2, h.col - 1)),
+          turned: false,
+        };
+        if (freeFor(buttonLegs(b))) (props.onAdd(b), props.onSelect(b.id));
       }
       return;
     }
     if (tool === "pot") {
       if (h && !isRail(h.row)) {
-        const p: Pot = { id: newId("pot"), kind: "pot", row: h.row as MainRow, col: Math.max(1, Math.min(COLS - 2, h.col - 1)), turn: 0.5 };
-        if (freeFor(potLegs(p))) props.onAdd(p), props.onSelect(p.id);
+        const p: Pot = {
+          id: newId("pot"),
+          kind: "pot",
+          row: h.row as MainRow,
+          col: Math.max(1, Math.min(COLS - 2, h.col - 1)),
+          turn: 0.5,
+        };
+        if (freeFor(potLegs(p))) (props.onAdd(p), props.onSelect(p.id));
       }
       return;
     }
     if (tool === "seg7") {
       if (h && !isRail(h.row)) {
-        const d: Seg7 = { id: newId("seg"), kind: "seg7", col: Math.max(1, Math.min(COLS - 4, h.col - 2)) };
-        if (freeFor(seg7Legs(d))) props.onAdd(d), props.onSelect(d.id);
+        const d: Seg7 = {
+          id: newId("seg"),
+          kind: "seg7",
+          col: Math.max(1, Math.min(COLS - SEG_WIDTH + 1, h.col - 1)),
+        };
+        if (freeFor(seg7Legs(d))) (props.onAdd(d), props.onSelect(d.id));
       }
       return;
     }
@@ -270,7 +342,7 @@ export function Breadboard(props: BreadboardProps) {
 
   const onPointerMove = (e: RPointerEvent<SVGSVGElement>) => {
     const { x, y } = toSvg(e);
-    setHover(nearestNode(x, y));
+    setHover(loops ? null : nearestNode(x, y));
     const d = dragRef.current;
     if (!d) return;
     const next = { ...d, x, y } as Drag;
@@ -291,7 +363,10 @@ export function Breadboard(props: BreadboardProps) {
     }
     if (done.mode === "shift") {
       const part = circuit.parts.find((p) => p.id === done.id);
-      if (part && (part.kind === "button" || part.kind === "pot" || part.kind === "seg7")) {
+      if (
+        part &&
+        (part.kind === "button" || part.kind === "pot" || part.kind === "seg7")
+      ) {
         const next = shifted(done, part);
         if (next) props.onChange(part.id, next);
       }
@@ -301,8 +376,14 @@ export function Breadboard(props: BreadboardProps) {
     if (!node) return;
     if (done.mode === "new") {
       if (node === done.from || occupied.has(node)) return;
-      const part: TwoLeg = { id: newId(done.kind), kind: done.kind, a: done.from, b: node };
-      if (done.kind === "wire") part.color = pickColor(props.wireColor, done.from, node);
+      const part: TwoLeg = {
+        id: newId(done.kind),
+        kind: done.kind,
+        a: done.from,
+        b: node,
+      };
+      if (done.kind === "wire")
+        part.color = pickColor(props.wireColor, done.from, node);
       if (done.kind === "resistor") part.ohms = 220;
       props.onAdd(part);
       props.onSelect(part.id);
@@ -328,266 +409,414 @@ export function Breadboard(props: BreadboardProps) {
   const ledById = new Map(analysis.leds.map((l) => [l.id, l]));
 
   const legPos = (p: TwoLeg, end: "a" | "b"): XY => {
-    if (drag?.mode === "leg" && drag.id === p.id && drag.end === end) return { x: drag.x, y: drag.y };
+    if (drag?.mode === "leg" && drag.id === p.id && drag.end === end)
+      return { x: drag.x, y: drag.y };
     return nodeXY(end === "a" ? p.a : p.b);
   };
 
+  const pop = props.popover && !loops ? props.popover : null;
+  const popPin = pop ? PIN_BY_ID.get(pop.pin) : undefined;
+  // Under the pin's printed label: below it on the far row, and below the
+  // pin itself on the near row, where the label sits above.
+  const popTop = popPin
+    ? popPin.side === "T"
+      ? popPin.y + 48
+      : popPin.y + 12
+    : 0;
+
   return (
-    <svg
-      ref={svgRef}
-      className={`wr-svg wr-tool-${tool}${drag ? " wr-svg--dragging" : ""}`}
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      width={VIEW_W}
-      height={VIEW_H}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={finishDrag}
-      onPointerCancel={() => setDrag(null)}
-      onPointerLeave={() => setHover(null)}
-      role="img"
-      aria-label="A development board above a breadboard"
-    >
-      <defs>
-        <radialGradient id="wr-glow">
-          <stop offset="0%" stopColor="#ff5a3c" stopOpacity="0.85" />
-          <stop offset="45%" stopColor="#ff5a3c" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#ff5a3c" stopOpacity="0" />
-        </radialGradient>
-      </defs>
+    <div className="wr-board-box">
+      <svg
+        ref={svgRef}
+        className={`wr-svg wr-tool-${tool}${drag ? " wr-svg--dragging" : ""}`}
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        width={VIEW_W}
+        height={VIEW_H}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finishDrag}
+        onPointerCancel={() => setDrag(null)}
+        onPointerLeave={() => setHover(null)}
+        role="img"
+        aria-label="A development board above a breadboard"
+      >
+        <defs>
+          <radialGradient id="wr-glow">
+            <stop offset="0%" stopColor="#ff5a3c" stopOpacity="0.85" />
+            <stop offset="45%" stopColor="#ff5a3c" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#ff5a3c" stopOpacity="0" />
+          </radialGradient>
+        </defs>
 
-      <DevBoard
-        powered={powered}
-        circuit={circuit}
-        analysis={analysis}
-        hover={hover}
-        selected={selected}
-        onPinClick={props.onPinClick}
-      />
-
-      {/* ── The breadboard body ── */}
-      <rect x={BB_X0} y={BB_Y} width={BB_X1 - BB_X0} height={BB_Y1 - BB_Y} rx={8} className="wr-bb" />
-      <rect x={BB_X0 + 8} y={CHANNEL_Y - 7} width={BB_X1 - BB_X0 - 16} height={14} rx={3} className="wr-bb-channel" />
-      {(["tp", "tn", "bn", "bp"] as const).map((r) => {
-        const y = rowY(r) + (r === "tp" || r === "bn" ? -P * 0.5 : P * 0.5);
-        return (
-          <line
-            key={r}
-            x1={colX(1) - 8}
-            x2={colX(COLS) + 8}
-            y1={y}
-            y2={y}
-            className={r === "tp" || r === "bp" ? "wr-rail-plus" : "wr-rail-minus"}
+        <g className={`wr-phys${loops ? " wr-phys--gone" : ""}`}>
+          <DevBoard
+            powered={powered}
+            circuit={circuit}
+            analysis={analysis}
+            hover={hover}
+            selected={selected}
+            onPinClick={props.onPinClick}
           />
-        );
-      })}
-      {(["tp", "tn", "bn", "bp"] as const).map((r) => (
-        <text key={r} x={BB_X0 + 12} y={rowY(r) + 4} className="wr-bb-sign">
-          {r === "tp" || r === "bp" ? "+" : "−"}
-        </text>
-      ))}
-      {MAIN_ROWS.map((r) => (
-        <text key={r} x={BB_X0 + 13} y={rowY(r) + 3.5} className="wr-bb-letter">
-          {r}
-        </text>
-      ))}
-      {Array.from({ length: COLS }, (_, i) => i + 1)
-        .filter((c) => c === 1 || c % 5 === 0)
-        .map((c) => (
-          <g key={c}>
-            <text x={colX(c)} y={rowY("a") - P * 0.62} className="wr-bb-num">
-              {c}
-            </text>
-            <text x={colX(c)} y={rowY("j") + P * 0.95} className="wr-bb-num">
-              {c}
-            </text>
-          </g>
-        ))}
 
-      {/* ── X-ray: the metal strips inside ── */}
-      {xray &&
-        STRIPS.map((strip, i) => {
-          const a = nodeXY(strip[0]!);
-          const b = nodeXY(strip[strip.length - 1]!);
-          const col = netColors ? colorOfNode(strip[0]!) : undefined;
-          const lit = hoverNet >= 0 && analysis.netOf(strip[0]!) === hoverNet;
-          return (
-            <line
-              key={i}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              className={`wr-strip${lit ? " wr-strip--hover" : ""}`}
-              style={col ? { stroke: col } : undefined}
-            />
-          );
-        })}
-
-      {/* ── Holes ── */}
-      {HOLES.map((h) => {
-        const inHover = hoverNet >= 0 && analysis.netOf(h.id) === hoverNet;
-        const col = netColors ? colorOfNode(h.id) : undefined;
-        return (
+          {/* ── The breadboard body ── */}
           <rect
-            key={h.id}
-            x={h.x - 3.5}
-            y={h.y - 3.5}
-            width={7}
-            height={7}
-            rx={1.2}
-            className={`wr-hole${inHover ? " wr-hole--hover" : ""}`}
-            style={col ? { fill: col, stroke: col } : undefined}
+            x={BB_X0}
+            y={BB_Y}
+            width={BB_X1 - BB_X0}
+            height={BB_Y1 - BB_Y}
+            rx={8}
+            className="wr-bb"
           />
-        );
-      })}
-
-      {/* ── Parts ── */}
-      {parts.map((p) => {
-        const isSel = p.id === selected;
-        const select = (e: RPointerEvent) => {
-          e.stopPropagation();
-          props.onSelect(p.id);
-        };
-        if (p.kind === "button") {
-          return (
-            <PushButton
-              key={p.id}
-              part={p}
-              pressed={circuit.pressed.has(p.id)}
-              selected={isSel}
-              xray={xray}
-              onDown={(e) => {
-                e.stopPropagation();
-                capture(e.currentTarget as Element, e.pointerId);
-                props.onSelect(p.id);
-                props.onPress(p.id, true);
-              }}
-              onUp={() => props.onPress(p.id, false)}
-            />
-          );
-        }
-        if (p.kind === "seg7") {
-          return (
-            <Display
-              key={p.id}
-              part={p}
-              leds={ledById}
-              selected={isSel}
-              xray={xray}
-              onDown={select}
-            />
-          );
-        }
-        if (p.kind === "pot") {
-          return (
-            <Potentiometer
-              key={p.id}
-              part={p}
-              selected={isSel}
-              onKnob={(e) => {
-                const { x, y } = toSvg(e);
-                begin(e, { mode: "knob", id: p.id, x0: x, y0: y, turn0: p.turn, x, y }, p.id);
-              }}
-              onDown={select}
-            />
-          );
-        }
-        const a = legPos(p, "a");
-        const b = legPos(p, "b");
-        if (p.kind === "wire") {
-          const c = arcControl(a, b);
-          const color = netColors ? (colorOfNode(p.a) ?? "#888") : WIRE_COLORS[(p.color as WireColor) ?? "yellow"];
-          const d = `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`;
-          return (
-            <g key={p.id} className={`wr-part${isSel ? " wr-part--sel" : ""}`} onPointerDown={select}>
-              <path d={d} className="wr-wire-hit" />
-              <path d={d} className="wr-wire" style={{ stroke: color }} />
-              <circle cx={a.x} cy={a.y} r={3.2} className="wr-wire-end" />
-              <circle cx={b.x} cy={b.y} r={3.2} className="wr-wire-end" />
-            </g>
-          );
-        }
-        if (p.kind === "resistor") return <Resistor key={p.id} a={a} b={b} selected={isSel} onDown={select} />;
-        const r = ledById.get(p.id);
-        return (
-          <Led
-            key={p.id}
-            a={a}
-            b={b}
-            status={r?.status ?? "idle"}
-            brightness={r?.brightness ?? 0}
-            popping={popping.has(p.id)}
-            selected={isSel}
-            onDown={select}
+          <rect
+            x={BB_X0 + 8}
+            y={CHANNEL_Y - 7}
+            width={BB_X1 - BB_X0 - 16}
+            height={14}
+            rx={3}
+            className="wr-bb-channel"
           />
-        );
-      })}
-
-      {/* ── Current, drawn along the physical path ── */}
-      {(!drag || drag.mode === "knob") &&
-        litLoops.map((l) => (
-          <path
-            key={l.id}
-            d={pathD(l.loop!, partMap)}
-            className="wr-flow"
-            style={{ opacity: 0.25 + 0.75 * l.brightness }}
-          />
-        ))}
-      {analysis.short && props.showShort && <path d={pathD(analysis.short.path, partMap)} className="wr-short" />}
-
-      {/* ── A wire being drawn ── */}
-      {drag?.mode === "new" && <DragPreview from={nodeXY(drag.from)} to={{ x: drag.x, y: drag.y }} kind={drag.kind} />}
-
-      {/* ── Leg handles: grab a leg to move it, or the part it belongs to ── */}
-      {parts.map((p) => {
-        if (p.kind === "button" || p.kind === "pot" || p.kind === "seg7") {
-          return legsOf(p).map((l, i) => {
-            const { x, y } = nodeXY(l);
+          {(["tp", "tn", "bn", "bp"] as const).map((r) => {
+            const y = rowY(r) + (r === "tp" || r === "bn" ? -P * 0.5 : P * 0.5);
             return (
-              <circle
-                key={`${p.id}-${i}`}
-                cx={x}
-                cy={y}
-                r={7}
-                className="wr-leg-handle"
-                onPointerDown={(e) => {
-                  const pt = toSvg(e);
-                  begin(e, { mode: "shift", id: p.id, leg: i, x: pt.x, y: pt.y }, p.id);
-                }}
+              <line
+                key={r}
+                x1={colX(1) - 8}
+                x2={colX(COLS) + 8}
+                y1={y}
+                y2={y}
+                className={
+                  r === "tp" || r === "bp" ? "wr-rail-plus" : "wr-rail-minus"
+                }
               />
             );
-          });
-        }
-        return (["a", "b"] as const).map((end) => {
-          const pos = legPos(p, end);
-          return (
-            <circle
-              key={`${p.id}-${end}`}
-              cx={pos.x}
-              cy={pos.y}
-              r={7}
-              className="wr-leg-handle"
-              onPointerDown={(e) => {
-                const pt = toSvg(e);
-                begin(e, { mode: "leg", id: p.id, end, fixed: end === "a" ? p.b : p.a, x: pt.x, y: pt.y }, p.id);
-              }}
-            />
-          );
-        });
-      })}
+          })}
+          {(["tp", "tn", "bn", "bp"] as const).map((r) => (
+            <text key={r} x={BB_X0 + 12} y={rowY(r) + 4} className="wr-bb-sign">
+              {r === "tp" || r === "bp" ? "+" : "−"}
+            </text>
+          ))}
+          {MAIN_ROWS.map((r) => (
+            <text
+              key={r}
+              x={BB_X0 + 13}
+              y={rowY(r) + 3.5}
+              className="wr-bb-letter"
+            >
+              {r}
+            </text>
+          ))}
+          {Array.from({ length: COLS }, (_, i) => i + 1)
+            .filter((c) => c === 1 || c % 5 === 0)
+            .map((c) => (
+              <g key={c}>
+                <text
+                  x={colX(c)}
+                  y={rowY("a") - P * 0.62}
+                  className="wr-bb-num"
+                >
+                  {c}
+                </text>
+                <text
+                  x={colX(c)}
+                  y={rowY("j") + P * 0.95}
+                  className="wr-bb-num"
+                >
+                  {c}
+                </text>
+              </g>
+            ))}
 
-      {/* ── Hovered hole or pin, and where a drag would land ── */}
-      {hover && !drag && <HoverTag id={hover} state={pinState(circuit, hover)} occupied={occupied.has(hover)} />}
-      {(drag?.mode === "new" || drag?.mode === "leg") &&
-        (() => {
-          const n = nearestNode(drag.x, drag.y);
-          if (!n) return null;
-          const owner = occupied.get(n);
-          const bad = !!owner && owner !== (drag.mode === "leg" ? drag.id : undefined);
-          const { x, y } = nodeXY(n);
-          return <circle cx={x} cy={y} r={7} className={bad ? "wr-snap wr-snap--bad" : "wr-snap"} />;
-        })()}
-    </svg>
+          {/* ── X-ray: the metal strips inside ── */}
+          {xray &&
+            STRIPS.map((strip, i) => {
+              const a = nodeXY(strip[0]!);
+              const b = nodeXY(strip[strip.length - 1]!);
+              const col = netColors ? colorOfNode(strip[0]!) : undefined;
+              const lit =
+                hoverNet >= 0 && analysis.netOf(strip[0]!) === hoverNet;
+              return (
+                <line
+                  key={i}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  className={`wr-strip${lit ? " wr-strip--hover" : ""}`}
+                  style={col ? { stroke: col } : undefined}
+                />
+              );
+            })}
+
+          {/* ── Holes ── */}
+          {HOLES.map((h) => {
+            const inHover = hoverNet >= 0 && analysis.netOf(h.id) === hoverNet;
+            const col = netColors ? colorOfNode(h.id) : undefined;
+            return (
+              <rect
+                key={h.id}
+                x={h.x - 3.5}
+                y={h.y - 3.5}
+                width={7}
+                height={7}
+                rx={1.2}
+                className={`wr-hole${inHover ? " wr-hole--hover" : ""}`}
+                style={col ? { fill: col, stroke: col } : undefined}
+              />
+            );
+          })}
+
+          {/* ── Parts ── */}
+          {parts.map((p) => {
+            const isSel = p.id === selected;
+            const select = (e: RPointerEvent) => {
+              e.stopPropagation();
+              props.onSelect(p.id);
+            };
+            if (p.kind === "button") {
+              return (
+                <PushButton
+                  key={p.id}
+                  part={p}
+                  pressed={circuit.pressed.has(p.id)}
+                  selected={isSel}
+                  xray={xray}
+                  onDown={(e) => {
+                    e.stopPropagation();
+                    capture(e.currentTarget as Element, e.pointerId);
+                    props.onSelect(p.id);
+                    props.onPress(p.id, true);
+                  }}
+                  onUp={() => props.onPress(p.id, false)}
+                />
+              );
+            }
+            if (p.kind === "seg7") {
+              return (
+                <Display
+                  key={p.id}
+                  part={p}
+                  leds={ledById}
+                  selected={isSel}
+                  xray={xray}
+                  onDown={select}
+                />
+              );
+            }
+            if (p.kind === "pot") {
+              return (
+                <Potentiometer
+                  key={p.id}
+                  part={p}
+                  selected={isSel}
+                  onKnob={(e) => {
+                    const { x, y } = toSvg(e);
+                    begin(
+                      e,
+                      {
+                        mode: "knob",
+                        id: p.id,
+                        x0: x,
+                        y0: y,
+                        turn0: p.turn,
+                        x,
+                        y,
+                      },
+                      p.id,
+                    );
+                  }}
+                  onDown={select}
+                />
+              );
+            }
+            const a = legPos(p, "a");
+            const b = legPos(p, "b");
+            if (p.kind === "wire") {
+              const c = arcControl(a, b);
+              const color = netColors
+                ? (colorOfNode(p.a) ?? "#888")
+                : WIRE_COLORS[(p.color as WireColor) ?? "yellow"];
+              const d = `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`;
+              return (
+                <g
+                  key={p.id}
+                  className={`wr-part${isSel ? " wr-part--sel" : ""}`}
+                  onPointerDown={select}
+                >
+                  <path d={d} className="wr-wire-hit" />
+                  <path d={d} className="wr-wire" style={{ stroke: color }} />
+                  <circle cx={a.x} cy={a.y} r={3.2} className="wr-wire-end" />
+                  <circle cx={b.x} cy={b.y} r={3.2} className="wr-wire-end" />
+                </g>
+              );
+            }
+            if (p.kind === "resistor")
+              return (
+                <Resistor
+                  key={p.id}
+                  a={a}
+                  b={b}
+                  selected={isSel}
+                  onDown={select}
+                />
+              );
+            const r = ledById.get(p.id);
+            return (
+              <Led
+                key={p.id}
+                a={a}
+                b={b}
+                status={r?.status ?? "idle"}
+                brightness={r?.brightness ?? 0}
+                popping={popping.has(p.id)}
+                selected={isSel}
+                onDown={select}
+              />
+            );
+          })}
+
+          {/* ── Current, drawn along the physical path ── */}
+          {(!drag || drag.mode === "knob") &&
+            litLoops.map((l) => (
+              <path
+                key={l.id}
+                d={pathD(l.loop!, partMap)}
+                className="wr-flow"
+                style={{ opacity: 0.25 + 0.75 * l.brightness }}
+              />
+            ))}
+          {analysis.short && props.showShort && (
+            <path
+              d={pathD(analysis.short.path, partMap)}
+              className="wr-short"
+            />
+          )}
+        </g>
+
+        {/* ── The diagram, over the board or as loops ── */}
+        {diagram && diagramMode !== "off" && (
+          <Diagram
+            diagram={diagram}
+            mode={diagramMode}
+            circuit={circuit}
+            analysis={analysis}
+            selected={selected}
+            onSelect={props.onSelect}
+            onPress={props.onPress}
+            onPinClick={props.onPinClick}
+          />
+        )}
+
+        {!loops && (
+          <>
+            {/* ── A wire being drawn ── */}
+            {drag?.mode === "new" && (
+              <DragPreview
+                from={nodeXY(drag.from)}
+                to={{ x: drag.x, y: drag.y }}
+                kind={drag.kind}
+              />
+            )}
+
+            {/* ── Leg handles: grab a leg to move it, or the part it belongs to ── */}
+            {parts.map((p) => {
+              if (
+                p.kind === "button" ||
+                p.kind === "pot" ||
+                p.kind === "seg7"
+              ) {
+                return legsOf(p).map((l, i) => {
+                  const { x, y } = nodeXY(l);
+                  return (
+                    <circle
+                      key={`${p.id}-${i}`}
+                      cx={x}
+                      cy={y}
+                      r={7}
+                      className="wr-leg-handle"
+                      onPointerDown={(e) => {
+                        const pt = toSvg(e);
+                        begin(
+                          e,
+                          { mode: "shift", id: p.id, leg: i, x: pt.x, y: pt.y },
+                          p.id,
+                        );
+                      }}
+                    />
+                  );
+                });
+              }
+              return (["a", "b"] as const).map((end) => {
+                const pos = legPos(p, end);
+                return (
+                  <circle
+                    key={`${p.id}-${end}`}
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={7}
+                    className="wr-leg-handle"
+                    onPointerDown={(e) => {
+                      const pt = toSvg(e);
+                      begin(
+                        e,
+                        {
+                          mode: "leg",
+                          id: p.id,
+                          end,
+                          fixed: end === "a" ? p.b : p.a,
+                          x: pt.x,
+                          y: pt.y,
+                        },
+                        p.id,
+                      );
+                    }}
+                  />
+                );
+              });
+            })}
+
+            {/* ── Hovered hole or pin, and where a drag would land ── */}
+            {hover && !drag && (
+              <HoverTag
+                id={hover}
+                state={pinState(circuit, hover)}
+                occupied={occupied.has(hover)}
+              />
+            )}
+            {(drag?.mode === "new" || drag?.mode === "leg") &&
+              (() => {
+                const n = nearestNode(drag.x, drag.y);
+                if (!n) return null;
+                const owner = occupied.get(n);
+                const bad =
+                  !!owner &&
+                  owner !== (drag.mode === "leg" ? drag.id : undefined);
+                const { x, y } = nodeXY(n);
+                return (
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={7}
+                    className={bad ? "wr-snap wr-snap--bad" : "wr-snap"}
+                  />
+                );
+              })()}
+          </>
+        )}
+      </svg>
+      {pop && popPin && (
+        <div
+          className="wr-popover"
+          role="dialog"
+          aria-label={`${popPin.label} settings`}
+          style={{
+            top: `${(popTop / VIEW_H) * 100}%`,
+            ["--wr-pop-x" as string]: `${(popPin.x / VIEW_W) * 100}%`,
+          }}
+        >
+          {pop.content}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -596,13 +825,23 @@ function knobTurn(d: Extract<Drag, { mode: "knob" }>) {
   return Math.max(0, Math.min(1, d.turn0 + (d.x - d.x0 - (d.y - d.y0)) / 160));
 }
 
-function pickColor(choice: WireColor | "auto", a: NodeId, b: NodeId): WireColor {
+function pickColor(
+  choice: WireColor | "auto",
+  a: NodeId,
+  b: NodeId,
+): WireColor {
   if (choice !== "auto") return choice;
   const kinds = [a, b].map((n) => {
     const pin = PIN_BY_ID.get(n);
-    if (pin) return pin.kind === "gnd" ? "gnd" : pin.kind === "3v3" || pin.kind === "vin" ? "plus" : "sig";
+    if (pin)
+      return pin.kind === "gnd"
+        ? "gnd"
+        : pin.kind === "3v3" || pin.kind === "vin"
+          ? "plus"
+          : "sig";
     const h = holeInfo(n);
-    if (h && isRail(h.row)) return h.row === "tp" || h.row === "bp" ? "plus" : "gnd";
+    if (h && isRail(h.row))
+      return h.row === "tp" || h.row === "bp" ? "plus" : "gnd";
     return "other";
   });
   if (kinds.includes("gnd")) return "black";
@@ -633,10 +872,38 @@ function DevBoard({
   const readings = new Map(analysis.readings.map((r) => [r.id, r]));
   return (
     <g className="wr-board">
-      <rect x={x0 - 14} y={(y0 + y1) / 2 - 17} width={26} height={34} rx={5} className="wr-usb" />
-      <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx={7} className="wr-pcb" />
-      <rect x={370} y={y0 + 68} width={158} height={84} rx={3} className="wr-module" />
-      <rect x={378} y={y0 + 74} width={116} height={72} rx={2} className="wr-can" />
+      <rect
+        x={x0 - 14}
+        y={(y0 + y1) / 2 - 17}
+        width={26}
+        height={34}
+        rx={5}
+        className="wr-usb"
+      />
+      <rect
+        x={x0}
+        y={y0}
+        width={x1 - x0}
+        height={y1 - y0}
+        rx={7}
+        className="wr-pcb"
+      />
+      <rect
+        x={370}
+        y={y0 + 68}
+        width={158}
+        height={84}
+        rx={3}
+        className="wr-module"
+      />
+      <rect
+        x={378}
+        y={y0 + 74}
+        width={116}
+        height={72}
+        rx={2}
+        className="wr-can"
+      />
       <text x={436} y={y0 + 114} className="wr-can-text">
         ESP32
       </text>
@@ -644,25 +911,55 @@ function DevBoard({
         d={`M 504 ${y0 + 80} h 16 v 10 h -12 v 10 h 12 v 10 h -12 v 10 h 12 v 10 h -12 v 10 h 12 v 10 h -16`}
         className="wr-antenna"
       />
-      <circle cx={x0 + 30} cy={y0 + 78} r={4} className={powered ? "wr-pwr wr-pwr--on" : "wr-pwr"} />
+      <circle
+        cx={x0 + 30}
+        cy={y0 + 78}
+        r={4}
+        className={powered ? "wr-pwr wr-pwr--on" : "wr-pwr"}
+      />
       <text x={x0 + 30} y={y0 + 94} className="wr-board-tiny">
         PWR
       </text>
-      <rect x={x0 + 22} y={y0 + 122} width={14} height={10} rx={2} className="wr-smd-btn" />
-      <rect x={x0 + 22} y={y0 + 142} width={14} height={10} rx={2} className="wr-smd-btn" />
+      <rect
+        x={x0 + 22}
+        y={y0 + 122}
+        width={14}
+        height={10}
+        rx={2}
+        className="wr-smd-btn"
+      />
+      <rect
+        x={x0 + 22}
+        y={y0 + 142}
+        width={14}
+        height={10}
+        rx={2}
+        className="wr-smd-btn"
+      />
 
       {PINS.map((p) => {
         const isGpio = p.kind === "gpio";
         const s = pinState(circuit, p.id);
-        const r = readings.get(p.id);
         const ly = p.side === "T" ? p.y + 26 : p.y - 26;
         const cls = ["wr-pinlabel"];
-        if (isGpio) cls.push("wr-pinlabel--gpio", ...pinClasses(s));
-        if (r) cls.push(r.digital === "floating" ? "wr-pinlabel--floating" : r.digital === "HIGH" ? "wr-pinlabel--reads-high" : "wr-pinlabel--reads-low");
-        if (selected === p.id) cls.push("wr-pinlabel--sel");
+        if (isGpio) cls.push("wr-pinlabel--gpio");
+        cls.push(
+          ...pinLabelClasses(
+            isGpio ? s : { mode: "INPUT" },
+            readings.get(p.id),
+            selected === p.id,
+          ),
+        );
         return (
           <g key={p.id}>
-            <rect x={p.x - 6} y={p.y - 6} width={12} height={12} rx={1.5} className="wr-pin" />
+            <rect
+              x={p.x - 6}
+              y={p.y - 6}
+              width={12}
+              height={12}
+              rx={1.5}
+              className="wr-pin"
+            />
             <rect
               x={p.x - 2.5}
               y={p.y - 2.5}
@@ -673,7 +970,15 @@ function DevBoard({
             <g
               data-pin={p.id}
               className={cls.join(" ")}
-              style={s.mode === "PWM" ? { ["--wr-duty" as string]: String(0.2 + (0.8 * s.duty) / 255) } : undefined}
+              style={
+                s.mode === "PWM"
+                  ? {
+                      ["--wr-duty" as string]: String(
+                        0.2 + (0.8 * s.duty) / 255,
+                      ),
+                    }
+                  : undefined
+              }
               onPointerDown={
                 isGpio
                   ? (e) => {
@@ -683,8 +988,20 @@ function DevBoard({
                   : undefined
               }
             >
-              <rect x={p.x - 8} y={ly - 17} width={16} height={34} rx={3} className="wr-pinlabel-bg" />
-              <text x={p.x} y={ly} transform={`rotate(-90 ${p.x} ${ly})`} className="wr-pinlabel-text">
+              <rect
+                x={p.x - 8}
+                y={ly - 17}
+                width={16}
+                height={34}
+                rx={3}
+                className="wr-pinlabel-bg"
+              />
+              <text
+                x={p.x}
+                y={ly}
+                transform={`rotate(-90 ${p.x} ${ly})`}
+                className="wr-pinlabel-text"
+              >
                 {p.label}
               </text>
             </g>
@@ -695,32 +1012,51 @@ function DevBoard({
   );
 }
 
-function pinClasses(s: PinState): string[] {
-  switch (s.mode) {
-    case "OUTPUT":
-      return [s.level ? "wr-pinlabel--high" : "wr-pinlabel--low"];
-    case "PWM":
-      return ["wr-pinlabel--pwm"];
-    case "INPUT_PULLDOWN":
-      return ["wr-pinlabel--pulldown"];
-    default:
-      return [];
-  }
-}
-
-function Resistor({ a, b, selected, onDown }: { a: XY; b: XY; selected: boolean; onDown: (e: RPointerEvent) => void }) {
+function Resistor({
+  a,
+  b,
+  selected,
+  onDown,
+}: {
+  a: XY;
+  b: XY;
+  selected: boolean;
+  onDown: (e: RPointerEvent) => void;
+}) {
   const body = bodyAt(a, b, 6);
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   const w = Math.max(14, Math.min(30, len - 12));
   const bands = ["#d0342c", "#d0342c", "#7a4a1e", "#c9a227"];
   return (
-    <g className={`wr-part${selected ? " wr-part--sel" : ""}`} onPointerDown={onDown}>
-      <polyline points={`${a.x},${a.y} ${body.x},${body.y} ${b.x},${b.y}`} className="wr-leg" />
-      <g transform={`translate(${body.x} ${body.y}) rotate(${angle > 90 || angle < -90 ? angle + 180 : angle})`}>
-        <rect x={-w / 2} y={-5} width={w} height={10} rx={4.5} className="wr-res-body" />
+    <g
+      className={`wr-part${selected ? " wr-part--sel" : ""}`}
+      onPointerDown={onDown}
+    >
+      <polyline
+        points={`${a.x},${a.y} ${body.x},${body.y} ${b.x},${b.y}`}
+        className="wr-leg"
+      />
+      <g
+        transform={`translate(${body.x} ${body.y}) rotate(${angle > 90 || angle < -90 ? angle + 180 : angle})`}
+      >
+        <rect
+          x={-w / 2}
+          y={-5}
+          width={w}
+          height={10}
+          rx={4.5}
+          className="wr-res-body"
+        />
         {bands.map((c, i) => (
-          <rect key={i} x={-w / 2 + 4 + i * ((w - 10) / 3.4)} y={-5} width={2.6} height={10} fill={c} />
+          <rect
+            key={i}
+            x={-w / 2 + 4 + i * ((w - 10) / 3.4)}
+            y={-5}
+            width={2.6}
+            height={10}
+            fill={c}
+          />
         ))}
       </g>
     </g>
@@ -750,9 +1086,18 @@ function Led({
   // The long leg (anode) gets a kink, as on the real part.
   const ak = { x: (a.x + body.x) / 2 + 3, y: (a.y + body.y) / 2 };
   return (
-    <g className={`wr-part${selected ? " wr-part--sel" : ""}`} onPointerDown={onDown}>
-      <polyline points={`${a.x},${a.y} ${ak.x},${ak.y} ${body.x},${body.y}`} className="wr-leg" />
-      <polyline points={`${b.x},${b.y} ${body.x},${body.y}`} className="wr-leg" />
+    <g
+      className={`wr-part${selected ? " wr-part--sel" : ""}`}
+      onPointerDown={onDown}
+    >
+      <polyline
+        points={`${a.x},${a.y} ${ak.x},${ak.y} ${body.x},${body.y}`}
+        className="wr-leg"
+      />
+      <polyline
+        points={`${b.x},${b.y} ${body.x},${body.y}`}
+        className="wr-leg"
+      />
       {lit && (
         <circle
           cx={body.x}
@@ -763,9 +1108,27 @@ function Led({
           style={{ opacity: 0.2 + 0.8 * brightness }}
         />
       )}
-      <circle cx={body.x} cy={body.y} r={9.5} className={burnt ? "wr-led wr-led--burnt" : "wr-led"} />
-      {lit && <circle cx={body.x} cy={body.y} r={9.5} className="wr-led-light" style={{ opacity: brightness }} />}
-      <circle cx={body.x - 3} cy={body.y - 3} r={2.6} className="wr-led-shine" />
+      <circle
+        cx={body.x}
+        cy={body.y}
+        r={9.5}
+        className={burnt ? "wr-led wr-led--burnt" : "wr-led"}
+      />
+      {lit && (
+        <circle
+          cx={body.x}
+          cy={body.y}
+          r={9.5}
+          className="wr-led-light"
+          style={{ opacity: brightness }}
+        />
+      )}
+      <circle
+        cx={body.x - 3}
+        cy={body.y - 3}
+        r={2.6}
+        className="wr-led-shine"
+      />
       {burnt && (
         <path
           d={`M ${body.x - 5} ${body.y - 4} l 4 4 l -2 3 l 5 3 M ${body.x + 4} ${body.y - 6} l -2 5`}
@@ -778,9 +1141,24 @@ function Led({
       {popping && (
         <g className="wr-pop">
           <circle cx={body.x} cy={body.y} r={10} className="wr-pop-ring" />
-          <circle cx={body.x - 4} cy={body.y - 12} r={6} className="wr-smoke wr-smoke--1" />
-          <circle cx={body.x + 5} cy={body.y - 16} r={7} className="wr-smoke wr-smoke--2" />
-          <circle cx={body.x} cy={body.y - 22} r={8} className="wr-smoke wr-smoke--3" />
+          <circle
+            cx={body.x - 4}
+            cy={body.y - 12}
+            r={6}
+            className="wr-smoke wr-smoke--1"
+          />
+          <circle
+            cx={body.x + 5}
+            cy={body.y - 16}
+            r={7}
+            className="wr-smoke wr-smoke--2"
+          />
+          <circle
+            cx={body.x}
+            cy={body.y - 22}
+            r={8}
+            className="wr-smoke wr-smoke--3"
+          />
         </g>
       )}
     </g>
@@ -816,8 +1194,12 @@ function PushButton({
     const h = nodeXY(l);
     const sx = Math.sign(h.x - cx);
     const sy = Math.sign(h.y - cy);
-    const exit = part.turned ? { x: cx + sx * H, y: cy + sy * T } : { x: cx + sx * T, y: cy + sy * H };
-    const knee = part.turned ? { x: cx + sx * (H + 7), y: cy + sy * T } : { x: cx + sx * T, y: cy + sy * (H + 4) };
+    const exit = part.turned
+      ? { x: cx + sx * H, y: cy + sy * T }
+      : { x: cx + sx * T, y: cy + sy * H };
+    const knee = part.turned
+      ? { x: cx + sx * (H + 7), y: cy + sy * T }
+      : { x: cx + sx * T, y: cy + sy * (H + 4) };
     return `M ${exit.x} ${exit.y} L ${knee.x} ${knee.y} L ${h.x} ${h.y}`;
   });
   return (
@@ -832,19 +1214,60 @@ function PushButton({
       ))}
       <g
         className="wr-btn-rot"
-        style={{ transform: `rotate(${part.turned ? 90 : 0}deg)`, transformOrigin: `${cx}px ${cy}px` }}
+        style={{
+          transform: `rotate(${part.turned ? 90 : 0}deg)`,
+          transformOrigin: `${cx}px ${cy}px`,
+        }}
       >
         {/* Drawn upright: tabs on the top and bottom edges. */}
-        <rect x={cx - H + 3} y={cy - H - 4} width={2 * H - 6} height={6} rx={1.5} className="wr-btn-tab" />
-        <rect x={cx - H + 3} y={cy + H - 2} width={2 * H - 6} height={6} rx={1.5} className="wr-btn-tab" />
-        <rect x={cx - H} y={cy - H} width={2 * H} height={2 * H} rx={2.5} className="wr-btn-body" />
+        <rect
+          x={cx - H + 3}
+          y={cy - H - 4}
+          width={2 * H - 6}
+          height={6}
+          rx={1.5}
+          className="wr-btn-tab"
+        />
+        <rect
+          x={cx - H + 3}
+          y={cy + H - 2}
+          width={2 * H - 6}
+          height={6}
+          rx={1.5}
+          className="wr-btn-tab"
+        />
+        <rect
+          x={cx - H}
+          y={cy - H}
+          width={2 * H}
+          height={2 * H}
+          rx={2.5}
+          className="wr-btn-body"
+        />
         {xray && (
           <>
-            <line x1={cx - T} y1={cy - H + 2} x2={cx - T} y2={cy + H - 2} className="wr-btn-pair" />
-            <line x1={cx + T} y1={cy - H + 2} x2={cx + T} y2={cy + H - 2} className="wr-btn-pair" />
+            <line
+              x1={cx - T}
+              y1={cy - H + 2}
+              x2={cx - T}
+              y2={cy + H - 2}
+              className="wr-btn-pair"
+            />
+            <line
+              x1={cx + T}
+              y1={cy - H + 2}
+              x2={cx + T}
+              y2={cy + H - 2}
+              className="wr-btn-pair"
+            />
           </>
         )}
-        <circle cx={cx} cy={cy} r={pressed ? 10 : 12} className={pressed ? "wr-btn-cap wr-btn-cap--down" : "wr-btn-cap"} />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={pressed ? 10 : 12}
+          className={pressed ? "wr-btn-cap wr-btn-cap--down" : "wr-btn-cap"}
+        />
       </g>
     </g>
   );
@@ -866,10 +1289,10 @@ function Display({
   onDown: (e: RPointerEvent) => void;
 }) {
   const x0 = colX(part.col) - 12;
-  const x1 = colX(part.col + 4) + 12;
+  const x1 = colX(part.col + SEG_WIDTH - 1) + 12;
   const y0 = rowY("e") - 10;
   const y1 = rowY("f") + 10;
-  const cx = (x0 + x1) / 2 - 4;
+  const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
   // Segment geometry, in a 36 × 60 box centred on (cx, cy), slightly slanted.
   const W = 34;
@@ -878,9 +1301,23 @@ function Display({
   const sk = 0.12;
   const pt = (x: number, y: number) => `${cx + x - y * sk},${cy + y}`;
   const hSeg = (y: number) =>
-    [pt(-W / 2 + t, y - t / 2), pt(W / 2 - t, y - t / 2), pt(W / 2 - t / 2, y), pt(W / 2 - t, y + t / 2), pt(-W / 2 + t, y + t / 2), pt(-W / 2 + t / 2, y)].join(" ");
+    [
+      pt(-W / 2 + t, y - t / 2),
+      pt(W / 2 - t, y - t / 2),
+      pt(W / 2 - t / 2, y),
+      pt(W / 2 - t, y + t / 2),
+      pt(-W / 2 + t, y + t / 2),
+      pt(-W / 2 + t / 2, y),
+    ].join(" ");
   const vSeg = (x: number, ya: number, yb: number) =>
-    [pt(x, ya + t / 2), pt(x + t / 2, ya + t), pt(x + t / 2, yb - t), pt(x, yb - t / 2), pt(x - t / 2, yb - t), pt(x - t / 2, ya + t)].join(" ");
+    [
+      pt(x, ya + t / 2),
+      pt(x + t / 2, ya + t),
+      pt(x + t / 2, yb - t),
+      pt(x, yb - t / 2),
+      pt(x - t / 2, yb - t),
+      pt(x - t / 2, ya + t),
+    ].join(" ");
   const shapes: Record<string, string> = {
     a: hSeg(-Hh),
     g: hSeg(0),
@@ -892,37 +1329,72 @@ function Display({
   };
   const segState = (s: string) => leds.get(`${part.id}:${s}`);
   return (
-    <g className={`wr-part wr-seg7${selected ? " wr-part--sel" : ""}`} onPointerDown={onDown}>
-      <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx={3} className="wr-seg7-body" />
+    <g
+      className={`wr-part wr-seg7${selected ? " wr-part--sel" : ""}`}
+      onPointerDown={onDown}
+    >
+      <rect
+        x={x0}
+        y={y0}
+        width={x1 - x0}
+        height={y1 - y0}
+        rx={3}
+        className="wr-seg7-body"
+      />
       {Object.entries(shapes).map(([s, d]) => {
         const st = segState(s);
         const b = st?.status === "lit" ? st.brightness : 0;
         return (
           <g key={s}>
-            <polygon points={d} className={st?.status === "burnt" ? "wr-seg wr-seg--burnt" : "wr-seg"} />
-            {b > 0.01 && <polygon points={d} className="wr-seg-lit" style={{ opacity: 0.15 + 0.85 * b }} />}
+            <polygon
+              points={d}
+              className={
+                st?.status === "burnt" ? "wr-seg wr-seg--burnt" : "wr-seg"
+              }
+            />
+            {b > 0.01 && (
+              <polygon
+                points={d}
+                className="wr-seg-lit"
+                style={{ opacity: 0.15 + 0.85 * b }}
+              />
+            )}
           </g>
         );
       })}
-      {(() => {
-        const st = segState("dp");
-        const b = st?.status === "lit" ? st.brightness : 0;
-        const dx = cx + W / 2 + 7 - Hh * sk;
-        return (
-          <g>
-            <circle cx={dx} cy={cy + Hh} r={3.5} className="wr-seg" />
-            {b > 0.01 && <circle cx={dx} cy={cy + Hh} r={3.5} className="wr-seg-lit" style={{ opacity: 0.15 + 0.85 * b }} />}
-          </g>
-        );
-      })()}
       {xray &&
-        [...SEG_TOP.map((l, i) => ({ l, x: colX(part.col + i), y: rowY("e") - 13 })), ...SEG_BOTTOM.map((l, i) => ({ l, x: colX(part.col + i), y: rowY("f") + 19 }))].map(
-          ({ l, x, y }, i) => (
-            <text key={i} x={x} y={y} className={l === "GND" ? "wr-seg-pin wr-seg-pin--gnd" : "wr-seg-pin"}>
+        [
+          ...SEG_TOP.map((l, i) => ({
+            l,
+            x: colX(part.col + i),
+            y: rowY("e") - 13,
+          })),
+          ...SEG_BOTTOM.map((l, i) => ({
+            l,
+            x: colX(part.col + i),
+            y: rowY("f") + 19,
+          })),
+        ].map(({ l, x, y }, i) => (
+          <g key={i}>
+            <rect
+              x={x - 6}
+              y={y - 9}
+              width={12}
+              height={12}
+              rx={2}
+              className="wr-seg-pin-bg"
+            />
+            <text
+              x={x}
+              y={y}
+              className={
+                l === "GND" ? "wr-seg-pin wr-seg-pin--gnd" : "wr-seg-pin"
+              }
+            >
               {l === "GND" ? "⏚" : l}
             </text>
-          ),
-        )}
+          </g>
+        ))}
     </g>
   );
 }
@@ -949,11 +1421,28 @@ function Potentiometer({
   const rad = ((angle - 90) * Math.PI) / 180;
   const R = 11;
   return (
-    <g className={`wr-part${selected ? " wr-part--sel" : ""}`} onPointerDown={onDown}>
+    <g
+      className={`wr-part${selected ? " wr-part--sel" : ""}`}
+      onPointerDown={onDown}
+    >
       {legs.map((l, i) => (
-        <line key={i} x1={l.x} y1={l.y} x2={l.x} y2={cy - up * 12} className="wr-leg" />
+        <line
+          key={i}
+          x1={l.x}
+          y1={l.y}
+          x2={l.x}
+          y2={cy - up * 12}
+          className="wr-leg"
+        />
       ))}
-      <rect x={mid.x - 25} y={cy - 16} width={50} height={32} rx={4} className="wr-pot-body" />
+      <rect
+        x={mid.x - 25}
+        y={cy - 16}
+        width={50}
+        height={32}
+        rx={4}
+        className="wr-pot-body"
+      />
       <g className="wr-pot-knob" onPointerDown={onKnob}>
         <circle cx={mid.x} cy={cy} r={R + 2} className="wr-pot-ring" />
         <circle cx={mid.x} cy={cy} r={R} className="wr-pot-cap" />
@@ -969,35 +1458,81 @@ function Potentiometer({
   );
 }
 
-function DragPreview({ from, to, kind }: { from: XY; to: XY; kind: "wire" | "resistor" | "led" }) {
+function DragPreview({
+  from,
+  to,
+  kind,
+}: {
+  from: XY;
+  to: XY;
+  kind: "wire" | "resistor" | "led";
+}) {
   if (kind === "wire") {
     const c = arcControl(from, to);
-    return <path d={`M ${from.x} ${from.y} Q ${c.x} ${c.y} ${to.x} ${to.y}`} className="wr-wire wr-wire--ghost" />;
+    return (
+      <path
+        d={`M ${from.x} ${from.y} Q ${c.x} ${c.y} ${to.x} ${to.y}`}
+        className="wr-wire wr-wire--ghost"
+      />
+    );
   }
-  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="wr-leg wr-leg--ghost" />;
+  return (
+    <line
+      x1={from.x}
+      y1={from.y}
+      x2={to.x}
+      y2={to.y}
+      className="wr-leg wr-leg--ghost"
+    />
+  );
 }
 
-function HoverTag({ id, state, occupied }: { id: NodeId; state: PinState; occupied: boolean }) {
+function HoverTag({
+  id,
+  state,
+  occupied,
+}: {
+  id: NodeId;
+  state: PinState;
+  occupied: boolean;
+}) {
   const pin = PIN_BY_ID.get(id);
   const { x, y } = nodeXY(id);
-  if (!pin) return <circle cx={x} cy={y} r={6.5} className={occupied ? "wr-hover wr-hover--full" : "wr-hover"} />;
+  if (!pin)
+    return (
+      <circle
+        cx={x}
+        cy={y}
+        r={6.5}
+        className={occupied ? "wr-hover wr-hover--full" : "wr-hover"}
+      />
+    );
   const text =
     pin.kind === "gpio"
-      ? `${pin.label} · GPIO ${pin.gpio} · ${state.mode}${pin.inputOnly ? " only" : ""}`
-      : pin.kind === "3v3"
-        ? "3V3 · 3.3 volts out"
-        : pin.kind === "vin"
-          ? "VIN · 5 volts from USB"
-          : pin.kind === "gnd"
-            ? "GND · ground, where every loop ends"
-            : "EN · reset";
-  const w = text.length * 6.1 + 14;
-  const ty = pin.side === "T" ? y - 20 : y + 20;
+      ? `${pin.label} - ${state.mode} - ${pinAbilities(pin).join(", ")}`
+      : pin.kind === "serial"
+        ? `${pin.label} - Avoid this`
+        : pin.kind === "3v3"
+          ? "3V3 - 3.3 Volts"
+          : pin.kind === "vin"
+            ? "VIN - 5 Volts (from USB)"
+            : pin.kind === "gnd"
+              ? "GND - ground"
+              : "EN - reset";
+  const w = text.length * 6.1 + 28;
+  const ty = pin.side === "T" ? y - 22 : y + 22;
   const tx = Math.max(w / 2 + 4, Math.min(VIEW_W - w / 2 - 4, x));
   return (
     <g pointerEvents="none">
       <circle cx={x} cy={y} r={7} className="wr-hover" />
-      <rect x={tx - w / 2} y={ty - 10} width={w} height={20} rx={4} className="wr-tooltip" />
+      <rect
+        x={tx - w / 2}
+        y={ty - 12}
+        width={w}
+        height={24}
+        rx={5}
+        className="wr-tooltip"
+      />
       <text x={tx} y={ty + 4} className="wr-tip-text">
         {text}
       </text>

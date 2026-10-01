@@ -25,9 +25,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { getMe, type MeEnrollment } from "../client.js";
+import {
+  getMe,
+  isStaffRole,
+  setActingAsStudent,
+  type MeEnrollment,
+} from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import {
+  Button,
   CourseSwitcher,
   IconButton,
   NavSheet,
@@ -39,6 +45,7 @@ import {
 } from "../components/index.js";
 import { MenuIcon, SignOutIcon, UserIcon } from "../icons.js";
 import { signOut } from "../session.js";
+import { TourPanel } from "../modules/onboarding/components/TourPanel.js";
 
 export function StudentLayout() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -58,9 +65,37 @@ export function StudentLayout() {
     async (signal?: AbortSignal) => {
       if (!courseId) return;
       try {
-        const m = await getMe(signal);
+        let m = await getMe(signal);
         if (signal?.aborted) return;
-        if (m.email) setIdentity(m.email.split("@")[0] ?? null);
+        // The student surface belongs to students. Course staff who land here
+        // are switched into a preview of THIS course — the session then runs
+        // as its sample student, a real student account — so nothing on these
+        // pages can render with staff credentials. Also covers moving from a
+        // preview of one course to another's student pages.
+        const staffHere = m.enrollments.find(
+          (x) => x.courseId === courseId && isStaffRole(x.role),
+        );
+        const previewingOther = m.preview != null && m.preview.courseId !== courseId;
+        if ((staffHere && !m.actingAsStudent) || previewingOther) {
+          try {
+            await setActingAsStudent(true, courseId);
+            m = await getMe(signal);
+            if (signal?.aborted) return;
+          } catch {
+            // Not staff here (a preview of another course wandered in):
+            // leave the preview rather than strand them.
+            await setActingAsStudent(false).catch(() => {});
+            navigate("/", { replace: true });
+            return;
+          }
+        }
+        setIdentity(
+          m.actingAsStudent
+            ? "Sample Student"
+            : m.email
+              ? (m.email.split("@")[0] ?? null)
+              : null,
+        );
         const e = m.enrollments.find((x) => x.courseId === courseId);
         if (!e) {
           navigate("/", { replace: true });
@@ -71,10 +106,12 @@ export function StudentLayout() {
           courseId: e.courseId,
           courseName: e.courseName,
           role: e.role,
+          capabilities: e.capabilities ?? [],
           showAttendance: e.showAttendance,
           showCollections: e.showCollections,
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
+          provenanceChatEnabled: e.provenanceChatEnabled ?? true,
           agentsEnabled: e.agentsEnabled,
           codeEnabled: e.codeEnabled ?? false,
           termSeason: e.termSeason,
@@ -82,6 +119,11 @@ export function StudentLayout() {
           startDate: e.startDate,
           endDate: e.endDate,
           isAdmin: Boolean(m.isAdmin),
+          canCreateCourses: Boolean(m.canCreateCourses),
+          genaiOptOut: Boolean(m.genaiOptOut),
+          genaiLocked: Boolean(e.genaiLocked),
+          codeChatAssignments: e.codeChatAssignments ?? 0,
+          writingChatAssignments: e.writingChatAssignments ?? 0,
           actingAsStudent: Boolean(m.actingAsStudent),
           refresh: () => load(),
         });
@@ -105,10 +147,27 @@ export function StudentLayout() {
   }, [location.pathname]);
 
   if (error) {
+    // Not a dead end: a transient /api/me failure must be recoverable in
+    // place — `load` is otherwise only re-run when the courseId changes, so
+    // without Retry a student was stranded until a manual browser reload.
     return (
       <div className="ds-home">
         <div className="ds-home__inner">
           <p className="error">{error}</p>
+          <p>
+            <Button
+              variant="subtle"
+              onClick={() => {
+                setError(null);
+                void load();
+              }}
+            >
+              Try again
+            </Button>{" "}
+            <Button variant="ghost" href="/courses">
+              All courses
+            </Button>
+          </p>
         </div>
       </div>
     );
@@ -118,11 +177,9 @@ export function StudentLayout() {
   }
 
   const home = `/course/${courseId}`;
-  // An instructor is previewing when they're really an instructor. With a live
-  // act-as-student downgrade, `value.role` is reported as `student`, so also
-  // treat the flag as previewing — otherwise the banner would vanish exactly
-  // when the downgrade is active.
-  const previewing = value.role === "instructor" || value.actingAsStudent;
+  // Staff never reach here un-previewed (see load), so the session flag is
+  // the whole story.
+  const previewing = value.actingAsStudent;
 
   // v1.2 — the modules are real routes now, so the active nav item comes from
   // the path's first segment, not a `#hash`. The bare course root (pre-redirect)
@@ -135,16 +192,10 @@ export function StudentLayout() {
   // Inside an agent conversation the header takes the same register as the
   // provenance editor: full width, no sign-out / identity chrome.
   const inAgent = seg === "chat";
-  const activeModule =
-    seg === "" || seg === "dashboard"
-      ? "dashboard"
-      : seg === "agents" || seg === "chat"
-        ? "agents"
-        : seg === "writing"
-          ? "writing"
-          : seg === "code"
-            ? "code"
-            : null;
+  // StudentModuleNav renders a single Dashboard item (see its header comment
+  // for why the other modules left the strip), so "dashboard" is the only
+  // value that can highlight — no point deriving names nothing renders.
+  const activeModule = seg === "" || seg === "dashboard" ? "dashboard" : null;
 
   // Mobile sheet contents (≤680). The student nav is already flat, so it maps
   // straight across; "All courses" is appended so the switcher's one
@@ -259,6 +310,7 @@ export function StudentLayout() {
         <div className="app__body">
           <Outlet />
         </div>
+        <TourPanel courseId={courseId} />
       </div>
     </CourseContext.Provider>
   );

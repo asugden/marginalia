@@ -34,11 +34,59 @@ export interface Tok {
 }
 
 const OPS = [
-  "<<=", ">>=", "==", "!=", "<=", ">=", "&&", "||", "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "::",
-  "+", "-", "*", "/", "%", "=", "<", ">", "!", "~", "&", "|", "^", "?", ":", ";", ",", ".", "(", ")", "{", "}", "[", "]",
+  "<<=",
+  ">>=",
+  "==",
+  "!=",
+  "<=",
+  ">=",
+  "&&",
+  "||",
+  "++",
+  "--",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "%=",
+  "&=",
+  "|=",
+  "^=",
+  "<<",
+  ">>",
+  "::",
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "=",
+  "<",
+  ">",
+  "!",
+  "~",
+  "&",
+  "|",
+  "^",
+  "?",
+  ":",
+  ";",
+  ",",
+  ".",
+  "(",
+  ")",
+  "{",
+  "}",
+  "[",
+  "]",
 ];
 
-const CURLY: Record<string, string> = { "“": '"', "”": '"', "‘": "'", "’": "'" };
+const CURLY: Record<string, string> = {
+  "“": '"',
+  "”": '"',
+  "‘": "'",
+  "’": "'",
+};
 
 export interface Directive {
   line: number;
@@ -55,7 +103,9 @@ function lex(src: string): { toks: Tok[]; includes: Directive[] } {
   const push = (t: Tok) => {
     // #define substitution, one level deep.
     const sub = t.k === "id" ? defines.get(t.v) : undefined;
-    if (sub) for (const s of sub) toks.push({ ...s, line: t.line, start: t.start, end: t.end });
+    if (sub)
+      for (const s of sub)
+        toks.push({ ...s, line: t.line, start: t.start, end: t.end });
     else toks.push(t);
   };
 
@@ -73,7 +123,7 @@ function lex(src: string): { toks: Tok[]; includes: Directive[] } {
     }
     if (CURLY[c]) {
       throw new LangError(
-        `Line ${line} has a curly quote (${c}). Code needs straight quotes (${CURLY[c]}). Word processors and some chat apps swap them in without asking.`,
+        `Line ${line} has a curly quote (${c}). Code must use quotes (${CURLY[c]}). LLMs and word processors can swap them automatically.`,
         line,
       );
     }
@@ -93,7 +143,10 @@ function lex(src: string): { toks: Tok[]; includes: Directive[] } {
     if (c === "#" && lineStart) {
       const s = i;
       while (i < src.length && src[i] !== "\n") i++;
-      const text = src.slice(s, i).replace(/\/\/.*$/, "").trim();
+      const text = src
+        .slice(s, i)
+        .replace(/\/\/.*$/, "")
+        .trim();
       const m = /^#\s*define\s+([A-Za-z_]\w*)\s+(.*)$/.exec(text);
       if (m) {
         const inner = lex(m[2]!).toks.filter((t) => t.k !== "eof");
@@ -128,7 +181,11 @@ function lex(src: string): { toks: Tok[]; includes: Directive[] } {
       i++;
       let v = "";
       while (i < src.length && src[i] !== c) {
-        if (src[i] === "\n") throw new LangError(`Line ${line} has a quote that never closes.`, line);
+        if (src[i] === "\n")
+          throw new LangError(
+            `Line ${line} has a quote that never closes.`,
+            line,
+          );
         if (src[i] === "\\") {
           const n = src[i + 1];
           v += n === "n" ? "\n" : n === "t" ? "\t" : (n ?? "");
@@ -140,7 +197,11 @@ function lex(src: string): { toks: Tok[]; includes: Directive[] } {
       continue;
     }
     const op = OPS.find((o) => src.startsWith(o, i));
-    if (!op) throw new LangError(`Line ${line} has a character this page doesn't understand: ${c}`, line);
+    if (!op)
+      throw new LangError(
+        `Line ${line} has a character this page doesn't understand: ${c}`,
+        line,
+      );
     i += op.length;
     push({ k: "op", v: op, line, start, end: i });
   }
@@ -160,7 +221,13 @@ export type Expr =
   | { k: "cast"; type: string; x: Expr; line: number }
   | { k: "bin"; op: string; a: Expr; b: Expr; line: number }
   | { k: "assign"; op: string; target: Expr; value: Expr; line: number }
-  | { k: "update"; op: "++" | "--"; prefix: boolean; target: Expr; line: number }
+  | {
+      k: "update";
+      op: "++" | "--";
+      prefix: boolean;
+      target: Expr;
+      line: number;
+    }
   | { k: "cond"; test: Expr; a: Expr; b: Expr; line: number };
 
 export interface Declarator {
@@ -171,12 +238,32 @@ export interface Declarator {
 export type Init = Expr | Init[];
 
 export type Stmt =
-  | { k: "decl"; type: string; isConst: boolean; vars: Declarator[]; line: number }
+  | {
+      k: "decl";
+      type: string;
+      isConst: boolean;
+      vars: Declarator[];
+      line: number;
+    }
   | { k: "expr"; e: Expr; line: number }
-  | { k: "if"; test: Expr; then: Stmt; else?: Stmt; line: number; elseLine?: number }
+  | {
+      k: "if";
+      test: Expr;
+      then: Stmt;
+      else?: Stmt;
+      line: number;
+      elseLine?: number;
+    }
   | { k: "while"; test: Expr; body: Stmt; line: number }
   | { k: "do"; test: Expr; body: Stmt; line: number }
-  | { k: "for"; init?: Stmt; test?: Expr; update?: Expr; body: Stmt; line: number }
+  | {
+      k: "for";
+      init?: Stmt;
+      test?: Expr;
+      update?: Expr;
+      body: Stmt;
+      line: number;
+    }
   | { k: "block"; body: Stmt[]; line: number; endLine: number }
   | { k: "return"; e?: Expr; line: number }
   | { k: "break"; line: number }
@@ -219,8 +306,29 @@ export interface Program {
 // ── Parser ─────────────────────────────────────────────────────────────
 
 const TYPE_WORDS = new Set([
-  "void", "int", "float", "double", "bool", "boolean", "long", "short", "unsigned", "signed", "byte", "char", "word",
-  "String", "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "size_t",
+  "void",
+  "int",
+  "float",
+  "double",
+  "bool",
+  "boolean",
+  "long",
+  "short",
+  "unsigned",
+  "signed",
+  "byte",
+  "char",
+  "word",
+  "String",
+  "uint8_t",
+  "uint16_t",
+  "uint32_t",
+  "uint64_t",
+  "int8_t",
+  "int16_t",
+  "int32_t",
+  "int64_t",
+  "size_t",
 ]);
 const QUALIFIERS = new Set(["const", "static", "volatile"]);
 
@@ -259,7 +367,7 @@ export function parse(src: string): Program {
     const t = peek();
     throw new LangError(
       t.k === "eof"
-        ? `The code ends before a "${v}" it needs. Check for a missing closing bracket.`
+        ? `The code ends before a needed "${v}". Check for a missing closing bracket.`
         : `Line ${t.line}: expected "${v}" but found "${t.v}".${v === ";" ? " Every statement ends with a semicolon." : ""}`,
       t.line,
     );
@@ -278,28 +386,66 @@ export function parse(src: string): Program {
   const parseType = () => {
     let isConst = false;
     const words: string[] = [];
-    while (peek().k === "id" && (QUALIFIERS.has(peek().v) || TYPE_WORDS.has(peek().v))) {
+    while (
+      peek().k === "id" &&
+      (QUALIFIERS.has(peek().v) || TYPE_WORDS.has(peek().v))
+    ) {
       const w = next().v;
       if (w === "const") isConst = true;
       else if (!QUALIFIERS.has(w)) words.push(w);
     }
-    if (is("*") || is("&")) throw new LangError(`Line ${peek().line}: pointers and references are beyond this page.`, peek().line);
+    if (is("*") || is("&"))
+      throw new LangError(
+        `Line ${peek().line}: pointers and references are fancy-- you don't need this demo.`,
+        peek().line,
+      );
     return { type: words.join(" "), isConst };
   };
 
   // Expressions, by C precedence.
   const BIN: string[][] = [
-    ["||"], ["&&"], ["|"], ["^"], ["&"], ["==", "!="], ["<", "<=", ">", ">="], ["<<", ">>"], ["+", "-"], ["*", "/", "%"],
+    ["||"],
+    ["&&"],
+    ["|"],
+    ["^"],
+    ["&"],
+    ["==", "!="],
+    ["<", "<=", ">", ">="],
+    ["<<", ">>"],
+    ["+", "-"],
+    ["*", "/", "%"],
   ];
-  const ASSIGN = new Set(["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="]);
+  const ASSIGN = new Set([
+    "=",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "%=",
+    "&=",
+    "|=",
+    "^=",
+    "<<=",
+    ">>=",
+  ]);
 
   const expr = (): Expr => assign();
   const assign = (): Expr => {
     const left = ternary();
     if (peek().k === "op" && ASSIGN.has(peek().v)) {
       const op = next().v;
-      if (left.k !== "id" && left.k !== "index") throw new LangError(`Line ${left.line}: can only assign to a variable.`, left.line);
-      return { k: "assign", op, target: left, value: assign(), line: left.line };
+      if (left.k !== "id" && left.k !== "index")
+        throw new LangError(
+          `Line ${left.line}: can only assign to a variable.`,
+          left.line,
+        );
+      return {
+        k: "assign",
+        op,
+        target: left,
+        value: assign(),
+        line: left.line,
+      };
     }
     return left;
   };
@@ -330,7 +476,13 @@ export function parse(src: string): Program {
     }
     if (t.k === "op" && (t.v === "++" || t.v === "--")) {
       next();
-      return { k: "update", op: t.v, prefix: true, target: unary(), line: t.line };
+      return {
+        k: "update",
+        op: t.v,
+        prefix: true,
+        target: unary(),
+        line: t.line,
+      };
     }
     if (is("(") && peek(1).k === "id" && TYPE_WORDS.has(peek(1).v)) {
       next();
@@ -349,7 +501,13 @@ export function parse(src: string): Program {
         eat("]");
         e = { k: "index", arr: e, idx, line: e.line };
       } else if (is("++") || is("--")) {
-        e = { k: "update", op: next().v as "++" | "--", prefix: false, target: e, line: e.line };
+        e = {
+          k: "update",
+          op: next().v as "++" | "--",
+          prefix: false,
+          target: e,
+          line: e.line,
+        };
       } else break;
     }
     return e;
@@ -359,14 +517,38 @@ export function parse(src: string): Program {
     if (t.k === "num") {
       const clean = t.v.replace(/[uUlLfF]+$/, "");
       const value = /^0[xX]/.test(clean) ? parseInt(clean, 16) : Number(clean);
-      lits.push({ start: t.start, end: t.end, line: t.line, text: t.v, value, kind: "num", isFloat: /[.eE]/.test(clean) || /[fF]$/.test(t.v), scope });
+      lits.push({
+        start: t.start,
+        end: t.end,
+        line: t.line,
+        text: t.v,
+        value,
+        kind: "num",
+        isFloat: /[.eE]/.test(clean) || /[fF]$/.test(t.v),
+        scope,
+      });
       return { k: "lit", lit: lits.length - 1, line: t.line };
     }
     if (t.k === "str") return { k: "str", v: t.v, line: t.line };
-    if (t.k === "char") return { k: "lit", lit: pushLit(t, t.v.charCodeAt(0) || 0, "num"), line: t.line };
+    if (t.k === "char")
+      return {
+        k: "lit",
+        lit: pushLit(t, t.v.charCodeAt(0) || 0, "num"),
+        line: t.line,
+      };
     if (t.k === "id") {
-      if (t.v === "HIGH" || t.v === "LOW") return { k: "lit", lit: pushLit(t, t.v === "HIGH" ? 1 : 0, "level"), line: t.line };
-      if (t.v === "true" || t.v === "false") return { k: "lit", lit: pushLit(t, t.v === "true" ? 1 : 0, "bool"), line: t.line };
+      if (t.v === "HIGH" || t.v === "LOW")
+        return {
+          k: "lit",
+          lit: pushLit(t, t.v === "HIGH" ? 1 : 0, "level"),
+          line: t.line,
+        };
+      if (t.v === "true" || t.v === "false")
+        return {
+          k: "lit",
+          lit: pushLit(t, t.v === "true" ? 1 : 0, "bool"),
+          line: t.line,
+        };
       let name = t.v;
       while (is(".") || is("::")) {
         next();
@@ -392,12 +574,23 @@ export function parse(src: string): Program {
       return e;
     }
     throw new LangError(
-      t.k === "eof" ? "The code ends in the middle of something." : `Line ${t.line}: didn't expect "${t.v}" here.`,
+      t.k === "eof"
+        ? "The code appears incomplete."
+        : `Line ${t.line}: didn't expect "${t.v}" here.`,
       t.line,
     );
   };
   const pushLit = (t: Tok, value: number, kind: Literal["kind"]) => {
-    lits.push({ start: t.start, end: t.end, line: t.line, text: t.v, value, kind, isFloat: false, scope });
+    lits.push({
+      start: t.start,
+      end: t.end,
+      line: t.line,
+      text: t.v,
+      value,
+      kind,
+      isFloat: false,
+      scope,
+    });
     return lits.length - 1;
   };
 
@@ -412,7 +605,12 @@ export function parse(src: string): Program {
     return items;
   };
 
-  const declRest = (type: string, isConst: boolean, line: number, first: string): Stmt & { k: "decl" } => {
+  const declRest = (
+    type: string,
+    isConst: boolean,
+    line: number,
+    first: string,
+  ): Stmt & { k: "decl" } => {
     const vars: Declarator[] = [];
     let name = first;
     for (;;) {
@@ -514,7 +712,8 @@ export function parse(src: string): Program {
     }
     // A control statement owns its header line even when a statement shares
     // it ("if (x) y();"): the check is what the line is about.
-    if (s.k === "if" || s.k === "while" || s.k === "for" || s.k === "do") stmtAt.set(line, s);
+    if (s.k === "if" || s.k === "while" || s.k === "for" || s.k === "do")
+      stmtAt.set(line, s);
     else if (s.k !== "block" && !stmtAt.has(line)) stmtAt.set(line, s);
     return s;
   };
@@ -523,7 +722,11 @@ export function parse(src: string): Program {
     const line = eat("{").line;
     const body: Stmt[] = [];
     while (!is("}")) {
-      if (peek().k === "eof") throw new LangError("A { is never closed with a matching }.", line);
+      if (peek().k === "eof")
+        throw new LangError(
+          "Curly brackets { must have matching closing brackets }.",
+          line,
+        );
       body.push(stmt());
     }
     const endLine = next().line;
@@ -536,7 +739,7 @@ export function parse(src: string): Program {
     if (!isTypeStart()) {
       const t = peek();
       throw new LangError(
-        `Line ${t.line}: "${t.v}" can't go here. Outside a function, only variables and functions are allowed.`,
+        `Line ${t.line}: "${t.v}" is incorrect. Only variables and functions are allowed outside of a function.`,
         t.line,
       );
     }
@@ -577,7 +780,15 @@ export function parse(src: string): Program {
       stmtAt.set(line, d);
     }
   }
-  if (!funcs.has("setup")) throw new LangError("There's no setup() function. Every sketch needs one, even if it's empty.", 1);
-  if (!funcs.has("loop")) throw new LangError("There's no loop() function. Every sketch needs one, even if it's empty.", 1);
+  if (!funcs.has("setup"))
+    throw new LangError(
+      "Every sketch requires a setup() function, even if it's empty.",
+      1,
+    );
+  if (!funcs.has("loop"))
+    throw new LangError(
+      "Every sketch requires a loop() function, even if it's empty.",
+      1,
+    );
   return { globals, funcs, lits, roles, stmtAt, funcAt, includes };
 }

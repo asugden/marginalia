@@ -74,8 +74,12 @@ export function AuthorVariantResultsPage() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `variant-results-${data.title.replace(/\W+/g, "-").toLowerCase()}.csv`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    // Revoking synchronously races the download in Firefox/Safari (same
+    // pattern as the code module's FilesPanel).
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
   const totalAssigned = data?.students.length ?? 0;

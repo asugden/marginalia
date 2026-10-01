@@ -1,53 +1,46 @@
-// Instructor-side writing-assignment authoring — /course/:id/instructor/assignments.
+// Assign ▸ Writing — /course/:id/instructor/assignments, and the create form
+// at /course/:id/instructor/assignments/new.
 //
-// This page predates the assignment wrapper and has narrowed since. The Assign
-// band (/course/:id/instructor/assign, the course-items module) is now the one
-// list of everything the course assigns, across every kind. What stays here is
-// the thing Assign deliberately does not do: AUTHORING a writing assignment —
-// its title, instructions, and the ordered checkpoints students submit
-// against. Writing is the one kind needing several dated moments, so it keeps
-// its own editor rather than being squeezed into the wrapper's single due date.
+// The AUTHORING side: one row per assignment, with its checkpoints inline, and
+// Edit / Publish / Delete. What students handed in is on the REVIEW side
+// (Review ▸ Submissions), where each checkpoint is listed as its own
+// assignment; a row's title links there.
 //
-// The combined writing+examples list below is retained so the page stands on
-// its own for a course that arrives here directly, but the Assign band is the
-// surface that list is now duplicated by; prefer linking there.
+// An assignment is a title, instructions, and the ordered checkpoints students
+// submit against ("draft Monday, final Wednesday" is ONE assignment the student
+// keeps one document across). A one-checkpoint assignment never shows its
+// checkpoint's name — it reads as "Due Oct 3", not "Final — Oct 3".
 //
-// This page is a PRESENTATION-LAYER union only. Nothing is merged underneath:
-// each kind is still read from its own module's API, still written through its
-// own editor, and still governed by its own rules. In particular the examples
-// privacy split (anonymous aggregate usage on one side, opt-in binary
-// completion on the other, never joined) survives untouched — this list shows
-// only the completion side, as a count of students who marked an example done.
+// Visibility is Draft / Published (stored as `archived_at`: set = students
+// can't see it). New assignments start as drafts. Delete removes the
+// assignment; submissions to it are kept and move to Uncategorized.
 //
-// Deadlines are optional on both kinds. A writing checkpoint with no date can
-// never be late; an example with no date is simply "worth your time". Nothing
-// here ever blocks a late submission — a deadline only decides whether the
-// writing roster prints the word LATE beside a timestamp.
+// Deadlines are optional. A checkpoint with no date can never be late, and
+// nothing here ever blocks a late submission.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import {
   createAssignment,
   deleteAssignment,
+  listAgentsWithSettings,
   listAssignments,
   updateAssignment,
+  type AgentSummary,
   type AssignmentDTO,
+  type CheckpointDTO,
   type CheckpointInput,
+  type CourseSubmissionSummary,
 } from "../api.js";
-import {
-  getCompletionRoster,
-  getCourseExamples,
-  type CourseExampleDTO,
-} from "../../examples/api.js";
-import { findExample } from "../../../examples/registry.js";
 import {
   Badge,
   Button,
-  Dropdown,
   Field,
   Input,
   PageHeader,
   Section,
+  Select,
+  Switch,
   Textarea,
   useConfirm,
 } from "../../../components/index.js";
@@ -55,6 +48,9 @@ import {
 /** A checkpoint while it's being edited. The date input speaks `datetime-local`
  *  strings, so the draft holds that rather than epoch ms. */
 interface CheckpointDraft {
+  /** The stored checkpoint's id; absent for one added in this edit. Sent back
+   *  so the server updates it in place and its submissions stay attached. */
+  id?: string;
   name: string;
   /** "" = no deadline. */
   due: string;
@@ -87,158 +83,99 @@ export function formatDue(ms: number | null): string {
   });
 }
 
-/** Example dates are stored at UTC midnight (the curation editor uses a
- *  date-only input), so they print as a day with no clock — showing "12:00 AM"
- *  beside them would suggest a precision the instructor never set. */
-function formatDay(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+/** How staff name one checkpoint of an assignment: the assignment's title,
+ *  plus the checkpoint's name only when there is more than one. */
+export function checkpointTitle(a: AssignmentDTO, c: CheckpointDTO | null): string {
+  return c && a.checkpoints.length > 1 ? `${a.title} — ${c.name}` : a.title;
 }
 
-// ── The unified row model ──────────────────────────────────────────────────
+/** Submissions no checkpoint page shows: never attached, attached to an
+ *  assignment since deleted, or to a checkpoint since removed. Kept visible on
+ *  their own page so nothing a student handed in is ever out of reach. */
+export function uncategorized(
+  subs: CourseSubmissionSummary[],
+  assignments: AssignmentDTO[],
+): CourseSubmissionSummary[] {
+  const checkpointIds = new Set(assignments.flatMap((a) => a.checkpoints.map((c) => c.id)));
+  return subs.filter((s) => s.checkpointId === null || !checkpointIds.has(s.checkpointId));
+}
 
-/**
- * One entry in the combined list, normalised from whichever module it came
- * from. The two kinds keep their own payloads (`writing` / `example`) rather
- * than being flattened into shared fields, because their editors, their detail
- * pages, and their rules all differ — the union exists to sort and render them
- * together, not to pretend they are the same thing.
- */
-type Entry =
-  | { kind: "writing"; key: string; title: string; sortDue: number | null; archived: boolean; writing: AssignmentDTO }
-  | { kind: "example"; key: string; title: string; sortDue: number | null; archived: false; example: CourseExampleDTO; completed: number; cohort: number };
+/** Where an assignment's submissions are read (Review ▸ Submissions): the
+ *  checkpoint page when there's only one checkpoint, else the whole
+ *  assignment, which links on to each checkpoint. */
+export function writingSubmissionsHref(courseId: string, a: AssignmentDTO): string {
+  const base = `/course/${courseId}/instructor/submissions/writing/${a.id}`;
+  return a.checkpoints.length === 1 ? `${base}/${a.checkpoints[0]!.id}` : base;
+}
 
-/**
- * Sort key: the soonest deadline the entry still carries, with undated entries
- * last.
- *
- * A writing assignment has several checkpoints, so "its" due date is the
- * earliest one that hasn't passed — the next thing the class owes — falling
- * back to its latest deadline once every checkpoint is behind us, so finished
- * work drifts to the top of the list in the order it was actually due rather
- * than jumping to the undated tail. An example has at most one date, which is
- * simply it.
- *
- * Undated entries sort last, not first: "no deadline" is the instructor
- * declining to schedule something, and a list read for "what's next" should not
- * open with the items that are never next. Within the undated group, and
- * between entries sharing a date, ties break on title so the order is stable
- * across reloads rather than depending on fetch timing.
- */
-function nextDue(cps: Array<{ dueAt: number | null }>, now: number): number | null {
-  const dated = cps.map((c) => c.dueAt).filter((d): d is number => d !== null);
+/** The checkpoints, as one line: "Due Oct 3" for a single checkpoint (its
+ *  name is never shown), "Draft due Oct 3 · Final due Oct 10" for several. */
+function checkpointLine(a: AssignmentDTO): string {
+  const due = (ms: number | null) => (ms === null ? "no deadline" : `due ${formatDue(ms)}`);
+  if (a.checkpoints.length === 0) return "No checkpoints";
+  if (a.checkpoints.length === 1) {
+    const d = due(a.checkpoints[0]!.dueAt);
+    return d.charAt(0).toUpperCase() + d.slice(1);
+  }
+  return a.checkpoints.map((c) => `${c.name} ${due(c.dueAt)}`).join(" · ");
+}
+
+/** The soonest deadline still ahead, else the latest one passed. */
+function nextDue(a: AssignmentDTO, now: number): number | null {
+  const dated = a.checkpoints.map((c) => c.dueAt).filter((d): d is number => d !== null);
   if (dated.length === 0) return null;
   const upcoming = dated.filter((d) => d >= now);
   return upcoming.length > 0 ? Math.min(...upcoming) : Math.max(...dated);
 }
 
-function compareEntries(a: Entry, b: Entry): number {
-  // Archived writing sinks below everything live, dated or not: it has been
-  // explicitly taken out of the students' list, so it is no longer something
-  // the class owes. (Examples have no archived state — removing one from the
-  // curated list is the equivalent, and it stops appearing here entirely.)
-  if (a.archived !== b.archived) return a.archived ? 1 : -1;
-  if (a.sortDue === null && b.sortDue === null) return a.title.localeCompare(b.title);
-  if (a.sortDue === null) return 1;
-  if (b.sortDue === null) return -1;
-  if (a.sortDue !== b.sortDue) return a.sortDue - b.sortDue;
+/** Drafts first (they are waiting on the instructor), then by next deadline
+ *  with undated last, ties by title — stable across reloads. */
+function compareAssignments(a: AssignmentDTO, b: AssignmentDTO, now: number): number {
+  const aDraft = a.archivedAt !== null;
+  const bDraft = b.archivedAt !== null;
+  if (aDraft !== bDraft) return aDraft ? -1 : 1;
+  const aDue = nextDue(a, now);
+  const bDue = nextDue(b, now);
+  if (aDue !== bDue) {
+    if (aDue === null) return 1;
+    if (bDue === null) return -1;
+    return aDue - bDue;
+  }
   return a.title.localeCompare(b.title);
 }
 
 export function AssignmentsPage() {
   const { courseId } = useCourse();
+  const navigate = useNavigate();
+  const base = `/course/${courseId}/instructor/assignments`;
   const [assignments, setAssignments] = useState<AssignmentDTO[] | null>(null);
-  const [examples, setExamples] = useState<CourseExampleDTO[] | null>(null);
-  /** slug → how many enrolled students marked it complete, plus the cohort
-   *  size. Both come out of the completion roster the Completion panel already
-   *  fetches, so the count costs no extra round-trip. */
-  const [completions, setCompletions] = useState<{ bySlug: Map<string, number>; cohort: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<AssignmentDTO | "new" | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   useEffect(() => {
     setAssignments(null);
-    setExamples(null);
-    setCompletions(null);
     setError(null);
     const ctrl = new AbortController();
-
     listAssignments(courseId, { includeArchived: true }, ctrl.signal)
-      .then((a) => { if (!ctrl.signal.aborted) setAssignments(a); })
+      .then((a) => {
+        if (!ctrl.signal.aborted) setAssignments(a);
+      })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
         setError(e instanceof Error ? e.message : "Load failed");
       });
-
-    // The examples half loads independently and fails quietly into an empty
-    // list: a course that has curated nothing is the common case, and a
-    // hiccup fetching the examples side should not blank out the writing the
-    // instructor came here for.
-    Promise.all([
-      getCourseExamples(courseId, ctrl.signal),
-      getCompletionRoster(courseId, ctrl.signal),
-    ])
-      .then(([rows, roster]) => {
-        if (ctrl.signal.aborted) return;
-        const bySlug = new Map<string, number>();
-        for (const student of roster) {
-          for (const slug of student.completed) {
-            bySlug.set(slug, (bySlug.get(slug) ?? 0) + 1);
-          }
-        }
-        setExamples(rows);
-        setCompletions({ bySlug, cohort: roster.length });
-      })
-      .catch(() => {
-        if (ctrl.signal.aborted) return;
-        setExamples([]);
-        setCompletions({ bySlug: new Map(), cohort: 0 });
-      });
-
     return () => ctrl.abort();
   }, [courseId]);
 
-  const entries = useMemo<Entry[] | null>(() => {
-    if (assignments === null || examples === null || completions === null) return null;
+  const sorted = useMemo(() => {
+    if (assignments === null) return null;
     const now = Date.now();
-    const rows: Entry[] = [
-      ...assignments.map((a): Entry => ({
-        kind: "writing",
-        key: `w:${a.id}`,
-        title: a.title,
-        sortDue: nextDue(a.checkpoints, now),
-        archived: a.archivedAt !== null,
-        writing: a,
-      })),
-      // Skip slugs the registry no longer knows: a deploy that drops an example
-      // should leave its curation row inert rather than produce a dead link.
-      // Same rule the student list and the curation panel follow.
-      ...examples
-        .filter((e) => findExample(e.slug))
-        .map((e): Entry => ({
-          kind: "example",
-          key: `e:${e.slug}`,
-          title: findExample(e.slug)?.title ?? e.slug,
-          sortDue: e.dueAt,
-          archived: false,
-          example: e,
-          completed: completions.bySlug.get(e.slug) ?? 0,
-          cohort: completions.cohort,
-        })),
-    ];
-    return rows.sort(compareEntries);
-  }, [assignments, examples, completions]);
+    return [...assignments].sort((a, b) => compareAssignments(a, b, now));
+  }, [assignments]);
 
   function upsert(saved: AssignmentDTO) {
-    setAssignments((cur) => {
-      const list = cur ?? [];
-      return list.some((a) => a.id === saved.id)
-        ? list.map((a) => (a.id === saved.id ? saved : a))
-        : [saved, ...list];
-    });
+    setAssignments((cur) => (cur ?? []).map((a) => (a.id === saved.id ? saved : a)));
     setEditing(null);
   }
 
@@ -246,8 +183,9 @@ export function AssignmentsPage() {
     if (
       !(await confirm({
         title: `Delete “${a.title}”?`,
-        body: "Submissions students already made are kept — they just stop being attached to an assignment. Archive instead if you only want it out of the student's list.",
+        body: "Students stop seeing it. Everything already submitted is kept and moves to Uncategorized in Review ▸ Submissions. To take it away from students without deleting it, Unpublish instead.",
         confirmLabel: "Delete",
+        danger: true,
       }))
     )
       return;
@@ -259,90 +197,72 @@ export function AssignmentsPage() {
     }
   }
 
-  async function onToggleArchive(a: AssignmentDTO) {
+  async function onTogglePublished(a: AssignmentDTO) {
     try {
-      const saved = await updateAssignment(a.id, {
-        courseId,
-        archived: a.archivedAt === null,
-      });
-      upsert(saved);
+      upsert(await updateAssignment(a.id, { courseId, archived: a.archivedAt === null }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
     }
   }
 
-  const writingCount = (assignments ?? []).filter((a) => a.archivedAt === null).length;
-  const archivedCount = (assignments ?? []).filter((a) => a.archivedAt !== null).length;
-  const exampleCount = (entries ?? []).filter((e) => e.kind === "example").length;
+  const published = (assignments ?? []).filter((a) => a.archivedAt === null).length;
+  const drafts = (assignments ?? []).length - published;
 
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Instructor"
-        title="Assignments"
-        scope="Everything you've set this class, on one list. Writing assignments carry checkpoints — a draft and a final, say — and the student keeps one document across all of them. Examples are interactive pages a student works through and marks complete."
+        eyebrow="Instructor · Assign"
+        title="Writing"
+        scope="Writing assignments: instructions and checkpoints, with one document per student across all of them. What students hand in is in Review ▸ Submissions."
       />
 
       {error && <p className="error">{error}</p>}
 
       <Section
-        kicker="Set for this course"
+        kicker="Writing assignments"
         meta={
-          entries === null
+          sorted === null
             ? undefined
             : [
-                `${writingCount} writing`,
-                `${exampleCount} example${exampleCount === 1 ? "" : "s"}`,
-                archivedCount > 0 ? `${archivedCount} archived` : null,
+                `${published} published`,
+                drafts > 0 ? `${drafts} draft${drafts === 1 ? "" : "s"}` : null,
               ]
                 .filter(Boolean)
                 .join(" · ")
         }
         actions={
-          editing === null && <NewAssignmentControl courseId={courseId} onNewWriting={() => setEditing("new")} />
+          <Button variant="primary" size="sm" onClick={() => navigate(`${base}/new`)}>
+            New
+          </Button>
         }
       >
-        {editing === "new" && (
-          <AssignmentEditor
-            courseId={courseId}
-            assignment={null}
-            onSaved={upsert}
-            onCancel={() => setEditing(null)}
-          />
-        )}
-
-        {entries === null ? (
+        {sorted === null ? (
           <p className="muted">Loading…</p>
-        ) : entries.length === 0 && editing === null ? (
+        ) : sorted.length === 0 ? (
           <p className="muted">
-            Nothing set yet. Add a writing assignment to give students something
-            to submit against — and to see, on one page, who hasn't. Or assign an
-            example for them to work through.
+            No writing assignments yet. Create one to give students something to
+            submit against.
           </p>
         ) : (
           <div className="app-list">
-            {entries.map((entry) =>
-              entry.kind === "writing" ? (
-                editing !== "new" && editing?.id === entry.writing.id ? (
-                  <AssignmentEditor
-                    key={entry.key}
-                    courseId={courseId}
-                    assignment={entry.writing}
-                    onSaved={upsert}
-                    onCancel={() => setEditing(null)}
-                  />
-                ) : (
-                  <WritingRow
-                    key={entry.key}
-                    courseId={courseId}
-                    assignment={entry.writing}
-                    onEdit={() => setEditing(entry.writing)}
-                    onArchive={() => onToggleArchive(entry.writing)}
-                    onDelete={() => onDelete(entry.writing)}
-                  />
-                )
+            {sorted.map((a) =>
+              editing === a.id ? (
+                <AssignmentEditor
+                  key={a.id}
+                  courseId={courseId}
+                  assignment={a}
+                  onSaved={upsert}
+                  onCancel={() => setEditing(null)}
+                />
               ) : (
-                <ExampleRow key={entry.key} courseId={courseId} entry={entry} />
+                <WritingRow
+                  key={a.id}
+                  courseId={courseId}
+                  assignment={a}
+                  onEdit={() => setEditing(a.id)}
+                  onTogglePublished={() => onTogglePublished(a)}
+                  onDelete={() => onDelete(a)}
+                />
               ),
             )}
           </div>
@@ -353,158 +273,72 @@ export function AssignmentsPage() {
   );
 }
 
-/**
- * The "New" control. Writing is created inline on this page; an example is
- * "created" by curating it from the registry, which is a different enough act
- * (pick an existing public page, rather than author a new thing) that it has
- * its own surface. So one option opens the editor below and the other
- * navigates.
- */
-function NewAssignmentControl({
-  courseId,
-  onNewWriting,
-}: {
-  courseId: string;
-  onNewWriting: () => void;
-}) {
+/** /instructor/assignments/new — the create form on its own page, so "New"
+ *  lands on the form rather than on a list. */
+export function NewAssignmentPage() {
+  const { courseId } = useCourse();
   const navigate = useNavigate();
-  // Dropdown is a controlled one-of-N, but here the options are actions rather
-  // than a persistent selection: the value resets to the placeholder after each
-  // pick so the trigger keeps reading "New".
+  const back = `/course/${courseId}/instructor/assignments`;
   return (
-    <Dropdown
-      value=""
-      placeholder="New"
-      ariaLabel="Add an assignment"
-      align="end"
-      options={[
-        { value: "writing", label: "Writing assignment" },
-        { value: "example", label: "Example" },
-      ]}
-      onChange={(v) => {
-        if (v === "writing") onNewWriting();
-        else navigate(`/course/${courseId}/instructor/assign/examples`);
-      }}
-    />
+    <div className="app-page">
+      <PageHeader
+        eyebrow="Instructor · Assign"
+        title="New writing assignment"
+        scope="It's saved as a draft: students see it once you publish it from the list."
+      />
+      <Section kicker="Assignment">
+        <AssignmentEditor
+          courseId={courseId}
+          assignment={null}
+          onSaved={() => navigate(back)}
+          onCancel={() => navigate(back)}
+        />
+      </Section>
+    </div>
   );
-}
-
-/** Type tag. Neutral on both kinds — this says what a row *is*, and must never
- *  become a place to say how a row is *going*. */
-function KindBadge({ kind }: { kind: "writing" | "example" }) {
-  return <Badge tone="neutral">{kind === "writing" ? "Writing" : "Example"}</Badge>;
 }
 
 function WritingRow({
   courseId,
-  assignment,
+  assignment: a,
   onEdit,
-  onArchive,
+  onTogglePublished,
   onDelete,
 }: {
   courseId: string;
   assignment: AssignmentDTO;
   onEdit: () => void;
-  onArchive: () => void;
+  onTogglePublished: () => void;
   onDelete: () => void;
 }) {
-  const archived = assignment.archivedAt !== null;
+  const draft = a.archivedAt !== null;
   return (
     <div className="app-list__row prov-asg__row">
       <div className="app-list__main">
         <div className="app-list__title">
-          <Link to={`/course/${courseId}/instructor/assignments/${assignment.id}`}>
-            {assignment.title}
-          </Link>{" "}
-          <KindBadge kind="writing" />
-          {archived && (
+          <Link to={writingSubmissionsHref(courseId, a)}>{a.title}</Link>
+          {draft && (
             <>
               {" "}
-              <Badge tone="neutral">archived</Badge>
+              <Badge tone="warning">Draft</Badge>
             </>
           )}
         </div>
         <div className="app-list__sub">
-          {assignment.checkpoints.length === 0
-            ? "No checkpoints"
-            : assignment.checkpoints
-                .map((c) => `${c.name} — ${formatDue(c.dueAt)}`)
-                .join(" · ")}
+          {checkpointLine(a)}
+          {draft && " · students can't see this yet"}
         </div>
-        {/* No "N of M submitted" here. The count exists only inside the
-            per-assignment roster endpoint, so showing it on the list would
-            cost one extra round-trip per row; open the assignment to see who
-            has submitted and who hasn't. */}
       </div>
       <div className="app-list__meta prov-asg__actions">
         <Button variant="subtle" size="sm" onClick={onEdit}>
           Edit
         </Button>
-        <Button variant="subtle" size="sm" onClick={onArchive}>
-          {archived ? "Unarchive" : "Archive"}
+        <Button variant="subtle" size="sm" onClick={onTogglePublished}>
+          {draft ? "Publish" : "Unpublish"}
         </Button>
-        <Button variant="danger" size="sm" onClick={onDelete}>
+        <button type="button" className="danger-link" onClick={onDelete}>
           Delete
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * An assigned example. The row links to the curation surface, which is where
- * both of this kind's detail views live.
- *
- * The only per-example figure shown is how many students marked it complete —
- * their own opt-in claim about their own work. Deliberately absent: open
- * counts, engaged-open counts, time spent, or anything else from the anonymous
- * usage aggregate. Those are a different table with no user column, and putting
- * one of its numbers on the same row as a per-student completion count would
- * imply the two can be read against each other. They cannot, by design. See the
- * examples module README.
- */
-function ExampleRow({
-  courseId,
-  entry,
-}: {
-  courseId: string;
-  entry: Extract<Entry, { kind: "example" }>;
-}) {
-  const navigate = useNavigate();
-  const { example, completed, cohort } = entry;
-  const dates: string[] = [];
-  if (example.assignedAt !== null) dates.push(`assigned ${formatDay(example.assignedAt)}`);
-  dates.push(example.dueAt !== null ? `due ${formatDay(example.dueAt)}` : "no deadline");
-
-  return (
-    <div className="app-list__row prov-asg__row">
-      <div className="app-list__main">
-        <div className="app-list__title">
-          <Link to={`/course/${courseId}/instructor/assign/examples`}>{entry.title}</Link>{" "}
-          <KindBadge kind="example" />
-        </div>
-        <div className="app-list__sub">
-          {dates.join(" · ")}
-          {cohort > 0 && <> · {completed}/{cohort} marked complete</>}
-          {example.note && <> · {example.note}</>}
-        </div>
-      </div>
-      <div className="app-list__meta prov-asg__actions">
-        <a
-          className="ex-preview-link"
-          href={`/examples/${example.slug}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Preview
-        </a>
-        <Button
-          variant="subtle"
-          size="sm"
-          onClick={() => navigate(`/course/${courseId}/instructor/assign/examples`)}
-        >
-          Manage
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -512,8 +346,9 @@ function ExampleRow({
 
 /**
  * Create/edit form for a writing assignment. Checkpoints are edited as an
- * ordered list and saved wholesale — the server replaces them rather than
- * reconciling ids, so the order on screen is the order stored.
+ * ordered list; each existing one carries its id back so the server updates
+ * it in place (its submissions stay attached). The order on screen is the
+ * order stored. A new assignment is created as a draft.
  */
 function AssignmentEditor({
   courseId,
@@ -529,13 +364,31 @@ function AssignmentEditor({
   const [title, setTitle] = useState(assignment?.title ?? "");
   const [instructions, setInstructions] = useState(assignment?.instructions ?? "");
   const [checkpoints, setCheckpoints] = useState<CheckpointDraft[]>(
-    assignment?.checkpoints.map((c) => ({ name: c.name, due: toLocalInput(c.dueAt) })) ??
+    assignment?.checkpoints.map((c) => ({ id: c.id, name: c.name, due: toLocalInput(c.dueAt) })) ??
       // A new assignment starts with one checkpoint: the common case is a
       // single due date, and an empty list would only be an extra click.
       [{ name: "Final", due: "" }],
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The chat beside this assignment's documents, and its voice (0033) — the
+  // same pair of controls a coding assignment has. Off for a new assignment,
+  // as in code: the instructor opts each one in.
+  const { genaiOptOut } = useCourse();
+  const [chatEnabled, setChatEnabled] = useState(assignment?.chatEnabled ?? false);
+  const [lockedAgentId, setLockedAgentId] = useState<string | null>(
+    assignment?.lockedAgentId ?? null,
+  );
+  /** Course-default agents — a personal agent can't be everyone's voice. */
+  const [agents, setAgents] = useState<AgentSummary[] | null>(null);
+  useEffect(() => {
+    if (genaiOptOut) return;
+    const ctrl = new AbortController();
+    listAgentsWithSettings(courseId, ctrl.signal)
+      .then((l) => !ctrl.signal.aborted && setAgents(l.agents.filter((a) => !a.mine)))
+      .catch(() => !ctrl.signal.aborted && setAgents([]));
+    return () => ctrl.abort();
+  }, [courseId, genaiOptOut]);
 
   function patchCheckpoint(i: number, patch: Partial<CheckpointDraft>) {
     setCheckpoints((cur) => cur.map((c, j) => (j === i ? { ...c, ...patch } : c)));
@@ -554,7 +407,11 @@ function AssignmentEditor({
   async function onSubmit() {
     setError(null);
     const cleaned: CheckpointInput[] = checkpoints
-      .map((c) => ({ name: c.name.trim(), dueAt: fromLocalInput(c.due) }))
+      .map((c) => ({
+        ...(c.id ? { id: c.id } : {}),
+        name: c.name.trim(),
+        dueAt: fromLocalInput(c.due),
+      }))
       .filter((c) => c.name !== "");
     if (!title.trim()) {
       setError("Give the assignment a title.");
@@ -572,12 +429,17 @@ function AssignmentEditor({
             title: title.trim(),
             instructions,
             checkpoints: cleaned,
+            // An instructor who opted out of generative AI never sees these
+            // controls, so their edit leaves a co-instructor's choice alone.
+            ...(genaiOptOut ? {} : { chatEnabled, lockedAgentId }),
           })
         : await createAssignment({
             courseId,
             title: title.trim(),
             instructions,
             checkpoints: cleaned,
+            ...(genaiOptOut ? {} : { chatEnabled, lockedAgentId }),
+            archived: true,
           });
       onSaved(saved);
     } catch (e) {
@@ -667,6 +529,31 @@ function AssignmentEditor({
           Add checkpoint
         </Button>
       </div>
+
+      {!genaiOptOut && (
+        <Switch
+          label="LLM chat beside the document"
+          checked={chatEnabled}
+          onChange={(e) => setChatEnabled(e.target.checked)}
+        />
+      )}
+      {chatEnabled && !genaiOptOut && (
+        <Field label="Voice" hint="How the chat talks to students writing this assignment.">
+          <Select
+            value={lockedAgentId ?? ""}
+            onChange={(e) => setLockedAgentId(e.target.value === "" ? null : e.target.value)}
+            disabled={agents === null}
+          >
+            <option value="">Let each student choose — course voices and their own</option>
+            <option value="builtin:socratic">Socratic (built-in)</option>
+            {(agents ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <div className="prov-asg__editor-actions">
         <Button variant="primary" onClick={onSubmit} loading={busy} disabled={busy}>

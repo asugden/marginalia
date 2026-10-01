@@ -1,35 +1,44 @@
-// Instructor-side Submissions page — /course/:id/instructor/submissions.
+// Uncategorized writing submissions — /course/:id/instructor/submissions/uncategorized.
 //
-// The course-wide review surface for provenance. Every time a student presses
-// "Share" in the writing editor, the worker freezes a snapshot of the document
-// and mints a token; this page lists them.
+// Writing submissions live under their assignments: Review ▸ Submissions
+// shows one row per checkpoint, and each row opens that checkpoint's
+// submissions. This page holds everything those pages can't show, so nothing
+// a student handed in is ever out of reach:
 //
-// Grouped by DOCUMENT, not by mint. A student can press Share repeatedly on the
-// same piece, so the raw table is one row per press — listing that flat buries
-// the actual unit of work under near-duplicate rows. Each row here is a document
-// with its latest snapshot; earlier ones are collapsed behind a "N earlier"
-// disclosure, newest first.
+//   - submissions never attached to an assignment (made before writing
+//     assignments existed, or deliberately left unattached);
+//   - submissions to an assignment that has since been deleted;
+//   - submissions to a checkpoint that has since been removed.
 //
-// Only instructors can reach the endpoint (403 otherwise) or open an individual
-// snapshot at /s/:token. This UI gate is best-effort; the server is authority.
+// Review ▸ Submissions only offers the way here when this list is non-empty.
+//
+// Grouped by DOCUMENT, not by mint: a student can submit the same piece
+// repeatedly, so each row is a document with its latest snapshot and earlier
+// ones behind an "N earlier" disclosure.
+//
+// Only staff can reach the endpoint (403 otherwise) or open a snapshot at
+// /s/:token. This UI gate is best-effort; the server is authority.
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
-import { relativeTime } from "../../../time.js";
 import {
+  listAssignments,
   listCourseSubmissions,
+  type AssignmentDTO,
   type CourseSubmissionSummary,
 } from "../api.js";
 import {
-  Badge,
   Input,
   PageHeader,
   Section,
+  SubmissionCards,
+  type SubmissionCardGroup,
 } from "../../../components/index.js";
+import { uncategorized } from "./AssignmentsPage.js";
 
 /** One document and every snapshot taken of it, newest first. */
-interface DocGroup {
+export interface DocGroup {
   documentId: string;
   title: string;
   studentEmail: string;
@@ -41,6 +50,7 @@ interface DocGroup {
 export function SubmissionsPage() {
   const { courseId } = useCourse();
   const [subs, setSubs] = useState<CourseSubmissionSummary[] | null>(null);
+  const [assignments, setAssignments] = useState<AssignmentDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
@@ -48,10 +58,14 @@ export function SubmissionsPage() {
     setSubs(null);
     setError(null);
     const ctrl = new AbortController();
-    listCourseSubmissions(courseId, ctrl.signal)
-      .then((s) => {
+    Promise.all([
+      listCourseSubmissions(courseId, ctrl.signal),
+      listAssignments(courseId, { includeArchived: true }, ctrl.signal),
+    ])
+      .then(([s, a]) => {
         if (ctrl.signal.aborted) return;
-        setSubs(s);
+        setAssignments(a);
+        setSubs(uncategorized(s, a));
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
@@ -62,25 +76,11 @@ export function SubmissionsPage() {
 
   // Group by document, preserving the server's newest-first order — so the
   // document with the most recent snapshot leads the page.
-  const groups = useMemo<DocGroup[]>(() => {
-    if (!subs) return [];
-    const byDoc = new Map<string, DocGroup>();
-    for (const s of subs) {
-      let g = byDoc.get(s.documentId);
-      if (!g) {
-        g = {
-          documentId: s.documentId,
-          title: s.title,
-          studentEmail: s.studentEmail,
-          studentName: s.studentName,
-          subs: [],
-        };
-        byDoc.set(s.documentId, g);
-      }
-      g.subs.push(s);
-    }
-    return [...byDoc.values()];
-  }, [subs]);
+  const groups = useMemo<DocGroup[]>(() => (subs ? groupByDocument(subs) : []), [subs]);
+  const checkpointCounts = useMemo(
+    () => new Map(assignments.map((a) => [a.id, a.checkpoints.length])),
+    [assignments],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -101,15 +101,19 @@ export function SubmissionsPage() {
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Instructor · Provenance"
-        title="Submissions"
-        scope="Snapshots students have shared from the writing tool. Each one freezes the document at that moment and records where every word came from. Only instructors can open them."
+        eyebrow="Instructor · Writing submissions"
+        title="Uncategorized"
+        scope="Writing submissions that don't belong to a current checkpoint: shared before assignments existed, or submitted to an assignment or checkpoint that was later deleted. They're kept here in full."
       />
+
+      <p className="muted small">
+        <Link to={`/course/${courseId}/instructor/submissions`}>← All submissions</Link>
+      </p>
 
       {error && <p className="error">{error}</p>}
 
       <Section
-        kicker="Shared documents"
+        kicker="Not under an assignment"
         meta={
           subs === null
             ? undefined
@@ -125,132 +129,83 @@ export function SubmissionsPage() {
           />
         }
       >
-        {/* No legend here by design — each bar carries its own breakdown in a
-            hover title and aria-label, and the snapshot view it links to has the
-            full legend. A standing legend just added noise to the list. */}
         {subs === null ? (
           <p className="muted">Loading…</p>
         ) : groups.length === 0 ? (
           <p className="muted">
-            Nothing shared yet. A student creates a snapshot with “Share” in the
-            writing editor.
+            Nothing here — every writing submission belongs to a checkpoint.
           </p>
         ) : filtered.length === 0 ? (
           <p className="muted">Nothing matches that filter.</p>
         ) : (
-          <div className="app-list">
-            {filtered.map((g) => (
-              <DocumentRow key={g.documentId} group={g} />
-            ))}
-          </div>
+          <SubmissionCards
+            groups={filtered.map((g) => toCardGroup(g, { context: "full", checkpointCounts }))}
+          />
         )}
       </Section>
     </div>
   );
 }
 
-function DocumentRow({ group }: { group: DocGroup }) {
-  const [open, setOpen] = useState(false);
-  const latest = group.subs[0]!;
-  const earlier = group.subs.slice(1);
-  const who = group.studentName || group.studentEmail;
-
-  return (
-    <>
-      <div className="app-list__row prov-subs__row">
-        <div className="app-list__main">
-          <div className="app-list__title">
-            {latest.revokedAt !== null ? (
-              latest.title || "Untitled"
-            ) : (
-              <Link to={`/s/${latest.token}`}>{latest.title || "Untitled"}</Link>
-            )}
-          </div>
-          <div className="app-list__sub">
-            {who} · shared {relativeTime(latest.createdAt)}
-            {latest.revokedAt !== null && " · revoked"}
-            {earlier.length > 0 && (
-              <>
-                {" · "}
-                <button
-                  type="button"
-                  className="prov-subs__more"
-                  onClick={() => setOpen((v) => !v)}
-                  aria-expanded={open}
-                >
-                  {open ? "hide" : `${earlier.length} earlier`}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="app-list__meta">
-          <OriginBar origins={latest.origins} />
-        </div>
-      </div>
-      {open &&
-        earlier.map((s) => (
-          <div className="app-list__row prov-subs__row is-earlier" key={s.token}>
-            <div className="app-list__main">
-              <div className="app-list__sub">
-                {s.revokedAt !== null ? (
-                  <>Earlier snapshot · revoked</>
-                ) : (
-                  <Link to={`/s/${s.token}`}>Earlier snapshot</Link>
-                )}
-                {" · "}
-                {relativeTime(s.createdAt)}
-              </div>
-            </div>
-            <div className="app-list__meta">
-              <OriginBar origins={s.origins} />
-            </div>
-          </div>
-        ))}
-    </>
-  );
+/** One document's snapshots as the shared submission card. Exported for the
+ *  writing assignment and checkpoint pages, which show the same cards.
+ *
+ *  `opts.context` decides what each entry says about where it was submitted:
+ *  "full" names the assignment and checkpoint (a mixed list), "checkpoint"
+ *  names only the checkpoint (one assignment's page), "none" names neither
+ *  (one checkpoint's page, where it's the page title). A checkpoint name is
+ *  only ever shown for an assignment that has more than one — see
+ *  `checkpointCounts`. */
+export function toCardGroup(
+  g: DocGroup,
+  opts: {
+    context?: "full" | "checkpoint" | "none";
+    checkpointCounts?: Map<string, number>;
+    /** Deadline per checkpoint id, so LATE can say by how much. */
+    checkpointDue?: Map<string, number | null>;
+  } = {},
+): SubmissionCardGroup {
+  const context = opts.context ?? "full";
+  return {
+    key: g.documentId,
+    title: g.title,
+    who: g.studentName || g.studentEmail,
+    entries: g.subs.map((s) => {
+      const multi = s.assignmentId !== null && (opts.checkpointCounts?.get(s.assignmentId) ?? 1) > 1;
+      return {
+        key: s.token,
+        href: s.revokedAt === null ? `/s/${s.token}` : null,
+        at: s.createdAt,
+        assignmentTitle: context === "full" ? s.assignmentTitle : null,
+        checkpointName: context !== "none" && multi ? s.checkpointName : null,
+        late: s.late,
+        lateByMs: (() => {
+          const due = s.checkpointId ? opts.checkpointDue?.get(s.checkpointId) : null;
+          return s.late && due != null ? s.createdAt - due : null;
+        })(),
+        revoked: s.revokedAt !== null,
+        origins: s.origins,
+      };
+    }),
+  };
 }
 
-/**
- * Proportional bar of where the text came from, in the same color vocabulary as
- * the editor and the snapshot viewer. Percentages are of total characters in the
- * frozen render, so an instructor can triage without opening every snapshot.
- */
-function OriginBar({ origins }: { origins: CourseSubmissionSummary["origins"] }) {
-  const { total, human, llm, pasted, edited, pasteCount } = origins;
-  if (total <= 0) {
-    return <Badge tone="neutral">empty</Badge>;
+/** Group snapshots by document, keeping the server's newest-first order. */
+export function groupByDocument(subs: CourseSubmissionSummary[]): DocGroup[] {
+  const byDoc = new Map<string, DocGroup>();
+  for (const s of subs) {
+    let g = byDoc.get(s.documentId);
+    if (!g) {
+      g = {
+        documentId: s.documentId,
+        title: s.title,
+        studentEmail: s.studentEmail,
+        studentName: s.studentName,
+        subs: [],
+      };
+      byDoc.set(s.documentId, g);
+    }
+    g.subs.push(s);
   }
-  const pct = (n: number) => (n / total) * 100;
-  // Text the student didn't compose at the keyboard. `pasted` includes text
-  // that was pasted and later retyped by hand — the server folds that in at
-  // mint time, since it's the same fact about how the content arrived.
-  const notTyped = Math.round(pct(llm + pasted + edited));
-  const segments = [
-    { key: "human", cls: "legend-human", value: human, label: "typed" },
-    { key: "pasted", cls: "legend-pasted", value: pasted, label: "pasted" },
-    { key: "llm", cls: "legend-llm", value: llm, label: "from LLM" },
-    { key: "edited", cls: "legend-edited", value: edited, label: "autocorrect" },
-  ].filter((s) => s.value > 0);
-  const title = segments
-    .map((s) => `${s.label} ${Math.round(pct(s.value))}%`)
-    .join(" · ");
-
-  return (
-    <span className="prov-subs__origins" title={title} aria-label={`Origins: ${title}`}>
-      <span className="prov-subs__bar" aria-hidden>
-        {segments.map((s) => (
-          <span
-            key={s.key}
-            className={`prov-subs__seg ${s.cls}`}
-            style={{ width: `${pct(s.value)}%` }}
-          />
-        ))}
-      </span>
-      <span className="app-list__count">
-        {notTyped}% not typed
-        {pasteCount > 0 && ` · ${pasteCount} paste${pasteCount === 1 ? "" : "s"}`}
-      </span>
-    </span>
-  );
+  return [...byDoc.values()];
 }

@@ -588,3 +588,103 @@ the primary.
 **Readouts.** A kicker (mono, `--text-2xs`, uppercase, `--text-muted`)
 over the value. A big number is mono, bold and tabular. A number that is
 a figure-scale value takes that scale's `-ink` colour.
+
+---
+
+## 15. Assignments: navigation, words, and visibility
+
+Every assignment type (writing, code, agents, examples, and whatever
+comes next) is a module, and modules drift apart one sensible decision
+at a time. These rules keep the instructor side of every type the same
+shape, so learning one teaches the rest.
+
+### Navigation: split by verb, not by type
+
+1. **Assign is what you give; Review is what comes back.** Every
+   assignment appears in both: under **Assign ▸ <type>** to create, edit
+   and publish it, and under **Review ▸ Submissions** to read what came
+   in. Each side links to the other ("Edit in Assign ▸ Writing" on a
+   submissions page; a row's title on an Assign page opens its
+   submissions).
+2. **Assign is a menu of assignment types.** One item per type that's
+   turned on. An **All** item (the combined list, in due order) appears
+   only when more than one type is on.
+3. **Review holds everything that comes back:** Submissions (every type,
+   by assignment) and Attendance. Submissions are never split into a
+   tab per type, and never shown as a flat feed of snapshots.
+4. **Build holds ingredients, never assignments.** Voices and libraries
+   are what assignments are made *from*. If students are handed it,
+   it's under Assign, not Build.
+
+### Assign pages: one shape
+
+5. **Every Assign page has the same layout.** `PageHeader` (eyebrow
+   `Instructor · Assign`, title = the type's name: "Writing", "Code",
+   "Agents", "Examples") → one `Section` of rows. The Section header's
+   actions end with the primary button **"New"**, just the word, never
+   "New assignment" or "New agent". Any secondary action ("From another
+   course") sits to its left as a subtle button. Rows end with subtle
+   **Edit**, then **Publish/Unpublish** where the type has drafts, then
+   a **Delete** danger link. No icon-only delete, no ghost buttons.
+   Examples keep their pick-and-save design (they're chosen, not
+   written), but use the same frame, eyebrow and button kinds.
+6. **"New" goes straight to the create form.** It lands on a page whose
+   only job is creating that thing (`…/new`), never on a list with a
+   second "New" button. Examples, which have no create form, land on
+   their picker.
+7. **Assign rows are per assignment.** A writing assignment is one row,
+   its checkpoints inline ("Draft due Oct 3 · Final due Oct 10"). Assign
+   rows carry no submission counts; those are Review's job.
+
+### Review ▸ Submissions: one shape
+
+8. **Each checkpoint is viewed as its own assignment.** Review lists one
+   row per writing checkpoint ("Essay 1 — Draft", "Essay 1 — Final") and
+   one per coding assignment. Each opens that checkpoint's or assignment's
+   submissions: each student's latest submission, with earlier ones
+   behind it, and then everyone who hasn't submitted.
+9. **Rows carry the same figures.** Deadline and **"N of M submitted ·
+   K on time"** (the shared `submissionFraction()`). M counts real
+   students (not the sample student). "On time" means at least one
+   submission landed by the deadline, so a late resubmission never undoes
+   it. With no deadline, only "submitted" shows.
+10. **A single checkpoint is invisible.** An assignment with one
+   checkpoint is shown under its own title everywhere, to staff *and*
+   students. The checkpoint's name ("Final") is never shown for it.
+11. **Late is a fact with a size.** A late submission says
+   **LATE by 2 h 15 min** (the shared `lateness()`), opens like any
+   other, and is never hidden, refused or coloured as a warning.
+12. **Nothing a student submitted is ever out of reach.** If deleting or
+    editing something could leave a submission belonging to no current
+    assignment, it must still be listed. Writing's **Uncategorized** page
+    is where those go, and its button appears only when it has
+    something in it (on Review ▸ Submissions). Edits must preserve identity: change a checkpoint
+    in place and never re-mint its id.
+
+### Words
+
+13. **Name the type, not the mechanism.** Everywhere, for students and
+    staff alike, the modules are **Writing** and **Code**. Their submission pages are **Writing
+    submissions** and **Code submissions** (PageHeader eyebrow
+    `Instructor · Writing submissions`). Internal module names
+    ("provenance") don't appear in UI copy.
+14. **Visibility is Draft / Published, and nothing else.** A
+    writing or coding assignment is either a **Draft** (a warning badge,
+    "students can't see this yet") or published. The row actions are
+    **Publish** / **Unpublish** (subtle) and **Delete** (danger link,
+    §2). New assignments are created as drafts, so anything that has to
+    be prepared after creation (a starter notebook, say) can be finished
+    and tried before students see it. Don't add "Archive", "Hide" or
+    "Restore" as extra states. If something needs to leave students'
+    view but keep its submissions, that is Unpublish.
+15. **A button says what students will experience.** Don't offer a
+    visibility control on a row whose state doesn't reach students. Agents
+    and examples have no draft state, so their rows on the All list offer
+    only Unassign.
+
+### Changes students can see
+
+16. **Any change to what a student sees is called out.** Staff-side
+    cleanups ship freely. A change to a student surface (its wording,
+    what appears, when it appears) is listed separately in the change's
+    description so the person deploying it can decide.

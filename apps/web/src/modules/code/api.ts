@@ -52,6 +52,9 @@ export interface CodeAssignmentDTO {
   aiPrompt?: string | null;
   /** Instructor-only. Null = the default library voice. */
   voice?: CodeVoiceRef | null;
+  /** Voice policy: true = each student picks their own library voice for the
+   *  chat; false = everyone gets the assignment's voice. */
+  voiceChoice: boolean;
   dueAt: number | null;
   mode: AssignmentMode;
   archivedAt: number | null;
@@ -72,6 +75,10 @@ export interface NotebookDTO extends NotebookSummaryDTO {
   content: NotebookContent;
   createdAt: number;
   aiEnabled: boolean;
+  /** Voice policy: true = show a library-voice picker in the chat header. */
+  aiVoiceChoice: boolean;
+  /** The library voice preselected when the picker is shown; null otherwise. */
+  aiVoiceDefault: string | null;
   assignment: {
     title: string;
     instructions: string;
@@ -124,7 +131,21 @@ export interface RosterStudentDTO {
   userId: string;
   email: string;
   displayName: string | null;
-  latest: SubmissionSummaryDTO | null;
+  latest:
+    | (SubmissionSummaryDTO & {
+        title: string;
+        /** Characters by origin, for the shared submission bar. Null when
+         *  origins weren't recorded (a practice copy). */
+        origins: {
+          total: number;
+          human: number;
+          pasted: number;
+          llm: number;
+          edited: number;
+          provided: number;
+        } | null;
+      })
+    | null;
   submissionCount: number;
 }
 
@@ -195,6 +216,25 @@ export async function listAssignments(
   return r.assignments;
 }
 
+/** "N of M submitted" figures, keyed by assignment id. Course staff only. */
+export interface SubmissionStats {
+  /** Real students enrolled — the sample student is not counted. */
+  students: number;
+  byId: Record<string, { submitted: number; onTime: number }>;
+}
+
+/** The staff list: every assignment (drafts included) with submission counts. */
+export async function listAssignmentsWithStats(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<{ assignments: CodeAssignmentDTO[]; stats: SubmissionStats }> {
+  const r = await call<{ assignments: CodeAssignmentDTO[]; stats?: SubmissionStats }>(
+    `/api/code/assignments${q(courseId, "&includeArchived=1&stats=1")}`,
+    { signal },
+  );
+  return { assignments: r.assignments, stats: r.stats ?? { students: 0, byId: {} } };
+}
+
 export async function getAssignment(courseId: string, id: string): Promise<CodeAssignmentDTO> {
   const r = await call<{ assignment: CodeAssignmentDTO }>(`/api/code/assignments/${seg(id)}${q(courseId)}`);
   return r.assignment;
@@ -207,6 +247,8 @@ export interface AssignmentInput {
   aiEnabled?: boolean;
   aiPrompt?: string | null;
   voice?: CodeVoiceRef | null;
+  /** True = each student picks their own library voice for the chat. */
+  voiceChoice?: boolean;
   dueAt?: number | null;
   archived?: boolean;
   mode?: AssignmentMode;
@@ -304,15 +346,22 @@ export interface ChatCallbacks {
   onAuthRequired?: () => void;
 }
 
-/** Stream one chat turn. Returns an abort function. */
+/** Stream one chat turn. Returns an abort function. `voiceId` is a library
+ *  voice, honored only when the assignment lets students choose (the server
+ *  ignores it otherwise). */
 export function streamChatTurn(
   courseId: string,
   notebookId: string,
   content: string,
   focusCellId: string | null,
   cb: ChatCallbacks,
+  voiceId?: string | null,
 ): () => void {
-  return streamSse(`/api/code/notebooks/${seg(notebookId)}/messages`, { courseId, content, focusCellId }, cb);
+  return streamSse(
+    `/api/code/notebooks/${seg(notebookId)}/messages`,
+    { courseId, content, focusCellId, ...(voiceId ? { voiceId } : {}) },
+    cb,
+  );
 }
 
 /** The instructor's chat preview on a starter notebook. Nothing is stored,
@@ -324,10 +373,11 @@ export function streamChatPreview(
   history: Array<{ role: "user" | "assistant"; content: string }>,
   focusCellId: string | null,
   cb: ChatCallbacks,
+  voiceId?: string | null,
 ): () => void {
   return streamSse(
     `/api/code/assignments/${seg(assignmentId)}/chat-preview`,
-    { courseId, content, history, focusCellId },
+    { courseId, content, history, focusCellId, ...(voiceId ? { voiceId } : {}) },
     cb,
   );
 }

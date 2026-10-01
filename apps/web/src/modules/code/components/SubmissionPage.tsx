@@ -11,20 +11,11 @@
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Button, PageHeader, Section } from "../../../components/index.js";
+import { Button, OriginLegend, PageHeader, Section } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
 import { Markdown } from "../../../Markdown.js";
-import { getSubmission, type Origin, type SubmissionDTO } from "../api.js";
+import { getSubmission, type SubmissionDTO } from "../api.js";
 import { Cells } from "./Cells.js";
-
-const ORIGIN_LABEL: Record<Origin, string> = {
-  human: "typed",
-  pasted: "pasted",
-  llm: "from LLM",
-  provided: "provided in the starter",
-  edited: "autocorrect",
-};
-const LEGEND: Origin[] = ["human", "pasted", "llm", "provided"];
 
 export function SubmissionPage() {
   const { courseId } = useCourse();
@@ -77,7 +68,7 @@ export function SubmissionPage() {
       />
       {sub && (
         <p className="muted small">
-          <Link to={`/course/${courseId}/instructor/code/${sub.assignmentId}`}>← Back to the roster</Link>
+          <Link to={`/course/${courseId}/instructor/submissions/code/${sub.assignmentId}`}>← Back to the roster</Link>
         </p>
       )}
       {error && <p className="error">{error}</p>}
@@ -100,17 +91,9 @@ export function SubmissionPage() {
             }
           >
             {render ? (
-              showOrigins && (
-                <div className="code-legend" aria-label="Where the text came from">
-                  {LEGEND.map((o) => (
-                    <span key={o} className="code-legend__item">
-                      <span className={`code-legend__swatch code-origin--${o}`} aria-hidden />
-                      {ORIGIN_LABEL[o]}
-                      <span className="code-legend__count">{render.totals[o].toLocaleString()} characters</span>
-                    </span>
-                  ))}
-                </div>
-              )
+              // The same legend as a writing submission, plus "provided" for
+              // the starter notebook's text.
+              showOrigins && <OriginLegend provided />
             ) : (
               <p className="muted small">
                 Origins weren't recorded for this copy: the assignment was set to practice, or

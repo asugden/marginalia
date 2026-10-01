@@ -5,13 +5,17 @@
 // that carries title="Sign out" for the tooltip + accessible label.
 //
 // All icons share the same path: stroke="currentColor", fill="none", so
-// colour follows the parent button's CSS colour.
+// color follows the parent button's CSS color.
 
 import type { SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
-function Icon({ size = 18, children, ...rest }: IconProps & { children: React.ReactNode }) {
+function Icon({
+  size = 18,
+  children,
+  ...rest
+}: IconProps & { children: React.ReactNode }) {
   return (
     <svg
       width={size}

@@ -7,6 +7,6 @@ export {
   SandboxNotebookPage,
   StarterNotebookPage,
 } from "./components/NotebookPage.js";
-export { InstructorCodePage } from "./components/InstructorCodePage.js";
+export { InstructorCodePage, NewCodeAssignmentPage } from "./components/InstructorCodePage.js";
 export { RosterPage } from "./components/RosterPage.js";
 export { SubmissionPage } from "./components/SubmissionPage.js";

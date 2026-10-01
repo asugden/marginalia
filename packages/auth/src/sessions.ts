@@ -67,6 +67,7 @@ export async function createSession(
     // Fresh sessions always start with full powers; "act as student" is an
     // opt-in toggle flipped later via setActingAsStudent().
     acting_as_student: 0,
+    acting_as_user_id: null,
   };
   await db
     .prepare(
@@ -97,10 +98,14 @@ export async function setActingAsStudent(
   db: D1Database,
   sessionId: string,
   acting: boolean,
+  /** 0030 — the sample student to act as; required when entering. */
+  asUserId: string | null = null,
 ): Promise<void> {
   await db
-    .prepare(`UPDATE sessions SET acting_as_student = ? WHERE id = ?`)
-    .bind(acting ? 1 : 0, sessionId)
+    .prepare(
+      `UPDATE sessions SET acting_as_student = ?, acting_as_user_id = ? WHERE id = ?`,
+    )
+    .bind(acting ? 1 : 0, acting ? asUserId : null, sessionId)
     .run();
 }
 
@@ -143,6 +148,7 @@ export async function findActiveSessionWithUser(
          s.user_agent   AS s_user_agent,
          s.ip_hash      AS s_ip_hash,
          s.acting_as_student AS s_acting_as_student,
+         s.acting_as_user_id AS s_acting_as_user_id,
          u.*
        FROM sessions s
        JOIN users u ON u.id = s.user_id
@@ -160,6 +166,7 @@ export async function findActiveSessionWithUser(
     user_agent: (row.s_user_agent as string | null) ?? null,
     ip_hash: (row.s_ip_hash as string | null) ?? null,
     acting_as_student: (row.s_acting_as_student as number | null) ?? 0,
+    acting_as_user_id: (row.s_acting_as_user_id as string | null) ?? null,
   };
   // The rest of the columns are users.* — strip the s_ prefixed ones.
   const user = {} as Record<string, unknown>;

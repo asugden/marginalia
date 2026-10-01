@@ -7,16 +7,21 @@
 // Nine flat tabs said nothing about how the pieces relate, so they are grouped
 // into three bands that state something true:
 //
-//   Assign — what you hand to the class: writing, agents, examples, and later
-//            readings and discussions. A new content type lands as a ROW on
-//            the Assign page, not as a new tab.
-//   Review — what comes back: submissions and attendance.
-//   Build  — the ingredients you author assignments FROM: voices, libraries,
-//            agent definitions. Never handed to a student directly.
+//   Assign — what you GIVE the class, one entry per assignment type:
+//            Writing, Code, Agents, Examples — plus "All", the combined list,
+//            shown only when more than one type is on. Create, edit, publish.
+//   Review — what COMES BACK: Submissions (every type, listed by assignment,
+//            each opening that assignment's submissions) and Attendance.
+//   Build  — the ingredients assignments are made FROM: voices and libraries.
+//            Never handed to a student directly.
 //
-// The distinction Build makes is the one that had been missing: a Voice is not
-// a peer of an assignment, it is an ingredient of one. Dashboard and Settings
-// sit outside the bands as course-level admin.
+// The split is by verb, not by type: an assignment appears under Assign (to
+// author it) and under Review ▸ Submissions (to read what came in), and the
+// two pages link to each other.
+//
+// Agents sit under Assign, not Build: an agent is something students are
+// given, like a writing assignment. Voices and libraries are what an agent is
+// made from. Dashboard and Settings sit outside the bands as course admin.
 //
 // Every pre-band URL still resolves — see the redirect shims in main.tsx.
 // Students and instructors hold live links, so no path may 404.
@@ -25,16 +30,25 @@
 // remain reachable by URL even when their tab is hidden — `visible` is a
 // dashboard-affordance hint, not an access gate (the worker authorizes
 // every endpoint independently). Dashboard / Library / Voices / Roster /
-// Settings always show; Agents / Attendance / Provenance are optional
+// Settings always show; Agents / Attendance / Writing / Code are optional
 // extensions toggled from Settings (Agents defaults on).
+
+import type { Capability } from "../api.js";
 
 // Tab visibility only depends on the lazy-reveal flags + (implicitly) role,
 // not the whole MeEnrollment DTO. Keep the predicate's input to just those
 // fields so adding unrelated enrollment fields (e.g. hideProvenanceMarks)
 // doesn't force every visible()-caller to supply them.
 export interface TabVisibilityFlags {
+  /** What the caller's role may do here (from /api/me). A tab whose
+   *  `requires` isn't held is hidden — a TA sees People, Submissions and
+   *  Attendance, not the authoring bands. */
+  capabilities?: Capability[];
   showAttendance?: boolean;
   agentsEnabled?: boolean;
+  /** The caller opted out of generative AI (personal). Hides Agents, Voices,
+   *  and the Library they draw on — from this person's screens only. */
+  genaiOptOut?: boolean;
   /** Writing (provenance) module. Drives the Submissions tab. */
   provenanceEnabled?: boolean;
   /** Code (Python notebooks) module. Default off. Drives the Code tab. */
@@ -66,23 +80,10 @@ export interface TabSpec {
   /** One-line description shown on the dashboard index under the tab strip. */
   description: string;
   visible: (e: TabVisibilityFlags | undefined) => boolean;
-  /** When set, the tab links to a *student-scoped* surface instead of the
-   *  staff base — i.e. /course/:courseId/<href> rather than
-   *  /course/:courseId/instructor/<slug>. Provenance uses this: the writing
-   *  tool is one surface under the student root (/course/:id/writing); the
-   *  instructor opens the same page and gets instructor-mode chrome (the
-   *  marks toggle) from their role in context, rather than a separate staff
-   *  copy. */
-  studentHref?: string;
-  /** When set, the tab links to this absolute path verbatim (no course
-   *  prefix). Used by Voices, which is a per-author library shared across an
-   *  instructor's courses and lives at the course-agnostic /author/voices. */
-  absoluteHref?: string;
-  /** Lazy-reveal feature key. Present on tabs that stay hidden until the
-   *  course turns them on. The dashboard's "Add a tool" affordance and
-   *  the worker's reveal-tab endpoint both key off this. Absent on
-   *  always-visible tabs (Library, Voices, Roster). */
-  revealFeature?: "attendance" | "collections";
+  /** The capability a role needs to see this tab at all. Omitted = any
+   *  course staff (the dashboard). Like `visible`, an affordance only; the
+   *  worker authorizes every endpoint itself. */
+  requires?: Capability;
 }
 
 export const TABS: TabSpec[] = [
@@ -96,78 +97,104 @@ export const TABS: TabSpec[] = [
   },
 
   // ── Assign ───────────────────────────────────────────────────────────────
-  // One tab for everything handed to the class. Writing, agents, and examples
-  // all appear as rows on this page, typed and in due order, rather than as
-  // three separate tabs that each reinvented dates and ordering.
+  // One entry per assignment type, plus "All" when there's more than one type.
   {
     slug: "assign",
+    requires: "author",
     band: "assign",
-    label: "Assign",
+    label: "All",
     description:
-      "Everything you've set this class, on one list — writing, agents, and examples together, in the order they come due. An item with no dates is a supplement: available all term, never late.",
-    // Always visible. Unlike the old Assignments tab this is not gated on the
-    // Writing module: agents and examples are assignable without it, and a
-    // course with Writing off still has a schedule worth seeing.
+      "Everything you've set this class, on one list and in the order it comes due. Shown when more than one kind of assignment is on.",
+    // Only when it would say more than a single type's page already does.
+    visible: (e) => assignTypesShown(e) > 1,
+  },
+  {
+    // Writing assignments. The URL predates the bands and stays so links
+    // resolve.
+    slug: "assignments",
+    requires: "author",
+    band: "assign",
+    label: "Writing",
+    description:
+      "Writing assignments: instructions and checkpoints, one document per student across all of them.",
+    // Absent flag reads as on, matching the enrollment query's COALESCE.
+    visible: (e) => e?.provenanceEnabled ?? true,
+  },
+  {
+    // Coding assignments. Opt-in — absent flag reads as OFF, unlike
+    // Writing/Agents.
+    slug: "code",
+    requires: "author",
+    band: "assign",
+    label: "Code",
+    description:
+      "Python notebooks that run in each student's browser: starter notebooks, deadlines, and whether LLM chat is available.",
+    visible: (e) => !!e?.codeEnabled,
+  },
+  {
+    slug: "agents",
+    requires: "author",
+    band: "assign",
+    label: "Agents",
+    description:
+      "AI helpers students can talk to. Each one carries its own voice and, optionally, an outline of topics or a set of sources.",
+    // Agents is an optional extension, default ON. Absent flag reads as on
+    // (COALESCE default 1 in listEnrollmentsForUserEnriched), so only an
+    // explicit instructor toggle-off hides it.
+    visible: (e) => (e?.agentsEnabled ?? true) && !e?.genaiOptOut,
+  },
+  {
+    // Examples have no create form — they're curated from the registry — so
+    // this is the curation page. Two segments deep; tabForPathname matches
+    // the longest slug, so it doesn't read as "All".
+    slug: "assign/examples",
+    requires: "author",
+    band: "assign",
+    label: "Examples",
+    description:
+      "Interactive teaching pages to put on the schedule. Pick which ones this class should work through.",
     visible: () => true,
   },
 
   // ── Review ───────────────────────────────────────────────────────────────
   // What comes back from the class.
   {
+    // Every assignment that takes submissions, one row per writing checkpoint
+    // or coding assignment, each opening that assignment's submissions. This
+    // was once a flat feed of writing snapshots; the URL is kept.
     slug: "submissions",
+    requires: "view_submissions",
     band: "review",
     label: "Submissions",
     description:
-      "Writing checkpoints students have shared. Each one is a frozen snapshot showing where every word came from.",
-    // Only meaningful when the Writing module is on. Absent flag reads as on,
-    // matching the COALESCE default the enrollment query applies.
-    visible: (e) => e?.provenanceEnabled ?? true,
-  },
-  {
-    // Coding assignments: authored here, reviewed per assignment from the
-    // same page. Opt-in — absent flag reads as OFF, unlike Writing/Agents.
-    slug: "code",
-    band: "review",
-    label: "Code",
-    description:
-      "Python notebooks that run in each student's browser. Set coding assignments, choose whether LLM chat is available, and read what students submit.",
-    visible: (e) => !!e?.codeEnabled,
+      "What students have handed in, by assignment: who submitted, who was on time, and who hasn't yet.",
+    visible: (e) => (e?.provenanceEnabled ?? true) || !!e?.codeEnabled,
   },
   {
     slug: "attendance",
+    requires: "run_attendance",
     band: "review",
     label: "Attendance",
     description:
       "QR check-in for in-person classes. Each session shows a rotating code on a projector; students scan from their phones.",
     visible: (e) => !!e?.showAttendance,
-    revealFeature: "attendance",
   },
 
   // ── Build ────────────────────────────────────────────────────────────────
   // The ingredients assignments are made FROM. Never handed to a student
-  // directly — that is what separates this band from Assign, and why a Voice
-  // stopped being a peer of an assignment.
-  {
-    slug: "agents",
-    band: "build",
-    label: "Agents",
-    description:
-      "AI helpers students can talk to. Each one carries its own voice and, optionally, an outline of topics or a set of sources. Author them here; put them in front of students from Assign.",
-    // Agents is an optional extension, default ON. Absent flag reads as on
-    // (COALESCE default 1 in listEnrollmentsForUserEnriched), so only an
-    // explicit instructor toggle-off hides it.
-    visible: (e) => e?.agentsEnabled ?? true,
-  },
+  // directly — that is what separates this band from Assign.
   {
     slug: "voices",
+    requires: "author",
     band: "build",
     label: "Voices",
     description:
       "The personas your agents speak in — tone, style, and pedagogy. Voices are yours and reusable across every course you teach.",
-    visible: () => true,
+    visible: (e) => !e?.genaiOptOut,
   },
   {
     slug: "collections",
+    requires: "author",
     band: "build",
     label: "Library",
     description:
@@ -175,12 +202,13 @@ export const TABS: TabSpec[] = [
     // Library is a core surface — always visible, not toggleable. (The
     // show_collections column is retained and reads on by default, but there
     // is no longer an instructor toggle to turn it off.)
-    visible: () => true,
+    visible: (e) => !e?.genaiOptOut,
   },
 
   // ── Course-level admin ───────────────────────────────────────────────────
   {
     slug: "roster",
+    requires: "manage_students",
     band: "admin",
     label: "People",
     description:
@@ -189,6 +217,7 @@ export const TABS: TabSpec[] = [
   },
   {
     slug: "settings",
+    requires: "author",
     band: "admin",
     label: "Settings",
     description:
@@ -197,18 +226,27 @@ export const TABS: TabSpec[] = [
   },
 ];
 
-// Note: neither examples nor writing assignments have a tab of their own. Both
-// are kinds of assignment, so they live as rows inside Assign — examples
-// curated at instructor/assign/examples, writing authored at
-// instructor/assignments. The student-facing examples list is unchanged and
-// still sits at /course/:id/examples.
+/** How many assignment TYPES (every Assign tab but "All") show for these
+ *  flags. "All" appears only when this is more than one. */
+function assignTypesShown(flags: TabVisibilityFlags | undefined): number {
+  return TABS.filter(
+    (t) => t.band === "assign" && t.slug !== "assign" && tabShows(t, flags),
+  ).length;
+}
+
+/** Whether a tab shows for these flags: its module is on AND the caller's role
+ *  holds the capability it requires. */
+export function tabShows(t: TabSpec, flags: TabVisibilityFlags | undefined): boolean {
+  if (!t.visible(flags)) return false;
+  return !t.requires || (flags?.capabilities?.includes(t.requires) ?? false);
+}
 
 /** Tabs in one band, in declaration order, filtered by visibility. */
 export function tabsInBand(
   band: Band,
   flags: TabVisibilityFlags | undefined,
 ): TabSpec[] {
-  return TABS.filter((t) => t.band === band && t.visible(flags));
+  return TABS.filter((t) => t.band === band && tabShows(t, flags));
 }
 
 /* ── The header nav ────────────────────────────────────────────────────────
@@ -222,13 +260,14 @@ export function tabsInBand(
  * bands since the flat strip was retired ("nine flat tabs said nothing about
  * how the pieces relate"); the header just kept flattening them back. Now:
  *
- *   Dashboard · Assign · Review ▾ · Build ▾
+ *   Dashboard · Assign ▾ · Review ▾ · Build ▾
  *
- * Dashboard and Assign are single destinations and stay direct links. Review
- * and Build are menus over their member tabs. Settings and People are NOT here
+ * Dashboard is a direct link. Assign, Review and Build are menus over their
+ * member tabs — Assign's members are the assignment types, so reaching one
+ * type's list is one click from anywhere. Settings and People are NOT here
  * — they're course admin, and they live in the course switcher's menu, which is
- * already the course-scoped menu. Voices stays under Build but is flagged
- * `away: true` because it leaves the course entirely (/author/voices).
+ * already the course-scoped menu. Voices sits under Build like any other tab;
+ * the pages are course-agnostic in content but mounted in the course shell.
  *
  * A band holding exactly one visible tab renders as a direct link to that tab
  * rather than a one-item menu — a menu you open to find a single choice is
@@ -245,9 +284,8 @@ export interface NavGroup {
   items: TabSpec[];
 }
 
-/** Bands rendered as their own top-level strip entry, in display order. Assign
- *  is a real band but has exactly one visible tab, so it falls out as a direct
- *  link via the length-1 rule — no special-casing needed. */
+/** Bands rendered as their own top-level strip entry, in display order. A band
+ *  with one visible tab falls out as a direct link via the length-1 rule. */
 const NAV_BANDS: readonly Band[] = ["admin", "assign", "review", "build"];
 
 /** Tabs that are course admin rather than course work. They're reachable from
@@ -270,7 +308,7 @@ export function navGroups(flags: TabVisibilityFlags | undefined): NavGroup[] {
     groups.push({
       key: items.length === 1 ? items[0]!.slug : band,
       // A single-tab band takes the TAB's name, not the band's — "Dashboard",
-      // not "Course"; "Assign" happens to match either way.
+      // not "Course"; "Attendance", not "Review".
       label: items.length === 1 ? items[0]!.label : (meta?.label ?? band),
       items,
     });
@@ -281,65 +319,46 @@ export function navGroups(flags: TabVisibilityFlags | undefined): NavGroup[] {
 /** The course-admin tabs, for the course switcher's menu. */
 export function adminMenuTabs(flags: TabVisibilityFlags | undefined): TabSpec[] {
   return TABS.filter(
-    (t) => ADMIN_MENU_SLUGS.includes(t.slug) && t.visible(flags),
+    (t) => ADMIN_MENU_SLUGS.includes(t.slug) && tabShows(t, flags),
   );
 }
 
-/** Build the URL a tab links to. Most tabs live under the staff base
- *  (/course/:id/instructor/<slug>); a `studentHref` tab links to the
- *  student-scoped surface (/course/:id/<href>) instead. */
+/** Build the URL a tab links to: the staff base (/course/:id/instructor/<slug>),
+ *  or the dashboard index for the empty slug. */
 export function tabHref(tab: TabSpec, courseId: string): string {
-  if (tab.absoluteHref) return tab.absoluteHref;
-  if (tab.studentHref) return `/course/${courseId}/${tab.studentHref}`;
   const base = `/course/${courseId}/instructor`;
   return tab.slug ? `${base}/${tab.slug}` : base;
 }
 
 /**
- * Surfaces that live under a band tab but keep their own first path segment.
+ * Surfaces that belong to a tab but sit under ANOTHER tab's path. One code
+ * submission's page lives at code/submissions/:id (its URL predates Review)
+ * but is reached from Review ▸ Submissions.
  *
- * Writing assignments are authored at instructor/assignments (and their roster
- * at instructor/assignments/:id), which predates the bands and stays put so
- * existing links resolve. Both belong to Assign, so the strip has to highlight
- * Assign while the URL says something else — without this map the nav would go
- * blank on a page reached from its own band.
- *
- * Keyed by first path segment → owning tab slug.
+ * Keyed by path prefix → owning tab slug; checked before slug matching.
  */
-const SURFACE_OWNER: Record<string, string> = {
-  assignments: "assign",
-};
+const SURFACE_OWNER: Array<[string, string]> = [["code/submissions/", "submissions"]];
 
 /** Find the tab matching the current URL pathname. Returns null on the
- *  dashboard index, or for any path that doesn't match a known tab. Matches
- *  both the staff base (/course/:id/instructor/<slug>) and a tab's
- *  student-scoped surface (/course/:id/<href>). */
+ *  dashboard index, or for any path that doesn't match a known tab. Every tab
+ *  lives under the staff base (/course/:id/instructor/<slug>). Slugs can be
+ *  more than one segment ("assign/examples"), so the LONGEST matching slug
+ *  wins — /assign/examples is Examples, not All. */
 export function tabForPathname(
   pathname: string,
   courseId: string,
 ): TabSpec | null {
-  // Absolute-href tabs (Voices → /author/voices) match by their own path,
-  // independent of the active course.
-  const abs = TABS.find(
-    (t) => t.absoluteHref && pathname.startsWith(t.absoluteHref),
-  );
-  if (abs) return abs;
-
   const staffBase = `/course/${courseId}/instructor`;
-  if (pathname.startsWith(staffBase)) {
-    const rest = pathname.slice(staffBase.length).replace(/^\//, "");
-    if (rest === "") return null;
-    const head = rest.split("/")[0]!;
-    const owner = SURFACE_OWNER[head];
-    if (owner) return TABS.find((t) => t.slug === owner) ?? null;
-    return TABS.find((t) => t.slug === head && !t.studentHref) ?? null;
-  }
-  // A student-scoped tab surface (e.g. the provenance writing tool) viewed
-  // from within the staff strip.
-  const prefix = `/course/${courseId}`;
-  if (!pathname.startsWith(prefix)) return null;
-  const rest = pathname.slice(prefix.length).replace(/^\//, "");
+  if (!pathname.startsWith(staffBase)) return null;
+  const rest = pathname.slice(staffBase.length).replace(/^\//, "");
   if (rest === "") return null;
-  const head = rest.split("/")[0]!;
-  return TABS.find((t) => t.studentHref === head) ?? null;
+  const owner = SURFACE_OWNER.find(([prefix]) => rest.startsWith(prefix))?.[1];
+  if (owner) return TABS.find((t) => t.slug === owner) ?? null;
+  let best: TabSpec | null = null;
+  for (const t of TABS) {
+    if (rest === t.slug || rest.startsWith(t.slug + "/")) {
+      if (!best || t.slug.length > best.slug.length) best = t;
+    }
+  }
+  return best;
 }
