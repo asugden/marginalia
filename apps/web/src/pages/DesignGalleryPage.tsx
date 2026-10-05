@@ -717,7 +717,7 @@ export function DesignGalleryPage() {
             <div className="dsg-specimen">
               <div className="dsg-stack" style={{ maxWidth: "30rem" }}>
                 <Field label="Name" hint="Shown to students.">
-                  <Input placeholder="e.g. Derivatives tutor" />
+                  <Input placeholder="e.g. Derivatives agent" />
                 </Field>
                 <Field label="Join code">
                   <Input mono defaultValue="A1B2C3" />
@@ -841,7 +841,7 @@ export function DesignGalleryPage() {
             </div>
             <div className="dsg-sub">Composer</div>
             <ChatComposer
-              placeholder="Message the tutor…"
+              placeholder="Message…"
               leadIcon={<PlusIcon size={18} />}
             />
           </Section>

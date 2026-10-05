@@ -20,7 +20,7 @@ export type Act = "none" | "relu" | "sigmoid" | "tanh";
 export const ACTS: Act[] = ["none", "relu", "sigmoid", "tanh"];
 
 export const ACT_NAME: Record<Act, string> = {
-  none: "None (linear)",
+  none: "Linear (none)",
   relu: "ReLU",
   sigmoid: "Sigmoid",
   tanh: "Tanh",
@@ -85,12 +85,23 @@ export interface Curve {
   points: Point[];
 }
 
-const jitter = (i: number) => 0.028 * Math.sin(i * 12.9898 + 4.1) * Math.cos(i * 3.3);
+const jitter = (i: number) =>
+  0.028 * Math.sin(i * 12.9898 + 4.1) * Math.cos(i * 3.3);
 
-function curve(id: Curve["id"], min: number, max: number, n: number, f: (at: number) => number): Curve {
+function curve(
+  id: Curve["id"],
+  min: number,
+  max: number,
+  n: number,
+  f: (at: number) => number,
+): Curve {
   const points = Array.from({ length: n }, (_, i) => {
     const at = min + ((max - min) * i) / (n - 1);
-    return { at, x: (at - min) / (max - min), y: Math.max(0, f(at) + jitter(i)) };
+    return {
+      at,
+      x: (at - min) / (max - min),
+      y: Math.max(0, f(at) + jitter(i)),
+    };
   });
   return { id, min, max, points };
 }
@@ -103,8 +114,12 @@ export const COFFEE = curve("coffee", 10, 95, 26, (t) => {
 });
 
 /** A visual-cortex neuron preferring bars tilted at 60°, over 0–180°. */
-export const CORTEX = curve("cortex", 0, 180, 25, (deg) =>
-  0.08 + 0.84 * Math.exp(-(((deg - 60) / 26) ** 2)),
+export const CORTEX = curve(
+  "cortex",
+  0,
+  180,
+  25,
+  (deg) => 0.08 + 0.84 * Math.exp(-(((deg - 60) / 26) ** 2)),
 );
 
 // ── The one-input network ────────────────────────────────────────────────
@@ -141,6 +156,25 @@ export function miss(net: Net1D, kind: Act, pts: Point[]): number {
 }
 
 /**
+ * How much of the curve's shape the fit captures, 0–1: one minus the squared
+ * miss over the curve's own spread around its mean (R², floored at zero). The
+ * page shows it as "accuracy". It is used instead of 1 − mean miss because the
+ * dots sit near zero over much of the range, so even a flat line has a small
+ * average miss — a straight line through a hump would read as 75% accurate.
+ * Here it reads as under 10%, which is what a student sees.
+ */
+export function accuracy(net: Net1D, kind: Act, pts: Point[]): number {
+  const mean = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+  let ss = 0;
+  let st = 0;
+  for (const p of pts) {
+    ss += (run1D(net, kind, p.x).y - p.y) ** 2;
+    st += (p.y - mean) ** 2;
+  }
+  return Math.max(0, 1 - ss / st);
+}
+
+/**
  * The linear network, collapsed. With no activation every hidden neuron is
  * w·x + b, and the output is a weighted sum of those — so the whole network,
  * however wide, is one slope and one intercept. This computes them from the
@@ -159,26 +193,60 @@ export function collapse(net: Net1D): { slope: number; intercept: number } {
 
 /**
  * The best n-neuron network for this activation, found the way any network
- * is: gradient descent on the squared error. It starts from a deterministic
- * guess — the neurons' turning points spread evenly across the range, the
- * output layer solved exactly for that guess — and refines everything with
- * Adam. Same inputs, same result, every time.
+ * is: gradient descent on the squared error. Each run starts from a
+ * deterministic guess — the neurons' turning points spread across the range,
+ * the output layer solved exactly for that guess — and refines everything
+ * with Adam. Same inputs, same result, every time.
+ *
+ * One start is not enough. Gradient descent only goes downhill from where it
+ * begins, and from a single evenly spaced guess a ReLU's bend can slide onto
+ * another's and stay there: two neurons doing one job, so adding the third
+ * changed nothing. So the fit runs from several spreads of turning points
+ * (some starting with every slope facing the same way, some with the last
+ * one flipped) and keeps the lowest error. That is what lets the page say
+ * each fit is the best a network of that size can do.
  */
 export function fit(kind: Act, n: number, pts: Point[]): Net1D {
-  // Steepness of the starting guess: a ReLU's bend or a sigmoid's step, placed
-  // at evenly spaced points t across the range.
-  const k = kind === "sigmoid" ? 14 : kind === "tanh" ? 7 : kind === "relu" ? 3 : 1;
-  const w: number[] = [];
-  const b: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = (i + 1) / (n + 1);
-    w.push(k);
-    b.push(-k * t);
+  // Steepness of the starting guess: a ReLU's bend or a sigmoid's step.
+  const k =
+    kind === "sigmoid" ? 14 : kind === "tanh" ? 7 : kind === "relu" ? 3 : 1;
+  // Where the n turning points start, as fractions of the range.
+  const spreads: ((i: number) => number)[] = [
+    (i) => (i + 1) / (n + 1), // evenly inside
+    (i) => (i + 0.5) / n, // evenly, half a gap from each end
+    (i) => (n === 1 ? 0.5 : 0.1 + (0.8 * i) / (n - 1)), // reaching the ends
+    (i) => 0.25 + (0.7 * (i + 1)) / (n + 1), // bunched toward the top
+  ];
+  let best: Net1D | null = null;
+  let bestErr = Infinity;
+  for (const spread of spreads) {
+    for (const flipLast of [false, true]) {
+      if (flipLast && n < 2) continue;
+      const w: number[] = [];
+      const b: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const t = spread(i);
+        const sign = flipLast && i === n - 1 ? -1 : 1;
+        w.push(sign * k);
+        b.push(-sign * k * t);
+      }
+      const { v, c } = solveOutput(kind, w, b, pts);
+      const net: Net1D = { w, b, v, c };
+      adam(net, kind, pts, 2500, 0.02);
+      const err = squaredError(net, kind, pts);
+      if (err < bestErr) {
+        best = net;
+        bestErr = err;
+      }
+    }
   }
-  const { v, c } = solveOutput(kind, w, b, pts);
-  const net: Net1D = { w, b, v, c };
-  adam(net, kind, pts, 2500, 0.02);
-  return net;
+  return best!;
+}
+
+function squaredError(net: Net1D, kind: Act, pts: Point[]): number {
+  let s = 0;
+  for (const p of pts) s += (run1D(net, kind, p.x).y - p.y) ** 2;
+  return s;
 }
 
 /** Least squares for the output layer with the hidden layer held fixed. */
@@ -229,7 +297,13 @@ function adam(net: Net1D, kind: Act, pts: Point[], steps: number, lr: number) {
   const n = net.w.length;
   const P = 3 * n + 1; // w, b, v, c
   const get = (j: number) =>
-    j < n ? net.w[j]! : j < 2 * n ? net.b[j - n]! : j < 3 * n ? net.v[j - 2 * n]! : net.c;
+    j < n
+      ? net.w[j]!
+      : j < 2 * n
+        ? net.b[j - n]!
+        : j < 3 * n
+          ? net.v[j - 2 * n]!
+          : net.c;
   const set = (j: number, val: number) => {
     if (j < n) net.w[j] = val;
     else if (j < 2 * n) net.b[j - n] = val;

@@ -254,7 +254,7 @@ let voiceSeq = 1;
 const ownedVoices = new Map<string, MockVoice>();
 ownedVoices.set("voice_seed", {
   id: "voice_seed",
-  name: "My Socratic tutor",
+  name: "My Socratic Agent",
   description: "A gentle, question-led voice.",
   systemPromptFragment: "Ask one question at a time; never give the answer directly.",
   updatedAt: Date.now(),

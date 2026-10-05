@@ -221,7 +221,7 @@ export const TABS: TabSpec[] = [
     band: "admin",
     label: "Settings",
     description:
-      "Course stats, the term and the dates it runs, and which extensions (Agents, Writing, Attendance) are turned on.",
+      "The term and the dates it runs, and which extensions (Agents, Writing, Attendance) are turned on.",
     visible: () => true,
   },
 ];

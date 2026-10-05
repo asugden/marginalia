@@ -22,7 +22,6 @@ export function SubmissionPage() {
   const { submissionId } = useParams<{ submissionId: string }>();
   const [sub, setSub] = useState<SubmissionDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showOrigins, setShowOrigins] = useState(true);
 
   useEffect(() => {
     if (!submissionId) return;
@@ -68,32 +67,17 @@ export function SubmissionPage() {
       />
       {sub && (
         <p className="muted small">
-          <Link to={`/course/${courseId}/instructor/submissions/code/${sub.assignmentId}`}>← Back to the roster</Link>
+          <Link to={`/course/${courseId}/instructor/submissions/code/${sub.assignmentId}`}>← All submissions for this assignment</Link>
         </p>
       )}
       {error && <p className="error">{error}</p>}
       {sub && (
         <>
-          <Section
-            kicker="Notebook"
-            actions={
-              render && (
-                <button
-                  type="button"
-                  className={"prov-toggle" + (showOrigins ? " is-on" : "")}
-                  onClick={() => setShowOrigins((v) => !v)}
-                  aria-pressed={showOrigins}
-                >
-                  <span className="prov-toggle__sw" />
-                  {showOrigins ? "Origins shown" : "Origins hidden"}
-                </button>
-              )
-            }
-          >
+          <Section kicker="Notebook">
             {render ? (
               // The same legend as a writing submission, plus "provided" for
               // the starter notebook's text.
-              showOrigins && <OriginLegend provided />
+              <OriginLegend provided />
             ) : (
               <p className="muted small">
                 Origins weren't recorded for this copy: the assignment was set to practice, or
@@ -102,10 +86,9 @@ export function SubmissionPage() {
             )}
             <div className="code-readonly">
               <Cells
-                key={showOrigins ? "marked" : "plain"}
                 cells={sub.content.cells}
                 readOnly
-                marksFor={render && showOrigins ? (id) => render.cells[id]?.runs : undefined}
+                marksFor={render ? (id) => render.cells[id]?.runs : undefined}
               />
             </div>
           </Section>

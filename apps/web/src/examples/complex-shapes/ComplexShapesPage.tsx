@@ -25,8 +25,8 @@ import "../mnist-mlp/digit-recognizer.css";
 import "../shared/controls.css";
 import "../shared/figure.css";
 import "./complex-shapes.css";
-import { DrawPanel } from "./DrawPanel.js";
 import { KindGlyph } from "./draw.js";
+import { DrawPanel } from "./DrawPanel.js";
 import type { Kind } from "./fit.js";
 import { NoisePanel } from "./NoisePanel.js";
 
@@ -42,7 +42,11 @@ export function ComplexShapesPage() {
     <div className="app">
       <header className="app-topbar app-topbar--wide">
         <div className="app-topbar__inner">
-          <Link to="/examples" className="app-lockup-link" aria-label="Examples">
+          <Link
+            to="/examples"
+            className="app-lockup-link"
+            aria-label="Examples"
+          >
             <Wordmark size="sm" />
           </Link>
           <span className="mnist-crumb">Examples</span>
@@ -54,7 +58,7 @@ export function ComplexShapesPage() {
         <div className="mnist-page">
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
-            <h1>Fitting complex shapes</h1>
+            <h1>Fitting and Overfitting</h1>
             <p className="mnist-lede">
               A model builds its curve out of simple pieces: flat steps, the way
               a <Link to="/examples/decision-tree">decision tree</Link> does, or
@@ -106,7 +110,9 @@ export function ComplexShapesPage() {
                 next day's.
               </p>
               <NoisePanel kind={kind} />
-              <p className="cs-note">The counts are illustrative, not from a real road.</p>
+              <p className="cs-note">
+                The counts are illustrative, not from a real road.
+              </p>
             </Card>
           </div>
         </div>

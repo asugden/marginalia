@@ -121,21 +121,6 @@ function CellView({
   const [hover, setHover] = useState(false);
   const marks = marksFor?.(cell.id);
 
-  if (cell.type === "markdown" && marks && readOnly) {
-    // Review with origins on: show the text cell's source so its marks are
-    // visible character by character.
-    return (
-      <section className="code-cell code-cell--text">
-        <div className="code-cell__gutter" aria-hidden />
-        <div className="code-cell__main">
-          <div className="code-cell__input">
-            <CodeEditor initialValue={cell.source} language="markdown" readOnly marks={marks} />
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   if (cell.type === "markdown") {
     const editing = !readOnly && (editingText?.has(cell.id) ?? false);
     return (
@@ -169,7 +154,8 @@ function CellView({
               title={readOnly ? undefined : "Double-click to edit"}
             >
               {cell.source.trim() ? (
-                <Markdown>{cell.source}</Markdown>
+                // Review: formatted text with its origin marks on it.
+                <Markdown origins={readOnly ? marks : undefined}>{cell.source}</Markdown>
               ) : (
                 <p className="code-cell__empty">{readOnly ? "" : "Empty text cell. Double-click to write."}</p>
               )}

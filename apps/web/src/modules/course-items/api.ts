@@ -1,7 +1,7 @@
 // Typed fetch wrappers for /api/course-items/*.
 // Mirrors apps/worker/src/modules/course-items/handlers.ts.
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const fetchInit: RequestInit = API_BASE ? { credentials: "include" } : {};
 
@@ -19,7 +19,9 @@ export type ItemKind = "writing" | "agent" | "example" | "reading" | "code";
  * become the field every call site reads and the distinction would be lost.
  */
 export type ItemCompletionDTO =
-  | { kind: "writing"; submitted: boolean }
+  /** `checkpoints`: the checkpoint ids submitted to (absent from older
+   *  servers, which only report the assignment as a whole). */
+  | { kind: "writing"; submitted: boolean; checkpoints?: string[] }
   | { kind: "agent"; finished: boolean }
   | { kind: "example"; markedDone: boolean }
   | { kind: "reading"; markedDone: boolean }
@@ -63,6 +65,9 @@ export interface CourseItemDTO {
   payload: Record<string, unknown> | null;
   /** Present on the list endpoint; always the CALLER'S OWN state. */
   completion?: ItemCompletionDTO;
+  /** Client-side only: set when a writing assignment has been split into one
+   *  item per checkpoint (course/dueness.ts `expandCheckpoints`). */
+  checkpoint?: { id: string; name: string };
 }
 
 export class ApiError extends Error {
@@ -268,7 +273,9 @@ export function instructorHref(
   const base = `/course/${courseId}/instructor`;
   switch (item.kind) {
     case "writing":
-      return `${base}/submissions/writing/${item.payloadRef}`;
+      return item.checkpoint
+        ? `${base}/submissions/writing/${item.payloadRef}/${item.checkpoint.id}`
+        : `${base}/submissions/writing/${item.payloadRef}`;
     case "agent":
       return `${base}/agents/${item.payloadRef}`;
     case "example":

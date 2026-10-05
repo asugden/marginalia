@@ -305,11 +305,14 @@
   stroke: var(--border-strong);
   stroke-width: 1;
 }
+/* The neuron's (or cell's) boundary: a sand region with a solid edge, so the
+   sum and the activation read as one body sitting on it. Sand rather than a
+   hue: green sits next to the sage reserved for positive weights, and the
+   accent may be red or blue, which would read as a computed value. */
 .af-neuronframe {
-  fill: none;
+  fill: var(--surface-sunken);
   stroke: var(--border-strong);
   stroke-width: 1;
-  stroke-dasharray: 5 4;
 }
 .af-flowline {
   fill: none;
@@ -345,6 +348,14 @@
   stroke: var(--text-muted);
   stroke-width: 1;
   stroke-dasharray: 3 3;
+}
+/* The slope-1 reference: longer dashes than the guides, so the two never
+   read as the same kind of line. */
+.af-plot__ref {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.25;
+  stroke-dasharray: 7 4;
 }
 /* A network's output as a curve: a computed value, so vermillion. */
 .af-plot__fit {

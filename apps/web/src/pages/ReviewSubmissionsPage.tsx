@@ -19,14 +19,13 @@
 // rather than inside either module.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useCourse } from "../course/useCourse.js";
 import {
   Badge,
   Button,
+  ItemCard,
   PageHeader,
   Section,
-  submissionFraction,
 } from "../components/index.js";
 import {
   listAssignmentsWithStats as listWriting,
@@ -40,7 +39,10 @@ import { listAssignmentsWithStats as listCode } from "../modules/code/api.js";
 
 interface Row {
   key: string;
-  kind: "Writing" | "Code";
+  kind: "writing" | "code";
+  /** What the card's mark hashes: the code assignment's id, or the writing
+   *  checkpoint's — the same id every other page uses for that item. */
+  seed: string;
   title: string;
   dueAt: number | null;
   href: string;
@@ -84,7 +86,10 @@ export function ReviewSubmissionsPage() {
             if (hidden && !counts) continue;
             out.push({
               key: `w:${cp.id}`,
-              kind: "Writing",
+              kind: "writing",
+              // Sibling checkpoints read as separate assignments, colour
+              // included; a lone checkpoint is just the assignment.
+              seed: a.checkpoints.length > 1 ? cp.id : a.id,
               title: checkpointTitle(a, cp),
               dueAt: cp.dueAt,
               href: `${base}/writing/${a.id}/${cp.id}`,
@@ -102,7 +107,8 @@ export function ReviewSubmissionsPage() {
           if (hidden && !counts) continue;
           out.push({
             key: `c:${a.id}`,
-            kind: "Code",
+            kind: "code",
+            seed: a.id,
             title: a.title,
             dueAt: a.dueAt,
             href: `${base}/code/${a.id}`,
@@ -192,24 +198,37 @@ function ReviewRows({ rows }: { rows: Row[] }) {
   return (
     <div className="app-list">
       {rows.map((r) => (
-        <div className="app-list__row" key={r.key}>
-          <div className="app-list__main">
-            <div className="app-list__title">
-              <Link to={r.href}>{r.title}</Link> <Badge tone="neutral">{r.kind}</Badge>
-              {r.hidden && (
-                <>
-                  {" "}
-                  <Badge tone="warning">Unpublished</Badge>
-                </>
-              )}
-            </div>
-            <div className="app-list__sub">
+        <ItemCard
+          key={r.key}
+          kind={r.kind}
+          seed={r.seed}
+          title={r.title}
+          href={r.href}
+          badges={
+            r.hidden && (
+              <>
+                {" "}
+                <Badge tone="warning">Unpublished</Badge>
+              </>
+            )
+          }
+          sub={
+            <>
               {r.dueAt === null ? "No deadline" : `Due ${formatDue(r.dueAt)}`}
-              {" · "}
-              {submissionFraction(r.counts, r.students, r.dueAt !== null)}
-            </div>
-          </div>
-        </div>
+              {r.students === 0
+                ? " · no students enrolled"
+                : r.dueAt !== null && ` · ${r.counts?.onTime ?? 0} on time`}
+            </>
+          }
+          meta={
+            r.students > 0 && (
+              <span className="card-figure">
+                <span className="card-figure__n">{r.counts?.submitted ?? 0}</span>
+                <span className="card-figure__label">of {r.students} submitted</span>
+              </span>
+            )
+          }
+        />
       ))}
     </div>
   );

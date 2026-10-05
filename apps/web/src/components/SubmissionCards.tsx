@@ -24,8 +24,6 @@ export interface OriginTotals {
   edited: number;
   /** Code only: text the instructor's starter notebook provided. */
   provided?: number;
-  /** Clipboard imports, counted when the tool reports them. */
-  pasteCount?: number;
 }
 
 export interface SubmissionCardEntry {
@@ -53,28 +51,47 @@ export interface SubmissionCardGroup {
   entries: SubmissionCardEntry[];
 }
 
-export function SubmissionCards({ groups }: { groups: SubmissionCardGroup[] }) {
+/**
+ * `layout`:
+ *   "submission" (default) — the work leads: its title is the row's link, with
+ *     who and when beneath. For lists that span assignments.
+ *   "student" — the person leads: their name is the link (and the only text in
+ *     the key colour), with when beside it; the title drops to the second line.
+ *     For a single assignment's page, where every title is that assignment's.
+ */
+export function SubmissionCards({
+  groups,
+  layout = "submission",
+}: {
+  groups: SubmissionCardGroup[];
+  layout?: "submission" | "student";
+}) {
   return (
     <div className="app-list">
       {groups.map((g) => (
-        <SubmissionCardRow key={g.key} group={g} />
+        <SubmissionCardRow key={g.key} group={g} layout={layout} />
       ))}
     </div>
   );
 }
 
-function Context({ e }: { e: SubmissionCardEntry }) {
+/** What the submission belongs to: assignment and/or checkpoint. */
+function Where({ e }: { e: SubmissionCardEntry }) {
+  return e.assignmentTitle != null ? (
+    <>
+      {" · "}
+      {e.assignmentTitle}
+      {e.checkpointName != null && <> — {e.checkpointName}</>}
+    </>
+  ) : (
+    e.checkpointName != null && <> · {e.checkpointName}</>
+  );
+}
+
+/** How it arrived: late, revoked. */
+function Status({ e }: { e: SubmissionCardEntry }) {
   return (
     <>
-      {e.assignmentTitle != null ? (
-        <>
-          {" · "}
-          {e.assignmentTitle}
-          {e.checkpointName != null && <> — {e.checkpointName}</>}
-        </>
-      ) : (
-        e.checkpointName != null && <> · {e.checkpointName}</>
-      )}
       {e.late &&
         (e.lateByMs != null && e.lateByMs > 0
           ? ` · LATE by ${lateness(e.lateByMs)}`
@@ -84,40 +101,61 @@ function Context({ e }: { e: SubmissionCardEntry }) {
   );
 }
 
-function SubmissionCardRow({ group }: { group: SubmissionCardGroup }) {
+function SubmissionCardRow({
+  group,
+  layout,
+}: {
+  group: SubmissionCardGroup;
+  layout: "submission" | "student";
+}) {
   const [open, setOpen] = useState(false);
   const latest = group.entries[0]!;
   const earlier = group.entries.slice(1);
+  const title = group.title || "Untitled";
+  const link = (text: string) => (latest.href ? <Link className="card-link" to={latest.href}>{text}</Link> : text);
+  const more = earlier.length > 0 && (
+    <>
+      {" · "}
+      <button
+        type="button"
+        className="prov-subs__more"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? "hide" : `${earlier.length} earlier`}
+      </button>
+    </>
+  );
 
   return (
     <>
       <div className="app-list__row prov-subs__row">
-        <div className="app-list__main">
-          <div className="app-list__title">
-            {latest.href ? (
-              <Link to={latest.href}>{group.title || "Untitled"}</Link>
-            ) : (
-              group.title || "Untitled"
-            )}
+        {layout === "student" ? (
+          <div className="app-list__main">
+            <div className="app-list__title">
+              {link(group.who)}
+              <span className="prov-subs__when">
+                {" · "}shared {relativeTime(latest.at)}
+                <Status e={latest} />
+                {more}
+              </span>
+            </div>
+            <div className="app-list__sub">
+              {title}
+              <Where e={latest} />
+            </div>
           </div>
-          <div className="app-list__sub">
-            {group.who} · shared {relativeTime(latest.at)}
-            <Context e={latest} />
-            {earlier.length > 0 && (
-              <>
-                {" · "}
-                <button
-                  type="button"
-                  className="prov-subs__more"
-                  onClick={() => setOpen((v) => !v)}
-                  aria-expanded={open}
-                >
-                  {open ? "hide" : `${earlier.length} earlier`}
-                </button>
-              </>
-            )}
+        ) : (
+          <div className="app-list__main">
+            <div className="app-list__title">{link(title)}</div>
+            <div className="app-list__sub">
+              {group.who} · shared {relativeTime(latest.at)}
+              <Where e={latest} />
+              <Status e={latest} />
+              {more}
+            </div>
           </div>
-        </div>
+        )}
         <div className="app-list__meta">
           <OriginBar origins={latest.origins} />
         </div>
@@ -127,10 +165,11 @@ function SubmissionCardRow({ group }: { group: SubmissionCardGroup }) {
           <div className="app-list__row prov-subs__row is-earlier" key={s.key}>
             <div className="app-list__main">
               <div className="app-list__sub">
-                {s.href ? <Link to={s.href}>Earlier snapshot</Link> : <>Earlier snapshot</>}
+                {s.href ? <Link className="card-link" to={s.href}>Earlier snapshot</Link> : <>Earlier snapshot</>}
                 {" · "}
                 {relativeTime(s.at)}
-                <Context e={s} />
+                <Where e={s} />
+                <Status e={s} />
               </div>
             </div>
             <div className="app-list__meta">
@@ -143,25 +182,30 @@ function SubmissionCardRow({ group }: { group: SubmissionCardGroup }) {
 }
 
 /** The typed / pasted / other bar. Its breakdown is in the hover title and
- *  aria-label; the submission it links to carries the full legend. */
+ *  aria-label; the submission it links to carries the full legend.
+ *
+ *  Everything here — bar, percentage, breakdown — measures the student's OWN
+ *  text. Starter code the instructor provided isn't theirs either way, so it
+ *  is left out entirely rather than drawn beside their work; the submission
+ *  view still marks it. */
 export function OriginBar({ origins }: { origins: OriginTotals | null }) {
   if (!origins) return <Badge tone="neutral">not recorded</Badge>;
-  const { total, human, llm, pasted, edited, pasteCount = 0 } = origins;
-  const provided = origins.provided ?? 0;
+  const { total, human, llm, pasted, edited } = origins;
+  const own = total - (origins.provided ?? 0);
   if (total <= 0) {
     return <Badge tone="neutral">empty</Badge>;
   }
-  const pct = (n: number) => (n / total) * 100;
-  // Text the student didn't compose at the keyboard. Starter code the
-  // instructor provided isn't the student's either way, so it isn't counted
-  // against them here.
-  const notTyped = Math.round(pct(llm + pasted + edited));
+  if (own <= 0) {
+    return <Badge tone="neutral">starter only</Badge>;
+  }
+  const pct = (n: number) => (n / own) * 100;
+  // Stated as a positive: the share of their own text they typed.
+  const typed = Math.round(pct(human));
   const segments = [
     { key: "human", cls: "legend-human", value: human, label: "typed" },
     { key: "pasted", cls: "legend-pasted", value: pasted, label: "pasted" },
     { key: "llm", cls: "legend-llm", value: llm, label: "from LLM" },
     { key: "edited", cls: "legend-edited", value: edited, label: "autocorrect" },
-    { key: "provided", cls: "legend-provided", value: provided, label: "provided" },
   ].filter((s) => s.value > 0);
   const title = segments
     .map((s) => `${s.label} ${Math.round(pct(s.value))}%`)
@@ -179,8 +223,7 @@ export function OriginBar({ origins }: { origins: OriginTotals | null }) {
         ))}
       </span>
       <span className="app-list__count">
-        {notTyped}% not typed
-        {pasteCount > 0 && ` · ${pasteCount} paste${pasteCount === 1 ? "" : "s"}`}
+        {typed}% typed
       </span>
     </span>
   );
@@ -200,22 +243,4 @@ export function OriginLegend({ provided = false }: { provided?: boolean }) {
       )}
     </div>
   );
-}
-
-/**
- * The "N of M" line an assignment row carries on staff lists — the same words
- * for writing and code. Real students only (the server leaves out the sample
- * student). With no deadline nothing can be late, so only "submitted" shows.
- */
-export function submissionFraction(
-  counts: { submitted: number; onTime: number } | undefined,
-  students: number,
-  hasDeadline: boolean,
-): string {
-  const submitted = counts?.submitted ?? 0;
-  const onTime = counts?.onTime ?? 0;
-  if (students === 0) return "no students enrolled";
-  const parts = [`${submitted} of ${students} submitted`];
-  if (hasDeadline) parts.push(`${onTime} on time`);
-  return parts.join(" · ");
 }

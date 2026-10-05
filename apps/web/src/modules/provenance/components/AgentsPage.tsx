@@ -251,7 +251,7 @@ function AgentEditor(props: {
           <Input
             value={draft.name}
             onChange={(e) => onChange({ ...draft, name: e.target.value })}
-            placeholder="e.g. Socratic tutor"
+            placeholder="e.g. Socratic agent"
           />
         </Field>
         <Field label="System prompt">

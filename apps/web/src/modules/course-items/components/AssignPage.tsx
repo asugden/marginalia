@@ -41,7 +41,7 @@
 // rosters, where each kind's own rules already apply.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import {
   completionLabel,
@@ -53,14 +53,15 @@ import {
   setAssignmentPublished,
   updateCourseItem,
   type CourseItemDTO,
-  type ItemKind,
   type WritingPayload,
 } from "../api.js";
 import { findExample } from "../../../examples/registry.js";
+import { itemTitle } from "../title.js";
 import {
   Badge,
   Button,
   Dropdown,
+  ItemCard,
   PageHeader,
   Section,
   useConfirm,
@@ -330,9 +331,6 @@ function NewItemControl({ courseId }: { courseId: string }) {
  * real term is part of the content, so students learning that the thing they
  * talk to is an agent is pedagogically useful rather than jargon leakage.
  */
-function KindBadge({ kind }: { kind: ItemKind }) {
-  return <Badge tone="neutral">{kindLabel(kind)}</Badge>;
-}
 
 function ItemRow({
   courseId,
@@ -375,21 +373,16 @@ function ItemRow({
   // An example wrapper stores the slug as its title (the worker cannot see
   // the registry); show the registry's title instead, falling back to the
   // slug if the registry no longer knows it.
-  const title =
-    item.kind === "example" && !missingExample
-      ? findExample(item.payloadRef)?.title ?? item.title
-      : item.title;
+  const title = itemTitle(item);
 
   return (
-    <div className="app-list__row prov-asg__row">
-      <div className="app-list__main">
-        <div className="app-list__title">
-          {href && !dangling ? (
-            <Link to={href}>{title}</Link>
-          ) : (
-            <span>{title}</span>
-          )}{" "}
-          <KindBadge kind={item.kind} />
+    <ItemCard
+      kind={item.kind}
+      seed={item.payloadRef}
+      title={title}
+      href={href && !dangling ? href : null}
+      badges={
+        <>
           {item.kind === "agent" && !dangling && <AgentTraits item={item} />}
           {hidden && (
             <>
@@ -409,8 +402,10 @@ function ItemRow({
               <Badge tone="warning">module off</Badge>
             </>
           )}
-        </div>
-        <div className="app-list__sub">
+        </>
+      }
+      sub={
+        <>
           {dangling ? (
             // Stated plainly rather than hidden: the row is why something
             // vanished from the student list, and the instructor is the only
@@ -437,9 +432,10 @@ function ItemRow({
               {item.note && <> · {item.note}</>}
             </>
           )}
-        </div>
-      </div>
-      <div className="app-list__meta prov-asg__actions">
+        </>
+      }
+      meta={
+        <>
         {item.kind === "example" && !dangling && (
           <a
             className="ex-preview-link"
@@ -468,8 +464,9 @@ function ItemRow({
             </button>
           </>
         )}
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
 

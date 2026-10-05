@@ -18,7 +18,7 @@
 // Deadlines are optional. A checkpoint with no date can never be late, and
 // nothing here ever blocks a late submission.
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import {
   createAssignment,
@@ -37,6 +37,7 @@ import {
   Button,
   Field,
   Input,
+  ItemCard,
   PageHeader,
   Section,
   Select,
@@ -313,34 +314,39 @@ function WritingRow({
 }) {
   const draft = a.archivedAt !== null;
   return (
-    <div className="app-list__row prov-asg__row">
-      <div className="app-list__main">
-        <div className="app-list__title">
-          <Link to={writingSubmissionsHref(courseId, a)}>{a.title}</Link>
-          {draft && (
-            <>
-              {" "}
-              <Badge tone="warning">Draft</Badge>
-            </>
-          )}
-        </div>
-        <div className="app-list__sub">
+    <ItemCard
+      kind="writing"
+      seed={a.id}
+      title={a.title}
+      href={writingSubmissionsHref(courseId, a)}
+      badges={
+        draft && (
+          <>
+            {" "}
+            <Badge tone="warning">Draft</Badge>
+          </>
+        )
+      }
+      sub={
+        <>
           {checkpointLine(a)}
           {draft && " · students can't see this yet"}
-        </div>
-      </div>
-      <div className="app-list__meta prov-asg__actions">
-        <Button variant="subtle" size="sm" onClick={onEdit}>
-          Edit
-        </Button>
-        <Button variant="subtle" size="sm" onClick={onTogglePublished}>
-          {draft ? "Publish" : "Unpublish"}
-        </Button>
-        <button type="button" className="danger-link" onClick={onDelete}>
-          Delete
-        </button>
-      </div>
-    </div>
+        </>
+      }
+      meta={
+        <>
+          <Button variant="subtle" size="sm" onClick={onEdit}>
+            Edit
+          </Button>
+          <Button variant="subtle" size="sm" onClick={onTogglePublished}>
+            {draft ? "Publish" : "Unpublish"}
+          </Button>
+          <button type="button" className="danger-link" onClick={onDelete}>
+            Delete
+          </button>
+        </>
+      }
+    />
   );
 }
 

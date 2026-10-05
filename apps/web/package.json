@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/modules/onboarding/onboarding.test.ts"
+    "test": "tsx src/modules/onboarding/onboarding.test.ts && tsx src/markdownOrigins.test.ts && tsx src/cards.test.ts && tsx src/course/dueness.test.ts && tsx src/course/studentWork.test.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

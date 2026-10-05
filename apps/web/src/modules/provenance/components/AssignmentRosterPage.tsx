@@ -23,7 +23,7 @@ import {
   type AssignmentRoster,
   type CourseSubmissionSummary,
 } from "../api.js";
-import { Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
+import { Button, Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
 import { groupByDocument, toCardGroup } from "./SubmissionsPage.js";
 import { formatDue } from "./AssignmentsPage.js";
 
@@ -89,11 +89,15 @@ export function AssignmentRosterPage() {
         eyebrow="Instructor · Writing submissions"
         title={roster?.assignment.title ?? "Assignment"}
         scope="Everything students have submitted to this assignment, and who hasn't submitted yet."
+        actions={
+          <Button variant="subtle" size="sm" href={`/course/${courseId}/instructor/assignments`}>
+            Edit
+          </Button>
+        }
       />
 
       <p className="muted small">
-        <Link to={`/course/${courseId}/instructor/submissions`}>← All submissions</Link> ·{" "}
-        <Link to={`/course/${courseId}/instructor/assignments`}>Edit in Assign ▸ Writing</Link>
+        <Link to={`/course/${courseId}/instructor/submissions`}>← All assignments</Link>
       </p>
 
       {error && <p className="error">{error}</p>}
@@ -143,6 +147,7 @@ export function AssignmentRosterPage() {
           <p className="muted">{q ? "Nothing matches that filter." : "Nothing submitted yet."}</p>
         ) : (
           <SubmissionCards
+            layout="student"
             groups={groups.map((g) =>
               toCardGroup(g, {
                 context: "checkpoint",

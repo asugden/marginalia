@@ -59,7 +59,9 @@ export interface CourseItemRow {
  * module's no-false-positives rule governs this surface too.
  */
 export type ItemCompletionDTO =
-  | { kind: "writing"; submitted: boolean }
+  /** `checkpoints`: the checkpoint ids submitted to, so a list that shows each
+   *  checkpoint as its own item can say which are done. */
+  | { kind: "writing"; submitted: boolean; checkpoints: string[] }
   | { kind: "agent"; finished: boolean }
   | { kind: "example"; markedDone: boolean }
   | { kind: "reading"; markedDone: boolean }

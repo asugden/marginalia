@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
+import { Button, Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
 import { getRoster, type CodeAssignmentDTO, type RosterStudentDTO } from "../api.js";
 import { formatDue } from "./CodeHomePage.js";
@@ -53,10 +53,14 @@ export function RosterPage() {
               : `${data.assignment.dueAt ? `Due ${formatDue(data.assignment.dueAt)}` : "No deadline"} · chat ${data.assignment.aiEnabled ? "on" : "off"}. Everyone enrolled is listed, whether or not they've submitted.`
             : undefined
         }
+        actions={
+          <Button variant="subtle" size="sm" href={base}>
+            Edit
+          </Button>
+        }
       />
       <p className="muted small">
-        <Link to={`/course/${courseId}/instructor/submissions`}>← All submissions</Link> ·{" "}
-        <Link to={base}>Edit in Assign ▸ Code</Link>
+        <Link to={`/course/${courseId}/instructor/submissions`}>← All assignments</Link>
       </p>
       {error && <p className="error">{error}</p>}
 
@@ -80,6 +84,7 @@ export function RosterPage() {
           <p className="muted">{query.trim() ? "Nothing matches that filter." : "Nothing submitted yet."}</p>
         ) : (
           <SubmissionCards
+            layout="student"
             groups={submittedRows.map((s) => ({
               key: s.userId,
               title: s.latest!.title,

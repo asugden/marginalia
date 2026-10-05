@@ -1,19 +1,18 @@
 // Course Settings — the instructor's course-configuration page
-// (/course/:courseId/instructor/settings). Three headed sections:
-//   1. Course Stats — agents / libraries / enrolled totals.
-//   2. Term & Timeline — the semester + the dates the course runs (which drive
+// (/course/:courseId/instructor/settings). Two headed sections:
+//   1. Term & Timeline — the semester + the dates the course runs (which drive
 //      whether it's "current").
-//   3. Resources & Extensions — the optional module toggles.
+//   2. Resources & Extensions — the optional module toggles.
+//
+// No stats here: enrollment is on the dashboard, and agents and libraries
+// each have their own list. Settings is for what the instructor changes.
 //
 // This replaces the old inline course-admin panel that lived behind a chevron
 // on the "All courses" cards. Current values seed from useCourse(); after a
 // save/toggle it calls refresh() so the nav and dashboard reflect the change
 // without a reload.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  listAgents,
-  listCollections,
-  listRoster,
   setCourseFeature,
   updateCourse,
 } from "../client.js";
@@ -32,8 +31,6 @@ import {
   PageHeader,
   Section,
   Select,
-  StatGrid,
-  StatTile,
 } from "../components/index.js";
 import { RestartTour } from "../modules/onboarding/components/RestartTour.js";
 
@@ -55,11 +52,6 @@ export function CourseSettingsPage() {
     refresh,
   } = useCourse();
 
-  const [stats, setStats] = useState<{
-    agents: number;
-    libraries: number;
-    students: number;
-  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Module toggles — optimistic local copies; refresh() reconciles the nav.
@@ -77,30 +69,6 @@ export function CourseSettingsPage() {
   const [endDraft, setEndDraft] = useState<string>(msToDateInput(endDate));
   const [saveBusy, setSaveBusy] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    Promise.allSettled([
-      listAgents(courseId),
-      listCollections(courseId),
-      listRoster(courseId),
-    ]).then(([agents, collections, roster]) => {
-      if (!live) return;
-      setStats({
-        agents: agents.status === "fulfilled" ? agents.value.agents.length : 0,
-        libraries:
-          collections.status === "fulfilled"
-            ? collections.value.collections.length
-            : 0,
-        students:
-          roster.status === "fulfilled"
-            ? roster.value.roster.filter((r) => r.role === "student" && !r.isSample).length
-            : 0,
-      });
-    });
-    return () => {
-      live = false;
-    };
-  }, [courseId]);
 
   async function toggleFeature(
     feature: "attendance" | "agents" | "provenance" | "code",
@@ -181,32 +149,18 @@ export function CourseSettingsPage() {
     }
   }
 
-  const n = (v: number | undefined) => (v == null ? "—" : v.toLocaleString());
 
   return (
     <div className="app-page app-settings">
       <PageHeader
         eyebrow="Instructor · Settings"
         title="Settings"
-        scope="The course’s totals, the term and dates it runs, and which tools it offers."
+        scope="The term and dates the course runs, and which tools it offers."
       />
 
       {error && <p className="error">{error}</p>}
 
-      {/* 1 — Course Stats */}
-      <Section title="Course Stats" description="What’s in this course right now.">
-        <StatGrid>
-          {!genaiOptOut && (
-            <>
-              <StatTile value={n(stats?.agents)} label="Agents" />
-              <StatTile value={n(stats?.libraries)} label="Libraries" />
-            </>
-          )}
-          <StatTile value={n(stats?.students)} label="Enrolled" />
-        </StatGrid>
-      </Section>
-
-      {/* 2 — Term & Timeline */}
+      {/* 1 — Term & Timeline */}
       <Section
         title="Term & Timeline"
         description="The semester sets the label and grouping; the start and end dates decide when the course counts as “current.” Pick a term and hit “Use term dates” for a sensible default window you can adjust."
@@ -274,7 +228,7 @@ export function CourseSettingsPage() {
         </div>
       </Section>
 
-      {/* 3 — Resources & Extensions */}
+      {/* 2 — Resources & Extensions */}
       <Section
         title="Resources & Extensions"
         description="Turn an extension off to remove it from this course’s nav and the students’ view."

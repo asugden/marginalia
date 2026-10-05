@@ -65,15 +65,6 @@
 .ds-switcher__new strong { color: var(--accent-deep); }
 .ds-switcher__new .muted { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; }
 
-/* Collection icon tile (DS .app-coll-ic): an accent-tinted book glyph leading
-   each collection row. Replaces the misused student-shell .ds-id__icon. */
-.ds-coll-ic {
-  width: 38px; height: 38px; flex: none; border-radius: var(--radius-sm);
-  background: var(--accent-wash); color: var(--accent-ink);
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.ds-coll-ic svg { width: 20px; height: 20px; }
-
 /* ---- Modal (DS .app-modal): a centered card over a scrim. Used by the
    "copy agent from another course" picker; previously rendered unstyled. ---- */
 .ds-modal-backdrop {
@@ -167,18 +158,6 @@
 .ds-joincode { display: flex; align-items: center; gap: 1rem; background: var(--surface-sunken); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-top: 1rem; flex-wrap: wrap; }
 .ds-joincode__label { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
 .ds-joincode__code { font-family: var(--font-mono); font-weight: 700; font-size: 1.3rem; letter-spacing: 0.04em; color: var(--accent); }
-
-/* ---- Generic staff list (agents, collections, voices) ---- */
-.ds-staff-list { display: flex; flex-direction: column; gap: 0.6rem; }
-.ds-staff-list__row {
-  display: flex; align-items: center; gap: 0.85rem; padding: 0.9rem 1rem;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs); text-decoration: none;
-}
-.ds-staff-list__main { flex: 1; min-width: 0; }
-.ds-staff-list__title { font-weight: 600; color: var(--text-strong); font-size: var(--text-base); }
-.ds-staff-list__sub { color: var(--text-muted); font-size: var(--text-sm); margin-top: 0.1rem; }
-.ds-staff-list__actions { display: flex; gap: 0.4rem; align-items: center; flex: none; }
 
 /* The mid-width instructor-bar wrap used to be duplicated here against the
    pre-bands `.ds-staff-top--instructor` / `.ds-staff-nav` markup, which no

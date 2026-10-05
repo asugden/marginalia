@@ -219,8 +219,8 @@ async function resolveCompletions(
       ? repo.listFinishedAgentIds(env.DB, courseId, userId)
       : new Set<string>(),
     kinds.has("writing")
-      ? repo.listSubmittedAssignmentIds(env.DB, courseId, userId)
-      : new Set<string>(),
+      ? repo.listSubmittedWriting(env.DB, courseId, userId)
+      : new Map<string, Set<string>>(),
     kinds.has("example") || kinds.has("reading")
       ? repo.listCompletedExampleSlugs(env.DB, courseId, userId)
       : new Set<string>(),
@@ -243,6 +243,7 @@ async function resolveCompletions(
         out.set(row.id, {
           kind: "writing",
           submitted: submittedWriting.has(row.payload_ref),
+          checkpoints: [...(submittedWriting.get(row.payload_ref) ?? [])],
         });
         break;
       case "example":

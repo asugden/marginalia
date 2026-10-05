@@ -371,6 +371,16 @@ export function StopIcon(props: IconProps) {
   );
 }
 
+// Code — Lucide "code" (angle brackets).
+export function CodeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m16 18 6-6-6-6" />
+      <path d="m8 6-6 6 6 6" />
+    </Icon>
+  );
+}
+
 export function CursorIcon(props: IconProps) {
   return (
     <Icon {...props}>

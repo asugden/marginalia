@@ -20,6 +20,7 @@ import {
   Button,
   Field,
   Input,
+  ItemCard,
   PageHeader,
   RadioCard,
   RadioCardGroup,
@@ -180,55 +181,55 @@ export function InstructorCodePage() {
                   onCancel={() => setEditing(null)}
                 />
               ) : (
-                <div className="app-list__row prov-asg__row" key={a.id}>
-                  <div className="app-list__main">
-                    <div className="app-list__title">
-                      <Link to={`/course/${courseId}/instructor/submissions/code/${a.id}`}>
-                        {a.title}
-                      </Link>
-                      {a.archivedAt !== null && (
-                        <>
-                          {" "}
-                          <Badge tone="warning">Draft</Badge>
-                        </>
-                      )}
-                    </div>
-                    <div className="app-list__sub">
-                      {[
-                        a.mode === "practice" ? "Practice" : null,
-                        a.dueAt ? `Due ${formatDue(a.dueAt)}` : "No deadline",
-                        a.archivedAt !== null ? "students can't see this yet" : null,
-                        a.aiEnabled
-                          ? a.voiceChoice
-                            ? "Chat on · students pick the voice"
-                            : "Chat on"
-                          : // Opted out of generative AI: don't label every row
-                            // with it; a co-instructor's "Chat on" still shows.
-                            genaiOptOut
-                            ? null
-                            : "Chat off",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                  </div>
-                  {authors && (
-                    <div className="app-list__meta prov-asg__actions">
-                      <Button variant="subtle" size="sm" href={`${base}/${a.id}/starter`}>
-                        Starter notebook
-                      </Button>
-                      <Button variant="subtle" size="sm" onClick={() => setEditing(a.id)}>
-                        Edit
-                      </Button>
-                      <Button variant="subtle" size="sm" onClick={() => void togglePublished(a)}>
-                        {a.archivedAt !== null ? "Publish" : "Unpublish"}
-                      </Button>
-                      <button type="button" className="danger-link" onClick={() => void remove(a)}>
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <ItemCard
+                  key={a.id}
+                  kind="code"
+                  seed={a.id}
+                  title={a.title}
+                  href={`/course/${courseId}/instructor/submissions/code/${a.id}`}
+                  badges={
+                    a.archivedAt !== null && (
+                      <>
+                        {" "}
+                        <Badge tone="warning">Draft</Badge>
+                      </>
+                    )
+                  }
+                  sub={[
+                    a.mode === "practice" ? "Practice" : null,
+                    a.dueAt ? `Due ${formatDue(a.dueAt)}` : "No deadline",
+                    a.archivedAt !== null ? "students can't see this yet" : null,
+                    a.aiEnabled
+                      ? a.voiceChoice
+                        ? "Chat on · students pick the voice"
+                        : "Chat on"
+                      : // Opted out of generative AI: don't label every row
+                        // with it; a co-instructor's "Chat on" still shows.
+                        genaiOptOut
+                        ? null
+                        : "Chat off",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  meta={
+                    authors && (
+                      <>
+                        <Button variant="subtle" size="sm" href={`${base}/${a.id}/starter`}>
+                          Starter notebook
+                        </Button>
+                        <Button variant="subtle" size="sm" onClick={() => setEditing(a.id)}>
+                          Edit
+                        </Button>
+                        <Button variant="subtle" size="sm" onClick={() => void togglePublished(a)}>
+                          {a.archivedAt !== null ? "Publish" : "Unpublish"}
+                        </Button>
+                        <button type="button" className="danger-link" onClick={() => void remove(a)}>
+                          Delete
+                        </button>
+                      </>
+                    )
+                  }
+                />
               ),
             )}
           </div>

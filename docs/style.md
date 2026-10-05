@@ -603,8 +603,8 @@ shape, so learning one teaches the rest.
 1. **Assign is what you give; Review is what comes back.** Every
    assignment appears in both: under **Assign ▸ <type>** to create, edit
    and publish it, and under **Review ▸ Submissions** to read what came
-   in. Each side links to the other ("Edit in Assign ▸ Writing" on a
-   submissions page; a row's title on an Assign page opens its
+   in. Each side links to the other (an **Edit** button in a submissions
+   page's header; a row's title on an Assign page opens its
    submissions).
 2. **Assign is a menu of assignment types.** One item per type that's
    turned on. An **All** item (the combined list, in due order) appears

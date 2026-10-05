@@ -14,8 +14,8 @@ more honest part of coursework — and to bring some trust back to it.
 
 Three things an instructor can build:
 
-1. **Agents** — AI tutors students chat with. Each carries a *voice* (how
-   it talks) and can be shaped two ways:
+1. **Agents** — Instructor-controlled AI agents students chat with. Each
+   carries a *voice* (how it talks) and can be shaped two ways:
    - **Outlines** — a guided conversation that walks the student through a
      set sequence of topics, with a turn budget for each and a condition
      that ends it. A real state machine, enforced in code — not a system

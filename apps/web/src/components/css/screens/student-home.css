@@ -178,10 +178,6 @@
   .ds-home__panel-action .ds-btn { width: 100%; justify-content: center; }
 }
 
-/* Completion verb on a student's due-next row ("submitted", "marked done"):
-   the caller's own state, quiet next to the deadline phrase — never red,
-   even inside an overdue row. */
-.app-dash__done { color: var(--text-muted); font-weight: 400; }
 
 /* Module-panel headings are links (the module items left the student top
    line; the dashboard is the hub). They read as headings until hovered. */

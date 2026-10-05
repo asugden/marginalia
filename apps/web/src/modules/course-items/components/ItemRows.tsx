@@ -15,9 +15,9 @@
 // why it is opt-in rather than automatic.
 
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { Badge } from "../../../components/index.js";
-import { completionLabel, kindLabel, type CourseItemDTO } from "../api.js";
+import { ItemCard } from "../../../components/index.js";
+import { itemTitle } from "../title.js";
+import { completionLabel, type CourseItemDTO } from "../api.js";
 import { dueLabel, shortDate, type DatedItem } from "../../../course/dueness.js";
 
 function Row({
@@ -32,15 +32,14 @@ function Row({
   sub: ReactNode;
 }) {
   return (
-    <div className={"app-list__row" + (overdue ? " app-list__row--overdue" : "")}>
-      <div className="app-list__main">
-        <div className="app-list__title">
-          {href ? <Link to={href}>{item.title}</Link> : <span>{item.title}</span>}{" "}
-          <Badge tone="neutral">{kindLabel(item.kind)}</Badge>
-        </div>
-        <div className="app-list__sub">{sub}</div>
-      </div>
-    </div>
+    <ItemCard
+      kind={item.kind}
+      seed={item.checkpoint?.id ?? item.payloadRef}
+      title={itemTitle(item)}
+      href={href}
+      sub={sub}
+      className={overdue ? "app-list__row--overdue" : undefined}
+    />
   );
 }
 
@@ -48,8 +47,11 @@ export function ItemRows({
   rows,
   hrefFor,
   showCompletion = false,
+  viewer = "student",
 }: {
   rows: DatedItem[];
+  /** Staff see past deadlines as dates ("Due 2 days ago"), never as overdue. */
+  viewer?: "student" | "staff";
   /** Where a row's title links, or null for plain text. */
   hrefFor: (item: CourseItemDTO) => string | null;
   showCompletion?: boolean;
@@ -63,10 +65,10 @@ export function ItemRows({
             key={d.item.id}
             item={d.item}
             href={hrefFor(d.item)}
-            overdue={d.bucket === "overdue"}
+            overdue={viewer === "student" && d.bucket === "overdue"}
             sub={
               <>
-                {shortDate(d.dueAt)} · <span className="app-list__due">{dueLabel(d)}</span>
+                {shortDate(d.dueAt)} · <span className="app-list__due">{dueLabel(d, viewer)}</span>
                 {done && <> · {done}</>}
               </>
             }

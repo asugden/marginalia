@@ -107,7 +107,7 @@ export function SubmissionsPage() {
       />
 
       <p className="muted small">
-        <Link to={`/course/${courseId}/instructor/submissions`}>← All submissions</Link>
+        <Link to={`/course/${courseId}/instructor/submissions`}>← All assignments</Link>
       </p>
 
       {error && <p className="error">{error}</p>}

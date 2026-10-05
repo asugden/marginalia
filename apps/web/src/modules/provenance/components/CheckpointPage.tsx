@@ -20,7 +20,7 @@ import {
   type AssignmentRoster,
   type CourseSubmissionSummary,
 } from "../api.js";
-import { Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
+import { Button, Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
 import { groupByDocument, toCardGroup } from "./SubmissionsPage.js";
 import { checkpointTitle, formatDue } from "./AssignmentsPage.js";
 
@@ -116,11 +116,15 @@ export function CheckpointPage() {
             ? `${checkpoint.dueAt === null ? "No deadline" : `Due ${formatDue(checkpoint.dueAt)}`}. Each student's latest submission to this checkpoint, with earlier ones behind it. Late work is marked, never hidden.`
             : undefined
         }
+        actions={
+          <Button variant="subtle" size="sm" href={assignHref}>
+            Edit
+          </Button>
+        }
       />
 
       <p className="muted small">
-        <Link to={listHref}>← All submissions</Link> ·{" "}
-        <Link to={assignHref}>Edit in Assign ▸ Writing</Link>
+        <Link to={listHref}>← All assignments</Link>
       </p>
 
       {error && <p className="error">{error}</p>}
@@ -144,6 +148,7 @@ export function CheckpointPage() {
           <p className="muted">{q ? "Nothing matches that filter." : "Nothing submitted yet."}</p>
         ) : (
           <SubmissionCards
+            layout="student"
             groups={groups.map((g) =>
               toCardGroup(g, {
                 context: "none",

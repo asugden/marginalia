@@ -29,34 +29,50 @@ export interface Family {
    * into whichever side has room beside it, and no two grow into each other.
    */
   lean: "left" | "right";
+  /**
+   * Which side of the axis the names hang on. Below by default; a family whose
+   * tick crowds its neighbours' puts its names ABOVE the line, where the left
+   * half of the figure is empty.
+   */
+  side?: "above";
 }
 
 /**
  * The divide. Left of this position you can point at the number that produced
  * an answer; right of it you can measure the behaviour but not narrate it.
  */
-export const OPEN_BOX_EDGE = 0.34;
+export const OPEN_BOX_EDGE = 0.4;
 
 export const FAMILIES: Family[] = [
   {
     id: "regression",
     label: "Regression",
-    pos: 0.06,
+    pos: 0.05,
     // Nothing to its left but the dot; grows right toward the open axis.
     lean: "right",
     models: [{ name: "linear regression" }, { name: "logistic regression" }],
   },
   {
-    id: "margin",
-    label: "SVM · Naive Bayes",
-    pos: 0.24,
-    // The long gap to Decision tree models is on its right, so it grows there
-    // and leaves Regression's column room to its left.
+    id: "svm",
+    label: "SVM",
+    // The open-box models bunch up near regression and the axis then opens
+    // out: the step from them to trees is far bigger than the steps between
+    // them. Too close to share the space under the line, so SVM's names hang
+    // above it.
+    pos: 0.12,
     lean: "right",
-    models: [
-      { name: "support vector machine", slug: "svm" },
-      { name: "naive Bayes", slug: "naive-bayes" },
-    ],
+    side: "above",
+    slug: "svm",
+    models: [{ name: "support vector machine" }],
+  },
+  {
+    id: "naive-bayes",
+    label: "Naive Bayes",
+    pos: 0.19,
+    // Below the line, starting just clear of Regression's longest name.
+    lean: "right",
+    slug: "naive-bayes",
+    models: [],
   },
   {
     id: "trees",
@@ -86,13 +102,14 @@ export const FAMILIES: Family[] = [
   },
 ];
 
-/** What increases as you move right. Sits above the arrowhead. */
+/** What increases as you move right. Stacked over the arrowhead; the loss of
+ *  interpretability is drawn as its own bar, so it is not repeated here. */
 export const AXIS_QUANTITIES = [
-  "complexity (decreasing interpretability)",
+  "complexity",
   "cost",
-  "#rows of training data",
+  "rows of training data",
   "parameters",
-  "#features",
+  "features",
 ];
 
 /**
@@ -103,9 +120,24 @@ export const AXIS_QUANTITIES = [
  */
 export const ROW_FLOOR: Record<string, number> = {
   regression: 100,
-  margin: 100,
+  svm: 100,
+  "naive-bayes": 100,
   trees: 500,
   neural: 10000,
+};
+
+/**
+ * When plenty of rows makes the NEXT family worth it. Data is the other thing,
+ * besides more features, that pays for a more complex model: a tree ensemble
+ * beats a regression on a few columns once there are thousands of rows to learn
+ * the interactions from. A network is a harder sell — on a handful of columns
+ * XGBoost wins however much data there is — so it also wants a real number of
+ * features before rows can tip it over. Rows only ever move the pick ONE family
+ * right of where the feature count put it, and never left.
+ */
+export const ROW_PLENTY: Record<string, { rows: number; minFeatures: number }> = {
+  trees: { rows: 10000, minFeatures: 1 },
+  neural: { rows: 1000000, minFeatures: 20 },
 };
 
 export interface Band {
@@ -113,6 +145,8 @@ export interface Band {
   /** Upper bound of the feature band; Infinity for the last. */
   maxFeatures: number;
   verdict: string;
+  /** Said instead when plenty of rows, not the feature count, put you here. */
+  verdictFromRows?: string;
 }
 
 /**
@@ -136,20 +170,27 @@ export const BANDS: Band[] = [
     familyId: "trees",
     maxFeatures: 100,
     verdict: "XGBoost. More columns than you can hold in your head, but nowhere near enough to need a network.",
+    verdictFromRows: "XGBoost. Few enough columns to read by hand, but with this much data a tree ensemble will find interactions a regression cannot.",
   },
   {
     familyId: "neural",
     maxFeatures: Infinity,
     verdict: "Reframe the problem to need fewer features, or reach for a neural network — and bring a lot more data.",
+    verdictFromRows: "A neural network starts to earn its keep. With this many rows it can learn what an ensemble would need hand-built features for.",
   },
 ];
 
 export function classify(features: number, rows: number) {
-  // The last band is unbounded, so find() always succeeds; the fallback only
-  // satisfies an index the compiler cannot prove.
-  const band =
-    BANDS.find((b) => features <= b.maxFeatures) ?? (BANDS[BANDS.length - 1] as Band);
+  // Feature count picks the starting band. The last band is unbounded, so the
+  // search always succeeds; the fallback only satisfies the compiler.
+  let i = BANDS.findIndex((b) => features <= b.maxFeatures);
+  if (i < 0) i = BANDS.length - 1;
+  // Plenty of rows buys one step further right.
+  const next = BANDS[i + 1];
+  const plenty = next ? ROW_PLENTY[next.familyId] : undefined;
+  const bumped = plenty !== undefined && rows >= plenty.rows && features >= plenty.minFeatures;
+  const band = (bumped && next) || (BANDS[i] as Band);
   const family = FAMILIES.find((f) => f.id === band.familyId) ?? (FAMILIES[0] as Family);
   const neededRows = ROW_FLOOR[family.id] ?? 100;
-  return { band, family, neededRows, starved: rows < neededRows };
+  return { band, family, bumped, neededRows, starved: rows < neededRows };
 }

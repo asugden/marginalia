@@ -14,6 +14,8 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 // KaTeX styles live with the renderer so they ride the lazy-loaded chunk.
 import "katex/dist/katex.min.css";
+import type { OriginRun } from "@marginalia/provenance";
+import { rehypeOrigins } from "./markdownOrigins.js";
 import type { MessageSource } from "./api.js";
 
 interface Props {
@@ -25,12 +27,17 @@ interface Props {
   /** Builds the click-through URL for a citation. Null = the source can't
    *  be opened (e.g. deleted) and the pill renders as a disabled chip. */
   citationHref?: (c: MessageSource) => string | null;
+  /** Where each stretch of the SOURCE came from (provenance runs, in order).
+   *  When given, the rendered text carries the same origin marks as a code
+   *  cell (`.code-origin--*`), so a reviewer reads formatted text with its
+   *  origins on it. Ignored alongside citations, which rewrite the source. */
+  origins?: OriginRun[];
 }
 
 const CITATION_TOKEN_RE = /\[\^?(src_[0-9a-f-]{36})\]/g;
 const PILL_SCHEME = "marginalia-cite://";
 
-export function Markdown({ children, citations, citationHref }: Props) {
+export function Markdown({ children, citations, citationHref, origins }: Props) {
   let content = children;
   const pillByOrdinal = new Map<number, MessageSource>();
   // v0.7 §3.5 — always strip un-pillable [^src_*] tokens. Pre-v0.5
@@ -49,7 +56,12 @@ export function Markdown({ children, citations, citationHref }: Props) {
     <div className="markdown-body">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={
+          // Only when the text being rendered IS the source the runs measure.
+          origins && content === children
+            ? [rehypeKatex, rehypeOrigins(children, origins)]
+            : [rehypeKatex]
+        }
         components={{
           // External-link safety: every link opens in a new tab and severs
           // window.opener. No raw-HTML passthrough (react-markdown defaults

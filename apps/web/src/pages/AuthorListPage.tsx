@@ -19,8 +19,8 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import {
-  Avatar,
   Badge,
+  ItemCard,
   Button,
   PageHeader,
   Section,
@@ -147,56 +147,48 @@ export function AuthorListPage() {
       ) : (
         <div className="app-list">
           {agents.map((a) => (
-            <div className="app-list__row" key={a.id}>
-              <Avatar name={a.title} agent={a.hasBackbone} />
-              <div className="app-list__main">
-                <div className="app-list__title">{a.title}</div>
-                <div
-                  className="app-list__sub"
-                  style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
-                >
-                  <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
-                    {a.hasBackbone ? "guided" : "free-form"}
-                  </Badge>
-                  {a.hasCollection && (
-                    <Badge tone="info" dot>
-                      grounded
-                    </Badge>
-                  )}
+            <ItemCard
+              key={a.id}
+              kind="agent"
+              seed={a.id}
+              title={a.title}
+              href={`/course/${courseId}/instructor/agents/${a.id}`}
+              sub={[
+                a.hasBackbone ? "Guided" : "Free-form",
+                a.hasCollection ? "Grounded in sources" : null,
+                a.hasVariants ? "Hidden split running" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              meta={
+                <>
                   {a.hasVariants && (
-                    <Badge tone="warning" dot>
-                      hidden split
-                    </Badge>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      href={`/course/${courseId}/instructor/agents/${a.id}/variants`}
+                    >
+                      Results
+                    </Button>
                   )}
-                </div>
-              </div>
-              <div className="app-list__meta prov-asg__actions">
-                {a.hasVariants && (
                   <Button
                     variant="subtle"
                     size="sm"
-                    href={`/course/${courseId}/instructor/agents/${a.id}/variants`}
+                    href={`/course/${courseId}/instructor/agents/${a.id}`}
                   >
-                    Results
+                    Edit
                   </Button>
-                )}
-                <Button
-                  variant="subtle"
-                  size="sm"
-                  href={`/course/${courseId}/instructor/agents/${a.id}`}
-                >
-                  Edit
-                </Button>
-                <button
-                  type="button"
-                  className="danger-link"
-                  disabled={deletingId === a.id}
-                  onClick={() => onDelete(a)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
+                  <button
+                    type="button"
+                    className="danger-link"
+                    disabled={deletingId === a.id}
+                    onClick={() => onDelete(a)}
+                  >
+                    Delete
+                  </button>
+                </>
+              }
+            />
           ))}
         </div>
       )}
