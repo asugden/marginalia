@@ -81,6 +81,7 @@ export function SubmissionPage() {
                 Open a scratch copy
               </Button>
               <ReviewNav
+                back={nav ? { href: nav.assignment.listHref, label: nav.assignment.title } : null}
                 up={nav?.up ?? null}
                 down={nav?.down ?? null}
                 students={{

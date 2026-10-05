@@ -145,6 +145,7 @@ export function PublicSubmissionPage() {
         <Wordmark size="sm" />
         {nav && (
           <ReviewNav
+            back={{ href: nav.assignment.listHref, label: nav.assignment.title }}
             up={nav.up}
             down={nav.down}
             students={{ prev: nav.prev, next: nav.next, position: nav.position }}

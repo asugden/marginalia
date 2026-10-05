@@ -203,6 +203,7 @@
 .review-nav__chev--up { transform: rotate(180deg); }
 .review-nav__chev--left { transform: rotate(90deg); }
 .review-nav__chev--right { transform: rotate(-90deg); }
+.review-nav__back { transform: rotate(180deg); }
 .review-nav__brief {
   appearance: none; cursor: pointer; font: inherit; font-size: var(--text-xs);
   color: var(--text-secondary); background: none;

@@ -1,7 +1,8 @@
 // The review pages' small navigation cluster, top right of the header:
 //
-//   [Assignment]  ↑ ↓   ‹ 3 of 24 ›
+//   ←  [Assignment]  ↑ ↓   ‹ 3 of 24 ›
 //
+//   ←    back to the assignment's submissions (submission pages only)
 //   ‹ ›  previous / next student in this assignment (submission pages only)
 //   ↑ ↓  previous / next dated assignment — the same student's submission
 //        there, or that assignment's page (see reviewGrid.ts)
@@ -14,7 +15,7 @@
 
 import { useState } from "react";
 import { IconButton } from "../components/index.js";
-import { ChevronIcon } from "../icons.js";
+import { ArrowIcon, ChevronIcon } from "../icons.js";
 import { Markdown } from "../Markdown.js";
 import type { GridAssignment, NavTarget } from "./reviewGrid.js";
 
@@ -59,11 +60,14 @@ function Move({
 }
 
 export function ReviewNav({
+  back,
   up,
   down,
   students,
   brief,
 }: {
+  /** Back to the list this page was reached from; omitted on that list. */
+  back?: NavTarget | null;
   up: NavTarget | null;
   down: NavTarget | null;
   /** Left / right between students; omitted on an assignment's own page. */
@@ -77,6 +81,11 @@ export function ReviewNav({
 }) {
   return (
     <nav className="review-nav" aria-label="Move between submissions">
+      {back && (
+        <IconButton size="sm" title={`Back to ${back.label}`} href={back.href}>
+          <ArrowIcon size={16} className="review-nav__back" />
+        </IconButton>
+      )}
       {brief && (
         <button
           type="button"
