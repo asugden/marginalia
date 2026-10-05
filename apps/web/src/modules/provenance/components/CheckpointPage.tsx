@@ -14,6 +14,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
+import { navFromAssignment, writingKey } from "../../../course/reviewGrid.js";
+import { useReviewGrid } from "../../../course/useReviewGrid.js";
+import { AssignmentBrief, ReviewNav, useBriefOpen } from "../../../course/ReviewNav.js";
 import {
   getAssignmentRoster,
   listCourseSubmissions,
@@ -34,6 +37,9 @@ export function CheckpointPage() {
   const [subs, setSubs] = useState<CourseSubmissionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const grid = useReviewGrid(courseId);
+  const nav = grid && checkpointId ? navFromAssignment(grid, writingKey(checkpointId)) : null;
+  const [briefOpen, toggleBrief] = useBriefOpen();
 
   useEffect(() => {
     if (!assignmentId || !checkpointId) return;
@@ -90,6 +96,7 @@ export function CheckpointPage() {
   );
 
   const loading = roster === null || subs === null;
+  const hasBrief = !!assignment?.instructions.trim();
   const listHref = `/course/${courseId}/instructor/submissions`;
   const assignHref = `/course/${courseId}/instructor/assignments`;
 
@@ -117,15 +124,32 @@ export function CheckpointPage() {
             : undefined
         }
         actions={
-          <Button variant="subtle" size="sm" href={assignHref}>
-            Edit
-          </Button>
+          <>
+            <Button variant="subtle" size="sm" href={assignHref}>
+              Edit
+            </Button>
+            <ReviewNav
+              up={nav?.up ?? null}
+              down={nav?.down ?? null}
+              brief={hasBrief ? { open: briefOpen, onToggle: toggleBrief } : null}
+            />
+          </>
         }
       />
 
       <p className="muted small">
         <Link to={listHref}>← All assignments</Link>
       </p>
+
+      {briefOpen && hasBrief && assignment && (
+        <AssignmentBrief
+          assignment={{
+            title: checkpointTitle(assignment, checkpoint),
+            dueAt: checkpoint?.dueAt ?? null,
+            instructions: assignment.instructions,
+          }}
+        />
+      )}
 
       {error && <p className="error">{error}</p>}
 

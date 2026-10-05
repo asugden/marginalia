@@ -185,6 +185,7 @@ export function toCardGroup(
         })(),
         revoked: s.revokedAt !== null,
         origins: s.origins,
+        readBy: s.readBy,
       };
     }),
   };

@@ -40,6 +40,9 @@ export interface SubmissionCardEntry {
   revoked?: boolean;
   /** Null when origins weren't recorded (e.g. a practice copy). */
   origins: OriginTotals | null;
+  /** Course staff who have opened it, most recent first. Empty = nobody yet;
+   *  undefined = the caller doesn't track reads, and nothing is shown. */
+  readBy?: { by: string; at: number }[];
 }
 
 export interface SubmissionCardGroup {
@@ -88,7 +91,7 @@ function Where({ e }: { e: SubmissionCardEntry }) {
   );
 }
 
-/** How it arrived: late, revoked. */
+/** How it arrived: late, revoked. Then whether staff have read it. */
 function Status({ e }: { e: SubmissionCardEntry }) {
   return (
     <>
@@ -97,7 +100,35 @@ function Status({ e }: { e: SubmissionCardEntry }) {
           ? ` · LATE by ${lateness(e.lateByMs)}`
           : " · LATE")}
       {e.revoked && " · revoked"}
+      {e.readBy && e.readBy.length > 0 && (
+        <span title={readTitle(e.readBy)}> · read</span>
+      )}
     </>
+  );
+}
+
+function readTitle(readBy: { by: string; at: number }[]): string {
+  return (
+    "Opened by " +
+    readBy
+      .map(
+        (r) =>
+          `${r.by} (${new Date(r.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })})`,
+      )
+      .join(", ")
+  );
+}
+
+/** The unread dot: nobody on staff has opened this submission yet. */
+function Unread({ e }: { e: SubmissionCardEntry }) {
+  if (!e.readBy || e.readBy.length > 0) return null;
+  return (
+    <span
+      className="prov-subs__unread"
+      title="Not opened by course staff yet"
+      aria-label="Unread"
+      role="img"
+    />
   );
 }
 
@@ -133,6 +164,7 @@ function SubmissionCardRow({
         {layout === "student" ? (
           <div className="app-list__main">
             <div className="app-list__title">
+              <Unread e={latest} />
               {link(group.who)}
               <span className="prov-subs__when">
                 {" · "}shared {relativeTime(latest.at)}
@@ -147,7 +179,10 @@ function SubmissionCardRow({
           </div>
         ) : (
           <div className="app-list__main">
-            <div className="app-list__title">{link(title)}</div>
+            <div className="app-list__title">
+              <Unread e={latest} />
+              {link(title)}
+            </div>
             <div className="app-list__sub">
               {group.who} · shared {relativeTime(latest.at)}
               <Where e={latest} />

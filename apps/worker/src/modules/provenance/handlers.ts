@@ -27,7 +27,12 @@ import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import { courseGenaiLocked, GENAI_LOCKED_CODE, GENAI_LOCKED_MESSAGE } from "../../genai.js";
 import { can, type Capability } from "../../permissions.js";
-import { countRealStudents } from "../../repo.js";
+import {
+  countRealStudents,
+  findUserById,
+  listSubmissionReads,
+  markSubmissionRead,
+} from "../../repo.js";
 import * as repo from "./repo.js";
 
 // Built-in provenance chat voices — synthesized from the shared voice library
@@ -1332,7 +1337,10 @@ export async function listCourseSubmissionsRoute(
   if (!can(enrollment.role, "view_submissions")) {
     return error("Course staff only", 403);
   }
-  const rows = await repo.listSubmissionsForCourse(env.DB, courseId);
+  const [rows, reads] = await Promise.all([
+    repo.listSubmissionsForCourse(env.DB, courseId),
+    listSubmissionReads(env.DB, courseId, "writing"),
+  ]);
   return json({
     submissions: rows.map((r) => ({
       token: r.token,
@@ -1340,8 +1348,11 @@ export async function listCourseSubmissionsRoute(
       title: r.title_snapshot,
       createdAt: r.created_at,
       revokedAt: r.revoked_at,
+      studentUserId: r.user_id,
       studentEmail: r.student_email,
       studentName: r.student_name,
+      // Staff who have opened this snapshot, most recent first; empty = unread.
+      readBy: reads.get(r.token) ?? [],
       origins: summarizeOrigins(r.render_json),
       // Null throughout for an unattached submission — every row predating
       // assignments reads this way, and the list renders them as it always did.
@@ -1481,10 +1492,29 @@ export async function publicSubmissionRoute(
   } catch {
     /* keep the empty render */
   }
+  // Staff opening someone else's snapshot marks it read for the course.
+  const viewerId = identity.userId!;
+  const [student] = await Promise.all([
+    findUserById(env.DB, row.user_id),
+    row.user_id !== viewerId
+      ? markSubmissionRead(env.DB, row.course_id, "writing", row.token, viewerId)
+      : Promise.resolve(),
+  ]);
   return json({
     title: row.title_snapshot,
     createdAt: row.created_at,
     render,
+    // Where it belongs, so the viewer can offer the way back and move between
+    // students and assignments. Null assignment fields: an unattached snapshot.
+    courseId: row.course_id,
+    assignmentId: row.assignment_id,
+    checkpointId: row.checkpoint_id,
+    student: {
+      userId: row.user_id,
+      // The sample student's address is a placeholder on a reserved domain.
+      email: student && student.is_sample !== 1 ? student.email : "",
+      displayName: student?.display_name ?? null,
+    },
   });
 }
 
@@ -1613,18 +1643,26 @@ export async function listAssignmentsRoute(
   // `stats=1` (course staff): per-CHECKPOINT counts of real students who
   // submitted, and who did so on time. Keyed by checkpoint id because the
   // instructor list shows each checkpoint as its own row.
+  // `unread`: students whose latest submission no staff member has opened.
   let stats:
-    | { students: number; byId: Record<string, { submitted: number; onTime: number }> }
+    | {
+        students: number;
+        byId: Record<string, { submitted: number; onTime: number; unread: number }>;
+      }
     | undefined;
   if (url.searchParams.get("stats") === "1" && can(enrollment.role, "view_submissions")) {
-    const [students, counts] = await Promise.all([
+    const [students, counts, unread] = await Promise.all([
       countRealStudents(env.DB, courseId),
       repo.listCheckpointStats(env.DB, courseId),
+      repo.listCheckpointUnreadCounts(env.DB, courseId),
     ]);
     stats = {
       students,
       byId: Object.fromEntries(
-        counts.map((c) => [c.checkpoint_id, { submitted: c.submitted, onTime: c.on_time }]),
+        counts.map((c) => [
+          c.checkpoint_id,
+          { submitted: c.submitted, onTime: c.on_time, unread: unread.get(c.checkpoint_id) ?? 0 },
+        ]),
       ),
     };
   }

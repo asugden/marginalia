@@ -2396,3 +2396,60 @@ export async function countRealStudents(db: D1Database, courseId: string): Promi
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
+
+// ── Submission reads (0034) ─────────────────────────────────────────────
+
+export type SubmissionKind = "writing" | "code";
+
+/** One staff member's open of a submission, as the lists show it. */
+export interface SubmissionReadDTO {
+  /** The reader as a person reads it: name, else email. */
+  by: string;
+  at: number;
+}
+
+/** Record that a staff member opened a submission. Re-opening moves the time
+ *  forward. The caller has already checked staff access and that the reader
+ *  isn't the submission's own author. */
+export async function markSubmissionRead(
+  db: D1Database,
+  courseId: string,
+  kind: SubmissionKind,
+  submissionId: string,
+  userId: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO submission_reads (course_id, kind, submission_id, user_id, read_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (kind, submission_id, user_id) DO UPDATE SET read_at = excluded.read_at`,
+    )
+    .bind(courseId, kind, submissionId, userId, now())
+    .run();
+}
+
+/** Every recorded read of one kind in a course, grouped by submission id,
+ *  most recent reader first. */
+export async function listSubmissionReads(
+  db: D1Database,
+  courseId: string,
+  kind: SubmissionKind,
+): Promise<Map<string, SubmissionReadDTO[]>> {
+  const { results } = await db
+    .prepare(
+      `SELECT r.submission_id, r.read_at, COALESCE(u.display_name, u.email) AS by_name
+         FROM submission_reads r
+         JOIN users u ON u.id = r.user_id
+        WHERE r.course_id = ? AND r.kind = ?
+        ORDER BY r.read_at DESC`,
+    )
+    .bind(courseId, kind)
+    .all<{ submission_id: string; read_at: number; by_name: string }>();
+  const out = new Map<string, SubmissionReadDTO[]>();
+  for (const r of results ?? []) {
+    const list = out.get(r.submission_id) ?? [];
+    list.push({ by: r.by_name, at: r.read_at });
+    out.set(r.submission_id, list);
+  }
+  return out;
+}

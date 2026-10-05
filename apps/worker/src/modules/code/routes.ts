@@ -23,7 +23,8 @@
 //   POST   /api/code/notebooks/:id/submissions                  submit a snapshot
 //
 // Submissions
-//   GET    /api/code/submissions/:id?courseId=                  frozen view — owner or INSTRUCTOR
+//   GET    /api/code/submissions?courseId=                      latest per student × assignment — STAFF
+//   GET    /api/code/submissions/:id?courseId=                  frozen view — owner or INSTRUCTOR (staff opening it marks it read)
 
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
@@ -80,6 +81,9 @@ export async function routeCode(
     }
   }
 
+  if (head === "submissions" && parts.length === 3 && m === "GET") {
+    return h.listLatestSubmissionsRoute(env, identity, url);
+  }
   if (head === "submissions" && id && parts.length === 4 && m === "GET") {
     return h.getSubmissionRoute(env, identity, url, id);
   }

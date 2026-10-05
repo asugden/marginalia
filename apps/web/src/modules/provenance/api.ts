@@ -646,8 +646,11 @@ export interface CourseSubmissionSummary {
   title: string;
   createdAt: number;
   revokedAt: number | null;
+  studentUserId: string;
   studentEmail: string;
   studentName: string | null;
+  /** Staff who have opened this snapshot, most recent first; empty = unread. */
+  readBy: { by: string; at: number }[];
   origins: {
     total: number;
     human: number;
@@ -699,6 +702,11 @@ export interface PublicSubmissionDTO {
   title: string;
   createdAt: number;
   render: ProvenanceRenderDTO;
+  courseId: string;
+  /** Null for a snapshot that belongs to no assignment. */
+  assignmentId: string | null;
+  checkpointId: string | null;
+  student: { userId: string; email: string; displayName: string | null };
 }
 
 /** Sentinel thrown by getPublicSubmission on a 401, so the viewer can tell
@@ -858,7 +866,8 @@ export async function listAssignments(
 export interface SubmissionStats {
   /** Real students enrolled — the sample student is not counted. */
   students: number;
-  byId: Record<string, { submitted: number; onTime: number }>;
+  /** `unread`: students whose latest submission no staff member has opened. */
+  byId: Record<string, { submitted: number; onTime: number; unread: number }>;
 }
 
 /** The instructor's list: every assignment (drafts included) plus

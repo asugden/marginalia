@@ -48,7 +48,7 @@ interface Row {
   href: string;
   /** Unpublished, but shown because students submitted before it was. */
   hidden: boolean;
-  counts: { submitted: number; onTime: number } | undefined;
+  counts: { submitted: number; onTime: number; unread: number } | undefined;
   students: number;
 }
 
@@ -218,6 +218,10 @@ function ReviewRows({ rows }: { rows: Row[] }) {
               {r.students === 0
                 ? " · no students enrolled"
                 : r.dueAt !== null && ` · ${r.counts?.onTime ?? 0} on time`}
+              {/* Read: every student's latest submission has been opened by
+                  someone on staff. Only said once there's something to read. */}
+              {(r.counts?.submitted ?? 0) > 0 &&
+                (r.counts!.unread === 0 ? " · all read" : ` · ${r.counts!.unread} unread`)}
             </>
           }
           meta={

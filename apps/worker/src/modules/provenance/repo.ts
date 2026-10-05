@@ -1403,3 +1403,42 @@ export async function listCheckpointStats(
     .all<CheckpointStatsRow>();
   return results ?? [];
 }
+
+/**
+ * Per checkpoint: real students whose latest live submission to it no staff
+ * member has opened (0034). A checkpoint is fully read when this is zero. A
+ * student's earlier snapshots don't count — only the one they'd be read on.
+ */
+export async function listCheckpointUnreadCounts(
+  db: D1Database,
+  courseId: string,
+): Promise<Map<string, number>> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.checkpoint_id, COUNT(*) AS unread
+         FROM provenance_submissions s
+         JOIN enrollments e
+              ON e.user_id = s.user_id AND e.course_id = s.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.user_id AND COALESCE(u.is_sample, 0) = 0
+        WHERE s.course_id = ?
+          AND s.checkpoint_id IS NOT NULL
+          AND s.revoked_at IS NULL
+          AND NOT EXISTS (
+                SELECT 1 FROM provenance_submissions s2
+                 WHERE s2.user_id = s.user_id
+                   AND s2.course_id = s.course_id
+                   AND s2.checkpoint_id = s.checkpoint_id
+                   AND s2.revoked_at IS NULL
+                   AND (s2.created_at > s.created_at
+                        OR (s2.created_at = s.created_at AND s2.token > s.token))
+              )
+          AND NOT EXISTS (
+                SELECT 1 FROM submission_reads r
+                 WHERE r.kind = 'writing' AND r.submission_id = s.token
+              )
+        GROUP BY s.checkpoint_id`,
+    )
+    .bind(courseId)
+    .all<{ checkpoint_id: string; unread: number }>();
+  return new Map((results ?? []).map((r) => [r.checkpoint_id, r.unread]));
+}

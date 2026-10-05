@@ -103,6 +103,21 @@ browser storage for files. It is marked in salmon throughout. The student's
 datasets aren't there (they never left the student's browser); the
 instructor can add a copy for the session.
 
+## Read by staff
+
+Opening a submission as course staff (`GET /submissions/:id`, anyone but its
+author) records a read in the shared `submission_reads` table (migration
+0034, kind `code`). Read state is shared across the course's staff: a
+submission is read once anyone on staff has opened it. The roster returns
+`readBy` on each latest submission, and `GET /assignments?stats=1` adds
+`unread` per assignment: real students whose latest submission nobody on
+staff has opened. Zero means the whole assignment has been read.
+
+`GET /submissions?courseId=` (staff) lists every student's latest submission
+to every assignment, with no content. The web app uses it to move between
+submissions (student by student, assignment by assignment) without loading
+each roster.
+
 ## Notebook format
 
 Our own small JSON shape (`types.ts`), not `.ipynb`. **Every output is

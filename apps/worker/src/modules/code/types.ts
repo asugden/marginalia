@@ -6,6 +6,7 @@
 // notebook can be rendered on an instructor's screen without executing or
 // injecting anything the student's code produced.
 
+import type { SubmissionReadDTO } from "../../repo.js";
 import type { Origin, OriginRun, ProvenanceAudit, PasteRecord } from "@marginalia/provenance";
 
 export type CellType = "code" | "markdown";
@@ -225,6 +226,8 @@ export interface RosterStudentDTO {
         /** Characters by origin — the same totals the writing tool's
          *  submission list shows as its bar. Null when not recorded. */
         origins: (Record<Origin, number> & { total: number }) | null;
+        /** Staff who have opened it, most recent first; empty = unread. */
+        readBy: SubmissionReadDTO[];
       })
     | null;
   submissionCount: number;

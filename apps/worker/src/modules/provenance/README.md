@@ -258,6 +258,16 @@ students (not the sample student) with a live submission, and how many of them
 submitted at least once by the deadline. `POST /assignments` accepts
 `archived: true` to create a draft students can't see.
 
+### Read by staff
+
+Opening a snapshot at `/public/submissions/:token` as staff (anyone but its
+author) records a read in the shared `submission_reads` table (migration
+0034, kind `writing`, keyed by token). Read state is shared across the
+course's staff. The course-wide list returns `readBy` per snapshot, and
+`GET /assignments?stats=1` adds `unread` per checkpoint: real students whose
+latest live submission to it nobody on staff has opened. A read is a record
+that someone looked, never a judgement about the work.
+
 ## Privacy: what the log retains, and what an instructor sees
 
 Since slice 8, `delete` events store the removed text (migration `0010` always

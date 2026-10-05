@@ -222,7 +222,8 @@ function serializeContent(raw: unknown): string | Response {
  *  assignment id; an assignment nobody has submitted to is simply absent. */
 interface SubmissionStatsDTO {
   students: number;
-  byId: Record<string, { submitted: number; onTime: number }>;
+  /** `unread`: students whose latest submission no staff member has opened. */
+  byId: Record<string, { submitted: number; onTime: number; unread: number }>;
 }
 
 export async function listAssignmentsRoute(
@@ -239,14 +240,18 @@ export async function listAssignmentsRoute(
   // assignment, and how many of them on time — the list's "N of M" figures.
   let stats: SubmissionStatsDTO | undefined;
   if (caller.seesSubmissions && url.searchParams.get("stats") === "1") {
-    const [students, counts] = await Promise.all([
+    const [students, counts, unread] = await Promise.all([
       coreRepo.countRealStudents(env.DB, courseId!),
       repo.listAssignmentStats(env.DB, courseId!),
+      repo.listUnreadCounts(env.DB, courseId!),
     ]);
     stats = {
       students,
       byId: Object.fromEntries(
-        counts.map((c) => [c.assignment_id, { submitted: c.submitted, onTime: c.on_time }]),
+        counts.map((c) => [
+          c.assignment_id,
+          { submitted: c.submitted, onTime: c.on_time, unread: unread.get(c.assignment_id) ?? 0 },
+        ]),
       ),
     };
   }
@@ -435,7 +440,10 @@ export async function rosterRoute(
   if (caller instanceof Response) return caller;
   const assignment = await repo.getAssignment(env.DB, courseId!, id);
   if (!assignment) return error("Assignment not found", 404);
-  const rows = await repo.listRoster(env.DB, courseId!, id);
+  const [rows, reads] = await Promise.all([
+    repo.listRoster(env.DB, courseId!, id),
+    coreRepo.listSubmissionReads(env.DB, courseId!, "code"),
+  ]);
   const students: RosterStudentDTO[] = rows.map((r) => ({
     userId: r.user_id,
     // The sample student's address is a placeholder on a reserved domain.
@@ -451,6 +459,7 @@ export async function rosterRoute(
             late: isLate(r.submitted_at, assignment.due_at),
             title: r.submission_title ?? assignment.title,
             origins: originTotals(r.render_json),
+            readBy: reads.get(r.submission_id) ?? [],
           }
         : null,
   }));
@@ -903,6 +912,34 @@ export async function listMySubmissionsRoute(
 }
 
 /**
+ * GET /submissions?courseId= — every student's latest submission to every
+ * assignment, course staff only. Just enough to move between submissions
+ * (student by student, assignment by assignment) without loading each
+ * assignment's roster.
+ */
+export async function listLatestSubmissionsRoute(
+  env: Env,
+  identity: Identity,
+  url: URL,
+): Promise<Response> {
+  const courseId = url.searchParams.get("courseId");
+  const caller = await resolveSubmissionViewer(env, identity, courseId);
+  if (caller instanceof Response) return caller;
+  const rows = await repo.listLatestSubmissions(env.DB, courseId!);
+  return json({
+    submissions: rows.map((r) => ({
+      id: r.id,
+      assignmentId: r.assignment_id,
+      userId: r.owner_user_id,
+      // The sample student's address is a placeholder on a reserved domain.
+      email: r.is_sample === 1 ? "" : r.email,
+      displayName: r.display_name,
+      submittedAt: r.created_at,
+    })),
+  });
+}
+
+/**
  * GET /submissions/:id — the frozen notebook plus the AI chat conversation as
  * it stood at submission time. Readable by the submitting student and by the
  * course's instructors; anyone else gets the same 404 as a bad id.
@@ -920,9 +957,14 @@ export async function getSubmissionRoute(
   if (!row || (!caller.seesSubmissions && row.owner_user_id !== caller.userId)) {
     return error("Submission not found", 404);
   }
+  // Staff opening someone else's submission marks it read for the course.
+  const marksRead = caller.seesSubmissions && row.owner_user_id !== caller.userId;
   const [assignment, student] = await Promise.all([
     repo.getAssignment(env.DB, courseId!, row.assignment_id),
     repo.getUser(env.DB, row.owner_user_id),
+    marksRead
+      ? coreRepo.markSubmissionRead(env.DB, courseId!, "code", row.id, caller.userId)
+      : Promise.resolve(),
   ]);
   let messages: CodeMessageDTO[] = [];
   try {

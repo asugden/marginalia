@@ -607,3 +607,70 @@ export async function listAssignmentStats(
     .all<{ assignment_id: string; submitted: number; on_time: number }>();
   return results ?? [];
 }
+
+export type LatestSubmissionRow = Pick<
+  CodeSubmissionRow,
+  "id" | "assignment_id" | "owner_user_id" | "created_at"
+> & { email: string; display_name: string | null; is_sample: number };
+
+/** The latest submission per student per assignment, for the whole course —
+ *  real and sample students alike, as the roster lists them. */
+export async function listLatestSubmissions(
+  db: D1Database,
+  courseId: string,
+): Promise<LatestSubmissionRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.id, s.assignment_id, s.owner_user_id, s.created_at,
+              u.email, u.display_name, u.is_sample
+         FROM code_submissions s
+         JOIN enrollments e
+              ON e.user_id = s.owner_user_id AND e.course_id = s.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.owner_user_id
+        WHERE s.course_id = ?
+          AND NOT EXISTS (
+                SELECT 1 FROM code_submissions s2
+                 WHERE s2.owner_user_id = s.owner_user_id
+                   AND s2.course_id = s.course_id
+                   AND s2.assignment_id = s.assignment_id
+                   AND (s2.created_at > s.created_at
+                        OR (s2.created_at = s.created_at AND s2.id > s.id))
+              )`,
+    )
+    .bind(courseId)
+    .all<LatestSubmissionRow>();
+  return results ?? [];
+}
+
+/** Per assignment: real students whose latest submission no staff member has
+ *  opened (0034). An assignment is fully read when this is zero. */
+export async function listUnreadCounts(
+  db: D1Database,
+  courseId: string,
+): Promise<Map<string, number>> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.assignment_id, COUNT(*) AS unread
+         FROM code_submissions s
+         JOIN enrollments e
+              ON e.user_id = s.owner_user_id AND e.course_id = s.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.owner_user_id AND COALESCE(u.is_sample, 0) = 0
+        WHERE s.course_id = ?
+          AND NOT EXISTS (
+                SELECT 1 FROM code_submissions s2
+                 WHERE s2.owner_user_id = s.owner_user_id
+                   AND s2.course_id = s.course_id
+                   AND s2.assignment_id = s.assignment_id
+                   AND (s2.created_at > s.created_at
+                        OR (s2.created_at = s.created_at AND s2.id > s.id))
+              )
+          AND NOT EXISTS (
+                SELECT 1 FROM submission_reads r
+                 WHERE r.kind = 'code' AND r.submission_id = s.id
+              )
+        GROUP BY s.assignment_id`,
+    )
+    .bind(courseId)
+    .all<{ assignment_id: string; unread: number }>();
+  return new Map((results ?? []).map((r) => [r.assignment_id, r.unread]));
+}

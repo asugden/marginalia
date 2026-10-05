@@ -13,6 +13,9 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, OriginLegend, PageHeader, Section } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
+import { codeKey, navFromSubmission } from "../../../course/reviewGrid.js";
+import { useReviewGrid } from "../../../course/useReviewGrid.js";
+import { AssignmentBrief, ReviewNav, useBriefOpen } from "../../../course/ReviewNav.js";
 import { Markdown } from "../../../Markdown.js";
 import { getSubmission, type SubmissionDTO } from "../api.js";
 import { Cells } from "./Cells.js";
@@ -34,7 +37,19 @@ export function SubmissionPage() {
     };
   }, [courseId, submissionId]);
 
-  const who = sub ? (sub.student.displayName ?? sub.student.email) : "";
+  const grid = useReviewGrid(courseId);
+  const nav =
+    grid && sub
+      ? navFromSubmission(grid, {
+          key: codeKey(sub.assignmentId),
+          userId: sub.student.userId,
+          submissionId: sub.id,
+        })
+      : null;
+  const [briefOpen, toggleBrief] = useBriefOpen();
+  const hasBrief = !!nav?.assignment.instructions.trim();
+
+  const who = sub ? (sub.student.displayName || sub.student.email || "Student") : "";
   const render = sub?.render ?? null;
   const cellNumber = new Map((sub?.content.cells ?? []).map((c, i) => [c.id, i + 1]));
   const imports = render
@@ -45,9 +60,11 @@ export function SubmissionPage() {
 
   return (
     <div className="app-page code-submission">
+      {/* The student leads: their name is the title, the assignment the
+          eyebrow — reading a run of submissions, who it is is what changes. */}
       <PageHeader
-        eyebrow="Instructor · Code submission"
-        title={sub ? `${who} — ${sub.assignmentTitle ?? sub.title}` : "Submission"}
+        eyebrow={sub ? `Code submission · ${sub.assignmentTitle ?? sub.title}` : "Code submission"}
+        title={sub ? who : "Submission"}
         scope={
           sub
             ? `Submitted ${new Date(sub.submittedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}${sub.late ? " · after the deadline" : ""}. Outputs are as the student last ran them; nothing here has been re-run.`
@@ -55,13 +72,25 @@ export function SubmissionPage() {
         }
         actions={
           sub && (
-            <Button
-              variant="subtle"
-              size="sm"
-              href={`/course/${courseId}/instructor/code/submissions/${sub.id}/scratch`}
-            >
-              Open a scratch copy
-            </Button>
+            <>
+              <Button
+                variant="subtle"
+                size="sm"
+                href={`/course/${courseId}/instructor/code/submissions/${sub.id}/scratch`}
+              >
+                Open a scratch copy
+              </Button>
+              <ReviewNav
+                up={nav?.up ?? null}
+                down={nav?.down ?? null}
+                students={{
+                  prev: nav?.prev ?? null,
+                  next: nav?.next ?? null,
+                  position: nav?.position ?? null,
+                }}
+                brief={hasBrief ? { open: briefOpen, onToggle: toggleBrief } : null}
+              />
+            </>
           )
         }
       />
@@ -71,6 +100,7 @@ export function SubmissionPage() {
         </p>
       )}
       {error && <p className="error">{error}</p>}
+      {briefOpen && hasBrief && nav && <AssignmentBrief assignment={nav.assignment} />}
       {sub && (
         <>
           <Section kicker="Notebook">

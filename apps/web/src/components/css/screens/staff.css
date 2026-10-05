@@ -189,3 +189,46 @@
   .ds-roster__meta { display: none; }
   .ds-joincode > div:first-child { flex-basis: 100%; }
 }
+
+/* ---- Review navigation (course/ReviewNav.tsx): a small cluster, top right of
+   a submission or assignment page. ‹ › between students, ↑ ↓ between dated
+   assignments, and a toggle for what was assigned. ---- */
+.review-nav { display: inline-flex; align-items: center; gap: 0.6rem; flex: none; }
+.review-nav__group { display: inline-flex; align-items: center; gap: 0.1rem; }
+.review-nav__pos {
+  font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted);
+  min-width: 4.5em; text-align: center; white-space: nowrap;
+}
+.review-nav__chev { transition: transform var(--dur-2) var(--ease-out); }
+.review-nav__chev--up { transform: rotate(180deg); }
+.review-nav__chev--left { transform: rotate(90deg); }
+.review-nav__chev--right { transform: rotate(-90deg); }
+.review-nav__brief {
+  appearance: none; cursor: pointer; font: inherit; font-size: var(--text-xs);
+  color: var(--text-secondary); background: none;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.2rem 0.55rem;
+}
+.review-nav__brief:hover { color: var(--text-strong); background: var(--surface-hover); }
+.review-nav__brief[aria-pressed="true"] { color: var(--text-strong); border-color: var(--border-strong); background: var(--surface-hover); }
+@media (max-width: 680px) {
+  /* The header's actions stretch at this width; keep the cluster compact. */
+  .ds-page-header__actions > .review-nav { flex: none; }
+}
+
+.review-brief {
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
+  margin: 0 0 var(--space-4); padding: 0.7rem 0.9rem;
+}
+.review-brief__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.7rem; }
+.review-brief__title { font-weight: 600; color: var(--text-strong); }
+.review-brief__due { font-size: var(--text-sm); color: var(--text-muted); }
+.review-brief__body { margin-top: 0.4rem; max-height: 40vh; overflow-y: auto; }
+.review-brief__empty { color: var(--text-muted); font-size: var(--text-sm); margin: 0.4rem 0 0; }
+
+/* Read state on submission lists: a quiet dot for "no one on staff has opened
+   this yet". Not an alert colour — unread is a fact, not a problem. */
+.prov-subs__unread {
+  display: inline-block; width: 0.45rem; height: 0.45rem; border-radius: 50%;
+  background: var(--accent); margin-right: 0.45rem; vertical-align: 0.1em;
+}

@@ -7,6 +7,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button, Input, PageHeader, Section, SubmissionCards } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
+import { codeKey, navFromAssignment } from "../../../course/reviewGrid.js";
+import { useReviewGrid } from "../../../course/useReviewGrid.js";
+import { AssignmentBrief, ReviewNav, useBriefOpen } from "../../../course/ReviewNav.js";
 import { getRoster, type CodeAssignmentDTO, type RosterStudentDTO } from "../api.js";
 import { formatDue } from "./CodeHomePage.js";
 
@@ -17,6 +20,10 @@ export function RosterPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const base = `/course/${courseId}/instructor/code`;
+  const grid = useReviewGrid(courseId);
+  const nav = grid && assignmentId ? navFromAssignment(grid, codeKey(assignmentId)) : null;
+  const [briefOpen, toggleBrief] = useBriefOpen();
+  const hasBrief = !!data?.assignment.instructions.trim();
 
   useEffect(() => {
     if (!assignmentId) return;
@@ -54,14 +61,30 @@ export function RosterPage() {
             : undefined
         }
         actions={
-          <Button variant="subtle" size="sm" href={base}>
-            Edit
-          </Button>
+          <>
+            <Button variant="subtle" size="sm" href={base}>
+              Edit
+            </Button>
+            <ReviewNav
+              up={nav?.up ?? null}
+              down={nav?.down ?? null}
+              brief={hasBrief ? { open: briefOpen, onToggle: toggleBrief } : null}
+            />
+          </>
         }
       />
       <p className="muted small">
         <Link to={`/course/${courseId}/instructor/submissions`}>← All assignments</Link>
       </p>
+      {briefOpen && hasBrief && data && (
+        <AssignmentBrief
+          assignment={{
+            title: data.assignment.title,
+            dueAt: data.assignment.dueAt,
+            instructions: data.assignment.instructions,
+          }}
+        />
+      )}
       {error && <p className="error">{error}</p>}
 
       <Section
@@ -100,6 +123,7 @@ export function RosterPage() {
                       ? s.latest!.submittedAt - data.assignment.dueAt
                       : null,
                   origins: s.latest!.origins,
+                  readBy: s.latest!.readBy,
                 },
               ],
             }))}

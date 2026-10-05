@@ -144,6 +144,8 @@ export interface RosterStudentDTO {
           edited: number;
           provided: number;
         } | null;
+        /** Staff who have opened it, most recent first; empty = unread. */
+        readBy: { by: string; at: number }[];
       })
     | null;
   submissionCount: number;
@@ -220,7 +222,8 @@ export async function listAssignments(
 export interface SubmissionStats {
   /** Real students enrolled — the sample student is not counted. */
   students: number;
-  byId: Record<string, { submitted: number; onTime: number }>;
+  /** `unread`: students whose latest submission no staff member has opened. */
+  byId: Record<string, { submitted: number; onTime: number; unread: number }>;
 }
 
 /** The staff list: every assignment (drafts included) with submission counts. */
@@ -462,6 +465,27 @@ export async function listMySubmissions(courseId: string, notebookId: string): P
 export async function getSubmission(courseId: string, id: string): Promise<SubmissionDTO> {
   const r = await call<{ submission: SubmissionDTO }>(`/api/code/submissions/${seg(id)}${q(courseId)}`);
   return r.submission;
+}
+
+/** Every student's latest submission to each assignment — course staff only.
+ *  For moving between submissions without loading every roster. */
+export interface LatestSubmissionDTO {
+  id: string;
+  assignmentId: string;
+  userId: string;
+  email: string;
+  displayName: string | null;
+  submittedAt: number;
+}
+
+export async function listLatestSubmissions(
+  courseId: string,
+  signal?: AbortSignal,
+): Promise<LatestSubmissionDTO[]> {
+  const r = await call<{ submissions: LatestSubmissionDTO[] }>(`/api/code/submissions${q(courseId)}`, {
+    signal,
+  });
+  return r.submissions;
 }
 
 // ── edit events ─────────────────────────────────────────────────────────
