@@ -277,3 +277,41 @@
 .cs-hit--draw {
   cursor: crosshair;
 }
+
+/* ── Split panels ─────────────────────────────────────────────────── */
+/* Validation: a hollow square and a dotted curve, between training's dashed
+   grey and test's solid ink. */
+.cs-dot--val {
+  fill: var(--surface);
+  stroke: var(--ml-input-ink);
+  stroke-width: 1.2;
+}
+.cs-curve--val {
+  stroke: var(--ink-500, var(--text-secondary));
+  stroke-dasharray: 1.5 3;
+  stroke-linecap: round;
+}
+.cs-cursor-dot--val {
+  fill: var(--ink-500, var(--text-secondary));
+}
+/* The chosen size: an ink rule, not the accent (it marks a result). */
+.cs-chosen {
+  stroke: var(--text-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.cs-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.cs-figcol {
+  min-width: 0;
+}
+.cs-tally {
+  margin: 0.6rem 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 68ch;
+}

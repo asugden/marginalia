@@ -9,8 +9,9 @@
 // the platform draws networks: input at the top, output at the bottom.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Wordmark } from "../../components/index.js";
+import { Button, Wordmark } from "../../components/index.js";
 import "./digit-recognizer.css";
 import {
   forward,
@@ -20,7 +21,13 @@ import {
   type Net,
   type RawWeights,
 } from "./net.js";
-import { NetworkView } from "./NetworkView.js";
+import { NetworkView, REGION_SPAN, type Region } from "./NetworkView.js";
+import { MLP_CODE } from "./code.js";
+import { CodeToggle } from "../shared/code-panel/CodeToggle.js";
+import { CodePopover, regionsLitBy } from "../shared/code-panel/CodePopover.js";
+import type { CodeSection } from "../shared/code-panel/types.js";
+import { useCodeView } from "../shared/code-panel/useCodeView.js";
+import "../shared/code-panel/code-panel.css";
 
 // The weights ship in /public so they're served as a plain static asset by the
 // same host as the SPA. Fetched once on mount.
@@ -32,6 +39,111 @@ export function DigitRecognizerPage() {
   const [activations, setActivations] = useState<Activations | null>(null);
   const [edgeThreshold, setEdgeThreshold] = useState(0.55);
   const [clearSignal, setClearSignal] = useState(0);
+
+  // Optional code view (off by default). The code itself lives in ./code.ts.
+  const code = useCodeView("deep-neural-network", MLP_CODE);
+  // The open code popover: the boxes for one part of the figure (or one
+  // stand-alone box), and which of them is showing. `key` names the button
+  // that opened it. Hovering a button opens its popover, which stays up
+  // while the pointer is on the button or the popover (with a short grace
+  // to cross the gap); clicking pins it until it is closed, which is also
+  // how a touch screen opens it.
+  const [open, setOpen] = useState<{
+    key: string;
+    at: Region | null;
+    sections: CodeSection[];
+    index: number;
+    pinned: boolean;
+  } | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const keepOpen = useCallback(() => {
+    if (closeTimer.current != null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, []);
+  const closeSoon = useCallback(() => {
+    keepOpen();
+    closeTimer.current = window.setTimeout(() => {
+      setOpen((cur) => (cur && !cur.pinned ? null : cur));
+    }, 250);
+  }, [keepOpen]);
+  useEffect(() => keepOpen, [keepOpen]);
+  const closeCode = useCallback(() => {
+    keepOpen();
+    setOpen(null);
+  }, [keepOpen]);
+  const show = useCallback(
+    (key: string, at: Region | null, sections: CodeSection[], pin: boolean) => {
+      keepOpen();
+      if (!sections.length) return;
+      setOpen((cur) => {
+        if (cur?.key === key) return pin ? { ...cur, pinned: true } : cur;
+        if (cur?.pinned && !pin) return cur; // a pinned box stays put
+        return { key, at, sections, index: 0, pinned: pin };
+      });
+    },
+    [keepOpen],
+  );
+  const sectionsAt = useCallback(
+    (r: Region) => code.version.sections.filter((s) => s.over.includes(r)),
+    [code.version],
+  );
+  // While a box is open its part of the network stays lit and the rest dims.
+  const litRegions = useMemo(
+    () =>
+      code.on && open
+        ? (regionsLitBy(open.sections[open.index]) as Set<Region> | null)
+        : null,
+    [code.on, open],
+  );
+  // Buttons under the figure for boxes that build no single part. Quiet
+  // text buttons; hover opens, click pins, like the parts themselves.
+  const codeButton = (
+    key: string,
+    at: Region | null,
+    sections: CodeSection[],
+    label: string,
+    children: ReactNode,
+    extra: { className?: string; style?: React.CSSProperties } = {},
+  ) => (
+    <Button
+      key={key}
+      size="sm"
+      variant="ghost"
+      className={[extra.className, open?.key === key ? "is-open" : ""].filter(Boolean).join(" ")}
+      style={extra.style}
+      title={label}
+      aria-label={label}
+      aria-pressed={open?.key === key}
+      onPointerEnter={() => show(key, at, sections, false)}
+      onPointerLeave={closeSoon}
+      onClick={() => show(key, at, sections, true)}
+    >
+      {children}
+    </Button>
+  );
+  // In code view the network's parts are the controls. Each part belongs
+  // to one box: the first that builds it. In the Dense version a layer's
+  // lines and neurons both open its Dense line, so the layer acts as one
+  // part. The popover is keyed and placed by the box's own home part (its
+  // neuron row when it has one), so it opens in the same place whichever
+  // half of the layer the pointer came in by.
+  const homeOf = useCallback(
+    (r: Region): Region | null => {
+      const owner = code.version.sections.find((s) => s.over.includes(r));
+      if (!owner) return null;
+      const over = owner.over as Region[];
+      return over.find((x) => !x.startsWith("w")) ?? over[0] ?? null;
+    },
+    [code.version],
+  );
+  const showRegion = useCallback(
+    (r: Region, pin: boolean) => {
+      const home = homeOf(r);
+      if (home) show(`r:${home}`, home, sectionsAt(home), pin);
+    },
+    [homeOf, show, sectionsAt],
+  );
+  const extras = code.version.sections.filter((s) => s.over.length === 0);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -117,9 +229,25 @@ export function DigitRecognizerPage() {
 
       <div className="app__body">
         <div className="mnist-page">
-          {/* Left-justified eyebrow -> heading lockup, DS style. */}
+          {/* Left-justified eyebrow -> heading lockup, DS style, with the
+              optional code switch at its upper right. */}
           <div className="mnist-head">
-            <p className="eyebrow">Interactive example</p>
+            <div className="mnist-head__top">
+              <p className="eyebrow">Interactive example</p>
+              <CodeToggle
+                on={code.on}
+                onChange={(on) => {
+                  code.setOn(on);
+                  closeCode();
+                }}
+                versions={MLP_CODE}
+                versionId={code.version.id}
+                onVersion={(id) => {
+                  code.setVersion(id);
+                  closeCode();
+                }}
+              />
+            </div>
             <h1>Deep Neural Network</h1>
             <p className="mnist-lede">
               Draw a digit on the grid at the top of the network. The top of the
@@ -231,6 +359,7 @@ export function DigitRecognizerPage() {
                 </button>
               </div>
               {net ? (
+                <div className="mnist-figure">
                 <NetworkView
                   net={net}
                   activations={activations}
@@ -238,11 +367,48 @@ export function DigitRecognizerPage() {
                   predicted={predicted}
                   onInput={handleDraw}
                   clearSignal={clearSignal}
+                  codeOn={code.on}
+                  litRegions={litRegions}
+                  onRegionEnter={(r) => showRegion(r, false)}
+                  onRegionLeave={closeSoon}
+                  onRegionClick={(r) => showRegion(r, true)}
                 />
+                {code.on && open && (() => {
+                  // Beside the part, never on it: below a part in the upper
+                  // half, above one in the lower half; on the same side as
+                  // its marker. Stand-alone boxes sit at the bottom.
+                  const span = open.at ? REGION_SPAN[open.at] : null;
+                  const below = span ? span.bottom < 0.5 : false;
+                  const side = open.at?.startsWith("w") ? "left" : "right";
+                  const style = span
+                    ? below
+                      ? { top: `${span.bottom * 100}%`, [side]: 8 }
+                      : { top: `${span.top * 100}%`, transform: "translateY(-100%)", [side]: 8 }
+                    : { bottom: 8, right: 8 };
+                  return (
+                    <CodePopover
+                      sections={open.sections}
+                      index={open.index}
+                      onIndex={(index) => setOpen({ ...open, index })}
+                      onClose={closeCode}
+                      style={style}
+                      onPointerEnter={keepOpen}
+                      onPointerLeave={closeSoon}
+                    />
+                  );
+                })()}
+                </div>
               ) : (
                 !loadError && (
                   <div className="mnist-loading">Loading network…</div>
                 )
+              )}
+              {code.on && extras.length > 0 && (
+                <div className="ex-chips">
+                  {extras.map((x) =>
+                    codeButton(`s:${x.id}`, null, [x], x.title, x.title),
+                  )}
+                </div>
               )}
             </div>
           </div>

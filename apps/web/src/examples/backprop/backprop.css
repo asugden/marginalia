@@ -1,0 +1,288 @@
+/* Backpropagation example. Panels follow docs/style.md §14; figure text uses
+   the shared figure voices (§12); errors, activations and gradients are
+   computed values (vermillion / cerulean), weights are learned (sage /
+   plum) (§11). Panel 3 also uses the activation example's stylesheet. */
+
+.bp-panel { margin-bottom: 1rem; }
+.bp-h2 { margin: 0 0 0.3rem; font-size: var(--text-lg, 1.15rem); line-height: 1.25; color: var(--text-strong); }
+.bp-sub p { margin: 0 0 1rem; font-size: var(--text-sm); line-height: 1.6; color: var(--text-secondary); max-width: 78ch; }
+.bp-note { margin: 1rem 0 0; padding-top: 0.7rem; border-top: 1px solid var(--border); }
+.bp-note p { margin: 0 0 0.4rem; font-size: var(--text-xs); line-height: 1.55; color: var(--text-muted); max-width: 78ch; }
+.bp-sub code, .bp-note code, .mnist-lede code {
+  font-family: var(--font-mono); font-size: 0.92em;
+  background: var(--surface-sunken); border-radius: 3px; padding: 0 0.2em;
+}
+.mnist-lede p { margin: 0; }
+
+.bp-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+/* Controls the reader operates: sunken surface, strong edge (§14). */
+.bp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.9rem;
+}
+.bp-controls__end { margin: 0 0 0 auto; }
+.bp-slider { display: flex; align-items: center; gap: 0.5rem; }
+.bp-slider .bp-kicker { margin: 0; color: var(--text-secondary); }
+.bp-slider input { width: 160px; accent-color: var(--accent); }
+
+.bp-readout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.7rem 0.85rem;
+  min-width: 0;
+}
+.bp-working {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+.bp-working__head { color: var(--text-muted); }
+.bp-working__off { color: var(--text-muted); }
+.bp-hint { margin: 0.5rem 0 0; font-size: var(--text-xs); color: var(--text-muted); }
+.bp-big { font-family: var(--font-mono); font-weight: 700; font-size: 1.4rem; font-variant-numeric: tabular-nums; color: var(--text-strong); }
+
+/* Sign of a computed value: its scale's ink (§11). */
+.bp-pos { color: var(--ml-value-pos-ink); fill: var(--ml-value-pos-ink); }
+.bp-neg { color: var(--ml-value-neg-ink); fill: var(--ml-value-neg-ink); }
+.bp-blank { fill: var(--fig-text-label); }
+
+/* Figures draw 1:1 and shrink, never grow (§12). */
+.bp-scroll { min-width: 0; }
+.bp-net, .bp-plot, .bp-climb__fig, .bp-land__fig, .bp-neuron__fig { display: block; max-width: 100%; height: auto; }
+
+.bp-legend { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--text-xs); color: var(--text-muted); }
+.bp-legend__row { display: flex; align-items: center; gap: 0.45rem; }
+.bp-legend__line { width: 22px; height: 0; border-top: 3px solid; display: inline-block; }
+.bp-legend__line--down { border-color: var(--bp-up); }
+.bp-legend__line--up { border-color: var(--bp-down); }
+.bp-legend__line--next { border-color: var(--text-strong); border-top-style: dashed; }
+
+/* ── 1. The climb ───────────────────────────────────────────────── */
+/* The climb's own colours, from the original figure: footsteps and the way
+   up in green, the fork in yellow, the way down in red. Used again for the
+   landscape's test steps, so green means "better" on both. */
+.bp-page {
+  --bp-up: #71c6b1;
+  --bp-fork: #ecb842;
+  --bp-down: #d75a53;
+}
+.bp-climb {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(180px, 220px);
+  gap: 1.25rem;
+  align-items: start;
+  justify-content: start;
+}
+@media (max-width: 720px) { .bp-climb { grid-template-columns: 1fr; } }
+.bp-climb__fig { border-radius: var(--radius-md); }
+.bp-climb__step { fill: var(--bp-up); }
+.bp-climb__here { fill: none; stroke: var(--bp-fork); stroke-width: 5; }
+/* The two ways on look alike until one is tried: the altitude says which. */
+.bp-climb__option {
+  fill: transparent;
+  stroke: var(--surface);
+  stroke-width: 5;
+  cursor: pointer;
+}
+.bp-climb__option:hover { stroke: var(--bp-fork); }
+.bp-climb__option--up.is-chosen { stroke: var(--bp-up); }
+.bp-climb__option--down.is-chosen { stroke: var(--bp-down); }
+.bp-change { display: block; margin-top: 0.3rem; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700; }
+.bp-change--up { color: var(--bp-up); }
+.bp-change--down { color: var(--bp-down); }
+
+/* ── 2. The landscape ───────────────────────────────────────────── */
+.bp-land {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 820px) { .bp-land { grid-template-columns: 1fr; } }
+.bp-land__side { display: flex; flex-direction: column; gap: 0.75rem; }
+.bp-land__fig { cursor: grab; touch-action: none; user-select: none; }
+.bp-land__fig:active { cursor: grabbing; }
+.bp-land__cell { stroke: var(--surface); stroke-width: 0.35; stroke-opacity: 0.6; }
+.bp-land__path { fill: none; stroke: var(--text-strong); stroke-width: 2; pointer-events: none; }
+.bp-land__foot { fill: var(--text-strong); pointer-events: none; }
+.bp-land__walker { fill: var(--surface); stroke: var(--text-strong); stroke-width: 3; pointer-events: none; }
+.bp-land__test { stroke-width: 2.5; stroke-linecap: round; pointer-events: none; }
+.bp-land__test--down { stroke: var(--bp-up); }
+.bp-land__test--up { stroke: var(--bp-down); }
+.bp-land__test.is-steepest { stroke-width: 4.5; }
+.bp-land__next { stroke: var(--text-strong); stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none; }
+.bp-land__arrowhead { fill: var(--text-strong); }
+
+/* ── 3. One neuron ──────────────────────────────────────────────── */
+.bp-neuron {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(220px, 280px);
+  gap: 1.25rem;
+  align-items: start;
+  justify-content: start;
+}
+@media (max-width: 860px) { .bp-neuron { grid-template-columns: 1fr; } }
+.bp-drag { cursor: ew-resize; touch-action: none; }
+.bp-drag:hover rect, .bp-drag.is-active rect { stroke: var(--text-strong); stroke-width: 1.5; }
+.bp-neuron__side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+/* A weight's change, as a square whose area is the change squared: solid
+   for now, dashed for backprop's fix. Sand, not a figure scale: it is a
+   cost, not a value the model holds. */
+.bp-cost { fill: var(--surface-sunken); stroke: var(--text-strong); stroke-width: 1.25; }
+.bp-cost--ghost { fill: none; stroke: var(--text-strong); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.bp-costbar {
+  display: block;
+  height: 8px;
+  margin-top: 0.4rem;
+  background: var(--surface-sunken);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bp-costbar__fill { display: block; height: 100%; background: var(--text-strong); border-radius: 999px; }
+.bp-target { fill: var(--surface); stroke: var(--fig-tile-border, var(--border-strong)); stroke-width: 2.25; stroke-dasharray: 4 3; }
+.bp-target.is-hit { stroke: var(--bp-up); stroke-width: 3.5; stroke-dasharray: none; }
+.bp-nudge { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 12.5px; }
+.bp-nudge th { text-align: left; font-weight: 400; color: var(--text-muted); padding: 0.2rem 0.6rem 0.2rem 0; }
+.bp-nudge td { padding: 0.2rem 0.4rem 0.2rem 0; font-variant-numeric: tabular-nums; }
+.bp-nudge__d { text-align: right; font-weight: 700; }
+.bp-nudge__ratio th, .bp-nudge__ratio td { border-top: 1px solid var(--border); padding-top: 0.4rem; }
+
+/* ── 4. The chain rule ─────────────────────────────────────────── */
+.bp-rule-caption { font-size: var(--text-sm); color: var(--text-strong); font-weight: 600; }
+.bp-rule {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: center;
+}
+@media (max-width: 980px) { .bp-rule { grid-template-columns: 1fr; } }
+.bp-rule__fig { display: block; max-width: 100%; height: auto; }
+.bp-rule__line { stroke: var(--border-strong); stroke-width: 2.5; stroke-linecap: round; }
+.bp-rule__line--weight { stroke: var(--text-strong); stroke-width: 3.5; }
+.bp-rule__block { fill: var(--surface-sunken); stroke: var(--border-strong); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bp-rule__hit { fill: transparent; cursor: pointer; }
+.bp-rule__hit:hover { fill: var(--text-strong); fill-opacity: 0.04; }
+.bp-rule__node { cursor: pointer; }
+.bp-rule__node .fig-neuron { fill: var(--surface); stroke-width: 3; }
+.bp-rule__node.is-off { opacity: 0.4; }
+
+/* The expression: one block per derivative. Shared ones are ink; a route's
+   take its colour (set inline). */
+.bp-expr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; }
+.bp-expr__lhs, .bp-expr__group { display: inline-flex; align-items: center; gap: 0.5rem; }
+.bp-expr__rhs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.bp-expr__op { font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700; color: var(--text-strong); }
+.bp-expr__routes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-left: 2px solid var(--text-strong);
+  border-right: 2px solid var(--text-strong);
+  border-radius: 12px;
+}
+.bp-expr__route { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.bp-expr__route.is-off .bp-block { opacity: 0.4; }
+.bp-expr__op--plus { width: 1.1em; }
+.bp-expr__route:first-child { padding-left: 1.6em; }
+.bp-expr__off { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.bp-block {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 7.5rem;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid var(--text-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  line-height: 1.2;
+}
+.bp-block--shared { background: var(--surface-sunken); }
+.bp-block__small { font-size: var(--text-2xs); color: var(--text-muted); }
+.bp-block__main { font-size: var(--text-sm); font-weight: 700; color: var(--text-strong); }
+
+/* ── 4. One path ────────────────────────────────────────────────── */
+.bp-chain__net { display: flex; justify-content: center; margin-bottom: 0.75rem; }
+.bp-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.4rem 0; margin-bottom: 0.9rem; }
+.bp-chain__step { display: flex; align-items: center; }
+.bp-gauge {
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.45rem 0.6rem;
+}
+.bp-gauge--source { background: var(--surface-sunken); border-color: var(--text-strong); }
+.bp-gauge .bp-kicker { margin-bottom: 0.15rem; }
+.bp-gauge__val { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-md, 1rem); font-variant-numeric: tabular-nums; }
+.bp-gauge__moved { font-family: var(--font-mono); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.bp-link { display: flex; flex-direction: column; align-items: center; padding: 0 0.45rem; min-width: 74px; }
+.bp-link__x { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-sm); }
+.bp-link__x::after { content: " →"; color: var(--text-muted); font-weight: 400; }
+.bp-link__what { font-size: var(--text-2xs); color: var(--text-muted); text-align: center; max-width: 9em; }
+.bp-chain__sums { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
+
+/* ── The network (panels 4 and 5) ───────────────────────────────── */
+.bp-net__tile { fill: var(--surface); }
+.bp-net__lossline { stroke: var(--border-strong); stroke-width: 1.5; }
+.bp-net__errbox { fill: var(--surface); stroke: var(--fig-node-border, var(--border-strong)); stroke-width: 1.5; }
+.bp-net__faded { opacity: 0.22; }
+.bp-net__edgehit { stroke: transparent; stroke-width: 12; cursor: help; }
+.bp-net__neuron.is-path .fig-neuron, .bp-net__neuron.is-path .bp-net__errbox { stroke: var(--text-strong); stroke-width: 2.5; }
+/* Ready to click: a dashed ink ring; selected: a solid one. */
+.bp-net__neuron.is-ready { cursor: pointer; }
+.bp-net__neuron.is-ready .fig-neuron, .bp-net__neuron.is-ready .bp-net__errbox {
+  stroke: var(--text-strong);
+  stroke-width: 2.5;
+  stroke-dasharray: 5 3;
+}
+.bp-net__neuron.is-ready:hover .fig-neuron, .bp-net__neuron.is-ready:hover .bp-net__errbox { fill: var(--surface-sunken); }
+.bp-net__neuron.is-selected .fig-neuron, .bp-net__neuron.is-selected .bp-net__errbox { stroke: var(--text-strong); stroke-width: 3.5; stroke-dasharray: none; }
+
+/* ── 5. The walk ────────────────────────────────────────────────── */
+.bp-walk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 980px) { .bp-walk { grid-template-columns: 1fr; } }
+.bp-walk__side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+
+/* ── 6. Training ────────────────────────────────────────────────── */
+.bp-train {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 860px) { .bp-train { grid-template-columns: 1fr; } }
+.bp-train__side { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.bp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.bp-plot__axis { stroke: var(--border-strong); stroke-width: 1; }
+.bp-plot__curve { fill: none; stroke: var(--ml-value-pos); stroke-width: 2; }
+.bp-plot__dot { fill: var(--text-strong); }
+.bp-preds { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 12.5px; }
+.bp-preds th { text-align: left; font-weight: 400; color: var(--text-muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 0.3rem; }
+.bp-preds td { padding: 0.2rem 0.6rem 0.2rem 0; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }

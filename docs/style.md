@@ -403,7 +403,11 @@ drawing as a kernel sees it, and in grey the digit's shadow carries
 through every layer the way it does in the input. Its dense neurons and
 output still take the computed scale. The training example's reconstruction
 stays greyscale for the same reason: it is computed, but it is a picture of
-the digit read side by side with the input it tries to copy. Any further exception is written
+the digit read side by side with the input it tries to copy. The backpropagation
+example's error landscape is greyscale, lighter with height, although error is
+computed: it is read as terrain, in a panel that follows a black-and-white drawing
+of a mountain, and a vermillion surface that large sits beside a red accent on some
+deploys. Its green and red test steps are then the only colour on it. Any further exception is written
 here, with its reason, or it is a bug.
 
 Examples are migrating onto this one at a time; the attention example

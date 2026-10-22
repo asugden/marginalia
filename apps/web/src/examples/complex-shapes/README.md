@@ -40,6 +40,27 @@ for ("a tree with 7 leaves", "a network with 3 ReLU neurons").
    large ones chase each day's scatter. A switch shows the usual traffic the
    counts were drawn from.
 
+   The two sets are named: today's counts are the **training** data, the
+   next day's the **test** data.
+3. **Holding out data.** One day's counts, with a quarter or half set aside
+   at random (Reshuffle draws another split). The model is fitted to the
+   rest; training and test miss are drawn against parameters exactly as
+   above. On every shuffle checked, test miss is lowest at a middle size and
+   higher at the largest; the opening shuffle shows it clearly for both kinds.
+4. **Choosing without peeking.** The same day split 24 / 12 / 12 into
+   training, validation and test. The size with the lowest validation miss
+   is marked *chosen*, and its validation and test misses are reported side
+   by side. A tally over 100 seeded shuffles reports how often the test miss
+   came out higher, and by how much on average. Measured: steps 68/100, by
+   31 cars an hour; bends 53/100, by 12. With 12 test counts the noise in
+   one test score is large, so the effect shows in the average more than in
+   the count, especially for bends.
+
+All four use one mark per set (`SplitFigure.tsx`): training a filled dot and
+dashed grey curve, validation a hollow square and dotted curve, test a hollow
+dot and solid curve. Splits are seeded (`split.ts`), so shuffle n is the same
+for every viewer.
+
 Because both kinds interpolate by stepping or zig-zagging between points,
 neither swings wildly between them the way a high-degree polynomial does; the
 next day's miss at the largest size is about √2 times the scatter, and its

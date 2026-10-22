@@ -1,0 +1,136 @@
+/* Optional code view for examples: the upper-right switch and the column
+   of code boxes. Shared so every example that offers code looks and
+   behaves the same. */
+
+/* ── The switch (+ version select) ──────────────────────────────── */
+.ex-code-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: none;
+}
+.ex-code-toggle .ds-switch { font-family: var(--font-mono); font-size: var(--text-xs); }
+.ex-code-toggle__version { font-family: var(--font-mono); font-size: var(--text-xs); }
+
+/* ── Buttons under the figure ──────────────────────────────────────
+   For boxes that build no single part (training, say): quiet
+   ghost buttons in small mono, sand while their box is open. The figure's
+   own parts are the main way in; these are the footnote. */
+.ex-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.35rem 0.1rem 0;
+}
+.ex-chips .ds-btn {
+  font-family: var(--font-mono);
+  --_pad-y: 0.2rem;
+  --_pad-x: 0.45rem;
+  --_fs: var(--text-2xs);
+  color: var(--text-muted);
+}
+.ex-chips .ds-btn:hover:not(:disabled),
+.ex-chips .ds-btn.is-open {
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+
+/* ── The popover ───────────────────────────────────────────────────
+   A pop-up over a figure: sunken (dark sand) card, strong border, soft
+   shadow (docs/style.md §14). No accent: it is not a selection. */
+.ex-pop {
+  position: absolute;
+  z-index: 5;
+  width: min(440px, calc(100% - 16px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.6rem 0.75rem 0.8rem 0.85rem;
+}
+.ex-pop__head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.35rem;
+}
+.ex-pop__title {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.ex-pop__pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.ex-pop__head .ds-btn { --_pad-y: 0.15rem; --_pad-x: 0.45rem; }
+.ex-pop__src {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.65rem 0.5rem 0.35rem;
+  color: var(--text-strong);
+}
+/* Each line wraps inside the box (never runs off the end); the inline
+   padding/text-indent from CodePopover give wrapped parts a hanging indent. */
+.ex-pop__line {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ex-pop__shape {
+  display: inline-block;
+  margin-top: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.1rem 0.4rem;
+}
+.ex-pop__explain p {
+  margin: 0.5rem 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+/* Lists in an explanation: one tight list, no gap between items. */
+.ex-pop__explain ol,
+.ex-pop__explain ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.4rem;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-body);
+}
+.ex-pop__explain li { margin: 0; padding-left: 0.1rem; }
+.ex-pop__explain li + li { margin-top: 0.15rem; }
+.ex-pop__explain code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--surface);
+  border-radius: 3px;
+  padding: 0 0.2em;
+}
+
+.ex-tok-comment { color: var(--text-muted); font-style: italic; }
+.ex-tok-string { color: #9a5b12; }
+.ex-tok-num { color: var(--blue-ink, #1d4f91); }
+.ex-tok-kw { color: var(--text-strong); font-weight: 700; }
+.ex-tok-call { color: var(--purple-ink, #5b2f8a); font-weight: 600; }

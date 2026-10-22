@@ -172,3 +172,23 @@
   max-width: 72ch;
 }
 .mnist-foot p { font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+
+/* ── Code view ───────────────────────────────────────────────── */
+/* The eyebrow row carries the code switch at its right edge. The switch
+   (and the version dropdown that appears with it) is taken out of the
+   flow, so turning code on never moves the eyebrow or the title. */
+.mnist-head__top {
+  position: relative;
+  margin-bottom: 0.4rem;
+}
+.mnist-head__top .eyebrow { margin-bottom: 0; }
+.mnist-head__top .ex-code-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* The figure is the positioning box for the code markers and popover,
+   which are placed by fractions of its height (see REGION_SPAN). */
+.mnist-figure { position: relative; }

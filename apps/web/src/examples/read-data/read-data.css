@@ -1,0 +1,273 @@
+/* Reading data example. Panels follow docs/style.md §14; the one colour
+   rule is strings salmon, numbers blue (general data-mark hues, §11). */
+
+.rd-panel { margin-bottom: 1rem; }
+.rd-h2 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.rd-h3 {
+  margin: 1.5rem 0 0.3rem;
+  font-size: var(--text-md);
+  color: var(--text-strong);
+}
+.rd-sub p {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 78ch;
+}
+.rd-note {
+  margin: 1rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+.rd-note p {
+  margin: 0 0 0.4rem;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+/* Lists in prose: one tight list (see renderProse). */
+.rd-sub ol, .rd-sub ul, .rd-note ol, .rd-note ul, .rd-explain ol, .rd-explain ul {
+  margin: 0 0 0.6rem;
+  padding-left: 1.4rem;
+  line-height: 1.5;
+}
+.rd-sub li, .rd-explain li { font-size: var(--text-sm); color: inherit; }
+.rd-note li { font-size: var(--text-xs); color: var(--text-muted); }
+.rd-explain ol, .rd-explain ul { margin-top: 0.5rem; color: var(--text-body); }
+.rd-sub ol, .rd-sub ul { color: var(--text-secondary); }
+.rd-sub li + li, .rd-note li + li, .rd-explain li + li { margin-top: 0.15rem; }
+.rd-sub code, .rd-note code, .rd-explain code, .mnist-lede code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  padding: 0 0.2em;
+}
+.mnist-lede p { margin: 0; }
+
+/* Kicker: mono, tiny, uppercase, muted (the §14 readout kicker). */
+.rd-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+.rd-filename { text-transform: none; letter-spacing: 0; color: var(--text-secondary); }
+
+/* Controls the reader operates sit on the sunken surface (§14). */
+.rd-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.9rem;
+}
+.rd-controls__count { margin: 0 0 0 auto; }
+.rd-mono-btn.ds-btn { font-family: var(--font-mono); }
+
+.rd-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.5rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.9rem;
+}
+.rd-choice .rd-kicker { color: var(--text-secondary); }
+.rd-choice__buttons { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+
+.rd-pairs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.25rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.9rem;
+}
+.rd-pairs__row { display: flex; gap: 0.35rem; }
+
+/* ── Code ───────────────────────────────────────────────────────── */
+.rd-code {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.45rem 0;
+  color: var(--text-strong);
+}
+/* Lines wrap inside the box, with a hanging indent so a wrapped part reads
+   as a continuation rather than a new line. */
+.rd-code__line {
+  padding: 0 0.8rem 0 calc(0.8rem + 2ch);
+  text-indent: -2ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rd-code__line.is-current { background: var(--surface-sunken); }
+.rd-code__line.is-ahead { opacity: 0.35; }
+.rd-tip.ds-tooltip { display: inline; cursor: help; }
+.rd-tip:hover > span { text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
+.rd-tok-kw { font-weight: 700; }
+.rd-tok-punct { color: var(--text-secondary); }
+.rd-tok-comment { color: var(--text-muted); font-style: italic; }
+
+/* The one colour rule. */
+.rd-str { color: var(--salmon-ink); }
+.rd-num { color: var(--blue-ink); }
+
+/* ── Readouts ───────────────────────────────────────────────────── */
+.rd-readout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.7rem 0.85rem;
+  min-width: 0;
+}
+.rd-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.rd-value__repr {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.rd-value--error code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+.rd-explain p {
+  margin: 0.5rem 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-body);
+  max-width: 72ch;
+}
+
+.rd-badge {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  border-radius: var(--radius-sm);
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+.rd-badge--str { background: var(--salmon-tint); border-color: var(--salmon-tint); color: var(--salmon-ink); }
+.rd-badge--num { background: var(--blue-tint); border-color: var(--blue-tint); color: var(--blue-ink); }
+
+/* ── Panel 1: file beside spreadsheet ───────────────────────────── */
+.rd-file-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+.rd-file-pair__side { min-width: 0; }
+.rd-file {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.8;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.8rem;
+  overflow-x: auto;
+  color: var(--text-strong);
+}
+.rd-file > div { white-space: pre; }
+.rd-file__comma { color: var(--text-muted); }
+.rd-file__nl {
+  margin-left: 0.2rem;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  padding: 0 0.2rem;
+}
+/* One selected state (§12): accent and bold. */
+.rd-file .is-on, .rd-sheet .is-on {
+  color: var(--accent);
+  font-weight: 700;
+  background: var(--surface-sunken);
+}
+.rd-scroll { overflow-x: auto; }
+.rd-sheet {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.rd-sheet th, .rd-sheet td {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+  text-align: left;
+}
+.rd-sheet td { cursor: default; }
+.rd-sheet__colname, .rd-sheet__rownum {
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  color: var(--text-muted);
+  text-align: center;
+}
+.rd-sheet__header td { font-weight: 600; color: var(--text-strong); }
+
+/* ── Panel 3: steps beside the names so far ─────────────────────── */
+.rd-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 700px) { .rd-steps { grid-template-columns: 1fr; } }
+.rd-vars__table { border-collapse: collapse; width: 100%; }
+.rd-vars__table th, .rd-vars__table td {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 400;
+}
+.rd-vars__table code { font-family: var(--font-mono); font-size: 13px; }
+
+/* ── Panel 6: the DataFrame, drawn the way a notebook draws one ─── */
+.rd-df { border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; }
+.rd-df th, .rd-df td {
+  padding: 0.3rem 0.7rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.rd-df thead th { font-weight: 700; color: var(--text-strong); border-bottom: 1px solid var(--border-strong); }
+.rd-df tbody th { font-weight: 700; color: var(--text-muted); }
+.rd-df tfoot th { text-align: left; border-bottom: 0; padding-top: 0.6rem; margin: 0; }
+.rd-df tfoot td { border-bottom: 0; padding-top: 0.6rem; }

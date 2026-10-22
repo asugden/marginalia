@@ -48,6 +48,18 @@ export const EXAMPLES: ExampleSpec[] = [
     ),
   },
   {
+    slug: "reading-data",
+    title: "Reading data",
+    blurb:
+      "Follow one small CSV file from disk into Python: open and read it by hand, find out why \"3\" + \"21\" is \"321\", gather the steps into a function, then let pandas do it in one line.",
+    tags: ["python", "CSV", "pandas", "interactive"],
+    Page: lazy(() =>
+      import("./read-data/ReadDataPage.js").then((m) => ({
+        default: m.ReadDataPage,
+      })),
+    ),
+  },
+  {
     slug: "deep-neural-network",
     title: "Deep Neural Network",
     blurb:
@@ -56,6 +68,18 @@ export const EXAMPLES: ExampleSpec[] = [
     Page: lazy(() =>
       import("./mnist-mlp/DigitRecognizerPage.js").then((m) => ({
         default: m.DigitRecognizerPage,
+      })),
+    ),
+  },
+  {
+    slug: "backpropagation",
+    title: "Backpropagation",
+    blurb:
+      "How a network knows which way to turn every weight. Climb a mountain by feel, walk an error landscape in 3D, nudge one neuron's weights, follow one path through a network, then click your way backwards through all of it.",
+    tags: ["neural networks", "backpropagation", "chain rule", "gradients", "interactive"],
+    Page: lazy(() =>
+      import("./backprop/BackpropPage.js").then((m) => ({
+        default: m.BackpropPage,
       })),
     ),
   },
@@ -75,8 +99,8 @@ export const EXAMPLES: ExampleSpec[] = [
     slug: "complex-shapes",
     title: "Fitting complex shapes",
     blurb:
-      "Build a curve from steps, the way a tree does, or from bends, the way ReLU neurons do. Draw any shape and buy it parameters until the model follows \u2014 then fit a day of noisy traffic and watch the extra parameters chase the noise.",
-    tags: ["parameters", "overfitting", "trees", "ReLU", "interactive"],
+      "Build a curve from steps, the way a tree does, or from bends, the way ReLU neurons do. Draw any shape and buy it parameters until the model follows \u2014 then fit a day of noisy traffic, watch the extra parameters chase the noise, and set data aside to catch it: training, validation and test.",
+    tags: ["parameters", "overfitting", "train/test split", "validation", "trees", "ReLU", "interactive"],
     Page: lazy(() =>
       import("./complex-shapes/ComplexShapesPage.js").then((m) => ({
         default: m.ComplexShapesPage,
@@ -241,7 +265,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "training",
-    title: "Training",
+    title: "Neural Network Training",
     blurb:
       "The only model here that arrives knowing nothing. Watch 6,500 parameters start as pure noise and become a network that reproduces a handwritten digit \u2014 trained live in your browser, one step at a time.",
     tags: ["training", "gradient descent", "autoencoder", "interactive"],
