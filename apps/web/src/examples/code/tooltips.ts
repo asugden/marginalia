@@ -11,7 +11,7 @@ export const TOOLTIPS: Record<string, string> = {
 
   // Pins
   pinMode:
-    "Set a pin/board connectoin to be an input or output (consider PULLUP or PULLDOWN).",
+    "Set a pin/board connection to be an input or output (consider PULLUP or PULLDOWN).",
   digitalWrite: "Set an OUTPUT pin to 3.3 Volts (HIGH) or GND (LOW).",
   analogWrite: "Uses PWM to simulate an analog output from 0 - 255.",
   digitalRead: "Reads a digital pin as HIGH or LOW.",

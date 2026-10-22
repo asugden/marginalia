@@ -505,7 +505,7 @@ export class Runner {
       ) {
         this.setPin(id, { mode: "INPUT" });
         this.notes.set(line, {
-          text: `${p.label} canoot use pull resistors, so it stays INPUT and can be noisy`,
+          text: `${p.label} cannot use pull resistors, so it stays INPUT and can be noisy`,
           at: this.simMs,
         });
         return;
