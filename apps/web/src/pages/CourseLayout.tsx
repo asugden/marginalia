@@ -25,7 +25,7 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
-import { getMe, type MeEnrollment } from "../client.js";
+import { getMe, isStaffRole, type MeEnrollment } from "../client.js";
 import { CourseContext, type CourseContextValue } from "../course/useCourse.js";
 import {
   adminMenuTabs,
@@ -34,6 +34,7 @@ import {
   tabHref,
 } from "../course/tabs.js";
 import {
+  Button,
   CourseNav,
   CourseSwitcher,
   IconButton,
@@ -44,6 +45,7 @@ import {
 } from "../components/index.js";
 import { MenuIcon, SignOutIcon } from "../icons.js";
 import { signOut } from "../session.js";
+import { TourPanel } from "../modules/onboarding/components/TourPanel.js";
 
 export function CourseLayout() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -80,15 +82,27 @@ export function CourseLayout() {
           navigate("/", { replace: true });
           return;
         }
+        // This is the INSTRUCTOR shell. A student who types the /instructor
+        // URL used to get the full staff chrome and then a 403 on every page —
+        // send them to their own course home instead. An instructor previewing
+        // as a student (actingAsStudent) also reads role "student" here, and
+        // their way back is the role switch, which clears the downgrade before
+        // navigating — so the redirect applies to them too, harmlessly.
+        if (!isStaffRole(e.role)) {
+          navigate(`/course/${courseId}/dashboard`, { replace: true });
+          return;
+        }
         setEnrollments(m.enrollments);
         setValue({
           courseId: e.courseId,
           courseName: e.courseName,
           role: e.role,
+          capabilities: e.capabilities ?? [],
           showAttendance: e.showAttendance,
           showCollections: e.showCollections,
           hideProvenanceMarks: e.hideProvenanceMarks,
           provenanceEnabled: e.provenanceEnabled,
+          provenanceChatEnabled: e.provenanceChatEnabled ?? true,
           agentsEnabled: e.agentsEnabled,
           codeEnabled: e.codeEnabled ?? false,
           termSeason: e.termSeason,
@@ -96,6 +110,11 @@ export function CourseLayout() {
           startDate: e.startDate,
           endDate: e.endDate,
           isAdmin: Boolean(m.isAdmin),
+          canCreateCourses: Boolean(m.canCreateCourses),
+          genaiOptOut: Boolean(m.genaiOptOut),
+          genaiLocked: Boolean(e.genaiLocked),
+          codeChatAssignments: e.codeChatAssignments ?? 0,
+          writingChatAssignments: e.writingChatAssignments ?? 0,
           actingAsStudent: Boolean(m.actingAsStudent),
           refresh: () => load(),
         });
@@ -120,10 +139,28 @@ export function CourseLayout() {
   }, [location.pathname]);
 
   if (error) {
+    // Not a dead end: a transient /api/me failure (a 500, a dropped
+    // connection) must be recoverable in place — `load` is otherwise only
+    // re-run when the courseId changes, so without Retry the user was
+    // stranded until a manual browser reload.
     return (
       <div className="ds-staff">
         <div className="ds-staff-page">
           <p className="error">{error}</p>
+          <p>
+            <Button
+              variant="subtle"
+              onClick={() => {
+                setError(null);
+                void load();
+              }}
+            >
+              Try again
+            </Button>{" "}
+            <Button variant="ghost" href="/courses">
+              All courses
+            </Button>
+          </p>
         </div>
       </div>
     );
@@ -132,7 +169,13 @@ export function CourseLayout() {
     return <div className="ds-staff" />;
   }
 
-  const currentEnrollment = enrollments.find((e) => e.courseId === courseId);
+  const enrollment = enrollments.find((e) => e.courseId === courseId);
+  // Tab flags: the course's modules and the caller's capabilities, plus the
+  // caller's own "not interested in generative AI" preference.
+  const currentEnrollment = enrollment && {
+    ...enrollment,
+    genaiOptOut: value.genaiOptOut,
+  };
   const currentTab = tabForPathname(location.pathname, courseId);
 
   // Mobile sheet contents (≤680, where the nav strip and course switcher are
@@ -202,6 +245,7 @@ export function CourseLayout() {
               enrollments={enrollments}
               variant="instructor"
               flags={currentEnrollment}
+              canCreateCourses={value.canCreateCourses}
             />
 
             {/* The banded nav — Dashboard · Assign · Review ▾ · Build ▾ —
@@ -239,6 +283,7 @@ export function CourseLayout() {
         <div className="app__body">
           <Outlet />
         </div>
+        <TourPanel courseId={courseId} />
       </div>
     </CourseContext.Provider>
   );

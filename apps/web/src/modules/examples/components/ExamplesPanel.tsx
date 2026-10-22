@@ -22,6 +22,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { ItemCard } from "../../../components/index.js";
 import { findExample } from "../../../examples/registry.js";
 import { getMyCourseExamples, type CourseExampleDTO } from "../api.js";
 
@@ -101,18 +102,16 @@ export function ExamplesPanel({ courseId }: { courseId: string }) {
           {rows.map(({ entry, spec }) => {
             const isDone = completed.has(entry.slug);
             return (
-              <div className="app-list__row" key={entry.slug}>
-                <div className="app-list__main">
-                  <div className="app-list__title">
-                    {/* ?c= is what surfaces the course strip on the public
-                        example page. Without it the page is the plain one. */}
-                    <Link
-                      to={`/examples/${entry.slug}?c=${encodeURIComponent(courseId)}`}
-                    >
-                      {spec.title}
-                    </Link>
-                  </div>
-                  <div className="app-list__sub">
+              <ItemCard
+                key={entry.slug}
+                kind="example"
+                seed={entry.slug}
+                title={spec.title}
+                // ?c= is what surfaces the course strip on the public example
+                // page. Without it the page is the plain one.
+                href={`/examples/${entry.slug}?c=${encodeURIComponent(courseId)}`}
+                sub={
+                  <>
                     {[
                       entry.dueAt !== null
                         ? `Due ${formatDate(entry.dueAt)}`
@@ -124,9 +123,9 @@ export function ExamplesPanel({ courseId }: { courseId: string }) {
                       .filter(Boolean)
                       .join(" · ")}
                     {entry.note && <> — {entry.note}</>}
-                  </div>
-                </div>
-              </div>
+                  </>
+                }
+              />
             );
           })}
         </div>

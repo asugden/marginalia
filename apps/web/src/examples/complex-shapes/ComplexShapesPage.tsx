@@ -14,7 +14,11 @@
 // which does more with the same count.
 //
 //   1. Draw a shape. No noise; more parameters only ever help.
-//   2. Overfitting. One day's traffic counts, scored on the next day's.
+//   2. Overfitting. One day's traffic counts (training), scored on the next
+//      day's (test).
+//   3. Holding out data. No next day: set some of one day's counts aside.
+//   4. Choosing without peeking. Split three ways; choose the size on
+//      validation, report on test.
 //
 // Show, don't tell: a sentence per panel, and the figures carry the rest.
 
@@ -25,10 +29,11 @@ import "../mnist-mlp/digit-recognizer.css";
 import "../shared/controls.css";
 import "../shared/figure.css";
 import "./complex-shapes.css";
-import { DrawPanel } from "./DrawPanel.js";
 import { KindGlyph } from "./draw.js";
+import { DrawPanel } from "./DrawPanel.js";
 import type { Kind } from "./fit.js";
 import { NoisePanel } from "./NoisePanel.js";
+import { HoldOutPanel, ValidationPanel } from "./SplitPanels.js";
 
 const KINDS: Array<[Kind, string]> = [
   ["steps", "Steps"],
@@ -42,7 +47,11 @@ export function ComplexShapesPage() {
     <div className="app">
       <header className="app-topbar app-topbar--wide">
         <div className="app-topbar__inner">
-          <Link to="/examples" className="app-lockup-link" aria-label="Examples">
+          <Link
+            to="/examples"
+            className="app-lockup-link"
+            aria-label="Examples"
+          >
             <Wordmark size="sm" />
           </Link>
           <span className="mnist-crumb">Examples</span>
@@ -54,7 +63,7 @@ export function ComplexShapesPage() {
         <div className="mnist-page">
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
-            <h1>Fitting complex shapes</h1>
+            <h1>Fitting and Overfitting</h1>
             <p className="mnist-lede">
               A model builds its curve out of simple pieces: flat steps, the way
               a <Link to="/examples/decision-tree">decision tree</Link> does, or
@@ -106,7 +115,40 @@ export function ComplexShapesPage() {
                 next day's.
               </p>
               <NoisePanel kind={kind} />
-              <p className="cs-note">The counts are illustrative, not from a real road.</p>
+              <p className="cs-note">
+                The counts are illustrative, not from a real road.
+              </p>
+            </Card>
+
+            <Card className="cs-panel" padding="md">
+              <h2 className="cs-h2">Holding out data</h2>
+              <p className="cs-sub">
+                There is rarely a next day to wait for. Instead, set some of
+                today's counts aside before fitting, and score the model on
+                those. Reshuffle to set aside different ones.
+              </p>
+              <HoldOutPanel kind={kind} />
+              <p className="cs-note">
+                The model never sees the test counts while it is fitted. That is
+                the whole trick: they stand in for traffic that has not happened
+                yet.
+              </p>
+            </Card>
+
+            <Card className="cs-panel" padding="md">
+              <h2 className="cs-h2">Choosing without peeking</h2>
+              <p className="cs-sub">
+                Pick the size with the best test score and the test counts stop
+                being a fair test: they chose the model. So split three ways:
+                fit on training, choose the size on validation, and look at the
+                test score once, at the end.
+              </p>
+              <ValidationPanel kind={kind} />
+              <p className="cs-note">
+                The chosen size had the lowest validation miss out of every size
+                tried, so that miss is partly luck. The test counts played no
+                part in the choice, so their miss is the honest one.
+              </p>
             </Card>
           </div>
         </div>

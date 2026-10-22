@@ -30,7 +30,8 @@ import {
 } from "@marginalia/auth";
 import type { Env } from "./env.js";
 import * as repo from "./repo.js";
-import { sessionTtlMs } from "./auth.js";
+import { DEV_PREVIEW_COOKIE, sessionTtlMs } from "./auth.js";
+import { isStaff } from "./permissions.js";
 
 const DEFAULT_ORG = "default";
 
@@ -139,44 +140,65 @@ export async function handleAuthRoute(
 }
 
 /**
- * POST /auth/act-as-student  { acting: boolean }
+ * POST /auth/act-as-student  { acting: boolean, courseId?: string }
  *
- * Flip the current session's "act as student" downgrade. Entering (acting
- * true) is gated on holding an instructor enrollment *somewhere* — the same
- * instance-wide check the voice-preview feature uses — so a plain student
- * can't grant themselves the (harmless, but confusing) student-of-a-student
- * state. Exiting is always allowed so a session can never get stuck.
+ * Enter or leave a course preview. Entering needs a courseId and a staff
+ * enrollment (instructor or TA) in that course; the session then acts as the
+ * course's sample student (created on first use — repo.getOrCreateSampleStudent)
+ * until it leaves. Leaving is always allowed so a session can never get stuck.
  *
- * The flag lives on the session row, so it clears on logout/expiry and is
- * invisible to any other device the user is signed in on.
+ * The preview lives on the session row (or, on the local dev bypass, a
+ * cookie), so it clears on logout/expiry and is invisible to any other device
+ * the user is signed in on.
  */
 async function handleActAsStudent(req: Request, env: Env): Promise<Response> {
-  const cookies = parseCookies(req.headers.get("cookie"));
-  const sid = cookies[SESSION_COOKIE];
-  if (!sid) return json({ error: "Not signed in" }, 401);
-  const session = await findActiveSession(env.DB, sid, Date.now());
-  if (!session) return json({ error: "Not signed in" }, 401);
-
   const body = (await req.json().catch(() => null)) as {
     acting?: boolean;
+    courseId?: unknown;
   } | null;
   const acting = body?.acting === true;
+  const courseId = typeof body?.courseId === "string" ? body.courseId : null;
 
+  // Who is really signed in — never the sample student, even mid-preview.
+  const dev =
+    env.ENVIRONMENT === "dev" && env.DEV_AUTH_BYPASS === "true" && !!env.DEV_AUTH_EMAIL;
+  let realUserId: string | null = null;
+  let sid: string | null = null;
+  if (dev) {
+    const u = await repo.findUserByEmail(env.DB, DEFAULT_ORG, env.DEV_AUTH_EMAIL!.toLowerCase());
+    realUserId = u?.id ?? null;
+  } else {
+    sid = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE] ?? null;
+    const session = sid ? await findActiveSession(env.DB, sid, Date.now()) : null;
+    realUserId = session?.user_id ?? null;
+  }
+  if (!realUserId) return json({ error: "Not signed in" }, 401);
+
+  let sampleId: string | null = null;
   if (acting) {
-    const isInstructor = await repo.userIsInstructorAnywhere(
-      env.DB,
-      session.user_id,
-    );
-    if (!isInstructor) {
-      return json(
-        { error: "Only instructors can preview the student experience." },
-        403,
-      );
+    if (!courseId) return json({ error: "courseId is required to preview" }, 400);
+    const enrollment = await repo.findEnrollment(env.DB, courseId, realUserId);
+    if (!enrollment || !isStaff(enrollment.role)) {
+      return json({ error: "Only course staff can preview the student experience." }, 403);
     }
+    const sample = await repo.getOrCreateSampleStudent(env.DB, courseId);
+    if (!sample) return json({ error: "Course not found" }, 404);
+    sampleId = sample.id;
   }
 
-  await setActingAsStudent(env.DB, sid, acting);
-  return json({ actingAsStudent: acting });
+  if (dev) {
+    const cookie = buildCookie({
+      name: DEV_PREVIEW_COOKIE,
+      value: sampleId ?? "",
+      maxAge: sampleId ? 60 * 60 * 24 : 0,
+      secure: false,
+    });
+    return json({ actingAsStudent: acting, courseId: acting ? courseId : null }, 200, {
+      "set-cookie": cookie,
+    });
+  }
+  await setActingAsStudent(env.DB, sid!, acting, sampleId);
+  return json({ actingAsStudent: acting, courseId: acting ? courseId : null });
 }
 
 async function handleLogin(
@@ -195,18 +217,24 @@ async function handleLogin(
   // state cookie had vanished. Folding it into the signed state carries it
   // through the IdP round-trip so the callback can refuse to retry twice.
   const retried = url.searchParams.get("retry") === "1";
-  const signed = await signState(
-    { nonce, returnTo, codeVerifier: verifier, ...(retried && { retried }) },
+  // Two signed blobs sharing one nonce. The cookie copy carries the PKCE
+  // verifier; the `state` parameter copy does NOT (see AuthState.codeVerifier
+  // for why). The callback binds them by nonce, so a state parameter without
+  // its matching cookie — or vice versa — is refused.
+  const publicState = { nonce, returnTo, ...(retried && { retried }) };
+  const stateParam = await signState(publicState, env.SESSION_SIGNING_KEY);
+  const cookieState = await signState(
+    { ...publicState, codeVerifier: verifier },
     env.SESSION_SIGNING_KEY,
   );
   const authUrl = await provider.authorizationUrl({
-    state: signed,
+    state: stateParam,
     codeChallenge: challenge,
     redirectUri: callbackUrl(req, env),
   });
   const stateCookie = buildCookie({
     name: OIDC_STATE_COOKIE,
-    value: signed,
+    value: cookieState,
     maxAge: OIDC_STATE_MAX_AGE,
     sameSite: "Lax",
   });
@@ -235,13 +263,21 @@ async function handleCallback(
     return json({ error: "Missing code or state" }, 400);
   }
 
-  // The cookie value MUST equal the state param — if the user navigated
-  // to /auth/callback with a forged state but no matching cookie (or vice
-  // versa), this rejects it. Both are HMAC-signed; checking equality of
-  // the signed blobs is a fast first gate before the crypto verify.
+  // The state cookie and the state param are two signed blobs minted
+  // together at /auth/login and bound by a shared nonce (the cookie copy
+  // additionally holds the PKCE verifier). Both must verify and the nonces
+  // must agree — a forged state alongside a real cookie, or a real state
+  // replayed without its cookie, is rejected below.
   const cookies = parseCookies(req.headers.get("cookie"));
   const stateCookie = cookies[OIDC_STATE_COOKIE];
-  if (!stateCookie || stateCookie !== stateParam) {
+  const cookieState = stateCookie
+    ? await verifyState(stateCookie, env.SESSION_SIGNING_KEY)
+    : null;
+  const stateOk =
+    cookieState !== null &&
+    typeof cookieState.codeVerifier === "string" &&
+    (await verifyState(stateParam, env.SESSION_SIGNING_KEY))?.nonce === cookieState.nonce;
+  if (!stateOk) {
     // Two very different situations reach this branch, and only one is an
     // attack:
     //
@@ -279,16 +315,17 @@ async function handleCallback(
     }
     return json({ error: "Invalid state cookie" }, 400);
   }
-  const state = await verifyState(stateParam, env.SESSION_SIGNING_KEY);
-  if (!state) {
-    return json({ error: "Invalid state signature" }, 400);
-  }
+  // The gate above established cookieState is verified and holds the
+  // verifier; everything from here on reads the cookie copy, which is the
+  // one the browser (not the URL) delivered.
+  const state = cookieState!;
+  const codeVerifier = state.codeVerifier!;
 
   let identity: ExternalIdentity;
   try {
     identity = await provider.exchangeCode({
       code,
-      codeVerifier: state.codeVerifier,
+      codeVerifier,
       redirectUri: callbackUrl(req, env),
     });
   } catch (err) {

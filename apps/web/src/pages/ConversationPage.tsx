@@ -336,7 +336,10 @@ export function ConversationPage() {
           // generation step, no need to refetch.
           if (!hasBackbone && ev.conversationTitle === null) {
             setTimeout(() => {
-              listConversations()
+              // Same agent scope as the sidebar's own effect — an unscoped
+              // call here used to overwrite the per-agent history with every
+              // conversation the caller owns, across agents and courses.
+              listConversations(undefined, agentId ?? undefined)
                 .then((r) =>
                   setHistory(
                     r.conversations.slice(0, SIDEBAR_CONVERSATION_LIMIT),

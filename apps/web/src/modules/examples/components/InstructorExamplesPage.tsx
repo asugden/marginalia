@@ -19,7 +19,6 @@
 // deliberately does not support. See the worker module README.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import { EXAMPLES, findExample } from "../../../examples/registry.js";
 import {
@@ -27,6 +26,7 @@ import {
   Button,
   Checkbox,
   Input,
+  ItemCard,
   PageHeader,
   SegmentedControl,
   Section,
@@ -49,22 +49,16 @@ export function InstructorExamplesPage() {
   const [panel, setPanel] = useState<Panel>("assign");
 
   return (
-    <div className="ds-staff-page">
+    <div className="app-page">
       <PageHeader
-        eyebrow="Instructor · Assignments"
+        eyebrow="Instructor · Assign"
         title="Examples"
         scope="Pick interactive examples for this course. The example pages themselves stay public and identical for everyone — assigning one adds it to your students' list, it doesn't lock anyone out."
       />
 
-      {/* Same back-link idiom the assignment roster uses — both are detail
-          surfaces hanging off the one Assignments list. */}
-      <p className="muted small">
-        <Link to={`/course/${courseId}/instructor/assign`}>← Assign</Link>
-      </p>
-
       <SegmentedControl
         options={[
-          { value: "assign", label: "Assign" },
+          { value: "assign", label: "Assigned" },
           { value: "usage", label: "Usage" },
           { value: "completion", label: "Completion" },
         ]}
@@ -92,6 +86,15 @@ interface Draft {
 
 function AssignPanel({ courseId }: { courseId: string }) {
   const [draft, setDraft] = useState<Draft[] | null>(null);
+  // Browser-only filter over the catalog: title, blurb, and slug.
+  const [query, setQuery] = useState("");
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return EXAMPLES;
+    return EXAMPLES.filter((ex) =>
+      [ex.title, ex.blurb, ex.slug].some((v) => v.toLowerCase().includes(q)),
+    );
+  }, [query]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -193,9 +196,38 @@ function AssignPanel({ courseId }: { courseId: string }) {
             {draft.map((d, i) => {
               const spec = findExample(d.slug);
               return (
-                <div className="app-list__row ex-assign__row" key={d.slug}>
-                  <div className="app-list__main">
-                    <div className="app-list__title">{spec?.title ?? d.slug}</div>
+                <ItemCard
+                  key={d.slug}
+                  className="ex-assign__row"
+                  kind="example"
+                  seed={d.slug}
+                  title={spec?.title ?? d.slug}
+                  meta={
+                    <>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      onClick={() => move(i, -1)}
+                      disabled={i === 0}
+                      aria-label={`Move ${spec?.title ?? d.slug} up`}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      onClick={() => move(i, 1)}
+                      disabled={i === draft.length - 1}
+                      aria-label={`Move ${spec?.title ?? d.slug} down`}
+                    >
+                      ↓
+                    </Button>
+                    <Button variant="subtle" size="sm" onClick={() => toggle(d.slug)}>
+                      Remove
+                    </Button>
+                    </>
+                  }
+                >
                     <div className="ex-assign__fields">
                       <label className="ex-assign__field">
                         <span>Assigned</span>
@@ -223,31 +255,7 @@ function AssignPanel({ courseId }: { courseId: string }) {
                         />
                       </label>
                     </div>
-                  </div>
-                  <div className="app-list__meta ex-assign__order">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => move(i, -1)}
-                      disabled={i === 0}
-                      aria-label={`Move ${spec?.title ?? d.slug} up`}
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => move(i, 1)}
-                      disabled={i === draft.length - 1}
-                      aria-label={`Move ${spec?.title ?? d.slug} down`}
-                    >
-                      ↓
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => toggle(d.slug)}>
-                      Remove
-                    </Button>
-                  </div>
-                </div>
+                </ItemCard>
               );
             })}
           </div>
@@ -257,32 +265,48 @@ function AssignPanel({ courseId }: { courseId: string }) {
       <Section
         kicker="All examples"
         description="Every example in this deployment. Each is a public page at its own URL; you can link one directly from a syllabus or a slide whether or not you assign it here."
+        actions={
+          <Input
+            type="search"
+            placeholder="Filter by title or topic…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ width: "16rem", maxWidth: "40vw" }}
+          />
+        }
       >
-        <div className="app-list">
-          {EXAMPLES.map((ex) => (
-            <div className="app-list__row" key={ex.slug}>
-              <div className="app-list__main">
-                <div className="app-list__title">{ex.title}</div>
-                <div className="app-list__sub">{ex.blurb}</div>
-              </div>
-              <div className="app-list__meta">
-                <a
-                  className="ex-preview-link"
-                  href={`/examples/${ex.slug}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Preview
-                </a>
-                <Checkbox
-                  checked={chosen.has(ex.slug)}
-                  onChange={() => toggle(ex.slug)}
-                  label="Assign"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+        {shown.length === 0 ? (
+          <p className="muted">No example matches “{query.trim()}”.</p>
+        ) : (
+          <div className="app-list">
+            {shown.map((ex) => (
+              <ItemCard
+                key={ex.slug}
+                kind="example"
+                seed={ex.slug}
+                title={ex.title}
+                sub={ex.blurb}
+                meta={
+                  <>
+                    <a
+                      className="ex-preview-link"
+                      href={`/examples/${ex.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Preview
+                    </a>
+                    <Checkbox
+                      checked={chosen.has(ex.slug)}
+                      onChange={() => toggle(ex.slug)}
+                      label="Assign"
+                    />
+                  </>
+                }
+              />
+            ))}
+          </div>
+        )}
       </Section>
     </>
   );
@@ -374,18 +398,19 @@ function UsagePanel({ courseId }: { courseId: string }) {
             {data.totals.map((t) => {
               const spec = findExample(t.slug);
               return (
-                <div className="app-list__row" key={t.slug}>
-                  <div className="app-list__main">
-                    <div className="app-list__title">{spec?.title ?? t.slug}</div>
-                    <div className="app-list__sub">
+                <ItemCard
+                  key={t.slug}
+                  kind="example"
+                  seed={t.slug}
+                  title={spec?.title ?? t.slug}
+                  sub={
+                    <>
                       {describeCount(t.opens, floor, "open")} ·{" "}
                       {describeCount(t.engagedOpens, floor, "engaged open")}
-                    </div>
-                  </div>
-                  <div className="app-list__meta">
-                    {t.suppressed && <Badge tone="neutral">small count</Badge>}
-                  </div>
-                </div>
+                    </>
+                  }
+                  meta={t.suppressed && <Badge tone="neutral">small count</Badge>}
+                />
               );
             })}
           </div>

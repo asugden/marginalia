@@ -4,7 +4,7 @@
 // flip to origin="pasted". Coloring is pure CSS (see styles.css).
 
 import { useEffect, useRef } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import CharacterCount from "@tiptap/extension-character-count";
@@ -111,6 +111,16 @@ export function ProvenanceEditor({
     return () => onEditorReady?.(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
+
+  // Tiptap 3's useEditor doesn't re-render on selection-only changes, so the
+  // Reference button (decided from the selection below) used to appear only
+  // when something unrelated re-rendered — seconds late. Subscribing to the
+  // selection re-renders exactly when it moves.
+  useEditorState({
+    editor,
+    selector: ({ editor: e }) =>
+      e ? `${e.state.selection.from}:${e.state.selection.to}` : "",
+  });
 
   if (!editor) return <div className="prov-editor-surface-wrap" />;
 

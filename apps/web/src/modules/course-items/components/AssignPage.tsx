@@ -1,10 +1,18 @@
-// The Assign band — /course/:id/instructor/assign.
+// Assign ▸ All — /course/:id/instructor/assign.
 //
 // One list showing everything this course has assigned, whatever kind it is:
-// writing, agents, and examples today; readings and discussions later. A new
-// content type lands here as a ROW, not as a new tab. That is the whole point
-// of the wrapper — the nav had been growing a tab per content type, which
-// scaled badly and said nothing true about how the pieces relate.
+// writing, code, agents, and examples. The Assign menu in the header lists each
+// kind's own page; this "All" entry appears only when more than one kind is on,
+// since with one kind it would just repeat that kind's page.
+//
+// This is the Assign (authoring) side, so it lists one row per ASSIGNMENT: a
+// writing assignment's checkpoints appear inline ("Draft due Oct 3 · Final due
+// Oct 10"; a lone checkpoint is just "due Oct 3", never "Final"). Review ▸
+// Submissions is where each checkpoint is listed as its own assignment.
+//
+// Visibility: writing and code rows carry the assignment's real Draft /
+// Published state and can be published from here. Agents and examples have
+// no draft state — their row can only be unassigned (taken off the schedule).
 //
 // This page supersedes the earlier combined AssignmentsPage, which unified
 // writing and examples in the presentation layer only. Here the union is real:
@@ -33,7 +41,7 @@
 // rosters, where each kind's own rules already apply.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import {
   completionLabel,
@@ -42,16 +50,18 @@ import {
   isSupplement,
   kindLabel,
   listCourseItems,
+  setAssignmentPublished,
   updateCourseItem,
   type CourseItemDTO,
-  type ItemKind,
   type WritingPayload,
 } from "../api.js";
 import { findExample } from "../../../examples/registry.js";
+import { itemTitle } from "../title.js";
 import {
   Badge,
   Button,
   Dropdown,
+  ItemCard,
   PageHeader,
   Section,
   useConfirm,
@@ -75,42 +85,69 @@ function formatDueTime(ms: number): string {
   });
 }
 
+type Checkpoint = WritingPayload["checkpoints"][number];
+
+/** A writing item's checkpoints, or [] for every other kind. */
+function checkpointsOf(item: CourseItemDTO): Checkpoint[] {
+  if (item.kind !== "writing") return [];
+  return (item.payload as unknown as WritingPayload | null)?.checkpoints ?? [];
+}
+
+/** A row's deadline for sorting. Writing: the soonest checkpoint still ahead,
+ *  else the latest one passed. Everything else: the item's own. */
+function itemDue(item: CourseItemDTO, now: number): number | null {
+  const cps = checkpointsOf(item);
+  if (cps.length === 0) return item.dueAt;
+  const dated = cps.map((c) => c.dueAt).filter((d): d is number => d !== null);
+  if (dated.length === 0) return null;
+  const upcoming = dated.filter((d) => d >= now);
+  return upcoming.length > 0 ? Math.min(...upcoming) : Math.max(...dated);
+}
+
 /**
  * The scheduling line for a row.
  *
  * "Supplement" is a first-class state, not an empty one: both dates null means
  * the instructor offered something without scheduling it, which is a normal
  * thing to do and reads better than a blank. Every existing agent is in this
- * state after the 0022 backfill.
+ * state after the 0022 backfill. Writing shows its checkpoints instead — a
+ * lone checkpoint by its date alone, never by its name.
  */
 function scheduleLine(item: CourseItemDTO): string {
+  const cps = checkpointsOf(item);
+  const due = (ms: number | null) => (ms === null ? "no deadline" : `due ${formatDueTime(ms)}`);
+  if (cps.length === 1) return due(cps[0]!.dueAt);
+  if (cps.length > 1) return cps.map((c) => `${c.name} ${due(c.dueAt)}`).join(" · ");
   if (isSupplement(item)) return "Supplement — always available";
   const parts: string[] = [];
   if (item.assignedAt !== null) parts.push(`assigned ${formatDay(item.assignedAt)}`);
-  parts.push(item.dueAt !== null ? `due ${formatDueTime(item.dueAt)}` : "no deadline");
+  parts.push(due(item.dueAt));
   return parts.join(" · ");
 }
 
 /**
- * Sort: soonest deadline first, undated last.
+ * Sort: drafts / hidden first (they wait on the instructor), then soonest
+ * deadline, undated last.
  *
  * Undated sorts last rather than first because "no deadline" is the instructor
  * declining to schedule something, and a list read for "what's next" should not
- * open with the items that are never next. Archived sinks below everything
- * live. Ties break on the instructor's own `ord`, then title, so the order is
- * stable across reloads instead of depending on fetch timing.
+ * open with the items that are never next. Ties break on the instructor's own
+ * `ord`, then title, so the order is stable across reloads instead of depending
+ * on fetch timing.
  */
-function compareItems(a: CourseItemDTO, b: CourseItemDTO): number {
-  const aArch = a.archivedAt !== null;
-  const bArch = b.archivedAt !== null;
-  if (aArch !== bArch) return aArch ? 1 : -1;
-  if (a.dueAt === null && b.dueAt === null) {
+function compareItems(a: CourseItemDTO, b: CourseItemDTO, now: number): number {
+  const aHidden = a.archivedAt !== null;
+  const bHidden = b.archivedAt !== null;
+  if (aHidden !== bHidden) return aHidden ? -1 : 1;
+  const aDue = itemDue(a, now);
+  const bDue = itemDue(b, now);
+  if (aDue === null && bDue === null) {
     if (a.ord !== b.ord) return a.ord - b.ord;
     return a.title.localeCompare(b.title);
   }
-  if (a.dueAt === null) return 1;
-  if (b.dueAt === null) return -1;
-  if (a.dueAt !== b.dueAt) return a.dueAt - b.dueAt;
+  if (aDue === null) return 1;
+  if (bDue === null) return -1;
+  if (aDue !== bDue) return aDue - bDue;
   return a.title.localeCompare(b.title);
 }
 
@@ -138,16 +175,33 @@ export function AssignPage() {
   }, [courseId]);
 
   const sorted = useMemo(
-    () => (items === null ? null : [...items].sort(compareItems)),
+    () => {
+      if (items === null) return null;
+      const now = Date.now();
+      return [...items].sort((a, b) => compareItems(a, b, now));
+    },
     [items],
   );
 
-  async function onToggleArchive(item: CourseItemDTO) {
+  async function reload() {
+    setItems(await listCourseItems(courseId, { includeArchived: true }));
+  }
+
+  /** Writing / code: the assignment's own Draft ⇄ Published. */
+  async function onTogglePublished(item: CourseItemDTO) {
     try {
-      const saved = await updateCourseItem(item.id, {
-        courseId,
-        archived: item.archivedAt === null,
-      });
+      await setAssignmentPublished(courseId, item, item.archivedAt !== null);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed");
+    }
+  }
+
+  /** Agents / examples hidden by the old Archive button: put the row back on
+   *  the schedule. No new row gets into this state any more. */
+  async function onRestore(item: CourseItemDTO) {
+    try {
+      const saved = await updateCourseItem(item.id, { courseId, archived: false });
       setItems((cur) => (cur ?? []).map((i) => (i.id === saved.id ? saved : i)));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
@@ -171,18 +225,19 @@ export function AssignPage() {
     }
   }
 
-  const liveCount = (items ?? []).filter((i) => i.archivedAt === null).length;
-  const archivedCount = (items ?? []).filter((i) => i.archivedAt !== null).length;
-  const supplementCount = (items ?? []).filter(
-    (i) => i.archivedAt === null && isSupplement(i),
+  const all = sorted ?? [];
+  const liveCount = all.filter((i) => i.archivedAt === null).length;
+  const hiddenCount = all.length - liveCount;
+  const supplementCount = all.filter(
+    (i) => i.archivedAt === null && i.kind !== "writing" && isSupplement(i),
   ).length;
 
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Instructor"
-        title="Assign"
-        scope="Everything you've set this class, on one list — writing, agents, and examples together, in the order they come due. An item with no dates is a supplement: available the whole term, never late."
+        eyebrow="Instructor · Assign"
+        title="All assignments"
+        scope="Everything you've set this class, on one list, in the order it comes due. An item with no dates is a supplement: available the whole term, never late."
       />
 
       {error && <p className="error">{error}</p>}
@@ -195,7 +250,7 @@ export function AssignPage() {
             : [
                 `${liveCount} item${liveCount === 1 ? "" : "s"}`,
                 supplementCount > 0 ? `${supplementCount} supplement` : null,
-                archivedCount > 0 ? `${archivedCount} archived` : null,
+                hiddenCount > 0 ? `${hiddenCount} not visible to students` : null,
               ]
                 .filter(Boolean)
                 .join(" · ")
@@ -216,7 +271,8 @@ export function AssignPage() {
                 key={item.id}
                 courseId={courseId}
                 item={item}
-                onArchive={() => onToggleArchive(item)}
+                onTogglePublished={() => onTogglePublished(item)}
+                onRestore={() => onRestore(item)}
                 onUnassign={() => onUnassign(item)}
               />
             ))}
@@ -229,17 +285,19 @@ export function AssignPage() {
 }
 
 /**
- * The "New" control. Each kind is authored on its own surface — writing in the
- * assignments editor, agents in the agent editor, examples by curating from the
- * registry — so this navigates rather than opening one universal form. The
- * wrapper schedules content; it does not author it, and a single generic
- * "create anything" form would have to reimplement three editors.
+ * The "New" control. Each kind is authored on its own surface, so this
+ * navigates rather than opening one universal form — and it navigates straight
+ * to that kind's CREATE form (never to a list the instructor then has to find
+ * a "New" button on). Examples have no create form: they are curated from the
+ * registry, so that page is where "new" lands.
  */
 function NewItemControl({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
-  // Code is an opt-in module: it appears in this menu only once the course
-  // has turned it on, so a course that never uses it never sees it.
-  const { codeEnabled } = useCourse();
+  // The menu respects which modules this course has turned on: a kind is only
+  // offered when the module that authors it is enabled, so a course with
+  // Writing off is never sent to a writing editor its students can't see.
+  // Examples are always assignable — they're public pages, not a module.
+  const { codeEnabled, provenanceEnabled, agentsEnabled, genaiOptOut } = useCourse();
   return (
     <Dropdown
       value=""
@@ -247,17 +305,19 @@ function NewItemControl({ courseId }: { courseId: string }) {
       ariaLabel="Assign something"
       align="end"
       options={[
-        { value: "writing", label: "Writing assignment" },
-        { value: "agent", label: "Agent" },
+        ...(provenanceEnabled ? [{ value: "writing", label: "Writing assignment" }] : []),
+        ...(agentsEnabled && !genaiOptOut ? [{ value: "agent", label: "Agent" }] : []),
         { value: "example", label: "Example" },
         ...(codeEnabled ? [{ value: "code", label: "Coding assignment" }] : []),
       ]}
       onChange={(v) => {
         const base = `/course/${courseId}/instructor`;
-        if (v === "writing") navigate(`${base}/assignments`);
-        else if (v === "agent") navigate(`${base}/agents`);
-        else if (v === "code") navigate(`${base}/code`);
-        else navigate(`${base}/assign/examples`);
+        if (v === "writing") navigate(`${base}/assignments/new`);
+        else if (v === "agent") navigate(`${base}/agents/new`);
+        else if (v === "code") navigate(`${base}/code/new`);
+        else if (v === "example") navigate(`${base}/assign/examples`);
+        // No catch-all: a future kind must be wired here explicitly rather
+        // than silently landing on the examples curation page.
       }}
     />
   );
@@ -271,23 +331,34 @@ function NewItemControl({ courseId }: { courseId: string }) {
  * real term is part of the content, so students learning that the thing they
  * talk to is an agent is pedagogically useful rather than jargon leakage.
  */
-function KindBadge({ kind }: { kind: ItemKind }) {
-  return <Badge tone="neutral">{kindLabel(kind)}</Badge>;
-}
 
 function ItemRow({
   courseId,
   item,
-  onArchive,
+  onTogglePublished,
+  onRestore,
   onUnassign,
 }: {
   courseId: string;
   item: CourseItemDTO;
-  onArchive: () => void;
+  onTogglePublished: () => void;
+  onRestore: () => void;
   onUnassign: () => void;
 }) {
-  const archived = item.archivedAt !== null;
+  const hidden = item.archivedAt !== null;
+  // Writing and code have a real Draft / Published state; agents and examples
+  // don't (see the file header).
+  const publishable = item.kind === "writing" || item.kind === "code";
   const href = instructorHref(courseId, item);
+  // A row whose module has since been turned off is stated rather than hidden:
+  // students can't see it (their surfaces filter by the same flags), and the
+  // instructor is the only one who can either unassign it or turn the module
+  // back on in Settings.
+  const { provenanceEnabled, agentsEnabled, codeEnabled } = useCourse();
+  const moduleOff =
+    (item.kind === "writing" && !provenanceEnabled) ||
+    (item.kind === "agent" && !agentsEnabled) ||
+    (item.kind === "code" && !codeEnabled);
 
   // The instructor's own completion state for their own account. Shown because
   // an instructor previewing an assignment is a normal thing to do, and the
@@ -302,26 +373,21 @@ function ItemRow({
   // An example wrapper stores the slug as its title (the worker cannot see
   // the registry); show the registry's title instead, falling back to the
   // slug if the registry no longer knows it.
-  const title =
-    item.kind === "example" && !missingExample
-      ? findExample(item.payloadRef)?.title ?? item.title
-      : item.title;
+  const title = itemTitle(item);
 
   return (
-    <div className="app-list__row prov-asg__row">
-      <div className="app-list__main">
-        <div className="app-list__title">
-          {href && !dangling ? (
-            <Link to={href}>{title}</Link>
-          ) : (
-            <span>{title}</span>
-          )}{" "}
-          <KindBadge kind={item.kind} />
+    <ItemCard
+      kind={item.kind}
+      seed={item.payloadRef}
+      title={title}
+      href={href && !dangling ? href : null}
+      badges={
+        <>
           {item.kind === "agent" && !dangling && <AgentTraits item={item} />}
-          {archived && (
+          {hidden && (
             <>
               {" "}
-              <Badge tone="neutral">archived</Badge>
+              <Badge tone="warning">{publishable ? "Draft" : "Off the schedule"}</Badge>
             </>
           )}
           {dangling && (
@@ -330,8 +396,16 @@ function ItemRow({
               <Badge tone="warning">content missing</Badge>
             </>
           )}
-        </div>
-        <div className="app-list__sub">
+          {moduleOff && !dangling && (
+            <>
+              {" "}
+              <Badge tone="warning">module off</Badge>
+            </>
+          )}
+        </>
+      }
+      sub={
+        <>
           {dangling ? (
             // Stated plainly rather than hidden: the row is why something
             // vanished from the student list, and the instructor is the only
@@ -340,10 +414,16 @@ function ItemRow({
               The {kindLabel(item.kind).toLowerCase()} this points at no longer
               exists. Students don't see it. Unassign to clear the row.
             </>
+          ) : moduleOff ? (
+            <>
+              The {item.kind === "agent" ? "Agents" : kindLabel(item.kind)}{" "}
+              module is turned off for this course, so students don't see this.
+              Turn it back on in Settings, or unassign to clear the row.
+            </>
           ) : (
             <>
               {scheduleLine(item)}
-              {item.kind === "writing" && <WritingCheckpoints item={item} />}
+              {hidden && publishable && " · students can't see this yet"}
               {/* The verb is per-kind and rendered verbatim — see the file
                   header. Absent when the caller hasn't done it, rather than
                   printed as a negative: this is the instructor's own state,
@@ -352,9 +432,10 @@ function ItemRow({
               {item.note && <> · {item.note}</>}
             </>
           )}
-        </div>
-      </div>
-      <div className="app-list__meta prov-asg__actions">
+        </>
+      }
+      meta={
+        <>
         {item.kind === "example" && !dangling && (
           <a
             className="ex-preview-link"
@@ -365,14 +446,27 @@ function ItemRow({
             Preview
           </a>
         )}
-        <Button variant="subtle" size="sm" onClick={onArchive}>
-          {archived ? "Unarchive" : "Archive"}
-        </Button>
-        <Button variant="danger" size="sm" onClick={onUnassign}>
-          Unassign
-        </Button>
-      </div>
-    </div>
+        {publishable && !dangling ? (
+          // Deleting a writing or code assignment is done on its own page,
+          // where the consequences for its submissions are spelled out.
+          <Button variant="subtle" size="sm" onClick={onTogglePublished}>
+            {hidden ? "Publish" : "Unpublish"}
+          </Button>
+        ) : (
+          <>
+            {hidden && (
+              <Button variant="subtle" size="sm" onClick={onRestore}>
+                Put back on schedule
+              </Button>
+            )}
+            <button type="button" className="danger-link" onClick={onUnassign}>
+              Unassign
+            </button>
+          </>
+        )}
+        </>
+      }
+    />
   );
 }
 
@@ -395,27 +489,6 @@ function AgentTraits({ item }: { item: CourseItemDTO }) {
           <Badge tone="neutral">sources</Badge>
         </>
       )}
-    </>
-  );
-}
-
-/**
- * Writing's checkpoints, inline.
- *
- * Writing is the one kind needing several dated moments — "draft Monday, final
- * Wednesday" is ONE assignment the student keeps one document across. The other
- * kinds are the one-date case, which is why the wrapper holds a single
- * `due_at` and writing keeps its own checkpoint rows.
- */
-function WritingCheckpoints({ item }: { item: CourseItemDTO }) {
-  const p = item.payload as unknown as WritingPayload | null;
-  if (!p || p.checkpoints.length === 0) return null;
-  return (
-    <>
-      {" · "}
-      {p.checkpoints
-        .map((c) => `${c.name} ${c.dueAt === null ? "(no deadline)" : formatDay(c.dueAt)}`)
-        .join(" · ")}
     </>
   );
 }

@@ -90,19 +90,21 @@ export function MachineLearningPage() {
             />
           </section>
 
-          <section aria-labelledby="p-line">
-            <h2 id="p-line" className="ovw-h2 ovw-h2--line">
+        </div>
+
+        {/* Full-bleed: the line is the page's one departure from the other
+            examples, set on its own band of paper running edge to edge. */}
+        <section className="ovw-line" aria-labelledby="p-line">
+          <div className="ovw-line__inner">
+            <h2 id="p-line" className="ovw-h2">
               Which model do you reach for?
             </h2>
             <p className="ovw-lede">
               {/* PLACEHOLDER — your words. */}
             </p>
-          </section>
-        </div>
-
-        {/* Full-bleed: the pinned line runs edge to edge, outside the page
-            frame the prose sits in. */}
-        <ComplexityLine />
+            <ComplexityLine />
+          </div>
+        </section>
       </div>
     </div>
   );

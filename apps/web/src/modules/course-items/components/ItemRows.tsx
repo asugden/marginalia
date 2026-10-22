@@ -1,9 +1,8 @@
-// The dated-item list both dashboards render: kind tag · title · absolute
-// date · relative phrase. Extracted from InstructorDashboardPage when the
-// student dashboard grew its own "Due next" strip, so the two surfaces can't
-// drift apart on what a deadline row looks like. The grid (app-dash__* in
-// app.css) keeps the four columns aligned down the list so dates and
-// deadlines scan vertically.
+// The item list both dashboards render, in the same row markup the Assign
+// and Review pages use (app-list rows: title with its kind badge, then a
+// line with the date and where it stands) — so a dashboard looks like the
+// rest of the app, not its own thing. `ItemRows` is for dated items (Due
+// next, Overdue); `UndatedItemRows` for supplements with no deadline.
 //
 // The relative phrase is `dueLabel` verbatim — a statement of date
 // arithmetic, with no risk or concern framing (the no-false-positives rule
@@ -15,45 +14,84 @@
 // the instructor's (their own state says nothing about the class), which is
 // why it is opt-in rather than automatic.
 
-import { Link } from "react-router-dom";
-import { completionLabel, kindLabel, type CourseItemDTO } from "../api.js";
+import type { ReactNode } from "react";
+import { ItemCard } from "../../../components/index.js";
+import { itemTitle } from "../title.js";
+import { completionLabel, type CourseItemDTO } from "../api.js";
 import { dueLabel, shortDate, type DatedItem } from "../../../course/dueness.js";
+
+function Row({
+  item,
+  href,
+  overdue = false,
+  sub,
+}: {
+  item: CourseItemDTO;
+  href: string | null;
+  overdue?: boolean;
+  sub: ReactNode;
+}) {
+  return (
+    <ItemCard
+      kind={item.kind}
+      seed={item.checkpoint?.id ?? item.payloadRef}
+      title={itemTitle(item)}
+      href={href}
+      sub={sub}
+      className={overdue ? "app-list__row--overdue" : undefined}
+    />
+  );
+}
 
 export function ItemRows({
   rows,
   hrefFor,
   showCompletion = false,
+  viewer = "student",
 }: {
   rows: DatedItem[];
+  /** Staff see past deadlines as dates ("Due 2 days ago"), never as overdue. */
+  viewer?: "student" | "staff";
   /** Where a row's title links, or null for plain text. */
   hrefFor: (item: CourseItemDTO) => string | null;
   showCompletion?: boolean;
 }) {
   return (
-    <ul className="app-dash__list">
+    <div className="app-list">
       {rows.map((d) => {
-        const href = hrefFor(d.item);
         const done = showCompletion ? completionLabel(d.item.completion) : null;
         return (
-          <li
+          <Row
             key={d.item.id}
-            className={
-              "app-dash__row" +
-              (d.bucket === "overdue" ? " app-dash__row--overdue" : "")
+            item={d.item}
+            href={hrefFor(d.item)}
+            overdue={viewer === "student" && d.bucket === "overdue"}
+            sub={
+              <>
+                {shortDate(d.dueAt)} · <span className="app-list__due">{dueLabel(d, viewer)}</span>
+                {done && <> · {done}</>}
+              </>
             }
-          >
-            <span className="app-dash__kind">{kindLabel(d.item.kind)}</span>
-            <span className="app-dash__title">
-              {href ? <Link to={href}>{d.item.title}</Link> : d.item.title}
-            </span>
-            <span className="app-dash__date">{shortDate(d.dueAt)}</span>
-            <span className="app-dash__due">
-              {dueLabel(d)}
-              {done && <span className="app-dash__done"> · {done}</span>}
-            </span>
-          </li>
+          />
         );
       })}
-    </ul>
+    </div>
+  );
+}
+
+/** Items with no deadline — offered all term, never late. */
+export function UndatedItemRows({
+  items,
+  hrefFor,
+}: {
+  items: CourseItemDTO[];
+  hrefFor: (item: CourseItemDTO) => string | null;
+}) {
+  return (
+    <div className="app-list">
+      {items.map((item) => (
+        <Row key={item.id} item={item} href={hrefFor(item)} sub="No deadline" />
+      ))}
+    </div>
   );
 }

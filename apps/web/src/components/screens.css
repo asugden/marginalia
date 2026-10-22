@@ -19,6 +19,7 @@
    only what app.css doesn't (provenance editor, attendance specifics) plus
    transitional shims during the port. */
 @import "./css/app.css";
+@import "./css/cards.css";
 
 @import "./css/screens/student-home.css";
 @import "./css/screens/student-conversation.css";

@@ -19,6 +19,16 @@ export { StudentModuleNav, studentModules } from "./StudentModuleNav.js";
 export { CourseSwitcher } from "./CourseSwitcher.js";
 export { SubmissionHistory } from "./SubmissionHistory.js";
 export type { SubmissionHistoryRow } from "./SubmissionHistory.js";
+export { OriginBar, OriginLegend, SubmissionCards } from "./SubmissionCards.js";
+export { ItemMark } from "./ItemMark.js";
+export { ItemCard } from "./ItemCard.js";
+export type { ItemCardProps } from "./ItemCard.js";
+export type { ItemMarkKind } from "./ItemMark.js";
+export type {
+  OriginTotals,
+  SubmissionCardEntry,
+  SubmissionCardGroup,
+} from "./SubmissionCards.js";
 export { CourseNav } from "./CourseNav.js";
 export { NavSheet } from "./NavSheet.js";
 export type { NavSheetSection, NavSheetRow } from "./NavSheet.js";

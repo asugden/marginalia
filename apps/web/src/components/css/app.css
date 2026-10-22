@@ -369,28 +369,6 @@ html, body { height: 100%; }
 .app-agents__stat { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
 .app-agents__stat i { color: var(--border-strong); font-style: normal; margin: 0 0.3rem; }
 
-.app-agents { display: flex; flex-direction: column; gap: 0.7rem; }
-.app-agent {
-  position: relative; display: flex; align-items: center; gap: 1.05rem; cursor: pointer;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 1.05rem 1.25rem 1.05rem 1.1rem; box-shadow: var(--shadow-xs);
-  overflow: hidden;
-  transition: box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out);
-}
-.app-agent::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); transform: scaleY(0); transition: transform var(--dur-3) var(--ease-out); }
-.app-agent:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
-.app-agent:hover::before { transform: scaleY(1); }
-.app-agent__index { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700; color: var(--text-faint); width: 1.6rem; flex: none; text-align: center; letter-spacing: -0.02em; }
-.app-agent:hover .app-agent__index { color: var(--accent); }
-.app-agent__main { flex: 1; min-width: 0; }
-.app-agent__title { font-weight: 700; font-size: var(--text-lg); color: var(--text-strong); letter-spacing: -0.01em; }
-.app-agent__blurb { color: var(--text-muted); font-size: var(--text-sm); margin: 0.12rem 0 0.5rem; }
-.app-agent__meta { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
-.app-agent__topics { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); white-space: nowrap; }
-.app-agent__topics::before { content: "·"; margin-right: 0.45rem; color: var(--border-strong); }
-.app-agent__action { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; width: 168px; }
-.app-agent__cta { min-width: 118px; justify-content: center; }
-
 /* ---- Writing entry (the panel whose top spacing was broken) ----
    Now a clearly separated zone: generous top gap, a hairline rule, its own
    sunken card with an eyebrow→heading lockup and one primary action. */
@@ -489,59 +467,11 @@ select.app-input {
 /* Dashboard/settings stat tiles moved to the shared <StatTile>/<StatGrid>
    primitive (components/css/StatTile.css). */
 
-/* Instructor dashboard: quick-action launchpad cards — one link per tool. */
-/* ---- Instructor dashboard: the dated item lists ----
-   A row is: kind tag · title · absolute date · relative phrase. The grid keeps
-   the four columns aligned down the list so dates and deadlines scan
-   vertically, which is the whole point of a time-ordered page. */
-.app-dash__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.app-dash__row {
-  display: grid; align-items: baseline;
-  grid-template-columns: 5.5rem 1fr auto auto;
-  gap: 0.35rem 0.9rem;
-  padding: 0.6rem 0.2rem;
-  border-bottom: 1px solid var(--border);
-}
-.app-dash__row:last-child { border-bottom: 0; }
-.app-dash__kind {
-  font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-faint);
-}
-.app-dash__title { min-width: 0; font-size: var(--text-base); color: var(--text-strong); }
-.app-dash__title a { color: inherit; text-decoration: none; }
-.app-dash__title a:hover { color: var(--accent); text-decoration: underline; }
-.app-dash__date {
-  font-family: var(--font-mono); font-size: var(--text-2xs);
-  color: var(--text-muted); white-space: nowrap;
-}
-/* The relative phrase. Overdue takes the accent — the ONE red thing on the
-   page, used as punctuation. It states elapsed days and nothing more: no
-   "at risk", no score, no flag. */
-.app-dash__due {
-  font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap;
-}
-.app-dash__row--overdue .app-dash__due { color: var(--accent); font-weight: 600; }
-/* Supplements are offered, never due — so they read quieter than dated work. */
-.app-dash__list--quiet .app-dash__title { color: var(--text-secondary); }
 .app-dash__empty { color: var(--text-muted); font-size: var(--text-sm); margin: 0; }
-
-/* The dashboard's five "Create …" launch cards were removed with the
-   time-ordered rebuild: they duplicated destinations the banded header already
-   reaches, and four of five were setup-week actions shown all semester. The
-   one create affordance left is the page header's "Assign something". */
-
-/* Generic list rows (agents / voices / collections) */
-.app-list { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
-.app-list__row { display: flex; align-items: center; gap: 1rem; padding: 0.95rem 1.1rem; border-bottom: 1px solid var(--border-faint); cursor: pointer; transition: background var(--dur-2) var(--ease-out); }
-.app-list__row:last-child { border-bottom: 0; }
-.app-list__row:hover { background: var(--surface-hover); }
-.app-list__main { flex: 1; min-width: 0; }
-.app-list__title { font-weight: 600; color: var(--text-strong); font-size: var(--text-base); }
-.app-list__sub { color: var(--text-muted); font-size: var(--text-sm); margin-top: 0.1rem; }
-.app-list__meta { display: flex; align-items: center; gap: 0.5rem; flex: none; }
-.app-list__count { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; flex: none; }
-.app-coll-ic { width: 38px; height: 38px; flex: none; border-radius: var(--radius-sm); background: var(--accent-wash); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; }
-.app-coll-ic svg { width: 20px; height: 20px; }
+/* Student dashboard, "By type": a label over each kind's cards. */
+.app-dash__group + .app-dash__group { margin-top: 1.25rem; }
+.app-dash__group > .mono-label { display: block; margin-bottom: 0.5rem; }
+.app-dash__more { margin-top: 0.75rem; display: flex; justify-content: center; }
 
 /* Outline (topic) editor */
 .topic { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); margin-bottom: 0.7rem; overflow: hidden; }
@@ -556,31 +486,12 @@ select.app-input {
 .topic--open .topic__chev { transform: rotate(180deg); }
 .topic__body { padding: 0.9rem 0.85rem 0.95rem 3.1rem; display: flex; flex-direction: column; gap: 0.9rem; border-top: 1px solid var(--border-faint); }
 
-/* Sources table */
-.src-list { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
-.src-row { display: flex; align-items: center; gap: 0.85rem; padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-faint); }
-.src-row:last-child { border-bottom: 0; }
-.src-row:hover { background: var(--surface-hover); }
-.src-row__name { flex: 1; min-width: 0; color: var(--text-strong); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.src-row__chunks { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
-
 /* Kind chips + status badges (sources) */
 .kind-chip { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; padding: 0.12rem 0.45rem; border-radius: var(--radius-xs); flex: none; }
 .kind-chip--pdf { background: var(--accent-wash); color: var(--accent-ink); }
 .kind-chip--markdown { background: var(--blue-tint); color: var(--blue-ink); }
 .kind-chip--text { background: var(--green-tint); color: var(--green-ink); }
 .kind-chip--url { background: var(--amber-tint); color: var(--amber-ink); }
-
-/* Roster table */
-.roster { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
-.roster__row { display: grid; grid-template-columns: 1fr auto auto; gap: 1rem; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-faint); }
-.roster__row:last-child { border-bottom: 0; }
-.roster__row:hover { background: var(--surface-hover); }
-.roster__person { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
-.roster__name { font-weight: 600; color: var(--text-strong); font-size: var(--text-sm); }
-.roster__email { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted); }
-.roster__progress { font-size: var(--text-sm); color: var(--text-secondary); }
-.roster__active { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
 
 /* Join code panel */
 /* flex-end so the Generate-code button bottom-aligns with the input row; the
@@ -603,6 +514,11 @@ select.app-input {
 .app-module__main { flex: 1; min-width: 0; }
 .app-module__main b { display: block; font-size: var(--text-base); font-weight: 600; color: var(--text-strong); }
 .app-module__main span { display: block; margin-top: 0.1rem; font-size: var(--text-sm); color: var(--text-muted); }
+/* A dependent row under a module toggle (e.g. Writing's chat controls):
+   indented so it reads as belonging to the module above it, and not a label
+   (its control is a select, not the row-wide switch). */
+.app-module--sub { margin-left: 1.5rem; cursor: default; }
+.app-module__control { display: block; margin-top: 0.5rem; max-width: 26rem; }
 /* Pill switch */
 .app-switch { appearance: none; -webkit-appearance: none; cursor: pointer; flex: none; width: 40px; height: 23px; border-radius: var(--radius-pill); background: var(--sand-300); position: relative; transition: background var(--dur-2) var(--ease-out); }
 .app-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-xs); transition: transform var(--dur-3) var(--ease-spring); }
@@ -650,31 +566,6 @@ select.app-input {
 .app-page--wide { max-width: var(--shell-max); }
 .app-empty { padding: 1.6rem 1.25rem; color: var(--text-muted); font-size: var(--text-sm); text-align: center; }
 
-.app-dlist { display: flex; flex-direction: column; gap: 0.9rem; }
-.app-dcourse { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); overflow: hidden; transition: box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
-.app-dcourse:hover { box-shadow: var(--shadow-sm); }
-.app-dcourse--open { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
-.app-dcourse__head { display: flex; align-items: center; gap: 0.9rem; padding: 1.05rem 1.25rem; }
-.app-dcourse__disc { appearance: none; cursor: pointer; flex: none; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm); width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); transition: var(--transition-color); }
-.app-dcourse__disc:hover { color: var(--text-strong); border-color: var(--border-strong); }
-.app-dcourse__disc svg { width: 16px; height: 16px; transition: transform var(--dur-2) var(--ease-out); }
-.app-dcourse--open .app-dcourse__disc { background: var(--accent-wash); border-color: var(--accent-wash-2); color: var(--accent-ink); }
-.app-dcourse--open .app-dcourse__disc svg { transform: rotate(180deg); }
-.app-dcourse__id { flex: 1; min-width: 0; cursor: pointer; }
-.app-dcourse__title { font-weight: 700; font-size: var(--text-lg); color: var(--text-strong); letter-spacing: -0.01em; display: flex; align-items: center;}
-.app-dcourse__id:hover .app-dcourse__title { color: var(--accent-ink); }
-.app-dcourse__stats { display: flex; align-items: center; flex-wrap: wrap; gap: 0.1rem; margin-top: 0.2rem; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
-.app-dcourse__stats i { color: var(--border-strong); font-style: normal; margin: 0 0.45rem; }
-.app-dcourse__mods { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; }
-/* Module indicator icons after a course title (Library / Attendance). */
-.app-dcourse__icons { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: 0.55rem; vertical-align: middle; margin-bottom: 2px; }
-.app-dcourse__icon { display: inline-flex; color: var(--text-faint); }
-.app-dcourse__icon svg { width: 22px; height: 22px; }
-.app-dcourse__mod { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-ink); background: var(--accent-wash); border: 1px solid var(--accent-wash-2); padding: 0.12rem 0.5rem; border-radius: var(--radius-pill); }
-.app-dcourse__mod--none { color: var(--text-faint); background: var(--surface-sunken); border-color: var(--border); }
-.app-dcourse__actions { flex: none; display: flex; align-items: center; gap: 0.5rem; }
-.app-dcourse__admin { padding: 0.4rem 1.25rem 1.4rem 1.25rem; border-top: 1px solid var(--border-faint); background: var(--surface-sunken); }
-
 /* ============================ Student: course groups ==================== */
 .app-coursegroup { margin-bottom: 2.5rem; }
 .app-coursegroup:last-of-type { margin-bottom: 0; }
@@ -690,11 +581,6 @@ select.app-input {
 .app-cgroup { margin-bottom: 1.5rem; }
 .app-cgroup:last-child { margin-bottom: 0; }
 .app-cgroup__head { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 0 0 0.7rem; }
-/* Term chip + date range inline in a course card's stats row. */
-.app-dcourse__term { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-ink); }
-.app-dcourse__dates { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: 0.02em; color: var(--text-muted); text-transform: none; }
-/* "Current" badge next to a running course's name. */
-.app-dcourse__badge { margin-left: 0.6rem; vertical-align: middle; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--accent-ink); background: var(--accent-wash); border: 1px solid var(--accent-wash-2); border-radius: var(--radius-pill); padding: 0.1rem 0.5rem; }
 /* Instructor term + date editor: a wrapping row of fields, then an actions row. */
 .app-termedit { display: flex; align-items: flex-end; gap: 0.7rem; flex-wrap: wrap; margin-top: 1.25rem; }
 .app-termedit__year { width: 6.5rem; }
@@ -712,6 +598,40 @@ select.app-input {
 
 .app-picker { list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.9rem; align-items: stretch; }
 .app-picker li { display: flex; }
+/* The personal "not interested in generative AI" switch, at the foot of the
+   courses page: set apart from the course list, quiet, never a card. */
+.app-genai-optout { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-faint); max-width: 44rem; }
+.app-genai-optout p { margin: 0.4rem 0 0; }
+
+/* /welcome — first-run setup. One narrow column; the stance and feature
+   choices reuse the radio-card grid. */
+.app-welcome { max-width: 46rem; }
+.app-welcome__count { margin: 0 0 0.5rem; color: var(--text-muted); }
+.app-welcome__lead { font-size: var(--text-md, 1.05rem); line-height: 1.6; margin: 0 0 1rem; }
+.app-welcome__list { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.6rem; line-height: 1.5; }
+.app-welcome__list--plain { list-style: none; padding-left: 0; gap: 0.3rem; }
+.app-welcome__secondary { margin-top: 1.25rem; display: grid; gap: 0.75rem; }
+.app-welcome__fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; align-items: end; }
+@media (max-width: 680px) { .app-welcome__fields { grid-template-columns: 1fr; } }
+.app-welcome__nav { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-top: 2rem; }
+
+/* The guided tour panel — pinned bottom-right on every course surface, above
+   page content, clear of the phone's safe area. Says which side you're on. */
+.app-tour { position: fixed; right: max(1rem, env(safe-area-inset-right, 0px)); bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 60; width: min(22rem, calc(100vw - 2rem)); display: grid; gap: 0.5rem; padding: 1rem 1.1rem 0.8rem; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+.app-tour--collapsed { width: auto; padding: 0.5rem 0.9rem; font: 600 var(--text-xs) / 1.4 var(--font-mono); color: var(--accent-ink); cursor: pointer; }
+.app-tour__head { display: flex; align-items: center; gap: 0.5rem; }
+.app-tour__count { font: 600 var(--text-xs) / 1.4 var(--font-mono); color: var(--text-muted); }
+.app-tour__side { font-size: var(--text-xs); padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+.app-tour__side--student { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.app-tour__icon { margin-left: auto; background: none; border: 0; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 0.25rem; }
+.app-tour__title { font-size: var(--text-md); }
+.app-tour__body { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--text); }
+.app-tour__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
+.app-tour__btn { font: inherit; font-size: var(--text-sm); padding: 0.35rem 0.7rem; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); color: var(--text-strong); cursor: pointer; }
+.app-tour__btn--quiet { border-color: transparent; background: none; color: var(--text-muted); }
+.app-tour__btn--primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.app-tour__btn:disabled { opacity: 0.6; cursor: default; }
+.app-tour__end { justify-self: start; background: none; border: 0; padding: 0; font-size: var(--text-xs); color: var(--text-muted); text-decoration: underline; cursor: pointer; }
 .app-picker__card { position: relative; display: flex; flex-direction: column; gap: 0.35rem; width: 100%; height: 100%; text-align: left; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.3rem 1.4rem; box-shadow: var(--shadow-xs); overflow: hidden; transition: box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
 .app-picker__card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); transform: scaleY(0); transition: transform var(--dur-3) var(--ease-out); }
 .app-picker__card:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
@@ -737,20 +657,6 @@ select.app-input {
 
 .app-papers { margin-top: 1.5rem; }
 .app-papers__bar { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0.2rem 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.6rem; }
-.app-papers__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.app-papers__list li { list-style: none; }
-.app-papers__list a { display: flex; align-items: center; gap: 0.85rem; padding: 0.75rem 0.9rem; text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); transition: box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
-.app-papers__list a:hover { border-color: var(--border-strong); box-shadow: var(--shadow-hover); }
-.app-papers__go { flex: none; display: inline-flex; align-items: center; color: var(--text-faint); transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
-.app-papers__go svg { width: 18px; height: 18px; }
-.app-papers__list a:hover .app-papers__go { color: var(--accent); transform: translateX(2px); }
-.app-papers__list a:hover .app-papers__title { color: var(--accent-ink); }
-.app-papers__ic { flex: none; width: 34px; height: 34px; border-radius: var(--radius-sm); background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; }
-.app-papers__ic svg { width: 18px; height: 18px; }
-.app-papers__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-.app-papers__title { font-weight: 600; color: var(--text-strong); font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.app-papers__meta { display: flex; align-items: center; flex-wrap: wrap; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
-.app-papers__meta i { font-style: normal; color: var(--border-strong); margin: 0 0.4rem; }
 
 /* ============================== Responsive ============================== */
 /* Mid widths (laptops / a window shrunk part way): the instructor nav drops to
@@ -784,23 +690,10 @@ select.app-input {
   .app-head h1 { font-size: 1.95rem; }
   .app-head__sub { font-size: var(--text-md); }
 
-  .app-agent { flex-wrap: wrap; gap: 0.5rem 0.9rem; padding: 1rem; }
-  .app-agent__index { display: none; }
-  .app-agent__main { flex: 1 1 60%; }
-  .app-agent__action { order: 3; flex-basis: 100%; width: auto; gap: 0.6rem; margin-top: 0.2rem; }
-  .app-agent__cta { flex: 1; min-width: 0; }
-
   .app-writing__card { grid-template-columns: 1fr; }
   .app-writing__new { flex-direction: column; align-items: stretch; width: 100%; }
   .app-writing__new .ds-btn { width: 100%; justify-content: center; }
   .app-writing__pick .app-input { min-width: 0; }
-
-  /* Dashboard course cards: actions drop below the title block. */
-  .app-dcourse__head { flex-wrap: wrap; }
-  .app-dcourse__id { flex-basis: calc(100% - 2.6rem); }
-  .app-dcourse__actions { flex-basis: 100%; margin-left: 2.6rem; }
-  .app-dcourse__actions .ds-btn { flex: 1; justify-content: center; }
-  .app-dcourse__admin .app-row > * { flex-basis: 100%; min-width: 0; }
 
   .app-chat { grid-template-columns: 1fr; }
   .app-chat--collapsed { grid-template-columns: 1fr; }
@@ -813,20 +706,7 @@ select.app-input {
   .app-page { padding: 1.5rem 1rem 3rem; }
   .app-page__actions { width: 100%; }
   .app-page__actions > * { flex: 1; }
-  .roster__row { grid-template-columns: 1fr auto; }
-  .roster__active { display: none; }
 
-  /* Instructor list rows (Agents, etc.): let the text take the full width and
-     drop the meta tags to their own line instead of squeezing the title. */
-  .app-list__row { flex-wrap: wrap; }
-  .app-list__main { flex: 1 1 auto; }
-  .app-list__meta { order: 3; flex-basis: 100%; flex-wrap: wrap; justify-content: flex-start; gap: 0.4rem; margin-top: 0.2rem; }
-  .app-list__meta > svg { display: none; }   /* drop the decorative chevron */
-
-  /* Source rows: name on its own line, tags/status below — never squeezed. */
-  .src-row { flex-wrap: wrap; row-gap: 0.45rem; }
-  .src-row__name { order: -1; flex-basis: 100%; white-space: normal; }
-  .src-row__chunks { display: none; }
 
   /* Attendance table: drop the present count column when narrow. */
   .att-table__head, .att-table__row { grid-template-columns: 4.5rem 1fr 5rem auto; }
@@ -873,11 +753,6 @@ select.app-input {
   .app-subtabs::-webkit-scrollbar { display: none; }
   .app-subtab { white-space: nowrap; }
 
-  /* Dashboard rows: the kind tag leads, title takes the rest, and the two date
-     columns drop to a second line rather than crushing the title. */
-  .app-dash__row { grid-template-columns: 5.5rem 1fr; }
-  .app-dash__date { grid-column: 1; }
-  .app-dash__due { grid-column: 2; justify-self: start; }
 
   /* Join code wraps; code on its own line above the actions. */
   .joincode { flex-wrap: wrap; }
@@ -900,8 +775,6 @@ select.app-input {
 @media (max-width: 380px) {
   .app-lockup__word { font-size: 1.05rem; }
   .app-conv__head { padding: 0.55rem 0.7rem; }
-  .roster__row { grid-template-columns: 1fr; gap: 0.35rem; }
-  .roster__progress { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); text-transform: uppercase; }
 }
 
 /* Account-tweak helper note inside the Tweaks panel. */

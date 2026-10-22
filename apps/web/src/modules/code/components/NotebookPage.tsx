@@ -25,7 +25,9 @@
 // sends uploaded files anywhere.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { hasCapability } from "../../../client.js";
+import { TourPanel } from "../../onboarding/components/TourPanel.js";
 import type { EditorView } from "@codemirror/view";
 import {
   Button,
@@ -92,6 +94,10 @@ interface Loaded {
   title: string;
   content: NotebookContent;
   aiEnabled: boolean;
+  /** Voice policy: true = the chat header shows a library-voice picker. */
+  aiVoiceChoice: boolean;
+  /** The library voice the picker preselects; null when there is no picker. */
+  aiVoiceDefault: string | null;
   assignment: {
     title: string;
     instructions: string;
@@ -145,8 +151,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
   }>();
   const courseParam = params.courseId ?? null;
   const { active, actingAsStudent } = useActiveCourse(courseParam);
-  const [searchParams] = useSearchParams();
-  const previewing = actingAsStudent || searchParams.get("preview") === "1";
+  // A preview runs as the course's sample student; see useActiveCourse.
+  const previewing = actingAsStudent;
   const home = `/course/${courseParam}`;
   const backHref =
     mode === "starter"
@@ -231,6 +237,13 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
             content: a.starter ?? { cells: [] },
             // The instructor can try the AI chat here when students will have it.
             aiEnabled: a.aiEnabled,
+            aiVoiceChoice: a.aiEnabled && a.voiceChoice,
+            aiVoiceDefault:
+              a.aiEnabled && a.voiceChoice
+                ? a.voice?.kind === "library"
+                  ? a.voice.id
+                  : "socratic"
+                : null,
             assignment: { title: a.title, instructions: a.instructions, dueAt: a.dueAt, mode: a.mode },
             isAssignment: false,
             tracking: false,
@@ -245,6 +258,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
             title: sub.assignmentTitle ?? sub.title,
             content: sub.content,
             aiEnabled: false,
+            aiVoiceChoice: false,
+            aiVoiceDefault: null,
             assignment: null,
             isAssignment: false,
             tracking: false,
@@ -260,6 +275,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
             title: nb.title,
             content: nb.content,
             aiEnabled: nb.aiEnabled,
+            aiVoiceChoice: nb.aiVoiceChoice ?? false,
+            aiVoiceDefault: nb.aiVoiceDefault ?? null,
             assignment: nb.assignment,
             isAssignment: nb.assignmentId !== null,
             tracking: nb.tracking,
@@ -652,7 +669,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
   }, [cells, focusCellId]);
 
   // ── render ────────────────────────────────────────────────────────────
-  const notInstructor = sandbox && active !== null && active.role !== "instructor";
+  const notInstructor =
+    sandbox && active !== null && !hasCapability(active, "view_submissions");
   if (loadError || !loaded || notInstructor) {
     return (
       <div className="ds-staff">
@@ -693,6 +711,7 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
         </header>
       )}
       {previewing && courseParam && <PreviewBanner courseId={courseParam} courseName={active?.courseName ?? ""} />}
+      {courseParam && <TourPanel courseId={courseParam} />}
 
       <header className="prov-shell-header code-header">
         <Link to={backHref} aria-label={sandbox ? "Back to the submission" : "Back to Code"}>
@@ -739,7 +758,10 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
             Run all
           </Button>
           <Button variant="ghost" size="sm" onClick={() => void restart()}>
-            {busy ? "Stop" : "Restart"}
+            {/* The kernel has no interrupt — the only way to stop a runaway
+                cell is a full restart, which clears every variable. Say so
+                rather than promising a narrower "Stop". */}
+            {busy ? "Stop & restart" : "Restart"}
           </Button>
           <Button variant="ghost" size="sm" onClick={clearOutputs}>
             Clear outputs
@@ -891,6 +913,8 @@ export function NotebookPage({ mode = "student" }: { mode?: PageMode }) {
                   onClearFocus={() => setFocusCellId(null)}
                   beforeSend={flush}
                   onReply={onChatReply}
+                  voiceChoice={loaded.aiVoiceChoice}
+                  voiceDefault={loaded.aiVoiceDefault}
                 />
               )}
               {side === "files" && (

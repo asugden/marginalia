@@ -207,7 +207,7 @@ export function TrainingPage() {
         <div className="mnist-page">
           <div className="mnist-head">
             <p className="eyebrow">Interactive example</p>
-            <h1>Training</h1>
+            <h1>Neural Network Training</h1>
             <p className="mnist-lede">
               Every other example here ships a model that already works. This
               one ships <i>nothing but data</i> and a random number generator,

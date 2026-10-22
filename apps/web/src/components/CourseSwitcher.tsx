@@ -38,6 +38,8 @@ export interface CourseSwitcherProps {
    *  omitted — the student variant, and any host that doesn't have them — the
    *  section is left out entirely. */
   flags?: TabVisibilityFlags;
+  /** Offer "New Course…" — only to people allowed to create courses. */
+  canCreateCourses?: boolean;
 }
 
 export function CourseSwitcher({
@@ -46,6 +48,7 @@ export function CourseSwitcher({
   enrollments,
   variant,
   flags,
+  canCreateCourses = false,
 }: CourseSwitcherProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -186,7 +189,7 @@ export function CourseSwitcher({
               ))}
             </>
           )}
-          {variant === "instructor" && (
+          {variant === "instructor" && canCreateCourses && (
             <>
               <div className="app-course__sep" />
               <button

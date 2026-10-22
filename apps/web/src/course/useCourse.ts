@@ -18,6 +18,8 @@ export interface CourseContextValue {
   courseId: string;
   courseName: string;
   role: MeEnrollment["role"];
+  /** What the caller's role may do in this course (from /api/me). */
+  capabilities: MeEnrollment["capabilities"];
   showAttendance: boolean;
   showCollections: boolean;
   /** v1.2 — the semester + active window this course is scheduled in, or null
@@ -36,6 +38,10 @@ export interface CourseContextValue {
   /** v1.1 — whether the provenance writing module is on for this course. When
    *  false, the student view drops the Writing module (nav + home panel). */
   provenanceEnabled: boolean;
+  /** migration 0026 — whether the writing editor offers the LLM chat pane.
+   *  Default ON. Read by the writing surfaces to hide chat affordances when
+   *  the instructor has turned the chat off. */
+  provenanceChatEnabled: boolean;
   /** migration 0018 — whether the Agents extension is on for this course. When
    *  false, the Agents tab drops from the instructor nav/dashboard and agents
    *  drop from the student view (nav + home panel). Default ON. */
@@ -46,6 +52,17 @@ export interface CourseContextValue {
   /** Instance-wide admin flag (from /api/me). Orthogonal to course role —
    *  feeds the topbar RoleSwitch so it can offer the Admin segment. */
   isAdmin: boolean;
+  /** May create courses (admin, or allowed by an admin). */
+  canCreateCourses: boolean;
+  /** This person opted out of generative AI (personal; hides AI controls
+   *  from their screens). Not the course lock — see genaiLocked. */
+  genaiOptOut: boolean;
+  /** Every instructor on the course opted out: AI features are locked off. */
+  genaiLocked: boolean;
+  /** Live code assignments with the AI chat on. */
+  codeChatAssignments: number;
+  /** Live writing assignments with the AI chat on (0033). */
+  writingChatAssignments: number;
   /** Session-scoped: an instructor is previewing this course as a student.
    *  While true, `role` above is already reported as `student` (so marks etc.
    *  match a real student), so the RoleSwitch reads this flag to keep offering

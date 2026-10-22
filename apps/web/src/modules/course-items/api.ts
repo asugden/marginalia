@@ -1,7 +1,7 @@
 // Typed fetch wrappers for /api/course-items/*.
 // Mirrors apps/worker/src/modules/course-items/handlers.ts.
 
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+const API_BASE = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const fetchInit: RequestInit = API_BASE ? { credentials: "include" } : {};
 
@@ -19,7 +19,9 @@ export type ItemKind = "writing" | "agent" | "example" | "reading" | "code";
  * become the field every call site reads and the distinction would be lost.
  */
 export type ItemCompletionDTO =
-  | { kind: "writing"; submitted: boolean }
+  /** `checkpoints`: the checkpoint ids submitted to (absent from older
+   *  servers, which only report the assignment as a whole). */
+  | { kind: "writing"; submitted: boolean; checkpoints?: string[] }
   | { kind: "agent"; finished: boolean }
   | { kind: "example"; markedDone: boolean }
   | { kind: "reading"; markedDone: boolean }
@@ -63,6 +65,9 @@ export interface CourseItemDTO {
   payload: Record<string, unknown> | null;
   /** Present on the list endpoint; always the CALLER'S OWN state. */
   completion?: ItemCompletionDTO;
+  /** Client-side only: set when a writing assignment has been split into one
+   *  item per checkpoint (course/dueness.ts `expandCheckpoints`). */
+  checkpoint?: { id: string; name: string };
 }
 
 export class ApiError extends Error {
@@ -146,6 +151,37 @@ export async function updateCourseItem(
   if (!res.ok) throw await apiError(res);
   const body = (await res.json()) as { item: CourseItemDTO };
   return body.item;
+}
+
+/**
+ * Publish or unpublish the writing or coding assignment behind a row.
+ *
+ * Only these two kinds have a real draft/published state students can see,
+ * and it lives on the assignment, not on this wrapper — the wrapper's own
+ * archive flag only drops a row from the student's "Due next" strip. So this
+ * goes to the owning module's endpoint, which mirrors the state back onto the
+ * wrapper. Named by URL rather than imported, since modules don't import one
+ * another; the payload endpoints are part of each module's public route list.
+ */
+export async function setAssignmentPublished(
+  courseId: string,
+  item: CourseItemDTO,
+  published: boolean,
+): Promise<void> {
+  const path =
+    item.kind === "writing"
+      ? `/api/provenance/assignments/${encodeURIComponent(item.payloadRef)}`
+      : item.kind === "code"
+        ? `/api/code/assignments/${encodeURIComponent(item.payloadRef)}`
+        : null;
+  if (!path) throw new Error("Only writing and code assignments can be published");
+  const res = await fetch(apiUrl(path), {
+    ...fetchInit,
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ courseId, archived: !published }),
+  });
+  if (!res.ok) throw await apiError(res);
 }
 
 /** Unassign. Removes the schedule row only — the payload and every piece of
@@ -237,13 +273,15 @@ export function instructorHref(
   const base = `/course/${courseId}/instructor`;
   switch (item.kind) {
     case "writing":
-      return `${base}/assignments/${item.payloadRef}`;
+      return item.checkpoint
+        ? `${base}/submissions/writing/${item.payloadRef}/${item.checkpoint.id}`
+        : `${base}/submissions/writing/${item.payloadRef}`;
     case "agent":
       return `${base}/agents/${item.payloadRef}`;
     case "example":
       return `${base}/assign/examples`;
     case "code":
-      return `${base}/code/${item.payloadRef}`;
+      return `${base}/submissions/code/${item.payloadRef}`;
     default:
       return null;
   }
@@ -254,10 +292,9 @@ export function instructorHref(
  * `instructorHref`, kept beside it for the same reason: the dashboard's
  * "Due next" strip and any future student list must agree on destinations.
  *
- * Writing and agent items land on their module's list page rather than a
- * per-item surface: a writing assignment is submitted from whichever document
- * the student chooses in the editor, and an agent may already have a
- * conversation in progress that only the agents list knows how to resume.
+ * A writing item opens the student's document for that assignment (created
+ * on first open). An agent item lands on the agents list: it may already
+ * have a conversation in progress that only the list knows how to resume.
  */
 export function studentHref(
   courseId: string,
@@ -266,7 +303,7 @@ export function studentHref(
   const base = `/course/${courseId}`;
   switch (item.kind) {
     case "writing":
-      return `${base}/writing`;
+      return `${base}/writing/assignment/${item.payloadRef}`;
     case "agent":
       return `${base}/agents`;
     case "example":

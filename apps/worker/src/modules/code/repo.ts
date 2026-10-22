@@ -79,6 +79,8 @@ export interface AssignmentInput {
   aiEnabled: boolean;
   aiPrompt: string | null;
   voiceJson: string | null;
+  /** True = each student picks their own library voice (migration 0027). */
+  voiceChoice: boolean;
   dueAt: number | null;
   mode: AssignmentMode;
 }
@@ -87,6 +89,7 @@ export async function createAssignment(
   db: D1Database,
   courseId: string,
   input: AssignmentInput,
+  opts: { draft?: boolean } = {},
 ): Promise<CodeAssignmentRow> {
   const id = newAssignmentId();
   const ts = now();
@@ -94,8 +97,8 @@ export async function createAssignment(
     .prepare(
       `INSERT INTO code_assignments
          (id, course_id, title, instructions, starter_json, ai_enabled, ai_prompt,
-          voice_json, due_at, mode, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          voice_json, voice_choice, due_at, mode, created_at, updated_at, archived_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -106,10 +109,14 @@ export async function createAssignment(
       input.aiEnabled ? 1 : 0,
       input.aiPrompt,
       input.voiceJson,
+      input.voiceChoice ? 1 : 0,
       input.dueAt,
       input.mode,
       ts,
       ts,
+      // A draft is stored hidden from students — the same column that
+      // unpublishing sets — so it can be finished before anyone sees it.
+      opts.draft ? ts : null,
     )
     .run();
   return (await getAssignment(db, courseId, id))!;
@@ -133,6 +140,7 @@ export async function updateAssignment(
   if (patch.aiEnabled !== undefined) add("ai_enabled", patch.aiEnabled ? 1 : 0);
   if (patch.aiPrompt !== undefined) add("ai_prompt", patch.aiPrompt);
   if (patch.voiceJson !== undefined) add("voice_json", patch.voiceJson);
+  if (patch.voiceChoice !== undefined) add("voice_choice", patch.voiceChoice ? 1 : 0);
   if (patch.dueAt !== undefined) add("due_at", patch.dueAt);
   if (patch.mode !== undefined) add("mode", patch.mode);
   if (patch.archived !== undefined) add("archived_at", patch.archived ? now() : null);
@@ -455,6 +463,11 @@ export interface RosterRow {
   submission_id: string | null;
   submitted_at: number | null;
   submission_count: number;
+  /** 0030 — the course's sample student (a preview identity). */
+  is_sample: number;
+  submission_title: string | null;
+  /** The latest submission's origin render; null when not recorded. */
+  render_json: string | null;
 }
 
 /** Every enrolled student, with their latest submission to one assignment.
@@ -467,8 +480,9 @@ export async function listRoster(
 ): Promise<RosterRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT e.user_id, u.email, u.display_name,
+      `SELECT e.user_id, u.email, u.display_name, u.is_sample,
               s.id AS submission_id, s.created_at AS submitted_at,
+              s.title AS submission_title, s.render_json AS render_json,
               (SELECT COUNT(*) FROM code_submissions c
                 WHERE c.course_id = e.course_id AND c.assignment_id = ?
                   AND c.owner_user_id = e.user_id) AS submission_count
@@ -566,4 +580,97 @@ export async function listEvents(
     .bind(notebookId, courseId)
     .all<CodeEventRow>();
   return results ?? [];
+}
+
+/** Per-assignment submission counts, for the instructor's assignment list.
+ *  Same rules as writing: real students only; "on time" means at least one
+ *  submission landed by the deadline. */
+export async function listAssignmentStats(
+  db: D1Database,
+  courseId: string,
+): Promise<Array<{ assignment_id: string; submitted: number; on_time: number }>> {
+  const { results } = await db
+    .prepare(
+      `SELECT a.id AS assignment_id,
+              COUNT(DISTINCT s.owner_user_id) AS submitted,
+              COUNT(DISTINCT CASE WHEN a.due_at IS NULL OR s.created_at <= a.due_at
+                                  THEN s.owner_user_id END) AS on_time
+         FROM code_assignments a
+         JOIN code_submissions s ON s.assignment_id = a.id AND s.course_id = a.course_id
+         JOIN enrollments e
+              ON e.user_id = s.owner_user_id AND e.course_id = a.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.owner_user_id AND COALESCE(u.is_sample, 0) = 0
+        WHERE a.course_id = ?
+        GROUP BY a.id`,
+    )
+    .bind(courseId)
+    .all<{ assignment_id: string; submitted: number; on_time: number }>();
+  return results ?? [];
+}
+
+export type LatestSubmissionRow = Pick<
+  CodeSubmissionRow,
+  "id" | "assignment_id" | "owner_user_id" | "created_at"
+> & { email: string; display_name: string | null; is_sample: number };
+
+/** The latest submission per student per assignment, for the whole course —
+ *  real and sample students alike, as the roster lists them. */
+export async function listLatestSubmissions(
+  db: D1Database,
+  courseId: string,
+): Promise<LatestSubmissionRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.id, s.assignment_id, s.owner_user_id, s.created_at,
+              u.email, u.display_name, u.is_sample
+         FROM code_submissions s
+         JOIN enrollments e
+              ON e.user_id = s.owner_user_id AND e.course_id = s.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.owner_user_id
+        WHERE s.course_id = ?
+          AND NOT EXISTS (
+                SELECT 1 FROM code_submissions s2
+                 WHERE s2.owner_user_id = s.owner_user_id
+                   AND s2.course_id = s.course_id
+                   AND s2.assignment_id = s.assignment_id
+                   AND (s2.created_at > s.created_at
+                        OR (s2.created_at = s.created_at AND s2.id > s.id))
+              )`,
+    )
+    .bind(courseId)
+    .all<LatestSubmissionRow>();
+  return results ?? [];
+}
+
+/** Per assignment: real students whose latest submission no staff member has
+ *  opened (0034). An assignment is fully read when this is zero. */
+export async function listUnreadCounts(
+  db: D1Database,
+  courseId: string,
+): Promise<Map<string, number>> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.assignment_id, COUNT(*) AS unread
+         FROM code_submissions s
+         JOIN enrollments e
+              ON e.user_id = s.owner_user_id AND e.course_id = s.course_id AND e.role = 'student'
+         JOIN users u ON u.id = s.owner_user_id AND COALESCE(u.is_sample, 0) = 0
+        WHERE s.course_id = ?
+          AND NOT EXISTS (
+                SELECT 1 FROM code_submissions s2
+                 WHERE s2.owner_user_id = s.owner_user_id
+                   AND s2.course_id = s.course_id
+                   AND s2.assignment_id = s.assignment_id
+                   AND (s2.created_at > s.created_at
+                        OR (s2.created_at = s.created_at AND s2.id > s.id))
+              )
+          AND NOT EXISTS (
+                SELECT 1 FROM submission_reads r
+                 WHERE r.kind = 'code' AND r.submission_id = s.id
+              )
+        GROUP BY s.assignment_id`,
+    )
+    .bind(courseId)
+    .all<{ assignment_id: string; unread: number }>();
+  return new Map((results ?? []).map((r) => [r.assignment_id, r.unread]));
 }

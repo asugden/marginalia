@@ -40,14 +40,16 @@ export function Neuron({
   size = 25,
   fill,
   className = "af-node",
+  rx = size * 0.36,
 }: {
   cx: number;
   cy: number;
   size?: number;
   fill: string;
   className?: string;
+  /** Corner radius; defaults to the neuron's heavy rounding. */
+  rx?: number;
 }) {
-  const rx = size * 0.36;
   return (
     <rect
       className={className}

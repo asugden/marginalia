@@ -5,7 +5,9 @@
 // Styles live in ../css/Card.css (imported via components.css); we do NOT
 // inject a <style> tag at runtime. Class prefix is `ds-`.
 
-import type { HTMLAttributes, ReactNode } from "react";
+import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { isDocumentHref } from "./Button.js";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   /** Inner padding. Default "md". */
@@ -53,8 +55,23 @@ export function Card({
     .join(" ");
 
   if (href) {
+    // Same rule as Button/IconButton: in-app paths go through the router so
+    // the SPA isn't reloaded; server paths (/api, /auth), other origins, and
+    // target/download anchors stay real document navigations.
+    const anchorProps = rest as AnchorHTMLAttributes<HTMLAnchorElement>;
+    const documentNav =
+      isDocumentHref(href) ||
+      anchorProps.target !== undefined ||
+      anchorProps.download !== undefined;
+    if (!documentNav) {
+      return (
+        <Link className={cls} to={href} {...anchorProps}>
+          {children}
+        </Link>
+      );
+    }
     return (
-      <a className={cls} href={href} {...rest}>
+      <a className={cls} href={href} {...anchorProps}>
         {children}
       </a>
     );

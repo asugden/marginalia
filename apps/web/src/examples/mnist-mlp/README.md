@@ -63,6 +63,38 @@ tooltip with that connection's **weight**, the source's **activation**,
 and their product (**contribution = weight × activation**) — the same
 quantity the trace ranks edges by.
 
+## Optional code view
+
+A **Code** switch at the upper right of the page heading (off by default)
+makes the network's parts the controls for their code; nothing else on
+the page moves. Pointing at a part
+(the grid, a band of weights, a row of neurons, the output) pops up the
+code that builds it, beside the part rather than over it, on the sunken
+"pop-up over a figure" card (docs/style.md §14). It stays up while the
+pointer is on the part or the popover; clicking or tapping pins it. While
+it is open that part sits on a sand band and the rest of the network dims.
+The figure's own hover explanations (output tracing, edge tooltips) are off
+in code view; drawing still works. Each part of the network has exactly
+one box. Boxes that build no single part (the training data, training,
+predicting) have quiet text buttons under the figure. There is deliberately
+no box with the whole program: finding and assembling the pieces is the
+point. A dropdown next to the switch picks one of two versions:
+
+- **TensorFlow · matmul** — weights created by hand as `tf.Variable`
+  tables and multiplied with `tf.matmul`. The weight-table boxes open from
+  the *lines* between rows; each bias + ReLU box from the *neurons*.
+- **Keras · Dense layers** — one `model.add(layers.Dense(...))` box per
+  layer. A layer's lines and neurons act as one part, since a `Dense`
+  layer owns its weights.
+
+Only one box is ever open, so the program is never on screen whole, and
+the reader reaches each piece by pointing at the part they want explained.
+
+All of the code and explanations live in **`code.ts`**, which is content
+only and is meant to be edited by hand (its header lists the fields and
+region names). The switch, popover, and persistence are shared across
+examples in `../shared/code-panel/`.
+
 ## Architecture
 
 - `net.ts` — the model type, the input `normalize()` step, and a

@@ -15,9 +15,10 @@
 // assigned work.
 //
 // TWO CLASSES OF ITEM, kept apart deliberately (see course/dueness.ts):
-//   * Scheduled work has a due date — it can be overdue, and it sorts by
-//     deadline. Overdue is split into its own section because burying it in a
-//     date-sorted list hides exactly the thing that needs action.
+//   * Scheduled work has a due date and sorts by deadline. Deadlines from the
+//     last week get their own "Recently due" section — where work just came
+//     in. Nothing is "overdue" for an instructor: this page holds no
+//     completion data, so a past deadline is only a date.
 //   * Supplements (`isSupplement`: no assignedAt, no dueAt) are optional
 //     agents and tracked examples. They are NEVER due and must never render as
 //     late; they're interesting only as "is anyone using this".
@@ -31,18 +32,17 @@
 // faking it from the caller's own state would be wrong as well as misleading.
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { listRoster, listJoinCodes } from "../client.js";
 import {
   instructorHref,
-  kindLabel,
   listCourseItems,
   type CourseItemDTO,
 } from "../modules/course-items/api.js";
-import { ItemRows } from "../modules/course-items/components/ItemRows.js";
+import { ItemRows, UndatedItemRows } from "../modules/course-items/components/ItemRows.js";
 import { useCourse } from "../course/useCourse.js";
 import {
-  overdueItems,
+  expandCheckpoints,
+  recentlyDueItems,
   supplements,
   upcomingItems,
 } from "../course/dueness.js";
@@ -68,7 +68,10 @@ export function InstructorDashboardPage() {
     termYear,
     startDate,
     endDate,
+    capabilities,
   } = useCourse();
+  // A TA sees this dashboard too, but assigns nothing.
+  const authors = capabilities.includes("author");
   const base = `/course/${courseId}/instructor`;
   const [items, setItems] = useState<CourseItemDTO[] | null>(null);
   const [students, setStudents] = useState<number | null>(null);
@@ -88,7 +91,7 @@ export function InstructorDashboardPage() {
       setItems(list.status === "fulfilled" ? list.value : []);
       setStudents(
         roster.status === "fulfilled"
-          ? roster.value.roster.filter((r) => r.role === "student").length
+          ? roster.value.roster.filter((r) => r.role === "student" && !r.isSample).length
           : null,
       );
       setJoinCode(
@@ -104,8 +107,9 @@ export function InstructorDashboardPage() {
 
   // One `now` per render so every bucket and label agrees with the others.
   const now = Date.now();
-  const all = items ?? [];
-  const overdue = overdueItems(all, now);
+  // Each writing checkpoint is its own item here (see expandCheckpoints).
+  const all = expandCheckpoints(items ?? []);
+  const recent = recentlyDueItems(all, now);
   const upcoming = upcomingItems(all, now, { limit: 6 });
   const extras = supplements(all, { limit: 6 });
 
@@ -132,14 +136,16 @@ export function InstructorDashboardPage() {
         title={courseName}
         scope={dates || "No start/end dates set — this course is always current."}
         actions={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<PlusIcon size={16} />}
-            href={`${base}/assign`}
-          >
-            Assign something
-          </Button>
+          authors ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<PlusIcon size={16} />}
+              href={`${base}/assign`}
+            >
+              Assign
+            </Button>
+          ) : undefined
         }
       />
 
@@ -152,35 +158,25 @@ export function InstructorDashboardPage() {
           label="Due this week"
         />
         <StatTile
-          value={loading ? "—" : overdue.length.toLocaleString()}
-          label="Overdue"
+          value={loading ? "—" : recent.length.toLocaleString()}
+          label="Recently due"
         />
       </StatGrid>
 
-      {/* Overdue first — it's the only section that asks for action today. */}
-      {overdue.length > 0 && (
-        <Section kicker="Overdue">
-          <ItemRows rows={overdue} hrefFor={(item) => instructorHref(courseId, item)} />
+      {/* Deadlines from the last week: where work just came in. */}
+      {recent.length > 0 && (
+        <Section kicker="Recently due">
+          <ItemRows rows={recent} viewer="staff" hrefFor={(item) => instructorHref(courseId, item)} />
         </Section>
       )}
 
-      <Section
-        kicker="Due next"
-        meta={
-          upcoming.length > 0 ? (
-            <Link to={`${base}/assign`}>All assigned</Link>
-          ) : undefined
-        }
-      >
+      <Section kicker="Due next">
         {loading ? (
           <p className="app-dash__empty">Loading…</p>
         ) : upcoming.length === 0 ? (
-          <p className="app-dash__empty">
-            Nothing due in the next week.{" "}
-            <Link to={`${base}/assign`}>See everything assigned</Link>.
-          </p>
+          <p className="app-dash__empty">Nothing due in the next week.</p>
         ) : (
-          <ItemRows rows={upcoming} hrefFor={(item) => instructorHref(courseId, item)} />
+          <ItemRows rows={upcoming} viewer="staff" hrefFor={(item) => instructorHref(courseId, item)} />
         )}
       </Section>
 
@@ -191,19 +187,7 @@ export function InstructorDashboardPage() {
           kicker="Also available"
           description="Optional work with no deadline — offered all term, never late."
         >
-          <ul className="app-dash__list app-dash__list--quiet">
-            {extras.map((item) => {
-              const href = instructorHref(courseId, item);
-              return (
-                <li key={item.id} className="app-dash__row">
-                  <span className="app-dash__kind">{kindLabel(item.kind)}</span>
-                  <span className="app-dash__title">
-                    {href ? <Link to={href}>{item.title}</Link> : item.title}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <UndatedItemRows items={extras} hrefFor={(item) => instructorHref(courseId, item)} />
         </Section>
       )}
 

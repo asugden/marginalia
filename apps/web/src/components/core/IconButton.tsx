@@ -6,6 +6,8 @@
 // tooltip and the accessible label for the icon-only control.
 
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { isDocumentHref } from "./Button.js";
 
 type CommonProps = {
   /** Visual role. Default "ghost". "round" = bordered circle, "primary" = filled accent. */
@@ -46,8 +48,22 @@ export function IconButton({
     .join(" ");
 
   if (href && !disabled) {
+    const anchorProps = rest as AnchorHTMLAttributes<HTMLAnchorElement>;
+    // Same rule as Button: in-app paths go through the router, so the SPA
+    // isn't torn down and reloaded for a navigation it can do in place.
+    const documentNav =
+      isDocumentHref(href) ||
+      anchorProps.target !== undefined ||
+      anchorProps.download !== undefined;
+    if (!documentNav) {
+      return (
+        <Link className={cls} to={href} title={title} aria-label={title} {...anchorProps}>
+          {children}
+        </Link>
+      );
+    }
     return (
-      <a className={cls} href={href} title={title} aria-label={title} {...rest}>
+      <a className={cls} href={href} title={title} aria-label={title} {...anchorProps}>
         {children}
       </a>
     );

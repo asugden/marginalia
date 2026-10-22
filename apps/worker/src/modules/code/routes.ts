@@ -2,8 +2,8 @@
 // first path segment after /api/ is "code".
 //
 // Assignments
-//   GET    /api/code/assignments?courseId=[&includeArchived=1]  list
-//   POST   /api/code/assignments                                create — INSTRUCTOR
+//   GET    /api/code/assignments?courseId=[&includeArchived=1][&stats=1]  list (+ submission counts, staff)
+//   POST   /api/code/assignments                                create — INSTRUCTOR (archived:true = draft)
 //   GET    /api/code/assignments/:id?courseId=                  fetch with starter
 //   PATCH  /api/code/assignments/:id                            edit — INSTRUCTOR
 //   DELETE /api/code/assignments/:id?courseId=                  delete — INSTRUCTOR
@@ -23,7 +23,8 @@
 //   POST   /api/code/notebooks/:id/submissions                  submit a snapshot
 //
 // Submissions
-//   GET    /api/code/submissions/:id?courseId=                  frozen view — owner or INSTRUCTOR
+//   GET    /api/code/submissions?courseId=                      latest per student × assignment — STAFF
+//   GET    /api/code/submissions/:id?courseId=                  frozen view — owner or INSTRUCTOR (staff opening it marks it read)
 
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
@@ -80,6 +81,9 @@ export async function routeCode(
     }
   }
 
+  if (head === "submissions" && parts.length === 3 && m === "GET") {
+    return h.listLatestSubmissionsRoute(env, identity, url);
+  }
   if (head === "submissions" && id && parts.length === 4 && m === "GET") {
     return h.getSubmissionRoute(env, identity, url, id);
   }

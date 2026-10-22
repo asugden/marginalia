@@ -244,11 +244,29 @@ can only show what exists, so the student who submitted nothing is exactly the
 one it cannot show. Latest live submission per (student, checkpoint) wins the
 cell; revoked ones are skipped.
 
-Checkpoints are replaced wholesale on edit rather than reconciled by id, so
-re-authoring the list mints new ids. `checkpoint_id` therefore carries no FK,
-and a submission pointing at a checkpoint that no longer resolves is treated as
-unattached rather than being destroyed — as is one whose assignment was deleted
-outright.
+Checkpoints are reconciled BY ID on edit: a checkpoint the editor sends back
+with its id is updated in place (name, deadline, position), one without an id
+is inserted, and only one the list no longer names is deleted. (They were once
+replaced wholesale, which re-minted every id and detached earlier submissions
+whenever a deadline moved; submissions detached that way before the fix still
+point at the old ids.) `checkpoint_id` carries no FK, so a submission whose
+checkpoint or assignment was deleted survives and is listed on the instructor's
+Uncategorized page.
+
+`GET /assignments?stats=1` (course staff) adds per-checkpoint counts: real
+students (not the sample student) with a live submission, and how many of them
+submitted at least once by the deadline. `POST /assignments` accepts
+`archived: true` to create a draft students can't see.
+
+### Read by staff
+
+Opening a snapshot at `/public/submissions/:token` as staff (anyone but its
+author) records a read in the shared `submission_reads` table (migration
+0034, kind `writing`, keyed by token). Read state is shared across the
+course's staff. The course-wide list returns `readBy` per snapshot, and
+`GET /assignments?stats=1` adds `unread` per checkpoint: real students whose
+latest live submission to it nobody on staff has opened. A read is a record
+that someone looked, never a judgement about the work.
 
 ## Privacy: what the log retains, and what an instructor sees
 
@@ -333,6 +351,9 @@ POST   /documents/:id/submissions      mint a share token (freezes snapshot)
 GET    /submissions?courseId=          course-wide list — INSTRUCTOR ONLY
 DELETE /submissions/:token             revoke
 
+GET    /settings?courseId=             read course settings (hide-marks, chat on/off, voice policy)
+PATCH  /settings                       set any subset of those — INSTRUCTOR ONLY
+
 GET    /assignments?courseId=          list — any enrolled user (students pick from it)
 POST   /assignments                    create — INSTRUCTOR ONLY
 GET    /assignments/:id?courseId=      fetch one with its checkpoints
@@ -351,6 +372,14 @@ require an `instructor` enrollment in the submission's course.
 BYO key path: messages POST accepts an `X-Provenance-LLM-Key` header.
 If present, the worker uses it for that request only; it is never
 written to D1, R2, KV, or logs.
+
+Chat controls (migration 0026, on `course_settings`): `provenance_chat_enabled`
+(default 1) gates conversation creation and every message turn — off means 403
+for everyone, matching the code module's posture. `provenance_locked_agent_id`
+(NULL = students choose) names the one agent every student gets; enforcement is
+at conversation creation and in `GET /agents` (a student's list is filtered to
+the assigned agent), and student personal-agent creation is refused while
+locked. Only a course-default agent or a `builtin:<voice>` id may be assigned.
 
 ## Event coordinates
 

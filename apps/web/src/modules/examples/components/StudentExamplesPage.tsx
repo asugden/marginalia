@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCourse } from "../../../course/useCourse.js";
 import { findExample } from "../../../examples/registry.js";
-import { Badge, Button, PageHeader, Section } from "../../../components/index.js";
+import { Badge, Button, ItemCard, PageHeader, Section } from "../../../components/index.js";
 import {
   getMyCourseExamples,
   markComplete,
@@ -115,42 +115,44 @@ export function StudentExamplesPage() {
             {rows.map(({ entry, spec }) => {
               const isDone = completed.has(entry.slug);
               return (
-                <div className="app-list__row ex-row" key={entry.slug}>
-                  <div className="app-list__main">
-                    <div className="app-list__title">
-                      {/* ?c= is what surfaces the course strip on the example
-                          page. Without it the page is the plain public one. */}
-                      <Link to={`/examples/${entry.slug}?c=${encodeURIComponent(courseId)}`}>
-                        {spec.title}
-                      </Link>
-                    </div>
-                    <div className="app-list__sub">
+                <ItemCard
+                  key={entry.slug}
+                  className="ex-row"
+                  kind="example"
+                  seed={entry.slug}
+                  title={spec.title}
+                  // ?c= is what surfaces the course strip on the example page.
+                  // Without it the page is the plain public one.
+                  href={`/examples/${entry.slug}?c=${encodeURIComponent(courseId)}`}
+                  sub={
+                    <>
                       {spec.blurb}
                       {entry.note && <> — {entry.note}</>}
+                    </>
+                  }
+                  meta={
+                    <>
+                      {isDone && <Badge tone="success">Complete</Badge>}
+                      <Button
+                        variant={isDone ? "ghost" : "subtle"}
+                        size="sm"
+                        onClick={() => toggle(entry.slug)}
+                        loading={busySlug === entry.slug}
+                        disabled={busySlug === entry.slug}
+                      >
+                        {isDone ? "Un-mark" : "Mark complete"}
+                      </Button>
+                    </>
+                  }
+                >
+                  {(entry.assignedAt !== null || entry.dueAt !== null) && (
+                    <div className="ex-row__dates">
+                      {entry.assignedAt !== null && <>assigned {formatDate(entry.assignedAt)}</>}
+                      {entry.assignedAt !== null && entry.dueAt !== null && " · "}
+                      {entry.dueAt !== null && <>due {formatDate(entry.dueAt)}</>}
                     </div>
-                    {(entry.assignedAt !== null || entry.dueAt !== null) && (
-                      <div className="ex-row__dates">
-                        {entry.assignedAt !== null && (
-                          <>assigned {formatDate(entry.assignedAt)}</>
-                        )}
-                        {entry.assignedAt !== null && entry.dueAt !== null && " · "}
-                        {entry.dueAt !== null && <>due {formatDate(entry.dueAt)}</>}
-                      </div>
-                    )}
-                  </div>
-                  <div className="app-list__meta">
-                    {isDone && <Badge tone="success">Complete</Badge>}
-                    <Button
-                      variant={isDone ? "ghost" : "subtle"}
-                      size="sm"
-                      onClick={() => toggle(entry.slug)}
-                      loading={busySlug === entry.slug}
-                      disabled={busySlug === entry.slug}
-                    >
-                      {isDone ? "Un-mark" : "Mark complete"}
-                    </Button>
-                  </div>
-                </div>
+                  )}
+                </ItemCard>
               );
             })}
           </div>

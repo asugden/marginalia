@@ -70,6 +70,26 @@ async function discoverIssuer(issuer: string): Promise<IssuerCache> {
   return entry;
 }
 
+/**
+ * Map the `email_verified` ID-token claim to our boolean.
+ *
+ * `email_verified` is OPTIONAL in OIDC Core §5.1. Some IdPs (Google) always
+ * send it; others (Microsoft Entra ID, and several enterprise IdPs) never
+ * mint it at all. Treating "absent" as "unverified" would lock out every
+ * user of those directories, so absence means "the IdP makes no assertion"
+ * and we defer to the IdP — which the deployment already trusts wholesale:
+ * the issuer is pinned in config and every accepted token is signed by it.
+ * An explicit `false` is still rejected — that is the IdP actively telling
+ * us the address is unconfirmed (e.g. self-service signup), which is the
+ * case the check exists for.
+ *
+ * Some IdPs serialise the claim as the string "true"/"false" rather than a
+ * JSON boolean; both spellings are honoured.
+ */
+export function claimToEmailVerified(value: unknown): boolean {
+  return value !== false && value !== "false";
+}
+
 export interface OidcProviderOptions {
   /** AuthProvider id (stored on users.external_provider). */
   id: string;
@@ -183,8 +203,7 @@ export class OidcProvider implements AuthProvider {
     }
     // Normalise: lowercase email + namespace subject by issuer so two IdPs
     // that happen to mint the same `sub` (rare but possible) can't collide.
-    const emailVerified =
-      payload.email_verified === true || payload.email_verified === "true";
+    const emailVerified = claimToEmailVerified(payload.email_verified);
     const displayName =
       typeof payload.name === "string" && payload.name.trim()
         ? payload.name.trim()

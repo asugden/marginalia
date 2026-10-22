@@ -17,6 +17,7 @@
 
 import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
+import { can, type Capability } from "../../permissions.js";
 import * as repo from "./repo.js";
 import {
   isItemKind,
@@ -71,15 +72,22 @@ async function requireMember(
   return userId;
 }
 
-async function requireInstructor(
+/** The caller's course role must hold `capability` (see permissions.ts). */
+async function requireCapability(
   env: Env,
   identity: Identity,
   courseId: string,
+  capability: Capability,
 ): Promise<string | Response> {
   const userId = requireUser(identity);
   if (userId instanceof Response) return userId;
   const role = await getEnrollmentRole(env, userId, courseId);
-  if (role !== "instructor") return errorResponse("Instructor only", 403);
+  if (!can(role, capability)) {
+    return errorResponse(
+      capability === "author" ? "Instructor only" : "Course staff only",
+      403,
+    );
+  }
   return userId;
 }
 
@@ -211,8 +219,8 @@ async function resolveCompletions(
       ? repo.listFinishedAgentIds(env.DB, courseId, userId)
       : new Set<string>(),
     kinds.has("writing")
-      ? repo.listSubmittedAssignmentIds(env.DB, courseId, userId)
-      : new Set<string>(),
+      ? repo.listSubmittedWriting(env.DB, courseId, userId)
+      : new Map<string, Set<string>>(),
     kinds.has("example") || kinds.has("reading")
       ? repo.listCompletedExampleSlugs(env.DB, courseId, userId)
       : new Set<string>(),
@@ -235,6 +243,7 @@ async function resolveCompletions(
         out.set(row.id, {
           kind: "writing",
           submitted: submittedWriting.has(row.payload_ref),
+          checkpoints: [...(submittedWriting.get(row.payload_ref) ?? [])],
         });
         break;
       case "example":
@@ -306,7 +315,7 @@ export async function listItemsRoute(
 
   const wantsArchived = url.searchParams.get("includeArchived") === "1";
   const role = await getEnrollmentRole(env, userId, courseId);
-  const includeArchived = wantsArchived && role === "instructor";
+  const includeArchived = wantsArchived && can(role, "author");
 
   const rows = await repo.listItems(env.DB, courseId, { includeArchived });
   const [payloads, completions] = await Promise.all([
@@ -349,7 +358,7 @@ export async function createItemRoute(
   const body = (await req.json().catch(() => null)) as CreateItemBody | null;
   const courseId = typeof body?.courseId === "string" ? body.courseId : null;
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "author");
   if (instructorOrResp instanceof Response) return instructorOrResp;
 
   if (!isItemKind(body?.kind)) {
@@ -439,7 +448,7 @@ export async function patchItemRoute(
     (typeof body?.courseId === "string" ? body.courseId : null) ??
     url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "author");
   if (instructorOrResp instanceof Response) return instructorOrResp;
 
   const existing = await repo.getItem(env.DB, courseId, itemId);
@@ -488,7 +497,7 @@ export async function deleteItemRoute(
 ): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "author");
   if (instructorOrResp instanceof Response) return instructorOrResp;
   const existing = await repo.getItem(env.DB, courseId, itemId);
   if (!existing) return errorResponse("Not found", 404);
@@ -513,7 +522,7 @@ export async function reorderItemsRoute(
     (typeof body?.courseId === "string" ? body.courseId : null) ??
     url.searchParams.get("courseId");
   if (!courseId) return errorResponse("courseId is required", 400);
-  const instructorOrResp = await requireInstructor(env, identity, courseId);
+  const instructorOrResp = await requireCapability(env, identity, courseId, "author");
   if (instructorOrResp instanceof Response) return instructorOrResp;
   if (!Array.isArray(body?.ids) || body.ids.some((i) => typeof i !== "string")) {
     return errorResponse("ids must be an array of item ids", 400);

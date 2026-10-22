@@ -105,6 +105,9 @@ export async function createItem(
     assignedAt: number | null;
     dueAt: number | null;
     note: string | null;
+    /** Set when the payload starts as a draft, so the wrapper is never live
+     *  for a moment before it is hidden. */
+    archivedAt?: number | null;
   },
 ): Promise<CourseItemRow> {
   const now = Date.now();
@@ -114,7 +117,7 @@ export async function createItem(
       `INSERT INTO course_items
          (id, course_id, kind, payload_ref, title, ord,
           assigned_at, due_at, note, archived_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -126,6 +129,7 @@ export async function createItem(
       params.assignedAt,
       params.dueAt,
       params.note,
+      params.archivedAt ?? null,
       now,
       now,
     )
@@ -394,22 +398,31 @@ export async function listFinishedAgentIds(
  * Revoked submissions are skipped: a student who withdrew a share has no live
  * artifact, matching how the roster treats them.
  */
-export async function listSubmittedAssignmentIds(
+export async function listSubmittedWriting(
   db: D1Database,
   courseId: string,
   userId: string,
-): Promise<Set<string>> {
+): Promise<Map<string, Set<string>>> {
+  // assignment id → the checkpoint ids submitted to. An assignment is present
+  // once anything was submitted to it; a checkpoint is present once a
+  // submission was attached to that checkpoint.
   const { results } = await db
     .prepare(
-      `SELECT DISTINCT assignment_id
+      `SELECT DISTINCT assignment_id, checkpoint_id
          FROM provenance_submissions
         WHERE course_id = ? AND user_id = ?
           AND assignment_id IS NOT NULL
           AND revoked_at IS NULL`,
     )
     .bind(courseId, userId)
-    .all<{ assignment_id: string }>();
-  return new Set((results ?? []).map((r) => r.assignment_id));
+    .all<{ assignment_id: string; checkpoint_id: string | null }>();
+  const out = new Map<string, Set<string>>();
+  for (const r of results ?? []) {
+    const cps = out.get(r.assignment_id) ?? new Set<string>();
+    if (r.checkpoint_id) cps.add(r.checkpoint_id);
+    out.set(r.assignment_id, cps);
+  }
+  return out;
 }
 
 /** Code assignment ids this student has submitted a notebook to. */

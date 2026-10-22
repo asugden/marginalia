@@ -3,7 +3,7 @@
 //
 // Documents (slice 1)
 //   GET    /api/provenance/documents?courseId=               list mine in this course
-//   POST   /api/provenance/documents                         create
+//   POST   /api/provenance/documents                         open-or-create for an assignment (0032)
 //   GET    /api/provenance/documents/:id?courseId=           fetch one
 //   PATCH  /api/provenance/documents/:id                     update title / body / counts
 //   DELETE /api/provenance/documents/:id?courseId=           delete
@@ -34,7 +34,7 @@
 //   DELETE /api/provenance/submissions/:token                      revoke
 //
 // Assignments (writing assignments with N checkpoints)
-//   GET    /api/provenance/assignments?courseId=             list — any enrolled user
+//   GET    /api/provenance/assignments?courseId=[&stats=1]   list — any enrolled user (stats: staff)
 //   POST   /api/provenance/assignments                       create — INSTRUCTOR ONLY
 //   GET    /api/provenance/assignments/:id?courseId=         fetch one — any enrolled user
 //   PATCH  /api/provenance/assignments/:id                   edit — INSTRUCTOR ONLY

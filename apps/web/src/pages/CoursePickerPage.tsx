@@ -21,13 +21,20 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { readBootstrap } from "../bootstrap.js";
-import { createCourse, getMe, type MeEnrollment } from "../client.js";
+import {
+  createCourse,
+  getMe,
+  isStaffRole,
+  setGenaiOptOut,
+  type MeEnrollment,
+} from "../client.js";
 import {
   Button,
   Field,
   Input,
   PageHeader,
   Select,
+  Switch,
   Tooltip,
   Wordmark,
 } from "../components/index.js";
@@ -103,6 +110,9 @@ export function CoursePickerPage() {
   const [searchParams] = useSearchParams();
 
   const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "1");
+  const [canCreate, setCanCreate] = useState(false);
+  const [genaiOptOut, setOptOut] = useState<boolean | null>(null);
+  const [optOutError, setOptOutError] = useState<string | null>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -110,6 +120,8 @@ export function CoursePickerPage() {
       .then((m) => {
         if (ctrl.signal.aborted) return;
         setEnrollments(m.enrollments);
+        setCanCreate(Boolean(m.canCreateCourses));
+        setOptOut(Boolean(m.genaiOptOut));
         // No auto-redirect here. RootRedirect (the `/` resolver) already
         // fast-paths a lone-enrollment user straight into their course, so
         // reaching /courses is always a *deliberate* destination.
@@ -121,7 +133,9 @@ export function CoursePickerPage() {
     return () => ctrl.abort();
   }, [navigate, searchParams]);
 
-  const teaches = (enrollments ?? []).some((e) => e.role === "instructor");
+  // "teaches" = works on any course as staff; "New Course" additionally needs
+  // the per-person permission, which a TA or a plain instructor may lack.
+  const teaches = (enrollments ?? []).some((e) => isStaffRole(e.role));
 
   const now = Date.now();
   const list = enrollments ?? [];
@@ -154,14 +168,21 @@ export function CoursePickerPage() {
                 : "Pick the one you want to open. Courses running now are up top; past and upcoming semesters below."
             }
             actions={
-              teaches ? (
-                <Button
-                  variant="primary"
-                  icon={<PlusIcon size={16} />}
-                  onClick={() => setNewOpen(true)}
-                >
-                  New Course
-                </Button>
+              canCreate ? (
+                <>
+                  {/* The guided path: explains the tool, sets up the course
+                      from a few answers, then tours it from both sides. */}
+                  <Button variant="subtle" href="/welcome">
+                    Guided setup
+                  </Button>
+                  <Button
+                    variant="primary"
+                    icon={<PlusIcon size={16} />}
+                    onClick={() => setNewOpen(true)}
+                  >
+                    New Course
+                  </Button>
+                </>
               ) : undefined
             }
           />
@@ -173,7 +194,7 @@ export function CoursePickerPage() {
           ) : enrollments.length === 0 ? (
             <p className="app-empty">
               You aren&rsquo;t enrolled in any courses yet. Use a join code on
-              the home page to enroll{teaches ? ", or create one above" : ""}.
+              the home page to enroll{canCreate ? ", or create one above" : ""}.
             </p>
           ) : (
             <>
@@ -191,10 +212,40 @@ export function CoursePickerPage() {
               />
             </>
           )}
+
+          {/* Personal: for course staff and course creators only. Students
+              never see it — their courses' AI is their instructors' call. */}
+          {(teaches || canCreate) && genaiOptOut !== null && (
+            <div className="app-genai-optout">
+              <Switch
+                label="I’m not interested in generative AI"
+                checked={genaiOptOut}
+                onChange={async (ev) => {
+                  const next = ev.target.checked;
+                  setOptOut(next);
+                  setOptOutError(null);
+                  try {
+                    await setGenaiOptOut(next);
+                  } catch (e) {
+                    setOptOut(!next);
+                    setOptOutError(e instanceof Error ? e.message : "Couldn’t save");
+                  }
+                }}
+              />
+              <p className="muted small">
+                Hides Voices, agents, and the AI chat controls from your screens.
+                In a course where every instructor has turned this on, students get
+                no AI features at all; writing is still recorded as typed or pasted.
+                If a co-instructor keeps AI on, their choice stands and you&rsquo;ll
+                see what students have.
+              </p>
+              {optOutError && <p className="error small">{optOutError}</p>}
+            </div>
+          )}
         </div>
       </div>
 
-      {newOpen && (
+      {newOpen && canCreate && (
         <NewCourseModal
           onClose={() => setNewOpen(false)}
           onCreate={async (name, patch) => {
@@ -262,7 +313,7 @@ function CourseCard({
   enrollment: MeEnrollment;
   navigate: ReturnType<typeof useNavigate>;
 }) {
-  const isInstructor = e.role === "instructor";
+  const isInstructor = isStaffRole(e.role);
   const home = isInstructor
     ? `/course/${e.courseId}/instructor`
     : `/course/${e.courseId}/dashboard`;

@@ -19,11 +19,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  addRosterEntry,
   createAdminCourse,
   deleteAdminCourse,
   demoteAdmin,
   getMe,
+  inviteUser,
   listAdminCourses,
   listAdmins,
   listAdminUsers,
@@ -31,6 +31,7 @@ import {
   listRoster,
   promoteAdmin,
   removeRosterEntry,
+  roleLabel,
   type AdminCourse,
   type AdminEntry,
   type AdminUser,
@@ -41,6 +42,7 @@ import {
   Avatar,
   Badge,
   Button,
+  Checkbox,
   Dropdown,
   Field,
   IconButton,
@@ -153,7 +155,7 @@ export function AdminPage() {
             value={tab}
             onChange={(v) => setTab(v as Tab)}
             options={[
-              { value: "instructors", label: "Instructors" },
+              { value: "instructors", label: "Staff" },
               { value: "courses", label: "Courses" },
               { value: "admins", label: "Admins" },
               { value: "users", label: "Users" },
@@ -171,16 +173,18 @@ export function AdminPage() {
   );
 }
 
-// Instructors — add / remove a course's instructors by email. Course-scoped
-// under the hood (addRosterEntry / removeRosterEntry with role "instructor"),
-// surfaced here so one instance-wide screen owns who teaches what. Students
-// self-enroll with a join code and are managed on the course People page, not
-// here.
+// Staff — add / remove a course's instructors and TAs by email, and decide
+// who may create courses. Invites work by email: the person signs in with
+// their institutional account and the first sign-in claims the row created
+// here, so they needn't have signed in before. Students self-enroll with a
+// join code and are managed on the course People page, not here.
 function InstructorsTab({ meUserId }: { meUserId: string | null }) {
   const [courses, setCourses] = useState<AdminCourse[] | null>(null);
   const [courseId, setCourseId] = useState<string>("");
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [draftEmail, setDraftEmail] = useState("");
+  const [draftRole, setDraftRole] = useState<"instructor" | "ta">("instructor");
+  const [draftCanCreate, setDraftCanCreate] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -211,7 +215,14 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
     setBusy(true);
     setError(null);
     try {
-      await addRosterEntry(courseId, draftEmail.trim().toLowerCase(), "instructor");
+      await inviteUser({
+        email: draftEmail.trim().toLowerCase(),
+        courseId,
+        role: draftRole,
+        // Course creation is a per-person permission; only meaningful to
+        // grant alongside an instructor invite.
+        canCreateCourses: draftRole === "instructor" && draftCanCreate,
+      });
       setDraftEmail("");
       reloadRoster(courseId);
     } catch (err) {
@@ -223,8 +234,8 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
   async function onRemove(entry: RosterEntry) {
     if (
       !(await confirm({
-        title: "Remove instructor?",
-        body: `${entry.email} will no longer be an instructor of this course.`,
+        title: `Remove ${roleLabel(entry.role)}?`,
+        body: `${entry.email} will no longer be on this course's staff.`,
         confirmLabel: "Remove",
       }))
     ) {
@@ -242,12 +253,12 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
     }
   }
 
-  const instructors = (roster ?? []).filter((r) => r.role === "instructor");
+  const instructors = (roster ?? []).filter((r) => r.role !== "student");
 
   return (
     <Section
-      kicker="Instructors"
-      description="Add an instructor to a course by email — they must have signed in at least once. This used to be buried inside each course’s People page; it lives here now so one screen owns who teaches what. Students self-enroll with a join code and never appear here."
+      kicker="Course staff"
+      description="Add an instructor or TA to a course by their institutional email — they can sign in afterwards. Instructors author; TAs manage students, see submissions, and run attendance. Instructors can add TAs themselves from the course’s People page; only admins add instructors. Students self-enroll with a join code and never appear here."
     >
       {error && <p className="error">{error}</p>}
 
@@ -262,7 +273,7 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
         }}
       >
         <div style={{ flex: 1, minWidth: "16rem" }}>
-          <Field label="Instructor email">
+          <Field label="Email">
             <Input
               type="email"
               placeholder="someone@example.edu"
@@ -294,6 +305,21 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
             />
           </Field>
         </div>
+        <div style={{ flex: "0 0 10rem", minWidth: 0 }}>
+          <Field label="Role">
+            <Dropdown
+              className="ds-dropdown--block"
+              ariaLabel="Role"
+              value={draftRole}
+              disabled={busy}
+              onChange={(v) => setDraftRole(v as "instructor" | "ta")}
+              options={[
+                { value: "instructor", label: "Instructor" },
+                { value: "ta", label: "TA" },
+              ]}
+            />
+          </Field>
+        </div>
         <Button
           type="submit"
           variant="primary"
@@ -301,14 +327,22 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
           loading={busy}
           disabled={busy || !draftEmail.trim() || !courseId}
         >
-          Add instructor
+          Add {roleLabel(draftRole)}
         </Button>
       </form>
+      {draftRole === "instructor" && (
+        <Checkbox
+          checked={draftCanCreate}
+          onChange={(e) => setDraftCanCreate(e.target.checked)}
+          label="Can create their own courses"
+          description="Leave off for someone who should only teach the courses they're added to. You can change this later on their user page."
+        />
+      )}
 
       {roster === null ? (
         <p className="muted">Loading…</p>
       ) : instructors.length === 0 ? (
-        <p className="muted">No instructors on this course yet.</p>
+        <p className="muted">No staff on this course yet.</p>
       ) : (
         <div className="app-list">
           {instructors.map((p) => {
@@ -326,7 +360,9 @@ function InstructorsTab({ meUserId }: { meUserId: string | null }) {
                   <div className="app-list__sub">{p.email}</div>
                 </div>
                 <div className="app-list__meta">
-                  <Badge tone="brand">instructor</Badge>
+                  <Badge tone={p.role === "instructor" ? "brand" : "neutral"}>
+                    {roleLabel(p.role)}
+                  </Badge>
                   {!isSelf && (
                     <IconButton
                       variant="ghost"
@@ -633,6 +669,12 @@ function UsersTab() {
                     <>
                       {" "}
                       <Badge tone="brand">admin</Badge>
+                    </>
+                  )}
+                  {!u.isAdmin && u.canCreateCourses && (
+                    <>
+                      {" "}
+                      <Badge tone="neutral">creates courses</Badge>
                     </>
                   )}
                 </div>

@@ -17,6 +17,7 @@ import {
   patchRosterEntry,
   promoteAdmin,
   removeRosterEntry,
+  setUserCanCreateCourses,
   type EnrollmentRole,
   type UserDetail,
 } from "../client.js";
@@ -129,6 +130,19 @@ export function UserDetailPage() {
       setBusy(false);
     }
   }
+  async function onToggleCreate(allowed: boolean) {
+    if (!detail) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await setUserCanCreateCourses(detail.user.userId, allowed);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function onChangeRole(
     courseId: string,
     currentRole: EnrollmentRole,
@@ -136,11 +150,14 @@ export function UserDetailPage() {
   ) {
     if (!detail) return;
     if (currentRole === nextRole) return;
-    if (currentRole === "instructor" && nextRole === "student") {
+    if (currentRole === "instructor" && nextRole !== "instructor") {
       if (
         !(await confirm({
-          title: "Downgrade to student?",
-          body: `${detail.user.email} will become a student on this course and lose instructor access to it.`,
+          title: nextRole === "ta" ? "Change to TA?" : "Downgrade to student?",
+          body:
+            nextRole === "ta"
+              ? `${detail.user.email} will become a TA on this course and stop authoring it.`
+              : `${detail.user.email} will become a student on this course and lose instructor access to it.`,
           confirmLabel: "Downgrade",
           danger: false,
         }))
@@ -257,6 +274,30 @@ export function UserDetailPage() {
         </div>
       </Section>
 
+      <Section kicker="Course creation">
+        <div
+          style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}
+        >
+          <span className="muted small" style={{ flex: 1, minWidth: "12rem" }}>
+            {u.isAdmin
+              ? "Admins can always create courses."
+              : u.canCreateCourses
+                ? "Can create their own courses, and becomes the instructor of each."
+                : "Can't create courses. They can still teach or TA courses they're added to."}
+          </span>
+          {!u.isAdmin && (
+            <Button
+              variant={u.canCreateCourses ? "subtle" : "primary"}
+              size="sm"
+              disabled={busy}
+              onClick={() => onToggleCreate(!u.canCreateCourses)}
+            >
+              {u.canCreateCourses ? "Stop course creation" : "Allow course creation"}
+            </Button>
+          )}
+        </div>
+      </Section>
+
       <Section kicker="Courses">
         {detail.enrollments.length === 0 ? (
           <p className="muted">Not enrolled in any course.</p>
@@ -284,6 +325,7 @@ export function UserDetailPage() {
                     }
                     options={[
                       { value: "student", label: "Student" },
+                      { value: "ta", label: "TA" },
                       { value: "instructor", label: "Instructor" },
                     ]}
                   />

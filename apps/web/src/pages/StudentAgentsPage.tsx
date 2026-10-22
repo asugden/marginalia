@@ -11,7 +11,7 @@ export function StudentAgentsPage() {
   return (
     <div className="app-home__inner">
       <div className="app-head">
-        <span className="eyebrow">Tutors to talk to</span>
+        <span className="eyebrow">Conversational agents</span>
         <span className="app-rule" />
         <h1>Agents</h1>
         <p className="app-head__sub">

@@ -31,6 +31,39 @@ import {
 
 const DAY = 86_400_000;
 
+/**
+ * Every checkpoint of a writing assignment is its own item. A writing
+ * assignment's deadlines live on its checkpoints, so its course item carries
+ * no date of its own; listed whole, it read as undated ("No deadline") and
+ * never appeared as due. Split, each checkpoint has its date, its own
+ * completion, and its own link — the way it is everywhere except where the
+ * assignment is defined. Titles follow Review's: "Essay — Draft" when there is
+ * more than one checkpoint, the bare title when there is one.
+ */
+export function expandCheckpoints(items: CourseItemDTO[]): CourseItemDTO[] {
+  return items.flatMap((item) => {
+    if (item.kind !== "writing") return [item];
+    const cps = (item.payload as { checkpoints?: { id: string; name: string; dueAt: number | null }[] } | null)
+      ?.checkpoints;
+    if (!cps || cps.length === 0) return [item];
+    const done = item.completion?.kind === "writing" ? item.completion : undefined;
+    return cps.map((cp) => ({
+      ...item,
+      id: `${item.id}:${cp.id}`,
+      title: cps.length > 1 ? `${item.title} — ${cp.name}` : item.title,
+      dueAt: cp.dueAt,
+      // A lone checkpoint IS the assignment: same title, colour, and link as
+      // everywhere else. Only siblings become items of their own.
+      checkpoint: cps.length > 1 ? { id: cp.id, name: cp.name } : undefined,
+      completion: done && {
+        kind: "writing" as const,
+        submitted: done.checkpoints ? done.checkpoints.includes(cp.id) : done.submitted,
+        checkpoints: done.checkpoints,
+      },
+    }));
+  });
+}
+
 /** Which time bucket a scheduled item falls into, relative to `now`. */
 export type DueBucket = "overdue" | "today" | "soon" | "later";
 
@@ -108,6 +141,20 @@ export function overdueItems(
   return scheduledItems(items, now).filter((d) => d.bucket === "overdue");
 }
 
+/** Deadlines that passed within the last `days` days, most recent first —
+ *  the instructor's "Recently due". Instructors have nothing overdue: a past
+ *  deadline is about the students' work, and this surface holds no completion
+ *  data (see the file header). Bounded, so the list doesn't grow all term. */
+export function recentlyDueItems(
+  items: CourseItemDTO[],
+  now: number,
+  days = 7,
+): DatedItem[] {
+  return overdueItems(items, now)
+    .filter((d) => d.daysOut >= -days)
+    .reverse();
+}
+
 /** Upcoming = due today or within the week. */
 export function upcomingItems(
   items: CourseItemDTO[],
@@ -152,10 +199,17 @@ export function dueThisWeek(items: CourseItemDTO[], now: number): number {
  * `now > due_at`, computed at read time, and moving the deadline is the whole
  * of the remedy.
  */
-export function dueLabel(d: DatedItem): string {
-  const n = d.daysOut;
+export function dueLabel(d: DatedItem, viewer: "student" | "staff" = "student"): string {
+  return duePhrase(d.daysOut, viewer);
+}
+
+/** `dueLabel` for a bare day count — whole days from now to the deadline. */
+export function duePhrase(n: number, viewer: "student" | "staff" = "student"): string {
   if (n < 0) {
     const late = Math.abs(n);
+    // A student shown a past deadline hasn't done the work (completed items
+    // are dropped), so "overdue" is true for them. For staff it is only a date.
+    if (viewer === "staff") return late === 1 ? "Due yesterday" : `Due ${late} days ago`;
     return late === 1 ? "Overdue by 1 day" : `Overdue by ${late} days`;
   }
   if (n === 0) return "Due today";

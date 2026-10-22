@@ -10,7 +10,7 @@
 // else, so this component only renders the frozen snapshot or an unavailable card.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   getPublicSubmission,
   getPublicSubmissionConversations,
@@ -19,14 +19,22 @@ import {
   type ProvenanceAuditDTO,
   type ProvenanceRenderDTO,
   type PublicConversationDTO,
+  type PublicSubmissionDTO,
 } from "../api.js";
-import { Button, Wordmark } from "../../../components/index.js";
+import { Button, OriginLegend, Wordmark } from "../../../components/index.js";
+import { navFromSubmission, writingKey } from "../../../course/reviewGrid.js";
+import { useReviewGrid } from "../../../course/useReviewGrid.js";
+import { AssignmentBrief, ReviewNav, useBriefOpen } from "../../../course/ReviewNav.js";
 
 export function PublicSubmissionPage() {
   const { token } = useParams<{ token: string }>();
   const [title, setTitle] = useState<string>("");
   const [render, setRender] = useState<ProvenanceRenderDTO | null>(null);
   const [createdAt, setCreatedAt] = useState<number | null>(null);
+  const [meta, setMeta] = useState<Pick<
+    PublicSubmissionDTO,
+    "courseId" | "assignmentId" | "checkpointId" | "student"
+  > | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [showChat, setShowChat] = useState(false);
@@ -42,12 +50,40 @@ export function PublicSubmissionPage() {
         setTitle(s.title);
         setRender(s.render);
         setCreatedAt(s.createdAt);
+        setMeta({
+          courseId: s.courseId,
+          assignmentId: s.assignmentId,
+          checkpointId: s.checkpointId,
+          student: s.student,
+        });
       })
       .catch((e) => {
         if (ctrl.signal.aborted) return;
         setError(e instanceof Error ? e.message : "This link is unavailable");
       });
     return () => ctrl.abort();
+  }, [token]);
+
+  // Moving between students and assignments. An unattached snapshot has no
+  // place in the grid, so it gets no moves.
+  const grid = useReviewGrid(meta?.courseId);
+  const nav =
+    grid && meta?.checkpointId && token
+      ? navFromSubmission(grid, {
+          key: writingKey(meta.checkpointId),
+          userId: meta.student.userId,
+          submissionId: token,
+        })
+      : null;
+  const [briefOpen, toggleBrief] = useBriefOpen();
+  const hasBrief = !!nav?.assignment.instructions.trim();
+  const who = meta ? meta.student.displayName || meta.student.email || "Student" : "";
+
+  // The chat drill-down belongs to one snapshot; close it on moving to another.
+  useEffect(() => {
+    setShowChat(false);
+    setConvs(null);
+    setConvError(null);
   }, [token]);
 
   async function loadConversations() {
@@ -105,12 +141,30 @@ export function PublicSubmissionPage() {
 
   return (
     <div className="prov-public">
+      <div className="prov-public-top">
+        <Wordmark size="sm" />
+        {nav && (
+          <ReviewNav
+            back={{ href: nav.assignment.listHref, label: nav.assignment.title }}
+            up={nav.up}
+            down={nav.down}
+            students={{ prev: nav.prev, next: nav.next, position: nav.position }}
+            brief={hasBrief ? { open: briefOpen, onToggle: toggleBrief } : null}
+          />
+        )}
+      </div>
+      {/* The student leads: reading a run of submissions, who wrote it is
+          what changes from page to page. */}
       <header className="prov-public-header">
         <div className="prov-public-titles">
-          <div style={{ marginBottom: "0.6rem" }}>
-            <Wordmark size="sm" />
-          </div>
-          <h1>{title || "Untitled"}</h1>
+          {nav && (
+            <span className="eyebrow">
+              Writing submission ·{" "}
+              <Link to={nav.assignment.listHref}>{nav.assignment.title}</Link>
+            </span>
+          )}
+          <h1>{who || title || "Untitled"}</h1>
+          {who && <p className="prov-public-doctitle">{title || "Untitled"}</p>}
           {createdAt && (
             <p className="muted small">
               Shared snapshot · {new Date(createdAt).toLocaleDateString(undefined, {
@@ -119,13 +173,10 @@ export function PublicSubmissionPage() {
             </p>
           )}
         </div>
-        <div className="prov-public-legend" aria-label="Word-origin legend">
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-human" /> typed</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-pasted" /> pasted</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-llm" /> from LLM</span>
-          <span className="prov-legend-item"><span className="prov-legend-swatch legend-edited" /> autocorrect</span>
-        </div>
+        <OriginLegend />
       </header>
+
+      {briefOpen && hasBrief && nav && <AssignmentBrief assignment={nav.assignment} />}
 
       <article className="prov-public-doc">
         <RenderedDoc render={render} />

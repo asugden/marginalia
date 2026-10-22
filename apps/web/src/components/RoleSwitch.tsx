@@ -30,7 +30,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { MeEnrollment } from "../api.js";
-import { setActingAsStudent } from "../client.js";
+import { isStaffRole, setActingAsStudent } from "../client.js";
 import { ChevronIcon } from "../icons.js";
 
 export type RoleSurface = "student" | "author" | "admin";
@@ -67,7 +67,7 @@ export function RoleSwitch({
 }: RoleSwitchProps) {
   // While previewing, the reported role is `student`; the caller is really an
   // instructor, so treat them as one for building the switch options.
-  const isInstructor = role === "instructor" || actingAsStudent;
+  const isInstructor = isStaffRole(role) || actingAsStudent;
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   // A failed switch must SAY so. This used to be a bare try/finally: when the
@@ -96,7 +96,7 @@ export function RoleSwitch({
       // standalone provenance editor), and choosing Instructor from there must
       // still un-stick them. setActingAsStudent is idempotent, so clearing when
       // already cleared is a harmless no-op.
-      await setActingAsStudent(target === "student");
+      await setActingAsStudent(target === "student", courseId);
       setOpen(false);
       navigate(to);
     } catch (e) {
@@ -133,12 +133,16 @@ export function RoleSwitch({
       to: authorTo,
     });
   }
-  options.push({
-    key: "student",
-    label: "Preview as student",
-    detail: "See this one course the way its students do",
-    to: studentTo,
-  });
+  // A preview is of one course (it runs as that course's sample student), so
+  // it's only on offer with a course in scope and to that course's staff.
+  if (courseId && isInstructor) {
+    options.push({
+      key: "student",
+      label: "Preview as student",
+      detail: "See this one course exactly as its students do",
+      to: studentTo,
+    });
+  }
   if (isAdmin) {
     options.push({
       key: "admin",

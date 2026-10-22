@@ -81,13 +81,16 @@ is never stored server-side.
   submission viewer, instructor submissions list, assignments editor +
   roster grid).
 
-## Instructor Submissions surface
+## Writing submissions (instructor)
 
-`/course/:id/instructor/submissions` (`SubmissionsPage.tsx`) — the course-wide
-review surface, and the only place in the module that reads across student
-owners. Built from the standard staff primitives (`.app-page` for the measure,
-`PageHeader`, `Section`, `.app-list`); the only bespoke CSS is the origin bar,
-which has no design-system equivalent.
+Writing submissions live under their assignments: each checkpoint's page
+(`CheckpointPage.tsx`), and the whole-assignment page
+(`AssignmentRosterPage.tsx`), both reached from Review ▸ Submissions.
+`SubmissionsPage.tsx` is now **Uncategorized**
+(`/instructor/submissions/uncategorized`) — the submissions none of those pages
+show (see "Assignments surface" below). All three read across student owners and are built from the
+standard staff primitives (`.app-page`, `PageHeader`, `Section`, `.app-list`)
+and the shared `SubmissionCards`.
 
 **Grouped by document, not by mint.** Pressing "Share" always mints a *new* row
 (`createSubmissionRoute` never reuses a token), so the raw table is one row per
@@ -102,23 +105,25 @@ Rows carry their assignment and checkpoint when they have one; a submission made
 outside any assignment still lists, exactly as every submission did before
 assignments existed.
 
-Backed by `GET /api/provenance/submissions?courseId=` — instructor-only, 403
-otherwise. The tab appears in the instructor strip only when the Writing module
-is enabled (`TabVisibilityFlags.provenanceEnabled`).
+Backed by `GET /api/provenance/submissions?courseId=` — course staff only, 403
+otherwise. Writing's entries (Assign ▸ Writing, its rows in Review ▸
+Submissions) appear only when the Writing module is enabled
+(`TabVisibilityFlags.provenanceEnabled`).
 
 ## Assignments surface
 
 `/course/:id/instructor/assignments` (`AssignmentsPage.tsx`) — **writing
-assignment authoring**, plus a combined list retained from before the
-assignment wrapper.
+assignment authoring only**.
 
-Since the wrapper landed, the one list of everything a course assigns is the
-**Assign band** (`/course/:id/instructor/assign`, the `course-items` module),
-which covers writing, agents, and examples in one real table. What stays here is
-what Assign deliberately does not do: authoring a writing assignment's title,
+The one list of everything a course assigns is the **Assign band**
+(`/course/:id/instructor/assign`, the `course-items` module), which covers
+writing, agents, examples, and code in one real table. What stays here is what
+Assign deliberately does not do: authoring a writing assignment's title,
 instructions, and ordered checkpoints. Writing is the only kind needing several
 dated moments, which is why it keeps its own editor instead of being squeezed
-into the wrapper's single `due_at`.
+into the wrapper's single `due_at`. (This page once carried its own combined
+writing+examples union from before the band existed; that duplicate list has
+been removed — one question, one page.)
 
 `provenance_assignments` and `provenance_assignment_checkpoints` are untouched by
 the wrapper — a `course_items` row points at an assignment through `payload_ref`
@@ -127,46 +132,61 @@ and owns only its scheduling. Completion for writing on the Assign list is
 agent's "finished" and an example's "marked done": an artifact is not a
 self-report, and the labels must never converge.
 
-The legacy list below is unchanged. Each row is tagged `Writing` or `Example`; a
-writing row opens its checkpoint roster, an example row opens the examples
-curation surface at `assign/examples`.
-
-Rows sort by the soonest deadline they still carry, undated last. A writing
-assignment's date is its earliest checkpoint that hasn't passed — the next thing
-the class owes — falling back to its latest deadline once all of them are behind
-us; an example has at most one date. Undated entries sort last because "no
-deadline" is the instructor declining to schedule something, and a list read for
-"what's next" should not open with items that are never next. Archived writing
-sinks below everything live. Ties break on title so order is stable across
-reloads rather than depending on fetch timing.
-
-**The union is presentation-only.** Nothing is merged underneath: the two kinds
-keep separate tables (`provenance_assignments` vs. `course_examples`), separate
-endpoints, separate editors, and separate rules. This page reads the examples
-module through its public `api.ts` and holds each kind in its own arm of a
-discriminated union rather than flattening them into shared fields. The combined
-list exists because "what have I set this class?" is one question — not because
-the features became one feature.
-
-The examples privacy split survives intact across the boundary. The only
-examples figure this list shows is how many students marked an example complete
-(their own opt-in claim, free from the completion roster fetch). Nothing from the
-anonymous usage aggregate appears here; see the examples module README for why
-those two must not sit on one row.
-
-No per-row submitted count appears on writing rows. That number lives only
-inside the per-assignment roster endpoint, so showing it on the list would cost
-one extra round-trip per row; open the assignment to see who has submitted and
-who hasn't.
+**Authored per assignment (Assign), viewed per checkpoint (Review).**
+Assign ▸ Writing (`/instructor/assignments`) lists one row per assignment with
+its checkpoints inline, and Edit / Publish / Delete. Review ▸ Submissions
+(`/instructor/submissions`, `pages/ReviewSubmissionsPage.tsx`, shared with
+Code) lists one row PER CHECKPOINT — "Essay 1 — Draft", "Essay 1 — Final" — with
+"N of M submitted · K on time" (from `GET /assignments?stats=1`). A row opens
+`/instructor/submissions/writing/:id/:cid` (CheckpointPage): each student's
+submissions to that checkpoint, latest first, late ones marked "LATE by …",
+then the students with nothing submitted. `/instructor/submissions/writing/:id`
+(AssignmentRosterPage) is the whole assignment at once; the old
+`/instructor/assignments/:id` redirects there. A one-checkpoint assignment never
+shows its checkpoint's name, to staff or to students (the submit picker lists
+it by title alone).
 
 Writing assignments themselves: one assignment, N checkpoints: a draft
 and a final are two checkpoints of one assignment, because the student keeps one
-document across both. Checkpoints are edited as an ordered list (add, remove,
-reorder) with an optional `datetime-local` deadline each; an empty date means no
-deadline, and nothing submitted to such a checkpoint is ever late. Saving
-replaces the checkpoint list wholesale. Assignments can be archived — out of the
-student's picker, still legible on the instructor's side — or deleted, which
-leaves already-attached submissions intact and merely unattached.
+document across both. The create form is its own page
+(`/instructor/assignments/new`). Checkpoints are edited as an ordered list
+(add, remove, reorder) with an optional `datetime-local` deadline each; an
+empty date means no deadline, and nothing submitted to such a checkpoint is
+ever late. Saving reconciles checkpoints BY ID — an edited checkpoint keeps its
+id, so submissions to it stay attached; only a removed checkpoint is deleted.
+
+**Draft / Published.** New assignments are created as drafts (`archived_at`
+set): students can't see them until Publish. Unpublish returns one to that
+state; Delete removes it and leaves its submissions intact.
+
+**Uncategorized.** `/instructor/submissions/uncategorized` lists the writing
+submissions no checkpoint page shows: never attached, or attached to an
+assignment or checkpoint since deleted. Review ▸ Submissions offers the button
+only when that list is non-empty.
+
+## Chat controls (migration 0026)
+
+Two course-level instructor controls, edited from Course Settings (the Writing
+module's block) and enforced server-side:
+
+- **Chat on/off** (`course_settings.provenance_chat_enabled`, default on).
+  Off hides the editor's chat toggle/pane for everyone and the worker refuses
+  conversation creation AND every turn — turning chat off mid-course also
+  silences threads that already exist.
+- **Voice policy** (`course_settings.provenance_locked_agent_id`). NULL =
+  students choose their agent (course defaults + personal ones — the behaviour
+  to date). Non-null names the ONE agent every student gets: a course-default
+  `provenance_agents` row or `builtin:<voice>`. While locked, the agent list a
+  student receives IS the assigned agent (filtered server-side), the picker
+  collapses to a statement, and personal-agent creation returns 403 (the
+  My-agents page explains why and hides its create button). Instructors keep
+  the full list so they can pick the voice and test others.
+
+Course-level, not per-assignment, because a writing document attaches to an
+assignment only at submission time — there is no assignment to hang a switch on
+while the student writes. The code module offers the same two decisions
+per-assignment (`ai_enabled`, `voice_choice`), which is the granularity code
+actually has.
 
 `/course/:id/instructor/assignments/:assignmentId` (`AssignmentRosterPage.tsx`)
 — one row per enrolled student, one column per checkpoint. Cells read

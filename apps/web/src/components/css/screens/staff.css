@@ -65,15 +65,6 @@
 .ds-switcher__new strong { color: var(--accent-deep); }
 .ds-switcher__new .muted { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; }
 
-/* Collection icon tile (DS .app-coll-ic): an accent-tinted book glyph leading
-   each collection row. Replaces the misused student-shell .ds-id__icon. */
-.ds-coll-ic {
-  width: 38px; height: 38px; flex: none; border-radius: var(--radius-sm);
-  background: var(--accent-wash); color: var(--accent-ink);
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.ds-coll-ic svg { width: 20px; height: 20px; }
-
 /* ---- Modal (DS .app-modal): a centered card over a scrim. Used by the
    "copy agent from another course" picker; previously rendered unstyled. ---- */
 .ds-modal-backdrop {
@@ -168,18 +159,6 @@
 .ds-joincode__label { font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
 .ds-joincode__code { font-family: var(--font-mono); font-weight: 700; font-size: 1.3rem; letter-spacing: 0.04em; color: var(--accent); }
 
-/* ---- Generic staff list (agents, collections, voices) ---- */
-.ds-staff-list { display: flex; flex-direction: column; gap: 0.6rem; }
-.ds-staff-list__row {
-  display: flex; align-items: center; gap: 0.85rem; padding: 0.9rem 1rem;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs); text-decoration: none;
-}
-.ds-staff-list__main { flex: 1; min-width: 0; }
-.ds-staff-list__title { font-weight: 600; color: var(--text-strong); font-size: var(--text-base); }
-.ds-staff-list__sub { color: var(--text-muted); font-size: var(--text-sm); margin-top: 0.1rem; }
-.ds-staff-list__actions { display: flex; gap: 0.4rem; align-items: center; flex: none; }
-
 /* The mid-width instructor-bar wrap used to be duplicated here against the
    pre-bands `.ds-staff-top--instructor` / `.ds-staff-nav` markup, which no
    component renders any more. The one live rule is the `.app-topbar--instructor`
@@ -209,4 +188,48 @@
   .ds-roster__row { grid-template-columns: 1fr auto; gap: 0.6rem; padding: 0.7rem 0.85rem; }
   .ds-roster__meta { display: none; }
   .ds-joincode > div:first-child { flex-basis: 100%; }
+}
+
+/* ---- Review navigation (course/ReviewNav.tsx): a small cluster, top right of
+   a submission or assignment page. ‹ › between students, ↑ ↓ between dated
+   assignments, and a toggle for what was assigned. ---- */
+.review-nav { display: inline-flex; align-items: center; gap: 0.6rem; flex: none; }
+.review-nav__group { display: inline-flex; align-items: center; gap: 0.1rem; }
+.review-nav__pos {
+  font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-muted);
+  min-width: 4.5em; text-align: center; white-space: nowrap;
+}
+.review-nav__chev { transition: transform var(--dur-2) var(--ease-out); }
+.review-nav__chev--up { transform: rotate(180deg); }
+.review-nav__chev--left { transform: rotate(90deg); }
+.review-nav__chev--right { transform: rotate(-90deg); }
+.review-nav__back { transform: rotate(180deg); }
+.review-nav__brief {
+  appearance: none; cursor: pointer; font: inherit; font-size: var(--text-xs);
+  color: var(--text-secondary); background: none;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.2rem 0.55rem;
+}
+.review-nav__brief:hover { color: var(--text-strong); background: var(--surface-hover); }
+.review-nav__brief[aria-pressed="true"] { color: var(--text-strong); border-color: var(--border-strong); background: var(--surface-hover); }
+@media (max-width: 680px) {
+  /* The header's actions stretch at this width; keep the cluster compact. */
+  .ds-page-header__actions > .review-nav { flex: none; }
+}
+
+.review-brief {
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
+  margin: 0 0 var(--space-4); padding: 0.7rem 0.9rem;
+}
+.review-brief__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.7rem; }
+.review-brief__title { font-weight: 600; color: var(--text-strong); }
+.review-brief__due { font-size: var(--text-sm); color: var(--text-muted); }
+.review-brief__body { margin-top: 0.4rem; max-height: 40vh; overflow-y: auto; }
+.review-brief__empty { color: var(--text-muted); font-size: var(--text-sm); margin: 0.4rem 0 0; }
+
+/* Read state on submission lists: a quiet dot for "no one on staff has opened
+   this yet". Not an alert colour — unread is a fact, not a problem. */
+.prov-subs__unread {
+  display: inline-block; width: 0.45rem; height: 0.45rem; border-radius: 50%;
+  background: var(--accent); margin-right: 0.45rem; vertical-align: 0.1em;
 }

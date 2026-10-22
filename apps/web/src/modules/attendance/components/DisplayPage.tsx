@@ -6,7 +6,7 @@
 // token appended as ?t=...; we refresh the token client-side every 5s so a
 // 30s server-side rotation never leaves the projector showing a stale code.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import QRCode from "qrcode";
 import { useCourse } from "../../../course/useCourse.js";
@@ -73,7 +73,13 @@ export function DisplayPage() {
   const [session, setSession] = useState<SessionDTO | null>(null);
   const [checkins, setCheckins] = useState<CheckinDTO[]>([]);
   const [token, setToken] = useState<QrToken | null>(null);
+  /** Fatal: the FIRST load failed and there is nothing to show. */
   const [err, setErr] = useState<string | null>(null);
+  /** Non-fatal: a later poll (or Close) failed. The projector keeps showing
+   *  the last good QR + roster with a small notice, instead of replacing the
+   *  whole live view mid-class. Clears itself on the next successful tick. */
+  const [liveErr, setLiveErr] = useState<string | null>(null);
+  const hasDataRef = useRef(false);
   const [qrSvg, setQrSvg] = useState<string>("");
   const [zoomed, setZoomed] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -85,11 +91,19 @@ export function DisplayPage() {
       try {
         const data = await getSession(id);
         if (cancelled) return;
+        hasDataRef.current = true;
         setSession(data.session);
         setCheckins(data.checkins);
         setErr(null);
+        setLiveErr(null);
       } catch (e) {
-        if (!cancelled) setErr(String((e as Error).message));
+        if (cancelled) return;
+        const msg = String((e as Error).message);
+        // Only the first load is fatal; once anything is on screen a failed
+        // poll must not blank the projector. The interval keeps ticking, so
+        // both states self-heal on the next successful fetch.
+        if (hasDataRef.current) setLiveErr(msg);
+        else setErr(msg);
       }
     };
     void tick();
@@ -138,14 +152,18 @@ export function DisplayPage() {
       const data = await getSession(id);
       setSession(data.session);
     } catch (e) {
-      setErr(String((e as Error).message));
+      // Inline, not fatal — the session is still on screen.
+      setLiveErr(String((e as Error).message));
     }
   }, [id, confirm]);
 
-  if (err)
+  if (err && !session)
     return (
       <Shell sessionsHref={sessionsHref}>
         <p className="error">{err}</p>
+        <p className="muted small">
+          Retrying automatically — this clears as soon as a fetch succeeds.
+        </p>
       </Shell>
     );
   if (!session)
@@ -192,6 +210,12 @@ export function DisplayPage() {
             </>
           }
         />
+
+        {liveErr && (
+          <p className="error" role="status">
+            Connection hiccup — showing the last update; retrying. ({liveErr})
+          </p>
+        )}
 
         <p className="ds-att-display__lead">
           {session.closedAt ? (

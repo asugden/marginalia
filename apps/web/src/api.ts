@@ -382,7 +382,11 @@ export function listConversations(
 export interface MeEnrollment {
   courseId: string;
   courseName: string;
-  role: "student" | "instructor";
+  role: EnrollmentRole;
+  /** What this role may do in the course, straight from the worker's
+   *  permission table (apps/worker/src/permissions.ts). Branch on these
+   *  (via hasCapability), not on `role`, so the table lives in one place. */
+  capabilities: Capability[];
   joinedAt: number;
   /** v1.0 §6 — lazy-reveal flags for the dashboard tab strip. Flip true
    *  the first time the course uses the feature; never flip back. */
@@ -396,6 +400,10 @@ export interface MeEnrollment {
    *  A real on/off toggle, default ON. When off, the writing tool disappears
    *  from the student view entirely. */
   provenanceEnabled: boolean;
+  /** migration 0026 — whether the writing editor offers the LLM chat pane.
+   *  Default ON. Course-level (a document attaches to an assignment only at
+   *  submission time, so there is no per-assignment hook). */
+  provenanceChatEnabled: boolean;
   /** migration 0018 — whether the Agents extension is enabled for this course.
    *  A real on/off toggle, default ON. When off, agents disappear from both
    *  the instructor nav/dashboard and the student view. */
@@ -404,6 +412,13 @@ export interface MeEnrollment {
    *  this course. Opt-in, default OFF: a course that never turns it on never
    *  shows it anywhere. */
   codeEnabled: boolean;
+  /** 0029 — every instructor on this course has opted out of generative AI,
+   *  so its AI features are off and the worker won't turn them on. */
+  genaiLocked: boolean;
+  /** Live code assignments with the AI chat on. */
+  codeChatAssignments: number;
+  /** Live writing assignments with the AI chat on (0033). */
+  writingChatAssignments: number;
   /** v1.2 (migration 0017) — the semester this course is taught in, or null
    *  when unscheduled. Academic year is derived from (termSeason, termYear)
    *  via course/term.ts. */
@@ -423,10 +438,18 @@ export interface MeResponse {
   /** Instance-wide admin flag (users.is_admin). Orthogonal to course role —
    *  drives the Admin segment of the topbar RoleSwitch. */
   isAdmin: boolean;
-  /** Session-scoped: an instructor is previewing the student experience. While
-   *  true, the worker also reports every `enrollments` role below as `student`,
-   *  so role-based UI (e.g. hiding provenance marks) matches a real student. */
+  /** May create courses (admins always; others when an admin allows it). */
+  canCreateCourses: boolean;
+  /** "Not interested in generative AI" (0029). Hides Voices, agents, and the
+   *  AI controls on Writing and Code from this person's own screens. */
+  genaiOptOut: boolean;
+  /** Previewing a course as its sample student (0030). While true, EVERY
+   *  field here describes the sample student — email, userId, enrollments —
+   *  because the worker authenticates the request as that student. Only the
+   *  preview chrome (banner, role switch) should read `preview`. */
   actingAsStudent: boolean;
+  /** Who is really signed in, and which course is being previewed. */
+  preview: { courseId: string; realEmail: string } | null;
   /** Every course the caller is enrolled in, joined-date desc. Empty when
    *  unauthenticated or not yet claimed. */
   enrollments: MeEnrollment[];
@@ -443,17 +466,28 @@ export function getMe(signal?: AbortSignal, opts?: JsonFetchOpts) {
   return jsonFetch<MeResponse>("/api/me", { signal }, opts);
 }
 
-/**
- * Enter (or leave) "act as student" — a session-scoped role downgrade that
- * lets an instructor run their own course exactly as a student would, hidden
- * marks and all. Entering requires an instructor enrollment somewhere
- * (enforced by the worker); leaving is always allowed.
- */
-export function setActingAsStudent(acting: boolean) {
-  return jsonFetch<{ actingAsStudent: boolean }>("/auth/act-as-student", {
+/** Set the caller's "not interested in generative AI" preference. */
+export function setGenaiOptOut(genaiOptOut: boolean) {
+  return jsonFetch<{ genaiOptOut: boolean }>("/api/me/preferences", {
     method: "POST",
-    body: JSON.stringify({ acting }),
+    body: JSON.stringify({ genaiOptOut }),
   });
+}
+
+/**
+ * Enter (or leave) a course preview. Entering needs the course and a staff
+ * enrollment in it (enforced by the worker); the session then runs as the
+ * course's sample student — a real student account — so every screen shows
+ * exactly what a student sees. Leaving is always allowed.
+ */
+export function setActingAsStudent(acting: boolean, courseId?: string | null) {
+  return jsonFetch<{ actingAsStudent: boolean; courseId: string | null }>(
+    "/auth/act-as-student",
+    {
+      method: "POST",
+      body: JSON.stringify({ acting, courseId: courseId ?? null }),
+    },
+  );
 }
 
 /** Parse the Worker's `event:`/`data:`/blank-line SSE framing into TurnEvents.
@@ -836,7 +870,34 @@ export async function addCollectionUrlSource(
 
 // ─── roster (instructor-only) ──────────────────────────────────────────────
 
-export type EnrollmentRole = "student" | "instructor";
+export type EnrollmentRole = "student" | "ta" | "instructor";
+
+/** Mirrors the worker's Capability union (apps/worker/src/permissions.ts). */
+export type Capability =
+  | "author"
+  | "manage_students"
+  | "view_submissions"
+  | "run_attendance"
+  | "manage_staff";
+
+/** Whether an enrollment's role holds a capability. Missing enrollment or an
+ *  older payload without `capabilities` holds nothing. */
+export function hasCapability(
+  e: { capabilities?: Capability[] } | null | undefined,
+  capability: Capability,
+): boolean {
+  return e?.capabilities?.includes(capability) ?? false;
+}
+
+/** Course staff — instructors and TAs — as opposed to students. */
+export function isStaffRole(role: EnrollmentRole | null | undefined): boolean {
+  return role === "instructor" || role === "ta";
+}
+
+/** Display label for a course role. */
+export function roleLabel(role: EnrollmentRole): string {
+  return role === "instructor" ? "Instructor" : role === "ta" ? "TA" : "Student";
+}
 
 export interface RosterEntry {
   userId: string;
@@ -845,10 +906,15 @@ export interface RosterEntry {
   role: EnrollmentRole;
   joinedAt: number;
   lastSeenAt: number | null;
+  /** The course's sample student (the identity previews run as), not a
+   *  person. Badged, and left out of student counts. */
+  isSample: boolean;
 }
 
 export function listRoster(courseId: string) {
-  return jsonFetch<{ roster: RosterEntry[] }>(
+  // `assignableRoles` is exactly what the worker will accept from the caller
+  // when adding or changing someone — offer those and nothing else.
+  return jsonFetch<{ roster: RosterEntry[]; assignableRoles: EnrollmentRole[] }>(
     `/api/courses/${encodeURIComponent(courseId)}/roster`,
   );
 }
@@ -951,22 +1017,10 @@ export function claimJoinCode(code: string) {
   );
 }
 
-/** v1.0 §6 — reveal a lazy-reveal feature tab (attendance / collections)
- *  on the course dashboard without using it first. Instructor-only. */
-export function revealCourseTab(
-  courseId: string,
-  feature: "attendance" | "collections",
-) {
-  return jsonFetch<{ ok: true }>(
-    `/api/courses/${encodeURIComponent(courseId)}/reveal-tab`,
-    { method: "POST", body: JSON.stringify({ feature }) },
-  );
-}
-
-/** v1.1 — toggle an optional course extension on/off (bidirectional, unlike
- *  revealCourseTab). Agents and Provenance are real on/off toggles that
- *  default ON; Attendance is opt-in. (Library is no longer toggleable.)
- *  Instructor-only on the server. */
+/** v1.1 — toggle an optional course extension on/off. Agents and Provenance
+ *  are real on/off toggles that default ON; Attendance is opt-in. (Library is
+ *  no longer toggleable.) Instructor-only on the server. This superseded the
+ *  one-way v1.0 "reveal-tab" call, which has been removed. */
 export function setCourseFeature(
   courseId: string,
   feature: "attendance" | "agents" | "provenance" | "code",
@@ -994,6 +1048,7 @@ export interface AdminUser {
   displayName: string | null;
   lastSeenAt: number | null;
   isAdmin: boolean;
+  canCreateCourses: boolean;
   externalProvider: string | null;
   enrollmentCount: number;
   createdAt: number;
@@ -1014,8 +1069,8 @@ export interface AuditEntry {
   createdAt: number;
 }
 
-// Instructor-facing course creation (any signed-in user; the caller becomes
-// the new course's instructor). Distinct from createAdminCourse, which is the
+// Instructor-facing course creation (admins, and people an admin has allowed
+// to create courses; the caller becomes the new course's instructor). Distinct from createAdminCourse, which is the
 // admin console's bare course-row create. Returns the new course id so the SPA
 // can navigate straight into it.
 /** A course's term + active window, as accepted by create/update and returned
@@ -1115,6 +1170,7 @@ export interface UserDetail {
     lastSeenAt: number | null;
     createdAt: number;
     isAdmin: boolean;
+    canCreateCourses: boolean;
     externalProvider: string | null;
   };
   enrollments: Array<{
@@ -1130,6 +1186,31 @@ export function getAdminUser(userId: string) {
     `/api/admin/users/${encodeURIComponent(userId)}`,
   );
 }
+/** Allow or stop a person creating courses. Admin-only on the server. */
+export function setUserCanCreateCourses(userId: string, allowed: boolean) {
+  return jsonFetch<{ userId: string; canCreateCourses: boolean }>(
+    `/api/admin/users/${encodeURIComponent(userId)}`,
+    { method: "PATCH", body: JSON.stringify({ canCreateCourses: allowed }) },
+  );
+}
+
+/**
+ * Invite someone by email. They sign in with their institutional account and
+ * the first sign-in claims this row. Optionally allow course creation and/or
+ * enroll them in a course with any role. Admin-only on the server.
+ */
+export function inviteUser(params: {
+  email: string;
+  canCreateCourses?: boolean;
+  courseId?: string | null;
+  role?: EnrollmentRole | null;
+}) {
+  return jsonFetch<{ userId: string; email: string; created: boolean }>(
+    `/api/admin/invite`,
+    { method: "POST", body: JSON.stringify(params) },
+  );
+}
+
 export function listAuditLog(limit = 100) {
   return jsonFetch<{ entries: AuditEntry[] }>(
     `/api/admin/audit-log?limit=${limit}`,

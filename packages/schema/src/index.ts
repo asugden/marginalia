@@ -5,9 +5,9 @@
 export * from "./term.js";
 import type { TermSeason } from "./term.js";
 
-// v0.6 dropped `ta` — see migration 0004. Any code still narrowing on `ta`
-// is dead and should be removed alongside the migration deploy.
-export type EnrollmentRole = "student" | "instructor";
+// `ta` was dropped in 0004 (it had no behaviour) and restored in 0028, where
+// it gained one: see apps/worker/src/permissions.ts for what each role may do.
+export type EnrollmentRole = "student" | "ta" | "instructor";
 
 export interface OrganizationRow {
   id: string;
@@ -31,6 +31,14 @@ export interface UserRow {
   email_verified_at: number | null;
   /** v0.6: instance-wide admin flag, orthogonal to course enrollments. */
   is_admin: number;
+  /** 0028: may create courses. Admins may regardless of this flag. */
+  can_create_courses: number;
+  /** 0029: "not interested in generative AI". See apps/worker/src/genai.ts. */
+  genai_opt_out: number;
+  /** 0030: a course's sample student (previewing identity), never a person. */
+  is_sample: number;
+  /** 0030: the course a sample student belongs to; null for real users. */
+  sample_course_id: string | null;
 }
 
 export interface CourseRow {
@@ -214,6 +222,12 @@ export interface SessionRow {
    * real `enrollments` role.
    */
   acting_as_student: number;
+  /**
+   * 0030 — while set, the worker authenticates this session's requests as
+   * the named sample student (a course preview). `user_id` stays the real
+   * owner; clearing this ends the preview.
+   */
+  acting_as_user_id: string | null;
 }
 
 /**
@@ -298,6 +312,9 @@ export interface ProvenanceDocumentRow {
   event_coords: "pm" | "text";
   created_at: number;
   updated_at: number;
+  /** 0032 — the writing assignment this document is for. NULL for documents
+   *  created before 0032, which stay free-standing and keep working. */
+  assignment_id: string | null;
 }
 
 /**
@@ -391,6 +408,10 @@ export interface ProvenanceAssignmentRow {
   updated_at: number;
   /** Set instead of deleting, so already-attached submissions keep their name. */
   archived_at: number | null;
+  /** 0033 — the LLM chat beside this assignment's documents. */
+  chat_enabled: number;
+  /** 0033 — null = students choose their chat agent; else the one they get. */
+  locked_agent_id: string | null;
 }
 
 export interface ProvenanceAssignmentCheckpointRow {

@@ -46,7 +46,22 @@ export interface NetworkViewProps {
   onInput: (input: Float32Array) => void;
   /** Bumping this clears the input grid. */
   clearSignal: number;
+  /** Code view on. The figure's parts become the controls for their code:
+   *  hover opens it, click/tap pins it. The figure's own hover explanations
+   *  (output tracing, edge tooltips) are switched off; drawing still works. */
+  codeOn?: boolean;
+  /** Pointer entered / left a part of the figure (code view only). */
+  onRegionEnter?: (region: Region) => void;
+  onRegionLeave?: (region: Region) => void;
+  /** A part was clicked or tapped (code view only): pin its code. */
+  onRegionClick?: (region: Region) => void;
+  /** Parts a code box is pointing at (open, or its button hovered): shaded
+   *  and kept at full strength while the rest dims. Null for none. */
+  litRegions?: Set<Region> | null;
 }
+
+/** The parts of the figure a code box can point at. */
+export type Region = "input" | "w1" | "h1" | "w2" | "h2" | "w3" | "out";
 
 const W = 900; // viewBox width
 const PAD = 24;
@@ -67,6 +82,28 @@ const H = 672;
 // takes them most of the way to a circle while keeping a hint of the square.
 const HNODE = 25;
 const HNODE_RX = 9;
+
+// Where each part of the figure sits vertically, in viewBox units. The
+// weight parts fill the gaps between rows; the neuron parts hug their row.
+// The input part is the 240-unit drawing grid centred on Y_INPUT.
+const GRID_BLOCK = 240;
+const HALF = HNODE / 2 + 4;
+const REGION_Y: Record<Region, { y0: number; y1: number }> = {
+  input: { y0: Y_INPUT - GRID_BLOCK / 2, y1: Y_INPUT + GRID_BLOCK / 2 },
+  w1: { y0: Y_INPUT + GRID_BLOCK / 2 + 2, y1: Y_H1 - HALF },
+  h1: { y0: Y_H1 - HALF, y1: Y_H1 + HALF },
+  w2: { y0: Y_H1 + HALF, y1: Y_H2 - HALF },
+  h2: { y0: Y_H2 - HALF, y1: Y_H2 + HALF },
+  w3: { y0: Y_H2 + HALF, y1: Y_OUT - 24 },
+  out: { y0: Y_OUT - 24, y1: Y_OUT + 24 },
+};
+
+/** Each part's top and bottom as fractions of the figure's height, so the
+ *  page can place HTML (markers, the code popover) over the scaled SVG. */
+export const REGION_SPAN: Record<Region, { top: number; bottom: number }> =
+  Object.fromEntries(
+    Object.entries(REGION_Y).map(([r, { y0, y1 }]) => [r, { top: y0 / H, bottom: y1 / H }]),
+  ) as Record<Region, { top: number; bottom: number }>;
 
 interface Geo {
   input: { cx: number; cy: number; s: number }[]; // square cells
@@ -91,7 +128,7 @@ function rowX(count: number, i: number, width: number, pad: number) {
 
 // Build the static geometry + edge lists once per net.
 function buildGeo(net: Net): Geo {
-  const gridBlock = 240; // px for the 20x20 grid
+  const gridBlock = GRID_BLOCK; // px for the 20x20 grid
   const s = gridBlock / GRID;
   const gx0 = W / 2 - gridBlock / 2;
   const gy0 = Y_INPUT - gridBlock / 2;
@@ -342,6 +379,8 @@ function tracePath(
 
 export function NetworkView({
   net, activations, edgeThreshold, predicted, onInput, clearSignal,
+  codeOn = false, litRegions = null, onRegionEnter, onRegionLeave,
+  onRegionClick,
 }: NetworkViewProps) {
   const geo = useMemo(() => buildGeo(net), [net]);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -440,13 +479,13 @@ export function NetworkView({
   // needs activations; hovering with an empty canvas does nothing.
   const [hoveredOut, setHoveredOut] = useState<number | null>(null);
   const path = useMemo<TracedPath | null>(() => {
-    if (hoveredOut == null || !activations) return null;
+    if (codeOn || hoveredOut == null || !activations) return null;
     // Only trace when there's actually a drawing to explain.
     let any = false;
     for (const v of activations.raw) if (v > 0.02) { any = true; break; }
     if (!any) return null;
     return tracePath(net, geo, activations, hoveredOut, hoveredOut === predicted);
-  }, [hoveredOut, activations, net, geo, predicted]);
+  }, [codeOn, hoveredOut, activations, net, geo, predicted]);
   const pathActive = path != null;
 
   // Which path edge is hovered (index into path.edges), for the weight tooltip.
@@ -474,6 +513,20 @@ export function NetworkView({
   }, [geo.e1, cut1]);
   const drawn2 = useMemo(() => geo.e2.filter((e) => e.abs >= cut2), [geo.e2, cut2]);
   const drawn3 = useMemo(() => geo.e3.filter((e) => e.abs >= cut3), [geo.e3, cut3]);
+
+  // Code view: the parts a code box points at keep full strength over a
+  // sand band; the rest dim. The input part is shown by its frame instead.
+  const dimFor = (r: Region) => (litRegions && !litRegions.has(r) ? 0.12 : 1);
+  const lit = (r: Region) => litRegions?.has(r) ?? false;
+  const litBands = (Object.keys(REGION_Y) as Region[])
+    .filter((r) => r !== "input" && lit(r))
+    .map((r) => ({ r, ...REGION_Y[r] }));
+  const BAND_X0 = PAD + 70;
+  // Hover targets for every part but the input, whose drawing surface
+  // reports its own enter/leave (below).
+  const hitBands = (Object.keys(REGION_Y) as Region[])
+    .filter((r) => r !== "input")
+    .map((r) => ({ r, ...REGION_Y[r] }));
 
   // Reverse so strongest (first in sorted order) paint last / on top.
   const renderEdges = (edges: Edge[], max: number, key: string) =>
@@ -510,14 +563,52 @@ export function NetworkView({
         <text x={10} y={Y_OUT} dominantBaseline="middle">output</text>
       </g>
 
+      {/* Code view: sand bands behind the parts a code box points at. */}
+      {codeOn && (
+        <g pointerEvents="none">
+          {litBands.map(({ r, y0, y1 }) => (
+            <rect
+              key={`band-${r}`}
+              x={BAND_X0} y={y0} width={W - BAND_X0 - PAD / 2} height={y1 - y0}
+              rx={8}
+              style={{ fill: "var(--surface-sunken)" }}
+            />
+          ))}
+        </g>
+      )}
+
+      {/* Code view: the parts' hover targets, transparent. The edges, nodes
+          and tiles drawn over them let the pointer through while code is on,
+          so a part is one target however it is drawn. */}
+      {codeOn && (
+        <g>
+          {hitBands.map(({ r, y0, y1 }) => (
+            <rect
+              key={`hit-${r}`}
+              x={BAND_X0} y={y0} width={W - BAND_X0 - PAD / 2} height={y1 - y0}
+              fill="transparent"
+              style={{ cursor: "pointer" }}
+              onPointerEnter={() => onRegionEnter?.(r)}
+              onPointerLeave={() => onRegionLeave?.(r)}
+              onClick={() => onRegionClick?.(r)}
+            />
+          ))}
+        </g>
+      )}
+
       {/* Edges first, so nodes sit on top. Draw deepest layer first. When a
           hover path is active, dim the whole base network so the traced path
           reads clearly on top. */}
-      <g strokeLinecap="round" opacity={pathActive ? 0.12 : 1}>
-        {renderEdges(drawn1, geo.max1, "e1")}
-        {renderEdges(drawn2, geo.max2, "e2")}
-        {renderEdges(drawn3, geo.max3, "e3")}
+      <g
+        strokeLinecap="round"
+        opacity={pathActive ? 0.12 : 1}
+        pointerEvents={codeOn ? "none" : undefined}
+      >
+        <g opacity={dimFor("w1")}>{renderEdges(drawn1, geo.max1, "e1")}</g>
+        <g opacity={dimFor("w2")}>{renderEdges(drawn2, geo.max2, "e2")}</g>
+        <g opacity={dimFor("w3")}>{renderEdges(drawn3, geo.max3, "e3")}</g>
       </g>
+
 
       {/* Highlight layer: the traced path, drawn thick with a soft glow. Sage
           for a positive edge, plum for negative — the learned scale at full
@@ -555,7 +646,7 @@ export function NetworkView({
           internally, but showing that here would make the image jump and
           expand under the pen on every stroke, which is disorienting.) A
           transparent hit-rect on top captures the pointer. */}
-      <g>
+      <g opacity={dimFor("input")}>
         {geo.input.map((c, i) => {
           const v = activations ? activations.raw[i]! : 0;
           const onPath = path?.px.has(i);
@@ -585,10 +676,13 @@ export function NetworkView({
             />
           );
         })}
-        {/* Frame + drawing hint. */}
+        {/* Frame + drawing hint. Darkens to ink while a code box points at
+            the input. */}
         <rect
           x={geo.gx0} y={geo.gy0} width={geo.gridBlock} height={geo.gridBlock}
-          fill="none" stroke="#c9c2b8" strokeWidth={1.5}
+          fill="none"
+          style={{ stroke: codeOn && lit("input") ? "var(--text-strong)" : "#c9c2b8" }}
+          strokeWidth={codeOn && lit("input") ? 2.5 : 1.5}
         />
         {/* Transparent capture surface — sits above the cells so every pointer
             move over the grid paints. */}
@@ -600,14 +694,18 @@ export function NetworkView({
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
-          onPointerLeave={onUp}
+          onPointerEnter={codeOn ? () => onRegionEnter?.("input") : undefined}
+          onPointerLeave={(e) => {
+            onUp(e);
+            if (codeOn) onRegionLeave?.("input");
+          }}
         />
       </g>
 
       {/* Hidden 1. Heavily-rounded squares (mostly circular but still a touch
           rectangular), sized to leave ~3px between neighbours. Path nodes grow
           a little and get a dark accent ring; others dim. */}
-      <g>
+      <g opacity={dimFor("h1")} pointerEvents={codeOn ? "none" : undefined}>
         {geo.h1.map((p, i) => {
           const onPath = path?.h1.has(i);
           const S = onPath ? HNODE + 4 : HNODE;
@@ -624,7 +722,7 @@ export function NetworkView({
         })}
       </g>
       {/* Hidden 2. */}
-      <g>
+      <g opacity={dimFor("h2")} pointerEvents={codeOn ? "none" : undefined}>
         {geo.h2.map((p, i) => {
           const onPath = path?.h2.has(i);
           const S = onPath ? HNODE + 4 : HNODE;
@@ -649,14 +747,14 @@ export function NetworkView({
           Hovering a tile traces an explanatory path (see tracePath): the
           winner explains why it fired; a wrong tile shows what pushed against
           it. Only meaningful once something is drawn. */}
-      <g>
+      <g opacity={dimFor("out")} pointerEvents={codeOn ? "none" : undefined}>
         {geo.out.map((p, i) => {
           const v = activations ? activations.output[i]! : 0;
           const label = net.labels[i] ?? "";
           const win = i === predicted && v > 0;
           const S = 40; // tile size
           const long = label.length > 2;
-          const hovered = hoveredOut === i;
+          const hovered = !codeOn && hoveredOut === i;
           // Glyph colour: light on the accent-filled winner or a dark
           // background; dark otherwise.
           const glyph = win ? "#fff" : v > 0.55 ? "#fff" : "var(--text-strong, #1c1917)";
@@ -664,7 +762,7 @@ export function NetworkView({
           return (
             <g
               key={`out-${i}`}
-              style={{ cursor: "pointer" }}
+              style={{ cursor: codeOn ? "default" : "pointer" }}
               opacity={dimTile ? 0.4 : 1}
               onPointerEnter={() => setHoveredOut(i)}
               onPointerLeave={() => setHoveredOut((cur) => (cur === i ? null : cur))}

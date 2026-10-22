@@ -64,6 +64,13 @@ const AssignPage = lazy(() =>
   import("./modules/course-items/index.js").then((m) => ({ default: m.AssignPage })));
 const ProvenanceAssignmentRosterPage = lazy(() =>
   import("./modules/provenance/index.js").then((m) => ({ default: m.AssignmentRosterPage })));
+// Review ▸ Submissions — every type's assignments, by what came back.
+const ReviewSubmissionsPage = lazy(() =>
+  import("./pages/ReviewSubmissionsPage.js").then((m) => ({ default: m.ReviewSubmissionsPage })));
+const ProvenanceNewAssignmentPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.NewAssignmentPage })));
+const ProvenanceCheckpointPage = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.CheckpointPage })));
 // Examples — standalone, public, unauthenticated interactive teaching pages.
 // See apps/web/src/examples/registry.ts. Each example's page is lazy-loaded
 // from the registry; the index page lists them.
@@ -89,6 +96,8 @@ const CodeHomePage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.CodeHomePage })));
 const CodeNotebookPage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.NotebookPage })));
+const ProvenanceOpenAssignment = lazy(() =>
+  import("./modules/provenance/index.js").then((m) => ({ default: m.OpenAssignmentDocument })));
 const CodeOpenAssignment = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.OpenAssignmentNotebook })));
 const CodeStarterPage = lazy(() =>
@@ -97,6 +106,8 @@ const CodeSandboxPage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.SandboxNotebookPage })));
 const CodeInstructorPage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.InstructorCodePage })));
+const CodeNewAssignmentPage = lazy(() =>
+  import("./modules/code/index.js").then((m) => ({ default: m.NewCodeAssignmentPage })));
 const CodeRosterPage = lazy(() =>
   import("./modules/code/index.js").then((m) => ({ default: m.RosterPage })));
 const CodeSubmissionPage = lazy(() =>
@@ -125,6 +136,8 @@ const StudentAgentsPage = lazy(() =>
   import("./pages/StudentAgentsPage.js").then((m) => ({ default: m.StudentAgentsPage })));
 const CoursePickerPage = lazy(() =>
   import("./pages/CoursePickerPage.js").then((m) => ({ default: m.CoursePickerPage })));
+const WelcomePage = lazy(() =>
+  import("./modules/onboarding/index.js").then((m) => ({ default: m.WelcomePage })));
 const LegacyCourseRedirect = lazy(() =>
   import("./pages/LegacyCourseRedirect.js").then((m) => ({ default: m.LegacyCourseRedirect })));
 
@@ -155,14 +168,23 @@ function LegacyInstructorExamplesRedirect() {
  * instructor/assign/examples. Instructors hold links to the old path, so it
  * redirects rather than 404ing.
  *
- * Note this is the ONLY assignments/* path that moved. `instructor/assignments`
- * itself and `instructor/assignments/:id` (the per-assignment roster) both stay
- * exactly where they were — writing is still authored there, and the roster is
- * the one view listing students who submitted nothing.
+ * (The per-assignment roster at `instructor/assignments/:id` has since moved
+ * too, to Review: see the ParamRedirect beside it.)
  */
 function LegacyAssignmentsExamplesRedirect() {
   const { courseId } = useParams<{ courseId: string }>();
   return <Navigate to={`/course/${courseId}/instructor/assign/examples`} replace />;
+}
+
+/**
+ * Redirect an old instructor URL to its new home under the same course,
+ * carrying route params across: `to` is relative to /course/:id/instructor/
+ * and its `:name` segments are filled from the current match.
+ */
+function ParamRedirect({ to }: { to: string }) {
+  const params = useParams();
+  const tail = to.replace(/:(\w+)/g, (_, k: string) => encodeURIComponent(params[k] ?? ""));
+  return <Navigate to={`/course/${params.courseId}/instructor/${tail}`} replace />;
 }
 
 const routes = [
@@ -171,6 +193,9 @@ const routes = [
   // v1.0 §2 — explicit picker entry point (deep-linkable from the dashboard's
   // "Switch course" menu).
   { path: "/courses", element: lz(<CoursePickerPage />) },
+  // First-run setup for someone allowed to create courses (RootRedirect sends
+  // a creator with no courses here; the picker links to it too).
+  { path: "/welcome", element: lz(<WelcomePage />) },
 
   // ── Legacy redirect shims (keep ≥6 months past the cutover) ──────────────
   // Course-agnostic student URLs from before the course-rooted model.
@@ -270,6 +295,10 @@ const routes = [
       { path: "examples", element: lz(<StudentExamplesPage />) },
       { path: "writing", element: lz(<ProvenanceDocumentListPage />) },
       { path: "writing/agents", element: lz(<ProvenanceAgentsPage />) },
+      // Open-or-create the student's document for a writing assignment, then
+      // redirect to the editor. A literal segment, so it can't collide with a
+      // document id.
+      { path: "writing/assignment/:assignmentId", element: lz(<ProvenanceOpenAssignment />) },
       { path: "code", element: lz(<CodeHomePage />) },
       // Open-or-create the caller's notebook for an assignment, then redirect
       // to it. A literal segment, so it can't collide with a notebook id.
@@ -322,36 +351,49 @@ const routes = [
       { path: "collections", element: lz(<CollectionsListPage />) },
       { path: "collections/:id", element: lz(<CollectionDetailPage />) },
       { path: "roster", element: lz(<RosterPage />) },
-      // Instructor-side provenance: the course-wide list of student checkpoints,
-      // and the assignments those checkpoints are submitted against. The roster
-      // is the per-assignment grid — the one view that lists students who have
-      // submitted nothing.
-      { path: "submissions", element: lz(<ProvenanceSubmissionsPage />) },
+      // ── Review ▸ Submissions ─────────────────────────────────────────
+      // What came back, by assignment. `submissions` was once a flat feed of
+      // writing snapshots; the URL is kept. Each assignment's submissions sit
+      // beneath it, whatever its type.
+      { path: "submissions", element: lz(<ReviewSubmissionsPage />) },
+      // Writing submissions that belong to no current checkpoint.
+      { path: "submissions/uncategorized", element: lz(<ProvenanceSubmissionsPage />) },
+      // A whole writing assignment, and one of its checkpoints. Ids are
+      // server-minted (`pasg_`/`pcp_`), so they can't collide with literals.
+      { path: "submissions/writing/:assignmentId", element: lz(<ProvenanceAssignmentRosterPage />) },
+      {
+        path: "submissions/writing/:assignmentId/:checkpointId",
+        element: lz(<ProvenanceCheckpointPage />),
+      },
+      { path: "submissions/code/:assignmentId", element: lz(<CodeRosterPage />) },
       // ── Assign band ──────────────────────────────────────────────────
-      // One list of every assignable kind, backed by `course_items`. A new
-      // content type appears here as a row, not as a new tab.
+      // One list of every assignable kind, backed by `course_items`, shown
+      // as Assign ▸ All when more than one kind is on.
       { path: "assign", element: lz(<AssignPage />) },
       // Examples curation. A literal segment under `assign`; nothing dynamic
       // is mounted beside it, so there is no collision to reason about.
       { path: "assign/examples", element: lz(<InstructorExamplesPage />) },
-      // Writing authoring keeps its own surface and its own URL. The Assign
-      // list schedules writing; this is where an assignment's title,
-      // instructions, and checkpoints are actually written.
+      // Assign ▸ Writing: authoring. Its create form is its own page, so
+      // "New" lands on the form. Assignment ids are `pasg_<uuid>`.
       { path: "assignments", element: lz(<ProvenanceAssignmentsPage />) },
-      // The per-assignment roster — every student against every checkpoint,
-      // including the ones who submitted nothing. Unmoved: instructors link to
-      // these directly. It cannot collide with a literal sibling, since
-      // `assignments/examples` now redirects rather than rendering, and
-      // assignment ids are server-minted `pasg_<uuid>` and never client-chosen.
-      { path: "assignments/:assignmentId", element: lz(<ProvenanceAssignmentRosterPage />) },
-      // Kept so links made before the bands landed still resolve.
+      { path: "assignments/new", element: lz(<ProvenanceNewAssignmentPage />) },
+      // Kept so links made before the bands landed still resolve. Literal,
+      // so it outranks the redirect below.
       { path: "assignments/examples", element: <LegacyAssignmentsExamplesRedirect /> },
+      // The writing roster used to live here; instructors hold links to it.
+      {
+        path: "assignments/:assignmentId",
+        element: <ParamRedirect to="submissions/writing/:assignmentId" />,
+      },
       { path: "examples", element: <LegacyInstructorExamplesRedirect /> },
+      // Assign ▸ Code.
       { path: "code", element: lz(<CodeInstructorPage />) },
-      // `submissions` is a literal segment; assignment ids are server-minted
-      // `casg_<uuid>`, so the two can't collide.
+      { path: "code/new", element: lz(<CodeNewAssignmentPage />) },
+      // One code submission. `submissions` is a literal segment; assignment
+      // ids are server-minted `casg_<uuid>`, so the two can't collide.
       { path: "code/submissions/:submissionId", element: lz(<CodeSubmissionPage />) },
-      { path: "code/:assignmentId", element: lz(<CodeRosterPage />) },
+      // The code roster used to live here.
+      { path: "code/:assignmentId", element: <ParamRedirect to="submissions/code/:assignmentId" /> },
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
     ],

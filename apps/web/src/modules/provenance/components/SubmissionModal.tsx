@@ -37,6 +37,10 @@ interface Props {
    *  permanent — a student can't quietly un-submit); the worker enforces the
    *  same rule. */
   canRevoke: boolean;
+  /** The assignment this document was written for (migration 0032), or null
+   *  for a document from before writing belonged to assignments. When set,
+   *  the student submits to that assignment's checkpoints only. */
+  assignmentId: string | null;
   onClose: () => void;
 }
 
@@ -58,11 +62,20 @@ function findCheckpoint(
   return null;
 }
 
-export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Props) {
+export function SubmissionModal({
+  documentId,
+  courseId,
+  canRevoke,
+  assignmentId,
+  onClose,
+}: Props) {
   const [subs, setSubs] = useState<SubmissionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [justSubmitted, setJustSubmitted] = useState(false);
+  /** null = nothing submitted this session; otherwise whether the server
+   *  judged that submission late — its verdict, not the client's prediction,
+   *  so a submit that crosses the deadline mid-flight still says so. */
+  const [justSubmitted, setJustSubmitted] = useState<{ late: boolean } | null>(null);
   const [assignments, setAssignments] = useState<AssignmentDTO[]>([]);
   // "" = submit without attaching to anything, which is what every submission
   // did before assignments existed and stays available afterwards.
@@ -82,8 +95,10 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
     // A failure here is deliberately silent: the picker is an addition, and a
     // student must still be able to submit if the assignment list won't load.
     listAssignments(courseId, undefined, ctrl.signal)
-      .then((a) => {
+      .then((all) => {
         if (ctrl.signal.aborted) return;
+        // A document written for an assignment submits to it and nothing else.
+        const a = assignmentId ? all.filter((x) => x.id === assignmentId) : all;
         setAssignments(a);
         // Preselect when there is exactly one checkpoint in the whole course —
         // with one thing to submit to, making them choose it is friction.
@@ -106,7 +121,7 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
     setBusy(true);
     setError(null);
     try {
-      const { token, createdAt } = await mintSubmission(
+      const { token, createdAt, late } = await mintSubmission(
         documentId,
         courseId,
         selected
@@ -118,7 +133,7 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
       // of this course can open a submission — so the old copy-to-clipboard
       // step would have put a link in the student's clipboard that nobody they
       // could send it to is able to view.
-      setJustSubmitted(true);
+      setJustSubmitted({ late: late === true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit");
     } finally {
@@ -168,25 +183,40 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
             looks and behaves exactly as it did before they existed. */}
         {assignments.length > 0 && (
           <div className="prov-submit-target">
+            {/* An assignment's document with a single checkpoint has nothing
+                to choose — it's preselected above, so no picker. */}
+            {!(assignmentId && assignments[0]?.checkpoints.length === 1) && (
             <Field label="Submitting to" htmlFor="prov-submit-target">
               <Select
                 id="prov-submit-target"
                 value={choice}
                 onChange={(e) => setChoice(e.target.value)}
               >
-                <option value="">Not part of an assignment</option>
-                {assignments.map((a) => (
-                  <optgroup key={a.id} label={a.title}>
-                    {a.checkpoints.map((c) => (
-                      <option key={c.id} value={cellKey(a.id, c.id)}>
-                        {c.name}
-                        {c.dueAt !== null && ` — due ${absoluteTime(c.dueAt)}`}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
+                {!assignmentId && <option value="">Not part of an assignment</option>}
+                {assignmentId && !choice && <option value="">Choose a checkpoint</option>}
+                {assignments.map((a) =>
+                  // A one-checkpoint assignment is just the assignment: its
+                  // checkpoint's name ("Final") is never shown to a student.
+                  a.checkpoints.length === 1 ? (
+                    <option key={a.id} value={cellKey(a.id, a.checkpoints[0]!.id)}>
+                      {a.title}
+                      {a.checkpoints[0]!.dueAt !== null &&
+                        ` — due ${absoluteTime(a.checkpoints[0]!.dueAt)}`}
+                    </option>
+                  ) : (
+                    <optgroup key={a.id} label={a.title}>
+                      {a.checkpoints.map((c) => (
+                        <option key={c.id} value={cellKey(a.id, c.id)}>
+                          {c.name}
+                          {c.dueAt !== null && ` — due ${absoluteTime(c.dueAt)}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ),
+                )}
               </Select>
             </Field>
+            )}
             {selected?.assignment.instructions && (
               <p className="muted small prov-submit-instructions">
                 {selected.assignment.instructions}
@@ -208,14 +238,18 @@ export function SubmissionModal({ documentId, courseId, canRevoke, onClose }: Pr
           icon={<ShareIcon size={16} />}
           onClick={onMint}
           loading={busy}
-          disabled={busy}
+          // An assignment's document needs a checkpoint to submit to; the
+          // server refuses otherwise.
+          disabled={busy || (assignmentId !== null && !selected)}
         >
           {active.length > 0 ? "Submit again" : "Submit to instructor"}
         </Button>
 
         {justSubmitted && (
           <p className="prov-submit-ok" role="status">
-            Submitted. Your instructor can now see this version.
+            {justSubmitted.late
+              ? "Submitted, marked late. Your instructor can now see this version."
+              : "Submitted. Your instructor can now see this version."}
           </p>
         )}
 

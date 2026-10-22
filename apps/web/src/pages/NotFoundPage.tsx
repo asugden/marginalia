@@ -88,6 +88,10 @@ export function NotFoundPage() {
               <Button
                 variant="primary"
                 href="/"
+                // Full reload on purpose: after a failed chunk load (this page
+                // doubles as the errorElement), only a fresh document gets a
+                // fresh bundle — a router transition would reuse the stale one.
+                reloadDocument
                 iconRight={<ArrowIcon size={16} />}
               >
                 {dest.kind === "app" ? "Back to your courses" : "Back home"}

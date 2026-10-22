@@ -76,7 +76,7 @@
 }
 .ex-assign__field--wide { flex: 1; min-width: 14rem; }
 .ex-assign__field--wide input { width: 100%; }
-.ex-assign__order { align-self: flex-start; }
+.ex-assign__row .app-list__meta { align-self: flex-start; }
 .ex-preview-link { font-size: var(--text-sm); color: var(--text-muted); }
 
 /* ── instructor: usage histogram ──────────────────────────────────────────

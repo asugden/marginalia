@@ -11,6 +11,7 @@
 // the rows differ in exactly one respect: whether the label is filled in.
 
 import { useState } from "react";
+import { Button } from "../../components/index.js";
 
 export interface Column {
   /** Header in the raw, as-collected state. */
@@ -44,14 +45,13 @@ export function SheetFigure({ columns, label, rows, trainCount }: Props) {
   return (
     <div className="ovw-sheet-block">
       <div className="ovw-sheet-bar">
-        <button
-          type="button"
-          className={`ovw-toggle${asFeatures ? " is-on" : ""}`}
+        <Button
+          size="sm"
+          variant={asFeatures ? "subtle" : "primary"}
           onClick={() => setAsFeatures((v) => !v)}
-          aria-pressed={asFeatures}
         >
-          {asFeatures ? "← back to data" : "turn data into features →"}
-        </button>
+          {asFeatures ? "As data" : "As features"}
+        </Button>
         <span className="ovw-sheet-bar__state">
           {asFeatures
             ? "features — every column is a number a model can read"

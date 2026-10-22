@@ -96,7 +96,8 @@ export async function verifyState(
     typeof parsed !== "object" ||
     typeof (parsed as AuthState).nonce !== "string" ||
     typeof (parsed as AuthState).returnTo !== "string" ||
-    typeof (parsed as AuthState).codeVerifier !== "string"
+    ((parsed as AuthState).codeVerifier !== undefined &&
+      typeof (parsed as AuthState).codeVerifier !== "string")
   ) {
     return null;
   }

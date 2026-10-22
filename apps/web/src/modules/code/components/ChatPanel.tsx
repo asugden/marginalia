@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../../../Markdown.js";
 import { SendIcon, StopIcon } from "../../../icons.js";
+import { listVoices } from "../../../api.js";
 import {
   isAuthError,
   listMessages,
@@ -32,6 +33,8 @@ export function NotebookChatPanel({
   onClearFocus,
   beforeSend,
   onReply,
+  voiceChoice = false,
+  voiceDefault = null,
 }: {
   courseId: string;
   target: ChatTarget;
@@ -44,10 +47,49 @@ export function NotebookChatPanel({
   /** Every assistant reply, including those loaded from history, so the
    *  notebook can recognise AI chat text if it turns up in a cell. */
   onReply?: (text: string) => void;
+  /** Voice policy (migration 0027): true = the assignment lets each student
+   *  pick a library voice, shown as a select in this panel's header. */
+  voiceChoice?: boolean;
+  /** The library voice preselected when choosing is on. */
+  voiceDefault?: string | null;
 }) {
   const preview = target.kind === "preview";
   const targetKey = target.kind === "notebook" ? target.notebookId : target.assignmentId;
   const [messages, setMessages] = useState<CodeMessageDTO[] | null>(preview ? [] : null);
+  // Students-choose voice policy. The pick sticks per notebook/assignment
+  // (localStorage) so it survives reloads; the server re-validates the id on
+  // every turn and ignores it when the policy is one-assigned-voice.
+  const voiceStorageKey = `code.voice.${targetKey}`;
+  const [voiceOptions, setVoiceOptions] = useState<Array<{ id: string; name: string }> | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(() => {
+    if (!voiceChoice) return null;
+    try {
+      return window.localStorage.getItem(voiceStorageKey) || voiceDefault;
+    } catch {
+      return voiceDefault;
+    }
+  });
+  useEffect(() => {
+    if (!voiceChoice) return;
+    let live = true;
+    listVoices()
+      .then((v) => {
+        if (!live) return;
+        setVoiceOptions(v.library.map((lv) => ({ id: lv.id, name: lv.name })));
+      })
+      .catch(() => live && setVoiceOptions([]));
+    return () => {
+      live = false;
+    };
+  }, [voiceChoice]);
+  function pickVoice(id: string) {
+    setVoiceId(id);
+    try {
+      window.localStorage.setItem(voiceStorageKey, id);
+    } catch {
+      /* private mode — the pick just won't survive a reload */
+    }
+  }
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,11 +158,12 @@ export function NotebookChatPanel({
       },
       onAuthRequired: () => redirectToLogin(),
     };
+    const chosenVoice = voiceChoice ? voiceId : null;
     if (target.kind === "notebook") {
-      abortRef.current = streamChatTurn(courseId, target.notebookId, text, focusCellId, callbacks);
+      abortRef.current = streamChatTurn(courseId, target.notebookId, text, focusCellId, callbacks, chosenVoice);
     } else {
       const history = (messages ?? []).map((m) => ({ role: m.role, content: m.content }));
-      abortRef.current = streamChatPreview(courseId, target.assignmentId, text, history, focusCellId, callbacks);
+      abortRef.current = streamChatPreview(courseId, target.assignmentId, text, history, focusCellId, callbacks, chosenVoice);
     }
   }
 
@@ -140,6 +183,21 @@ export function NotebookChatPanel({
     <div className="prov-chat code-chat">
       <div className="code-side__head">
         <span className="code-side__title">{preview ? "Chat preview" : "Chat"}</span>
+        {voiceChoice && voiceOptions !== null && voiceOptions.length > 0 && (
+          <select
+            className="code-chat__voice"
+            aria-label="Chat voice"
+            title="Your instructor lets you choose how this chat talks"
+            value={voiceId ?? voiceOptions[0]!.id}
+            onChange={(e) => pickVoice(e.target.value)}
+          >
+            {voiceOptions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       <div className="prov-chat-scroll" ref={scroller}>
         {messages === null ? (

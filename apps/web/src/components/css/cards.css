@@ -1,0 +1,337 @@
+/* ==== Cards ========================================================= *
+ * The ONE reference for every card and list row that stands for a thing:
+ * an assignment, an agent, a document, a submission, a person, a course.
+ * Change the look of cards here — the variables first, then the shared
+ * rules below — and every card type follows.
+ *
+ * Two structures, and every card type is one of them:
+ *
+ *   JOINED LIST    one bordered box, rows split by hairlines.
+ *                  .app-list (assignments, items, voices, collections,
+ *                  submissions…) · .src-list (sources, join codes) ·
+ *                  .roster (people)
+ *
+ *   STACKED CARDS  separate raised cards with a gap between them.
+ *                  .app-agent (student agent cards) · .app-papers__list
+ *                  (student documents / notebooks) · .ds-staff-list
+ *                  (writing agents) · .app-dcourse (course picker)
+ *
+ * The leading mark — the square icon tile before a card's title — is
+ * .card-mark (anything assigned; rendered by <ItemMark>), .app-coll-ic
+ * (libraries) and .app-papers__ic (a student's own documents/notebooks).
+ * Submissions carry no mark: a card WITH a mark is a thing handed out, a
+ * row WITHOUT one is something that came back. Add a new card type by joining one of
+ * the grouped selectors below, not by writing its own border/padding.
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* Surface */
+  --card-bg: var(--surface);
+  --card-border: 1px solid var(--border);
+  --card-border-color-hover: var(--border-strong);
+  --card-divider: 1px solid var(--border-faint);
+  --card-row-hover: var(--surface-hover);
+  --card-shadow: var(--shadow-xs);
+  --card-shadow-hover: var(--shadow-hover);
+  --card-radius: var(--radius-md);
+  --card-radius-lg: var(--radius-lg);
+  --card-transition:
+    box-shadow var(--dur-3) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+
+  /* Spacing */
+  --card-pad: 0.95rem 1.1rem;        /* rows and cards */
+  --card-pad-dense: 0.75rem 1rem;    /* management rows: people, sources; compact cards */
+  --card-pad-lg: 1.05rem 1.25rem;    /* feature cards: agents, courses */
+  --card-gap: 0.9rem;                /* between mark, text, and meta inside a card */
+  --card-stack-gap: 0.6rem;          /* between stacked cards */
+  --card-stack-gap-lg: 0.9rem;       /* between feature cards */
+
+  /* Type */
+  --card-title-color: var(--text-strong);
+  --card-title-weight: 600;
+  --card-title-size: var(--text-base);
+  --card-title-size-dense: var(--text-sm);
+  --card-title-weight-lg: 700;
+  --card-title-size-lg: var(--text-lg);
+  --card-sub-color: var(--text-muted);
+  --card-sub-size: var(--text-sm);
+  --card-label-size: var(--text-2xs);   /* mono counts, stats, meta */
+  --card-label-tracking: 0.04em;
+
+  /* Trailing figure — a card's headline number (submissions on Review).
+     The dashboard stat tiles' face, a step smaller. */
+  --card-figure-size: 1.6rem;
+
+  /* Leading mark (icon tile) */
+  --card-mark-size: 36px;
+  --card-mark-icon: 18px;
+  --card-mark-radius: var(--radius-sm);
+
+  /* Mark tones — the subtle per-item variation on assigned cards (ItemMark
+     hashes an item's id to one of these). Pale tint behind, matching ink for
+     the icon: the design system's AA pairs. Deliberately not the accent
+     (overdue/active), salmon (reads as late/error), or the --ml-* figure
+     scales (reserved). */
+  --card-tone-0-bg: var(--green-tint);   --card-tone-0-fg: var(--green-ink);
+  --card-tone-1-bg: var(--amber-tint);   --card-tone-1-fg: var(--amber-ink);
+  --card-tone-2-bg: var(--blue-tint);    --card-tone-2-fg: var(--blue-ink);
+  --card-tone-3-bg: var(--purple-tint);  --card-tone-3-fg: var(--purple-ink);
+  --card-tone-4-bg: var(--sand-100);     --card-tone-4-fg: var(--ink-600);
+}
+
+/* ---- Shared: containers ------------------------------------------- */
+
+.app-list, .src-list, .roster {
+  border: var(--card-border); border-radius: var(--card-radius);
+  overflow: hidden; background: var(--card-bg);
+}
+.app-agents, .app-papers__list, .ds-staff-list {
+  display: flex; flex-direction: column; gap: var(--card-stack-gap);
+}
+.app-dlist { display: flex; flex-direction: column; gap: var(--card-stack-gap-lg); }
+
+/* ---- Shared: a row in a joined list ------------------------------- */
+
+.app-list__row, .src-row, .roster__row {
+  gap: var(--card-gap); border-bottom: var(--card-divider);
+}
+.app-list__row:last-child, .src-row:last-child, .roster__row:last-child { border-bottom: 0; }
+.app-list__row:hover, .src-row:hover, .roster__row:hover { background: var(--card-row-hover); }
+.app-list__row { padding: var(--card-pad); }
+.src-row, .roster__row { padding: var(--card-pad-dense); }
+
+/* ---- Shared: a stacked card --------------------------------------- */
+
+.app-agent, .app-papers__list a, .ds-staff-list__row, .app-dcourse {
+  background: var(--card-bg); border: var(--card-border);
+  box-shadow: var(--card-shadow); transition: var(--card-transition);
+}
+.app-agent, .app-dcourse { border-radius: var(--card-radius-lg); overflow: hidden; }
+.app-papers__list a, .ds-staff-list__row { border-radius: var(--card-radius); }
+.app-agent:hover, .app-papers__list a:hover, .app-dcourse:hover {
+  border-color: var(--card-border-color-hover); box-shadow: var(--card-shadow-hover);
+}
+.app-agent, .app-papers__list a, .ds-staff-list__row, .app-dcourse__head {
+  display: flex; align-items: center; gap: var(--card-gap);
+}
+.app-agent, .app-dcourse__head { padding: var(--card-pad-lg); }
+.ds-staff-list__row { padding: var(--card-pad); }
+.app-papers__list a { padding: var(--card-pad-dense); }
+
+/* ---- Shared: text ------------------------------------------------- */
+
+.app-list__main, .app-agent__main, .app-papers__main, .ds-staff-list__main,
+.app-dcourse__id { flex: 1; min-width: 0; }
+
+.app-list__title, .app-papers__title, .ds-staff-list__title, .roster__name,
+.src-row__name {
+  font-weight: var(--card-title-weight); font-size: var(--card-title-size);
+  color: var(--card-title-color);
+}
+.roster__name, .src-row__name { font-size: var(--card-title-size-dense); }
+.app-agent__title, .app-dcourse__title {
+  font-weight: var(--card-title-weight-lg); font-size: var(--card-title-size-lg);
+  color: var(--card-title-color); letter-spacing: -0.01em;
+}
+
+.app-list__sub, .ds-staff-list__sub {
+  color: var(--card-sub-color); font-size: var(--card-sub-size); margin-top: 0.1rem;
+}
+
+/* Mono labels: counts, stats, dates, meta lines. */
+.app-list__count, .app-agent__topics, .app-papers__meta, .app-dcourse__stats,
+.app-dcourse__term, .app-dcourse__dates, .app-dcourse__mod, .app-dcourse__badge,
+.roster__email, .roster__active, .src-row__chunks {
+  font-family: var(--font-mono); font-size: var(--card-label-size);
+}
+.app-list__count, .app-agent__topics, .app-papers__meta, .app-dcourse__stats,
+.app-dcourse__mod {
+  text-transform: uppercase; letter-spacing: var(--card-label-tracking);
+}
+
+/* Trailing column: counts, actions, origin bar. */
+.app-list__meta, .ds-staff-list__actions, .app-dcourse__actions {
+  display: flex; align-items: center; flex: none;
+}
+.app-list__meta { gap: 0.5rem; }
+.ds-staff-list__actions { gap: 0.4rem; }
+.app-dcourse__actions { gap: 0.5rem; }
+
+/* ---- Shared: leading mark (icon tile) ----------------------------- */
+
+.card-mark, .app-coll-ic, .app-papers__ic {
+  flex: none; width: var(--card-mark-size); height: var(--card-mark-size);
+  border-radius: var(--card-mark-radius);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.card-mark svg, .app-coll-ic svg, .app-papers__ic svg { width: var(--card-mark-icon); height: var(--card-mark-icon); }
+/* Assigned items (ItemMark): kind icon on a hashed tone. */
+.card-mark--tone-0 { background: var(--card-tone-0-bg); color: var(--card-tone-0-fg); }
+.card-mark--tone-1 { background: var(--card-tone-1-bg); color: var(--card-tone-1-fg); }
+.card-mark--tone-2 { background: var(--card-tone-2-bg); color: var(--card-tone-2-fg); }
+.card-mark--tone-3 { background: var(--card-tone-3-bg); color: var(--card-tone-3-fg); }
+.card-mark--tone-4 { background: var(--card-tone-4-bg); color: var(--card-tone-4-fg); }
+.app-coll-ic { background: var(--accent-wash); color: var(--accent-ink); }
+.app-papers__ic { background: var(--surface-sunken); border: var(--card-border); color: var(--text-muted); }
+
+/* ---- Shared: the whole card is the link -------------------------- *
+ * A card's main link carries .card-link; its ::after stretches over the
+ * card, so a click anywhere opens it. Still one real link — keyboard,
+ * middle-click, and screen readers behave as for any link. Anything else
+ * interactive in the card (Edit, Delete, "N earlier") sits above it. */
+.app-list__row, .app-agent, .app-papers__list a, .ds-staff-list__row { position: relative; }
+.app-list__row { cursor: default; }
+.card-link::after { content: ""; position: absolute; inset: 0; z-index: 0; }
+.card-link:focus-visible { outline: none; }
+.card-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: inherit; }
+.app-list__row :is(a, button, input, select, textarea, label):not(.card-link) { position: relative; z-index: 1; }
+
+/* ---- Shared: trailing figure -------------------------------------- */
+
+.card-figure { display: flex; flex-direction: column; align-items: flex-end; min-width: 4.5rem; }
+.card-figure__n {
+  font-family: var(--font-mono); font-weight: 700; font-size: var(--card-figure-size);
+  color: var(--text-strong); letter-spacing: -0.02em; line-height: 1;
+}
+.card-figure__label {
+  margin-top: 0.3rem; font-family: var(--font-mono); font-size: var(--card-label-size);
+  text-transform: uppercase; letter-spacing: var(--card-label-tracking);
+  color: var(--text-muted); white-space: nowrap;
+}
+
+/* ==== Per-type details ============================================== *
+ * Only what is genuinely particular to one card type. If you find
+ * yourself setting a border, radius, padding, shadow, or title size
+ * here, it belongs in the shared rules above.
+ * ------------------------------------------------------------------ */
+
+/* ---- .app-list rows ---- */
+.app-list__row { display: flex; align-items: center; transition: background var(--dur-2) var(--ease-out); }
+.app-list__count { color: var(--text-muted); white-space: nowrap; flex: none; }
+/* Dashboard rows: an overdue deadline reads in the accent. */
+.app-list__row--overdue .app-list__due { color: var(--accent); font-weight: 600; }
+
+/* ---- Submission rows (SubmissionCards) — an .app-list row variant ---- */
+
+/* Collapsed prior submissions — quieter than the row they hang under. */
+.prov-subs__row.is-earlier { background: var(--surface-sunken); }
+.prov-subs__row.is-earlier .app-list__sub { padding-left: 0.9rem; }
+/* Inline "N earlier" disclosure inside the row's sub-line. */
+.prov-subs__more {
+  appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; color: var(--text-secondary); text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prov-subs__more:hover { color: var(--text-strong); }
+/* Student-led layout (one assignment's page): "shared … · LATE · N earlier"
+   sits beside the name on the first line, as plain text — the name is the
+   only thing in the key colour. */
+.prov-subs__when { font-weight: 400; color: var(--card-sub-color); font-size: var(--card-sub-size); }
+
+/* ---- Sources ---- */
+.src-row { display: flex; align-items: center; }
+.src-row__name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src-row__chunks { color: var(--text-muted); }
+
+/* ---- Roster (people) ---- */
+.roster__row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; }
+.roster__person { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.roster__email { color: var(--text-muted); }
+.roster__progress { font-size: var(--text-sm); color: var(--text-secondary); }
+.roster__active { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
+
+/* ---- Student agent cards ---- */
+.app-agent { position: relative; cursor: pointer; }
+/* Accent rail that slides in on hover. */
+.app-agent::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); transform: scaleY(0); transition: transform var(--dur-3) var(--ease-out); }
+.app-agent:hover::before { transform: scaleY(1); }
+.app-agent__index { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700; color: var(--text-faint); width: 1.6rem; flex: none; text-align: center; letter-spacing: -0.02em; }
+.app-agent:hover .app-agent__index { color: var(--accent); }
+.app-agent__blurb { color: var(--card-sub-color); font-size: var(--card-sub-size); margin: 0.12rem 0 0.5rem; }
+.app-agent__meta { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
+.app-agent__topics { color: var(--text-faint); white-space: nowrap; }
+.app-agent__topics::before { content: "·"; margin-right: 0.45rem; color: var(--border-strong); }
+.app-agent__action { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; width: 168px; }
+.app-agent__cta { min-width: 118px; justify-content: center; }
+
+/* ---- Student documents / notebooks ---- */
+.app-papers__list li { list-style: none; }
+.app-papers__list { list-style: none; margin: 0; padding: 0; }
+.app-papers__list a { text-decoration: none; }
+.app-papers__go { flex: none; display: inline-flex; align-items: center; color: var(--text-faint); transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
+.app-papers__go svg { width: 18px; height: 18px; }
+.app-papers__list a:hover .app-papers__go { color: var(--accent); transform: translateX(2px); }
+.app-papers__list a:hover .app-papers__title { color: var(--accent-ink); }
+.app-papers__main { display: flex; flex-direction: column; gap: 0.15rem; }
+.app-papers__title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-papers__meta { display: flex; align-items: center; flex-wrap: wrap; color: var(--text-faint); }
+.app-papers__meta i { font-style: normal; color: var(--border-strong); margin: 0 0.4rem; }
+
+/* ---- Writing agents (staff list) ---- */
+.ds-staff-list__row { text-decoration: none; }
+
+/* ---- Course picker cards ---- */
+.app-dcourse--open { border-color: var(--card-border-color-hover); box-shadow: var(--shadow-sm); }
+.app-dcourse__disc { appearance: none; cursor: pointer; flex: none; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm); width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); transition: var(--transition-color); }
+.app-dcourse__disc:hover { color: var(--text-strong); border-color: var(--border-strong); }
+.app-dcourse__disc svg { width: 16px; height: 16px; transition: transform var(--dur-2) var(--ease-out); }
+.app-dcourse--open .app-dcourse__disc { background: var(--accent-wash); border-color: var(--accent-wash-2); color: var(--accent-ink); }
+.app-dcourse--open .app-dcourse__disc svg { transform: rotate(180deg); }
+.app-dcourse__id { cursor: pointer; }
+.app-dcourse__title { display: flex; align-items: center; }
+.app-dcourse__id:hover .app-dcourse__title { color: var(--accent-ink); }
+.app-dcourse__stats { display: flex; align-items: center; flex-wrap: wrap; gap: 0.1rem; margin-top: 0.2rem; color: var(--text-muted); }
+.app-dcourse__stats i { color: var(--border-strong); font-style: normal; margin: 0 0.45rem; }
+.app-dcourse__mods { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; }
+/* Module indicator icons after a course title (Library / Attendance). */
+.app-dcourse__icons { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: 0.55rem; vertical-align: middle; margin-bottom: 2px; }
+.app-dcourse__icon { display: inline-flex; color: var(--text-faint); }
+.app-dcourse__icon svg { width: 22px; height: 22px; }
+.app-dcourse__mod { color: var(--accent-ink); background: var(--accent-wash); border: 1px solid var(--accent-wash-2); padding: 0.12rem 0.5rem; border-radius: var(--radius-pill); }
+.app-dcourse__mod--none { color: var(--text-faint); background: var(--surface-sunken); border-color: var(--border); }
+.app-dcourse__admin { padding: 0.4rem 1.25rem 1.4rem 1.25rem; border-top: var(--card-divider); background: var(--surface-sunken); }
+/* Term chip + date range inline in a course card's stats row. */
+.app-dcourse__term { text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-ink); }
+.app-dcourse__dates { letter-spacing: 0.02em; color: var(--text-muted); text-transform: none; }
+/* "Current" badge next to a running course's name. */
+.app-dcourse__badge { margin-left: 0.6rem; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--accent-ink); background: var(--accent-wash); border: 1px solid var(--accent-wash-2); border-radius: var(--radius-pill); padding: 0.1rem 0.5rem; }
+
+/* ==== Responsive ===================================================== */
+
+@media (max-width: 680px) {
+  :root { --card-pad-lg: 1rem; }
+
+  /* Joined-list rows: text takes the full width; meta drops to its own line
+     instead of squeezing the title. */
+  .app-list__row { flex-wrap: wrap; }
+  .app-list__main { flex: 1 1 auto; }
+  .app-list__meta { order: 3; flex-basis: 100%; flex-wrap: wrap; justify-content: flex-start; gap: 0.4rem; margin-top: 0.2rem; }
+  .app-list__meta > svg { display: none; }   /* drop the decorative chevron */
+
+  /* Source rows: name on its own line, tags/status below — never squeezed. */
+  .src-row { flex-wrap: wrap; row-gap: 0.45rem; }
+  .src-row__name { order: -1; flex-basis: 100%; white-space: normal; }
+  .src-row__chunks { display: none; }
+
+  .roster__row { grid-template-columns: 1fr auto; }
+  .roster__active { display: none; }
+
+  .app-agent { flex-wrap: wrap; gap: 0.5rem 0.9rem; }
+  .app-agent__index { display: none; }
+  .app-agent__main { flex: 1 1 60%; }
+  .app-agent__action { order: 3; flex-basis: 100%; width: auto; gap: 0.6rem; margin-top: 0.2rem; }
+  .app-agent__cta { flex: 1; min-width: 0; }
+
+  /* Course cards: actions drop below the title block. */
+  .app-dcourse__head { flex-wrap: wrap; }
+  .app-dcourse__id { flex-basis: calc(100% - 2.6rem); }
+  .app-dcourse__actions { flex-basis: 100%; margin-left: 2.6rem; }
+  .app-dcourse__actions .ds-btn { flex: 1; justify-content: center; }
+  .app-dcourse__admin .app-row > * { flex-basis: 100%; min-width: 0; }
+}
+
+@media (max-width: 380px) {
+  .roster__row { grid-template-columns: 1fr; gap: 0.35rem; }
+  .roster__progress { font-family: var(--font-mono); font-size: var(--card-label-size); color: var(--text-faint); text-transform: uppercase; }
+}

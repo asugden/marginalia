@@ -1,4 +1,4 @@
-# Example: Training
+# Example: Neural Network Training
 
 The only example in the gallery that ships **no weights**. It ships 240 digits
 and a random number generator, and trains a real autoencoder in the browser

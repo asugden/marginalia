@@ -153,6 +153,43 @@ export async function insertCheckin(
   return row;
 }
 
+/**
+ * Data-minimisation trigger. The raw signals captured at check-in (location,
+ * browser fingerprint, device cookie, hashed IP) exist only to compute the
+ * flags for that day's session: distance from the room, phone-passing
+ * between students. Once a later session opens for the course, every earlier
+ * day's flags are final and the raw detail has no remaining purpose, so it is
+ * blanked in place. What survives per check-in is who, when, the derived
+ * distance, and the flags.
+ *
+ * Runs on session open rather than on a schedule so the instance needs no
+ * cron trigger. Same-day sessions are left alone: findDuplicateDeviceUse
+ * compares across all sessions on one course+day.
+ */
+export async function scrubCheckinDetailsBefore(
+  db: D1Database,
+  courseId: string,
+  sessionDate: string,
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE attendance_checkins
+          SET lat = NULL, lon = NULL, accuracy_m = NULL,
+              fingerprint_hash = '', device_cookie = '', ip_hash = NULL
+        WHERE course_id = ?
+          AND (fingerprint_hash <> '' OR device_cookie <> ''
+               OR lat IS NOT NULL OR lon IS NOT NULL
+               OR accuracy_m IS NOT NULL OR ip_hash IS NOT NULL)
+          AND session_id IN (
+            SELECT id FROM attendance_sessions
+             WHERE course_id = ? AND session_date < ?
+          )`,
+    )
+    .bind(courseId, courseId, sessionDate)
+    .run();
+  return result.meta?.changes ?? 0;
+}
+
 /** Check-ins from a different user, on the same course+day, that already used
  *  this device cookie or fingerprint. Used to flag (not block) phone-passing. */
 export async function findDuplicateDeviceUse(
@@ -207,6 +244,9 @@ export async function listCheckinsWithUsers(
          FROM attendance_checkins c
          LEFT JOIN users u ON u.id = c.user_id
         WHERE c.session_id = ?
+          -- A course's sample student (a preview identity) is never a
+          -- person in the room; keep it out of the record and the export.
+          AND COALESCE(u.is_sample, 0) = 0
         ORDER BY c.created_at ASC`,
     )
     .bind(sessionId)

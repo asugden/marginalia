@@ -11,27 +11,20 @@
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Button, PageHeader, Section } from "../../../components/index.js";
+import { Button, OriginLegend, PageHeader, Section } from "../../../components/index.js";
 import { useCourse } from "../../../course/useCourse.js";
+import { codeKey, navFromSubmission } from "../../../course/reviewGrid.js";
+import { useReviewGrid } from "../../../course/useReviewGrid.js";
+import { AssignmentBrief, ReviewNav, useBriefOpen } from "../../../course/ReviewNav.js";
 import { Markdown } from "../../../Markdown.js";
-import { getSubmission, type Origin, type SubmissionDTO } from "../api.js";
+import { getSubmission, type SubmissionDTO } from "../api.js";
 import { Cells } from "./Cells.js";
-
-const ORIGIN_LABEL: Record<Origin, string> = {
-  human: "typed",
-  pasted: "pasted",
-  llm: "from LLM",
-  provided: "provided in the starter",
-  edited: "autocorrect",
-};
-const LEGEND: Origin[] = ["human", "pasted", "llm", "provided"];
 
 export function SubmissionPage() {
   const { courseId } = useCourse();
   const { submissionId } = useParams<{ submissionId: string }>();
   const [sub, setSub] = useState<SubmissionDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showOrigins, setShowOrigins] = useState(true);
 
   useEffect(() => {
     if (!submissionId) return;
@@ -44,7 +37,19 @@ export function SubmissionPage() {
     };
   }, [courseId, submissionId]);
 
-  const who = sub ? (sub.student.displayName ?? sub.student.email) : "";
+  const grid = useReviewGrid(courseId);
+  const nav =
+    grid && sub
+      ? navFromSubmission(grid, {
+          key: codeKey(sub.assignmentId),
+          userId: sub.student.userId,
+          submissionId: sub.id,
+        })
+      : null;
+  const [briefOpen, toggleBrief] = useBriefOpen();
+  const hasBrief = !!nav?.assignment.instructions.trim();
+
+  const who = sub ? (sub.student.displayName || sub.student.email || "Student") : "";
   const render = sub?.render ?? null;
   const cellNumber = new Map((sub?.content.cells ?? []).map((c, i) => [c.id, i + 1]));
   const imports = render
@@ -55,9 +60,11 @@ export function SubmissionPage() {
 
   return (
     <div className="app-page code-submission">
+      {/* The student leads: their name is the title, the assignment the
+          eyebrow — reading a run of submissions, who it is is what changes. */}
       <PageHeader
-        eyebrow="Instructor · Code submission"
-        title={sub ? `${who} — ${sub.assignmentTitle ?? sub.title}` : "Submission"}
+        eyebrow={sub ? `Code submission · ${sub.assignmentTitle ?? sub.title}` : "Code submission"}
+        title={sub ? who : "Submission"}
         scope={
           sub
             ? `Submitted ${new Date(sub.submittedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}${sub.late ? " · after the deadline" : ""}. Outputs are as the student last ran them; nothing here has been re-run.`
@@ -65,52 +72,43 @@ export function SubmissionPage() {
         }
         actions={
           sub && (
-            <Button
-              variant="subtle"
-              size="sm"
-              href={`/course/${courseId}/instructor/code/submissions/${sub.id}/scratch`}
-            >
-              Open a scratch copy
-            </Button>
+            <>
+              <Button
+                variant="subtle"
+                size="sm"
+                href={`/course/${courseId}/instructor/code/submissions/${sub.id}/scratch`}
+              >
+                Open a scratch copy
+              </Button>
+              <ReviewNav
+                back={nav ? { href: nav.assignment.listHref, label: nav.assignment.title } : null}
+                up={nav?.up ?? null}
+                down={nav?.down ?? null}
+                students={{
+                  prev: nav?.prev ?? null,
+                  next: nav?.next ?? null,
+                  position: nav?.position ?? null,
+                }}
+                brief={hasBrief ? { open: briefOpen, onToggle: toggleBrief } : null}
+              />
+            </>
           )
         }
       />
       {sub && (
         <p className="muted small">
-          <Link to={`/course/${courseId}/instructor/code/${sub.assignmentId}`}>← Back to the roster</Link>
+          <Link to={`/course/${courseId}/instructor/submissions/code/${sub.assignmentId}`}>← All submissions for this assignment</Link>
         </p>
       )}
       {error && <p className="error">{error}</p>}
+      {briefOpen && hasBrief && nav && <AssignmentBrief assignment={nav.assignment} />}
       {sub && (
         <>
-          <Section
-            kicker="Notebook"
-            actions={
-              render && (
-                <button
-                  type="button"
-                  className={"prov-toggle" + (showOrigins ? " is-on" : "")}
-                  onClick={() => setShowOrigins((v) => !v)}
-                  aria-pressed={showOrigins}
-                >
-                  <span className="prov-toggle__sw" />
-                  {showOrigins ? "Origins shown" : "Origins hidden"}
-                </button>
-              )
-            }
-          >
+          <Section kicker="Notebook">
             {render ? (
-              showOrigins && (
-                <div className="code-legend" aria-label="Where the text came from">
-                  {LEGEND.map((o) => (
-                    <span key={o} className="code-legend__item">
-                      <span className={`code-legend__swatch code-origin--${o}`} aria-hidden />
-                      {ORIGIN_LABEL[o]}
-                      <span className="code-legend__count">{render.totals[o].toLocaleString()} characters</span>
-                    </span>
-                  ))}
-                </div>
-              )
+              // The same legend as a writing submission, plus "provided" for
+              // the starter notebook's text.
+              <OriginLegend provided />
             ) : (
               <p className="muted small">
                 Origins weren't recorded for this copy: the assignment was set to practice, or
@@ -119,10 +117,9 @@ export function SubmissionPage() {
             )}
             <div className="code-readonly">
               <Cells
-                key={showOrigins ? "marked" : "plain"}
                 cells={sub.content.cells}
                 readOnly
-                marksFor={render && showOrigins ? (id) => render.cells[id]?.runs : undefined}
+                marksFor={render ? (id) => render.cells[id]?.runs : undefined}
               />
             </div>
           </Section>

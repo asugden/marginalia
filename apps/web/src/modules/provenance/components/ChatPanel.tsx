@@ -11,11 +11,12 @@
 // top bar's Settings popup) and passed in as `byoKey`.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   createConversation,
   deleteConversation,
   isAuthError,
-  listAgents,
+  listAgentsWithSettings,
   listConversations,
   listMessages,
   redirectToLogin,
@@ -94,6 +95,9 @@ function formatLastUsed(ts: number): string {
 export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onReady }: Props) {
   const [refs, setRefs] = useState<RefChip[]>([]);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
+  // Voice policy (migration 0026): non-null = the instructor assigned one
+  // agent for the whole course, so the picker collapses to a statement.
+  const [lockedAgentId, setLockedAgentId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationDTO[] | null>(null);
   const [active, setActive] = useState<ConversationDTO | null>(null);
   const [messages, setMessages] = useState<MessageDTO[]>([]);
@@ -155,20 +159,29 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
   useEffect(() => {
     const ctrl = new AbortController();
     Promise.all([
-      listAgents(courseId, ctrl.signal),
+      listAgentsWithSettings(courseId, ctrl.signal, documentId),
       listConversations(documentId, courseId, ctrl.signal),
     ])
-      .then(([a, c]) => {
+      .then(([listing, c]) => {
         if (ctrl.signal.aborted) return;
-        // Always offer the built-in Socratic voice as a default, first in the
-        // list, so a fresh course (no instructor-authored chat agents) still
-        // has something to talk to. The worker resolves "builtin:socratic" from
-        // the shared voice library — see createConversationRoute.
-        const withDefault = [
-          SOCRATIC_DEFAULT,
-          ...a.filter((x) => x.id !== SOCRATIC_DEFAULT.id),
-        ];
+        // With no voice lock, always offer the built-in Socratic voice as a
+        // default, first in the list, so a fresh course (no instructor-authored
+        // chat agents) still has something to talk to. The worker resolves
+        // "builtin:socratic" from the shared voice library — see
+        // createConversationRoute. With a lock, the server already narrowed a
+        // student's list to the assigned agent; prepend the builtin only when
+        // it IS the assigned voice (an instructor's own list never carries
+        // builtins, so their picker needs it added back).
+        const a = listing.agents;
+        const withDefault =
+          listing.lockedAgentId !== null
+            ? listing.lockedAgentId === SOCRATIC_DEFAULT.id &&
+              !a.some((x) => x.id === SOCRATIC_DEFAULT.id)
+              ? [SOCRATIC_DEFAULT, ...a]
+              : a
+            : [SOCRATIC_DEFAULT, ...a.filter((x) => x.id !== SOCRATIC_DEFAULT.id)];
         setAgents(withDefault);
+        setLockedAgentId(listing.lockedAgentId);
         setConversations(c);
         if (c.length > 0) setActive((cur) => cur ?? c[0]!);
       })
@@ -223,9 +236,15 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
   const openAgentPicker = useCallback(() => {
     // Seed the dropdown with the first available agent (Socratic default is
     // always first) so a one-click "Start" works without touching the picker.
-    setPickAgentId((cur) => cur || agents?.[0]?.id || SOCRATIC_DEFAULT.id);
+    // Under a voice lock the seed IS the assigned agent — never fall back to
+    // the builtin, which the server would refuse.
+    setPickAgentId((cur) =>
+      lockedAgentId !== null
+        ? lockedAgentId
+        : cur || agents?.[0]?.id || SOCRATIC_DEFAULT.id,
+    );
     setShowAgentPicker(true);
-  }, [agents]);
+  }, [agents, lockedAgentId]);
 
   const startConversation = useCallback(
     async (agentId: string) => {
@@ -446,14 +465,15 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
           {agents.length === 0 ? (
             <p className="muted small">
               No agents yet. Visit{" "}
-              <a href={`/course/${courseId}/writing/agents`}>My agents</a> to add one.
+              <Link to={`/course/${courseId}/writing/agents`}>My agents</Link> to
+              add one.
             </p>
           ) : (
             <>
               <p className="ds-modal-body">
-                Pick a voice to start chatting. Anything you ask is logged with the
-                document — the instructor can read it if you share this document
-                later.
+                {lockedAgentId !== null
+                  ? "Anything you ask is logged with the document — the instructor can read it if you share this document later."
+                  : "Pick a voice to start chatting. Anything you ask is logged with the document — the instructor can read it if you share this document later."}
               </p>
               {refs.length > 0 && (
                 <p className="ds-modal-body">
@@ -461,18 +481,27 @@ export function ChatPanel({ documentId, courseId, byoKey, onInsertAtCursor, onRe
                   carry into your first message.
                 </p>
               )}
-              <Field label="Voice">
-                <Dropdown
-                  className="ds-dropdown--block"
-                  ariaLabel="Voice"
-                  value={pickAgentId}
-                  onChange={setPickAgentId}
-                  options={agents.map((a) => ({
-                    value: a.id,
-                    label: a.mine ? `${a.name} · mine` : a.name,
-                  }))}
-                />
-              </Field>
+              {lockedAgentId !== null && agents.length === 1 ? (
+                // One assigned voice — a dropdown with a single option would
+                // only pretend there is a choice.
+                <p className="muted small">
+                  Voice: <b>{agents[0]!.name}</b> — set by your instructor for
+                  this course.
+                </p>
+              ) : (
+                <Field label="Voice">
+                  <Dropdown
+                    className="ds-dropdown--block"
+                    ariaLabel="Voice"
+                    value={pickAgentId}
+                    onChange={setPickAgentId}
+                    options={agents.map((a) => ({
+                      value: a.id,
+                      label: a.mine ? `${a.name} · mine` : a.name,
+                    }))}
+                  />
+                </Field>
+              )}
               <div className="ds-modal-actions">
                 <span className="ds-modal-actions-spacer" />
                 <Button

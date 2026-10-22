@@ -36,6 +36,8 @@ export async function ensureItem(
     assignedAt?: number | null;
     dueAt?: number | null;
     note?: string | null;
+    /** The payload was created as a draft: create the wrapper hidden too. */
+    archived?: boolean;
   },
 ): Promise<void> {
   const existing = await repo.findItemByPayload(
@@ -54,6 +56,7 @@ export async function ensureItem(
     assignedAt: params.assignedAt ?? null,
     dueAt: params.dueAt ?? null,
     note: params.note ?? null,
+    archivedAt: params.archived ? Date.now() : null,
   });
 }
 

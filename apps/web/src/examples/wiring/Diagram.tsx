@@ -6,28 +6,49 @@
 // On the board the layer only draws; the board underneath stays in charge
 // of the pointer. As loops, switches press and pin labels click.
 
-import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as RPointerEvent,
+} from "react";
 import { Button, Switch } from "../../components/index.js";
 import type { Analysis, Circuit, PinReading } from "./analyze.js";
 import { pinState } from "./analyze.js";
 import { VIEW_H, VIEW_W, type PinState } from "./model.js";
-import { corners, type Diagram as DiagramData, type DiagramFlag, type DiagramSymbol, type XY } from "./schematic.js";
+import {
+  corners,
+  type Diagram as DiagramData,
+  type DiagramFlag,
+  type DiagramSymbol,
+  type XY,
+} from "./schematic.js";
 
 export type DiagramMode = "off" | "board" | "loops";
 
 const MORPH_MS = 900;
 
 /** Diagram on or off, and, when on, whether it is pulled into loops. */
-export function DiagramControls({ mode, onChange }: { mode: DiagramMode; onChange: (m: DiagramMode) => void }) {
+export function DiagramControls({
+  mode,
+  onChange,
+}: {
+  mode: DiagramMode;
+  onChange: (m: DiagramMode) => void;
+}) {
   return (
     <>
-      <Switch label="Diagram" checked={mode !== "off"} onChange={(e) => onChange(e.currentTarget.checked ? "board" : "off")} />
+      <Switch
+        label="Diagram"
+        checked={mode !== "off"}
+        onChange={(e) => onChange(e.currentTarget.checked ? "board" : "off")}
+      />
       {mode !== "off" && (
         <Button
           size="sm"
           variant={mode === "loops" ? "primary" : "subtle"}
           aria-pressed={mode === "loops"}
-          title="Pull the diagram off the board into short loops around a battery"
+          title="Convert the connections into a simplified engineering diagram"
           onClick={() => onChange(mode === "loops" ? "board" : "loops")}
         >
           Simplify
@@ -36,8 +57,12 @@ export function DiagramControls({ mode, onChange }: { mode: DiagramMode; onChang
     </>
   );
 }
-const mix = (a: XY, b: XY, t: number): XY => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-const ease = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+const mix = (a: XY, b: XY, t: number): XY => ({
+  x: a.x + (b.x - a.x) * t,
+  y: a.y + (b.y - a.y) * t,
+});
+const ease = (k: number) =>
+  k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2;
 
 // ── Lines, and bridges where they cross ────────────────────────────────
 
@@ -59,11 +84,17 @@ function bridged(lines: Line[]): string[] {
   const box = lines.map((l) => {
     const xs = l.pts.map((p) => p.x);
     const ys = l.pts.map((p) => p.y);
-    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    return {
+      x0: Math.min(...xs),
+      x1: Math.max(...xs),
+      y0: Math.min(...ys),
+      y1: Math.max(...ys),
+    };
   });
   // Hops per line, per run: where along the run (0–1) each one falls.
   const hops = lines.map((l) => l.pts.slice(1).map(() => [] as number[]));
-  const flat = (a: XY, b: XY) => Math.abs(b.x - a.x) / (Math.hypot(b.x - a.x, b.y - a.y) || 1);
+  const flat = (a: XY, b: XY) =>
+    Math.abs(b.x - a.x) / (Math.hypot(b.x - a.x, b.y - a.y) || 1);
   for (let i = 0; i < lines.length; i++) {
     for (let j = i + 1; j < lines.length; j++) {
       const A = lines[i]!;
@@ -107,7 +138,8 @@ function bridged(lines: Line[]): string[] {
       let last = -Infinity;
       for (const u of hops[i]![m - 1]!.sort((x, y) => x - y)) {
         const s = u * len;
-        if (s - last < 2 * HOP + 1 || s < HOP + 1 || len - s < HOP + 1) continue;
+        if (s - last < 2 * HOP + 1 || s < HOP + 1 || len - s < HOP + 1)
+          continue;
         last = s;
         const h0 = { x: a.x + ux * (s - HOP), y: a.y + uy * (s - HOP) };
         const h1 = { x: a.x + ux * (s + HOP), y: a.y + uy * (s + HOP) };
@@ -121,12 +153,24 @@ function bridged(lines: Line[]): string[] {
 
 /** Classes for a pin's label, on the board or in the diagram: its mode as
  *  code set it, and what it reads. */
-export function pinLabelClasses(s: PinState, reading: PinReading | undefined, selected: boolean): string[] {
+export function pinLabelClasses(
+  s: PinState,
+  reading: PinReading | undefined,
+  selected: boolean,
+): string[] {
   const cls: string[] = [];
-  if (s.mode === "OUTPUT") cls.push(s.level ? "wr-pinlabel--high" : "wr-pinlabel--low");
+  if (s.mode === "OUTPUT")
+    cls.push(s.level ? "wr-pinlabel--high" : "wr-pinlabel--low");
   else if (s.mode === "PWM") cls.push("wr-pinlabel--pwm");
   else if (s.mode === "INPUT_PULLDOWN") cls.push("wr-pinlabel--pulldown");
-  if (reading) cls.push(reading.digital === "floating" ? "wr-pinlabel--floating" : reading.digital === "HIGH" ? "wr-pinlabel--reads-high" : "wr-pinlabel--reads-low");
+  if (reading)
+    cls.push(
+      reading.digital === "floating"
+        ? "wr-pinlabel--floating"
+        : reading.digital === "HIGH"
+          ? "wr-pinlabel--reads-high"
+          : "wr-pinlabel--reads-low",
+    );
   if (selected) cls.push("wr-pinlabel--sel");
   return cls;
 }
@@ -142,7 +186,16 @@ export interface DiagramProps {
   onPinClick: (id: string) => void;
 }
 
-export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, onPress, onPinClick }: DiagramProps) {
+export function Diagram({
+  diagram,
+  mode,
+  circuit,
+  analysis,
+  selected,
+  onSelect,
+  onPress,
+  onPinClick,
+}: DiagramProps) {
   const target = mode === "loops" ? 1 : 0;
   const [t, setT] = useState(target);
   const tRef = useRef(target);
@@ -150,7 +203,9 @@ export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, 
   useEffect(() => {
     const from = tRef.current;
     if (from === target) return;
-    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const still = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     if (still) {
       tRef.current = target;
       setT(target);
@@ -176,23 +231,66 @@ export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, 
   const late = Math.max(0, (t - 0.45) / 0.55);
   const bat = mix(diagram.battery.board, diagram.battery.loops, t);
 
-  const lines: Line[] = diagram.leads.map((l) => ({ key: l.key, net: l.net, pts: corners(l.board.map((p, i) => mix(p, l.loops[i]!, t))) }));
-  if (diagram.short) lines.push({ key: "short", net: -1, pts: corners(diagram.short.board.map((p, i) => mix(p, diagram.short!.loops[i]!, t))) });
+  const lines: Line[] = diagram.leads.map((l) => ({
+    key: l.key,
+    net: l.net,
+    pts: corners(l.board.map((p, i) => mix(p, l.loops[i]!, t))),
+  }));
+  if (diagram.short)
+    lines.push({
+      key: "short",
+      net: -1,
+      pts: corners(
+        diagram.short.board.map((p, i) => mix(p, diagram.short!.loops[i]!, t)),
+      ),
+    });
   const paths = bridged(lines);
 
   return (
     <g className={`wr-dg${mode === "loops" ? " wr-dg--loops" : ""}`}>
       {/* Paper over the board: it shows through on the board, and is gone
           as loops. Black ink reads the same in either theme. */}
-      <rect x={0} y={0} width={VIEW_W} height={VIEW_H} rx={8} className="wr-dg-paper" opacity={0.72 + 0.28 * t} />
+      <rect
+        x={0}
+        y={0}
+        width={VIEW_W}
+        height={VIEW_H}
+        rx={8}
+        className="wr-dg-paper"
+        opacity={0.72 + 0.28 * t}
+      />
       {/* The battery: the board's 3V3 and GND. */}
-      <g opacity={late} className="wr-dg-battery" transform={`translate(${bat.x - diagram.battery.loops.x} ${bat.y - diagram.battery.loops.y})`}>
-        <line x1={diagram.battery.plus.x - 13} x2={diagram.battery.plus.x + 13} y1={diagram.battery.plus.y} y2={diagram.battery.plus.y} className="wr-dg-cell" />
-        <line x1={diagram.battery.minus.x - 7} x2={diagram.battery.minus.x + 7} y1={diagram.battery.minus.y} y2={diagram.battery.minus.y} className="wr-dg-cell" />
-        <text x={diagram.battery.plus.x - 17} y={diagram.battery.plus.y - 4} className="wr-dg-bat-label">
+      <g
+        opacity={late}
+        className="wr-dg-battery"
+        transform={`translate(${bat.x - diagram.battery.loops.x} ${bat.y - diagram.battery.loops.y})`}
+      >
+        <line
+          x1={diagram.battery.plus.x - 13}
+          x2={diagram.battery.plus.x + 13}
+          y1={diagram.battery.plus.y}
+          y2={diagram.battery.plus.y}
+          className="wr-dg-cell"
+        />
+        <line
+          x1={diagram.battery.minus.x - 7}
+          x2={diagram.battery.minus.x + 7}
+          y1={diagram.battery.minus.y}
+          y2={diagram.battery.minus.y}
+          className="wr-dg-cell"
+        />
+        <text
+          x={diagram.battery.plus.x - 17}
+          y={diagram.battery.plus.y - 4}
+          className="wr-dg-bat-label"
+        >
           3V3
         </text>
-        <text x={diagram.battery.minus.x - 17} y={diagram.battery.minus.y + 12} className="wr-dg-bat-label">
+        <text
+          x={diagram.battery.minus.x - 17}
+          y={diagram.battery.minus.y + 12}
+          className="wr-dg-bat-label"
+        >
           GND
         </text>
       </g>
@@ -201,7 +299,14 @@ export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, 
         <path key={l.key} d={paths[i]} className="wr-dg-wire" />
       ))}
       {diagram.dots.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={3.2} className="wr-dg-dot" opacity={late} />
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r={3.2}
+          className="wr-dg-dot"
+          opacity={late}
+        />
       ))}
 
       {diagram.symbols.map((s) => {
@@ -229,7 +334,9 @@ export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, 
                 onPress(s.partId, true);
               }
             }}
-            onUp={s.kind === "switch" ? () => onPress(s.partId, false) : undefined}
+            onUp={
+              s.kind === "switch" ? () => onPress(s.partId, false) : undefined
+            }
           />
         );
       })}
@@ -240,7 +347,15 @@ export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, 
           flag={f}
           at={mix(f.board, f.loops, t)}
           opacity={late}
-          classes={f.pin ? pinLabelClasses(pinState(circuit, f.pin), readings.get(f.pin), selected === f.pin) : []}
+          classes={
+            f.pin
+              ? pinLabelClasses(
+                  pinState(circuit, f.pin),
+                  readings.get(f.pin),
+                  selected === f.pin,
+                )
+              : []
+          }
           onPin={
             f.pin
               ? (e) => {
@@ -261,7 +376,12 @@ export function Diagram({ diagram, mode, circuit, analysis, selected, onSelect, 
 // the two points it has at this moment. The body keeps its size; the leads
 // either side take up the length.
 
-const BODY: Record<DiagramSymbol["kind"], number> = { resistor: 26, led: 16, switch: 26, pot: 26 };
+const BODY: Record<DiagramSymbol["kind"], number> = {
+  resistor: 26,
+  led: 16,
+  switch: 26,
+  pot: 26,
+};
 
 function Symbol({
   sym,
@@ -300,7 +420,8 @@ function Symbol({
   // A label sits to the left of a column (a wiper leaves to the right), or
   // below a part lying across the board.
   let nl = { x: u.y, y: -u.x };
-  if (nl.x > 0.01 || (Math.abs(nl.x) <= 0.01 && nl.y < 0)) nl = { x: -nl.x, y: -nl.y };
+  if (nl.x > 0.01 || (Math.abs(nl.x) <= 0.01 && nl.y < 0))
+    nl = { x: -nl.x, y: -nl.y };
   const lx = mid.x + nl.x * 12;
   const ly = mid.y + nl.y * 12 + 3;
   const anchor = nl.x < -0.5 ? "end" : nl.x > 0.5 ? "start" : "middle";
@@ -313,11 +434,20 @@ function Symbol({
     const n = side >= 0 ? { x: -u.y, y: u.x } : { x: u.y, y: -u.x };
     const tip = { x: mid.x + n.x * 6, y: mid.y + n.y * 6 };
     const tail = { x: mid.x + n.x * 16, y: mid.y + n.y * 16 };
-    const head = (k: number) => ({ x: tip.x + n.x * 5 + u.x * 3 * k, y: tip.y + n.y * 5 + u.y * 3 * k });
+    const head = (k: number) => ({
+      x: tip.x + n.x * 5 + u.x * 3 * k,
+      y: tip.y + n.y * 5 + u.y * 3 * k,
+    });
     wiper = (
       <g className="wr-dg-sym-line">
-        <polyline points={`${w.x},${w.y} ${tail.x},${tail.y} ${tip.x},${tip.y}`} fill="none" />
-        <polygon points={`${tip.x},${tip.y} ${head(1).x},${head(1).y} ${head(-1).x},${head(-1).y}`} className="wr-dg-arrow" />
+        <polyline
+          points={`${w.x},${w.y} ${tail.x},${tail.y} ${tip.x},${tip.y}`}
+          fill="none"
+        />
+        <polygon
+          points={`${tip.x},${tip.y} ${head(1).x},${head(1).y} ${head(-1).x},${head(-1).y}`}
+          className="wr-dg-arrow"
+        />
       </g>
     );
   }
@@ -331,8 +461,20 @@ function Symbol({
     >
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="wr-dg-hit" />
       <g transform={`translate(${mid.x} ${mid.y}) rotate(${deg})`}>
-        <line x1={-len / 2} x2={-body / 2} y1={0} y2={0} className="wr-dg-sym-line" />
-        <line x1={body / 2} x2={len / 2} y1={0} y2={0} className="wr-dg-sym-line" />
+        <line
+          x1={-len / 2}
+          x2={-body / 2}
+          y1={0}
+          y2={0}
+          className="wr-dg-sym-line"
+        />
+        <line
+          x1={body / 2}
+          x2={len / 2}
+          y1={0}
+          y2={0}
+          className="wr-dg-sym-line"
+        />
         <g transform={`scale(${s})`}>
           {(sym.kind === "resistor" || sym.kind === "pot") && (
             <polyline
@@ -343,8 +485,17 @@ function Symbol({
           )}
           {sym.kind === "led" && (
             <>
-              <polygon points="-8,-8 -8,8 8,0" className={burnt ? "wr-dg-led wr-dg-led--burnt" : "wr-dg-led"} />
-              {lit > 0.01 && <polygon points="-8,-8 -8,8 8,0" className="wr-dg-led-lit" style={{ opacity: 0.25 + 0.75 * lit }} />}
+              <polygon
+                points="-8,-8 -8,8 8,0"
+                className={burnt ? "wr-dg-led wr-dg-led--burnt" : "wr-dg-led"}
+              />
+              {lit > 0.01 && (
+                <polygon
+                  points="-8,-8 -8,8 8,0"
+                  className="wr-dg-led-lit"
+                  style={{ opacity: 0.25 + 0.75 * lit }}
+                />
+              )}
               <line x1={8} x2={8} y1={-8} y2={8} className="wr-dg-sym-line" />
               {lit > 0.01 && (
                 <g className="wr-dg-rays" style={{ opacity: 0.3 + 0.7 * lit }}>
@@ -352,17 +503,43 @@ function Symbol({
                   <path d="M 4 -17 l -3 0.5 M 4 -17 l 0.2 3 M 9 -17 l -3 0.5 M 9 -17 l 0.2 3" />
                 </g>
               )}
-              {burnt && <path d="M -5 -5 L 5 5 M 5 -5 L -5 5" className="wr-dg-burnt-x" />}
+              {burnt && (
+                <path
+                  d="M -5 -5 L 5 5 M 5 -5 L -5 5"
+                  className="wr-dg-burnt-x"
+                />
+              )}
             </>
           )}
           {sym.kind === "switch" && (
             <>
               <circle cx={-11} cy={0} r={2.2} className="wr-dg-contact" />
               <circle cx={11} cy={0} r={2.2} className="wr-dg-contact" />
-              <g className="wr-dg-plunger" transform={`translate(0 ${pressed ? 0 : -4.5})`}>
-                <line x1={-13} x2={13} y1={-2.4} y2={-2.4} className="wr-dg-sym-line" />
-                <line x1={0} x2={0} y1={-2.4} y2={-9} className="wr-dg-sym-line" />
-                <line x1={-4} x2={4} y1={-9} y2={-9} className="wr-dg-sym-line" />
+              <g
+                className="wr-dg-plunger"
+                transform={`translate(0 ${pressed ? 0 : -4.5})`}
+              >
+                <line
+                  x1={-13}
+                  x2={13}
+                  y1={-2.4}
+                  y2={-2.4}
+                  className="wr-dg-sym-line"
+                />
+                <line
+                  x1={0}
+                  x2={0}
+                  y1={-2.4}
+                  y2={-9}
+                  className="wr-dg-sym-line"
+                />
+                <line
+                  x1={-4}
+                  x2={4}
+                  y1={-9}
+                  y2={-9}
+                  className="wr-dg-sym-line"
+                />
               </g>
             </>
           )}
@@ -370,7 +547,13 @@ function Symbol({
       </g>
       {wiper}
       {sym.label && (roomy || sym.label.length === 1) && (
-        <text x={lx} y={ly} textAnchor={anchor} className="wr-dg-label" opacity={labelOpacity}>
+        <text
+          x={lx}
+          y={ly}
+          textAnchor={anchor}
+          className="wr-dg-label"
+          opacity={labelOpacity}
+        >
           {sym.label}
         </text>
       )}
@@ -393,9 +576,23 @@ function Flag({
   classes: string[];
   onPin?: (e: RPointerEvent) => void;
 }) {
-  if (flag.kind === "open") return <circle cx={at.x} cy={at.y} r={3.2} className="wr-dg-open" opacity={opacity} />;
+  if (flag.kind === "open")
+    return (
+      <circle
+        cx={at.x}
+        cy={at.y}
+        r={3.2}
+        className="wr-dg-open"
+        opacity={opacity}
+      />
+    );
   if (flag.kind === "node") {
-    const c = flag.side === "above" ? { x: at.x, y: at.y - 8 } : flag.side === "below" ? { x: at.x, y: at.y + 8 } : { x: at.x + 8, y: at.y };
+    const c =
+      flag.side === "above"
+        ? { x: at.x, y: at.y - 8 }
+        : flag.side === "below"
+          ? { x: at.x, y: at.y + 8 }
+          : { x: at.x + 8, y: at.y };
     return (
       <g opacity={opacity} className="wr-dg-node">
         <circle cx={c.x} cy={c.y} r={8} />
@@ -406,12 +603,38 @@ function Flag({
     );
   }
   // A pin's label, drawn as the board draws it.
-  const c = flag.side === "above" ? { x: at.x, y: at.y - 17 } : flag.side === "below" ? { x: at.x, y: at.y + 17 } : { x: at.x + 8, y: at.y };
-  const cls = ["wr-pinlabel", flag.kind === "pin" ? "wr-pinlabel--gpio" : "wr-dg-power", ...classes];
+  const c =
+    flag.side === "above"
+      ? { x: at.x, y: at.y - 17 }
+      : flag.side === "below"
+        ? { x: at.x, y: at.y + 17 }
+        : { x: at.x + 8, y: at.y };
+  const cls = [
+    "wr-pinlabel",
+    flag.kind === "pin" ? "wr-pinlabel--gpio" : "wr-dg-power",
+    ...classes,
+  ];
   return (
-    <g opacity={opacity} className={cls.join(" ")} data-pin={flag.pin} onPointerDown={onPin}>
-      <rect x={c.x - 8} y={c.y - 17} width={16} height={34} rx={3} className="wr-pinlabel-bg" />
-      <text x={c.x} y={c.y} transform={`rotate(-90 ${c.x} ${c.y})`} className="wr-pinlabel-text">
+    <g
+      opacity={opacity}
+      className={cls.join(" ")}
+      data-pin={flag.pin}
+      onPointerDown={onPin}
+    >
+      <rect
+        x={c.x - 8}
+        y={c.y - 17}
+        width={16}
+        height={34}
+        rx={3}
+        className="wr-pinlabel-bg"
+      />
+      <text
+        x={c.x}
+        y={c.y}
+        transform={`rotate(-90 ${c.x} ${c.y})`}
+        className="wr-pinlabel-text"
+      >
         {flag.label}
       </text>
     </g>

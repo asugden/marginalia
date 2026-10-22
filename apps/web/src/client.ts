@@ -21,6 +21,7 @@ export type {
   AdminEntry,
   AdminUser,
   AuditEntry,
+  Capability,
   UserDetail,
   CollectionSourceSummary,
   CollectionSummary,
@@ -58,6 +59,7 @@ export const listConversations = impl.listConversations;
 export const sendMessage = impl.sendMessage;
 export const getMe = impl.getMe;
 export const setActingAsStudent = impl.setActingAsStudent;
+export const setGenaiOptOut = (impl as typeof real).setGenaiOptOut;
 export const listVoices = impl.listVoices;
 // v0.7 §1 — voice CRUD. Mock mode doesn't implement these (no per-user
 // voices in the mock data model); the AuthorVoicesPage etc. throw if
@@ -104,8 +106,6 @@ export const listJoinCodes = (impl as typeof real).listJoinCodes;
 export const createJoinCode = (impl as typeof real).createJoinCode;
 export const revokeJoinCode = (impl as typeof real).revokeJoinCode;
 export const claimJoinCode = (impl as typeof real).claimJoinCode;
-// v1.0 §6 — opt a lazy-reveal tab into the dashboard.
-export const revealCourseTab = (impl as typeof real).revealCourseTab;
 export const setCourseFeature = (impl as typeof real).setCourseFeature;
 // Instructor-facing course creation. Mock mode doesn't simulate it (the mock
 // has no mutable course set); calling it in mock mode throws.
@@ -123,6 +123,8 @@ export const demoteAdmin = (impl as typeof real).demoteAdmin;
 export const listAdminUsers = (impl as typeof real).listAdminUsers;
 export const getAdminUser = (impl as typeof real).getAdminUser;
 export const listAuditLog = (impl as typeof real).listAuditLog;
+export const setUserCanCreateCourses = (impl as typeof real).setUserCanCreateCourses;
+export const inviteUser = (impl as typeof real).inviteUser;
 
 // Pure helpers — same in mock and real, so re-export from api.ts directly.
-export { citationOpenUrl } from "./api.js";
+export { citationOpenUrl, hasCapability, isStaffRole, roleLabel } from "./api.js";

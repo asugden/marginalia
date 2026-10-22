@@ -16,7 +16,14 @@
 // start failing, a student who keeps chatting after completion will see their
 // topic counter drift past the end of the outline.
 
-import { transition, turnBudget, currentTopic, cleanReply, ADVANCE_MARKER } from "./machine.js";
+import {
+  transition,
+  turnBudget,
+  currentTopic,
+  cleanReply,
+  createMarkerFilter,
+  ADVANCE_MARKER,
+} from "./machine.js";
 import type { BackboneComponent, BackboneState } from "./types.js";
 
 let failures = 0;
@@ -137,6 +144,28 @@ const fresh: BackboneState = {
   };
   check("per-topic override is honored", turnBudget(override, override.topics[0]!), 5);
   check("default applies when unset", turnBudget(bb, bb.topics[0]!), 2);
+}
+
+// ── the marker never reaches the student ────────────────────────────────
+{
+  check("inline marker is stripped", cleanReply(`On to the next idea. ${ADVANCE_MARKER}`), "On to the next idea.");
+  check("mid-text marker is stripped", cleanReply(`A${ADVANCE_MARKER}B`), "AB");
+
+  // Every way a stream could split the reply, including inside the marker.
+  const reply = `Good — that's it.\n${ADVANCE_MARKER}`;
+  let everySplitClean = true;
+  for (let i = 0; i <= reply.length; i++) {
+    for (let j = i; j <= reply.length; j++) {
+      const f = createMarkerFilter();
+      const shown = f.push(reply.slice(0, i)) + f.push(reply.slice(i, j)) + f.push(reply.slice(j)) + f.flush();
+      if (shown.includes("[") || shown !== "Good — that's it.\n") everySplitClean = false;
+    }
+  }
+  check("streamed marker never shows, however it's split", everySplitClean, true);
+
+  const f = createMarkerFilter();
+  const kept = f.push("see [1] and [A") + f.push("BC]") + f.flush();
+  check("brackets that aren't the marker still show", kept, "see [1] and [ABC]");
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

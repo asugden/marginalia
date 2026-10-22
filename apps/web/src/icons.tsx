@@ -5,13 +5,17 @@
 // that carries title="Sign out" for the tooltip + accessible label.
 //
 // All icons share the same path: stroke="currentColor", fill="none", so
-// colour follows the parent button's CSS colour.
+// color follows the parent button's CSS color.
 
 import type { SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
-function Icon({ size = 18, children, ...rest }: IconProps & { children: React.ReactNode }) {
+function Icon({
+  size = 18,
+  children,
+  ...rest
+}: IconProps & { children: React.ReactNode }) {
   return (
     <svg
       width={size}
@@ -364,6 +368,16 @@ export function StopIcon(props: IconProps) {
     >
       <rect x="6" y="6" width="12" height="12" rx="2" />
     </svg>
+  );
+}
+
+// Code — Lucide "code" (angle brackets).
+export function CodeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m16 18 6-6-6-6" />
+      <path d="m8 6-6 6 6 6" />
+    </Icon>
   );
 }
 

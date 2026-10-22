@@ -36,7 +36,7 @@ export interface ExampleSpec {
 export const EXAMPLES: ExampleSpec[] = [
   {
     slug: "machine-learning",
-    title: "What Is Machine Learning",
+    title: "What machine learning is",
     kind: "overview",
     blurb:
       "The shape every problem here shares \u2014 data, features, model, labels, one spreadsheet \u2014 and the single line all the models sit on. Click into the line to reach the rest.",
@@ -44,6 +44,18 @@ export const EXAMPLES: ExampleSpec[] = [
     Page: lazy(() =>
       import("./overview/MachineLearningPage.js").then((m) => ({
         default: m.MachineLearningPage,
+      })),
+    ),
+  },
+  {
+    slug: "reading-data",
+    title: "Reading data",
+    blurb:
+      "Follow one small CSV file from disk into Python: open and read it by hand, find out why \"3\" + \"21\" is \"321\", gather the steps into a function, then let pandas do it in one line.",
+    tags: ["python", "CSV", "pandas", "interactive"],
+    Page: lazy(() =>
+      import("./read-data/ReadDataPage.js").then((m) => ({
+        default: m.ReadDataPage,
       })),
     ),
   },
@@ -60,8 +72,20 @@ export const EXAMPLES: ExampleSpec[] = [
     ),
   },
   {
+    slug: "backpropagation",
+    title: "Backpropagation",
+    blurb:
+      "How a network knows which way to turn every weight. Climb a mountain by feel, walk an error landscape in 3D, nudge one neuron's weights, follow one path through a network, then click your way backwards through all of it.",
+    tags: ["neural networks", "backpropagation", "chain rule", "gradients", "interactive"],
+    Page: lazy(() =>
+      import("./backprop/BackpropPage.js").then((m) => ({
+        default: m.BackpropPage,
+      })),
+    ),
+  },
+  {
     slug: "activation-function",
-    title: "Activation Functions",
+    title: "Activation functions",
     blurb:
       "One neuron adds up its weighted inputs; the activation decides what it sends on. Widen a network with no activation and it stays a straight line — then bend it, and find out why ReLU beat the more neuron-like sigmoid.",
     tags: ["neural networks", "ReLU", "sigmoid", "neuroscience", "interactive"],
@@ -73,10 +97,10 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "complex-shapes",
-    title: "Fitting Complex Shapes",
+    title: "Fitting complex shapes",
     blurb:
-      "Build a curve from steps, the way a tree does, or from bends, the way ReLU neurons do. Draw any shape and buy it parameters until the model follows \u2014 then fit a day of noisy traffic and watch the extra parameters chase the noise.",
-    tags: ["parameters", "overfitting", "trees", "ReLU", "interactive"],
+      "Build a curve from steps, the way a tree does, or from bends, the way ReLU neurons do. Draw any shape and buy it parameters until the model follows \u2014 then fit a day of noisy traffic, watch the extra parameters chase the noise, and set data aside to catch it: training, validation and test.",
+    tags: ["parameters", "overfitting", "train/test split", "validation", "trees", "ReLU", "interactive"],
     Page: lazy(() =>
       import("./complex-shapes/ComplexShapesPage.js").then((m) => ({
         default: m.ComplexShapesPage,
@@ -121,7 +145,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "svm",
-    title: "Support Vector Machines",
+    title: "Support vector machines",
     blurb:
       "Draw a straight line between two classes and leave the widest street you can, then let an SVM find the widest one. See which points hold the line in place.",
     tags: ["classification", "SVM", "margin", "interactive"],
@@ -145,7 +169,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "random-forest",
-    title: "Random Forest",
+    title: "Random forest -- parallel trees",
     blurb:
       "Reveal a forest one tree at a time. Watch where the trees agree and where they argue, dog by dog, and how the vote lands better than any single tree.",
     tags: ["ensembles", "random forest", "bagging", "interactive"],
@@ -157,7 +181,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "gradient-boosting",
-    title: "XGBoost",
+    title: "Gradient boosting -- serial trees",
     blurb:
       "The same trees stacked top to bottom instead of side by side. Each round is fitted to the last round's mistakes, so the order is the model \u2014 watch the residuals shrink, then watch it overfit.",
     tags: ["ensembles", "boosting", "XGBoost", "interactive"],
@@ -205,7 +229,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "language-models",
-    title: "Large Language Models",
+    title: "Large language models",
     blurb:
       "From a Markov chain of words to a language model: tokens in, one token out, one pass per word. Then many transformer blocks in series, drawn at the real shapes of 2026's open models.",
     tags: ["Markov chains", "tokenizers", "transformers", "LLMs", "scale", "interactive"],
@@ -241,7 +265,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "training",
-    title: "Training",
+    title: "Neural Network Training",
     blurb:
       "The only model here that arrives knowing nothing. Watch 6,500 parameters start as pure noise and become a network that reproduces a handwritten digit \u2014 trained live in your browser, one step at a time.",
     tags: ["training", "gradient descent", "autoencoder", "interactive"],
@@ -265,7 +289,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "wiring",
-    title: "Breadboards and Loops",
+    title: "Breadboard Secrets",
     blurb:
       "Wire a real breadboard: see the connections it hides, light an LED, burn one out, chase a short the long way round, and flip a digital pin by hand. A run of small puzzles, then free play.",
     tags: ["circuits", "breadboard", "microcontrollers", "interactive"],
@@ -277,7 +301,7 @@ export const EXAMPLES: ExampleSpec[] = [
   },
   {
     slug: "code",
-    title: "Reading a Sketch",
+    title: "Arduino Code",
     blurb:
       "Watch a microcontroller sketch run line by line on a live board: setup once, loop forever, every line coloured by its job, numbers you can drag, and threads from each pin number to its pin. Then hunt real beginner bugs, multiplex two displays and teach a tiny classifier.",
     tags: ["microcontrollers", "code", "Arduino", "interactive"],

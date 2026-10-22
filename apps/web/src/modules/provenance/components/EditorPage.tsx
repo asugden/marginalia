@@ -16,7 +16,9 @@
 
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { hasCapability } from "../../../client.js";
+import { TourPanel } from "../../onboarding/components/TourPanel.js";
 import {
   Button,
   Field,
@@ -32,6 +34,7 @@ import { GearIcon, KeyIcon, ShareIcon } from "../../../icons.js";
 import {
   getDocument,
   isAuthError,
+  listAgentsWithSettings,
   postEvents,
   redirectToLogin,
   setProvenanceHideMarks,
@@ -76,21 +79,12 @@ export function EditorPage() {
   const { active, actingAsStudent } = useActiveCourse(courseParam ?? null);
   const courseId = active?.courseId ?? null;
   const writeBase = `/course/${courseParam}/writing`;
-  // "Preview as student" — the instructor wants to see this course exactly as a
-  // student does, hidden marks and all. There are two ways it turns on:
-  //   1. The session-scoped act-as-student downgrade (RoleSwitch / "Preview as
-  //      student"). This is the intuitive path and the source of truth: while
-  //      it's set, /api/me already reports the caller's role as `student`.
-  //   2. Legacy `?preview=1` on the URL, kept working for older links.
-  // Either makes `previewing` true. We do NOT depend on the role alone, so the
-  // editor behaves identically however the instructor arrived.
-  const [searchParams] = useSearchParams();
-  const previewing = actingAsStudent || searchParams.get("preview") === "1";
-  // "Working as an instructor" = an instructor who is NOT previewing. Because
-  // the act-as-student downgrade reports role as `student`, an instructor in
-  // preview reads role !== "instructor" — which is exactly right: they should
-  // get the student experience. So this is only true when genuinely authoring.
-  const isInstructor = active?.role === "instructor" && !previewing;
+  // A preview runs as the course's sample student (a real student account),
+  // so while previewing, /api/me already describes a student and `active`
+  // is that student's enrollment — nothing here needs to pretend.
+  const previewing = actingAsStudent;
+  // An author working on their own document (not previewing).
+  const isInstructor = hasCapability(active, "author") && !previewing;
 
   // "Hide marks from students" — the persisted course setting (display-only;
   // recording is unaffected). Seeded from /api/me; an instructor flips it with
@@ -113,6 +107,23 @@ export function EditorPage() {
   //   • Student / acting-as-student → never colored, whatever the setting says.
   const hideMarksForEditor = hideMarksSetting || !isInstructor;
   const [doc, setDoc] = useState<DocumentDTO | null>(null);
+  // The chat switch for THIS document: its assignment's (0033), or the
+  // course's for a document from before writing belonged to assignments.
+  // When off, the pane, its toggle, and the settings gear all disappear —
+  // for everyone, matching code. The server refuses chat turns
+  // independently, so this is presentation, not the enforcement. Starts
+  // closed until the policy is known, so it never flashes on.
+  const [chatAllowed, setChatAllowed] = useState(false);
+  useEffect(() => {
+    if (!doc || !courseId) return;
+    const ctrl = new AbortController();
+    listAgentsWithSettings(courseId, ctrl.signal, doc.id)
+      .then((l) => !ctrl.signal.aborted && setChatAllowed(l.chatEnabled))
+      .catch(() => {
+        /* no policy, no chat pane */
+      });
+    return () => ctrl.abort();
+  }, [doc?.id, courseId]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -316,6 +327,9 @@ export function EditorPage() {
       };
       if (ev.text) outbound.text = ev.text;
       if (ev.origin) outbound.origin = ev.origin;
+      // The link from an llm_insert back to the chat message it came from.
+      // Dropping this field silently NULLed source_message_id server-side.
+      if (ev.sourceMessageId) outbound.sourceMessageId = ev.sourceMessageId;
       if (ev.removedOrigins) outbound.removedOrigins = ev.removedOrigins;
       if (ev.restoredOrigins) outbound.restoredOrigins = ev.restoredOrigins;
       if (ev.timingGapsMs && ev.timingGapsMs.length > 0) {
@@ -354,7 +368,7 @@ export function EditorPage() {
           <Link to={writeBase} aria-label="Back to documents">
             <Wordmark size="sm" />
           </Link>
-          <span className="ds-staff-top__role">Provenance</span>
+          <span className="ds-staff-top__role">Writing</span>
         </header>
         <div className="ds-staff-page">
           <p className="error">{loadError}</p>
@@ -373,7 +387,7 @@ export function EditorPage() {
           <Link to={writeBase} aria-label="Back to documents">
             <Wordmark size="sm" />
           </Link>
-          <span className="ds-staff-top__role">Provenance</span>
+          <span className="ds-staff-top__role">Writing</span>
         </header>
         <div className="ds-staff-page">
           <p className="muted">Loading…</p>
@@ -382,7 +396,8 @@ export function EditorPage() {
     );
   }
 
-  const gridTemplate = chatOpen
+  const chatVisible = chatOpen && chatAllowed;
+  const gridTemplate = chatVisible
     ? `${split}fr 6px ${1 - split}fr`
     : "minmax(0, 1fr)";
 
@@ -403,14 +418,15 @@ export function EditorPage() {
           a full-screen surface with no role switch — so mirror StudentLayout's
           banner here to (a) make the preview state obvious and (b) give a
           one-click way out that clears the act-as-student downgrade. */}
+      {courseParam && <TourPanel courseId={courseParam} />}
       {previewing && courseId && (
         <PreviewBanner courseId={courseId} courseName={active?.courseName ?? ""} />
       )}
       <header className="prov-shell-header">
         <Link to={writeBase} aria-label="Back to documents">
-          <span className="prov-shell-role">Provenance</span>
+          <span className="prov-shell-role">Writing</span>
         </Link>
-        {/* No explicit back button — the lockup above and this Provenance link
+        {/* No explicit back button — the lockup above and this Writing link
             both return toward the course / documents list. */}
         <input
           className="prov-shell-title"
@@ -446,7 +462,7 @@ export function EditorPage() {
         {/* Chat settings (currently the bring-your-own-key control). Only shown
             while the chat pane is open, since that's the only thing it affects.
             A dot on the gear signals a personal key is in effect. */}
-        {chatOpen && (
+        {chatVisible && (
           <IconButton
             title={byo.active ? "Chat settings — using your own key" : "Chat settings"}
             className={"prov-settings-gear" + (byo.active ? " is-active" : "")}
@@ -455,16 +471,18 @@ export function EditorPage() {
             <GearIcon size={18} />
           </IconButton>
         )}
-        <button
-          type="button"
-          className={"prov-toggle" + (chatOpen ? " is-on" : "")}
-          onClick={() => setChatOpen((v) => !v)}
-          aria-pressed={chatOpen}
-          title="Show or hide the LLM chat pane"
-        >
-          <span className="prov-toggle__sw" />
-          {chatOpen ? "Chat on" : "Chat off"}
-        </button>
+        {chatAllowed && (
+          <button
+            type="button"
+            className={"prov-toggle" + (chatOpen ? " is-on" : "")}
+            onClick={() => setChatOpen((v) => !v)}
+            aria-pressed={chatOpen}
+            title="Show or hide the LLM chat pane"
+          >
+            <span className="prov-toggle__sw" />
+            {chatOpen ? "Chat on" : "Chat off"}
+          </button>
+        )}
       </header>
 
       {shareOpen && courseId && (
@@ -472,6 +490,7 @@ export function EditorPage() {
           documentId={doc.id}
           courseId={courseId}
           canRevoke={isInstructor}
+          assignmentId={doc.assignmentId ?? null}
           onClose={() => setShareOpen(false)}
         />
       )}
@@ -482,7 +501,7 @@ export function EditorPage() {
 
       <div
         ref={splitContainerRef}
-        className={`prov-shell-body${chatOpen ? " chat-open" : ""}`}
+        className={`prov-shell-body${chatVisible ? " chat-open" : ""}`}
         style={{ gridTemplateColumns: gridTemplate }}
       >
         <section className="prov-editor-pane">
@@ -494,13 +513,13 @@ export function EditorPage() {
               onEvents={onEditorEvents}
               onEditorReady={(ed) => { editorRef.current = ed; }}
               hideMarks={hideMarksForEditor}
-              chatOpen={chatOpen}
+              chatOpen={chatVisible}
               onReference={onReference}
             />
           </div>
         </section>
 
-        {chatOpen && (
+        {chatVisible && (
           <>
             <div
               className="prov-divider"

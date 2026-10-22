@@ -14,6 +14,9 @@
 //      each neuron is a bend.
 //   3. Why ReLU won. A sigmoid chain and a ReLU chain, identical otherwise.
 //      Move the input; down the sigmoid chain the change fades to nothing.
+//   4. ReLU, GELU and SwiGLU, each drawn as input × gate = output: a hard
+//      switch, a smooth one, and a learned one. Prose is the author's to
+//      write; the card ships with bracketed placeholders.
 //
 // Show, don't tell: the prose on the page is a sentence per panel. This page
 // is used in class, after an introduction; the figures carry the argument.
@@ -27,6 +30,7 @@ import { ACTS, ACT_NAME, type Act } from "./act.js";
 import "./activation.css";
 import { DepthPanel } from "./DepthPanel.js";
 import { Glyph } from "./draw.js";
+import { GeluPanel } from "./GeluPanel.js";
 import { GrowPanel } from "./GrowPanel.js";
 import { NeuronPanel } from "./NeuronPanel.js";
 
@@ -34,16 +38,20 @@ export function ActivationPage() {
   // The story starts linear, so the first thing a student sees is what a
   // network cannot do without an activation.
   const [kind, setKind] = useState<Act>("none");
-  // Off by default so the page works for anyone: panel 2 fits a coffee curve.
-  // On, the parts take their neuroscience names and panel 2 fits a tuning
-  // curve from visual cortex instead.
-  const [bio, setBio] = useState(false);
+  // On by default: panel 1 draws its parts as the cells they were named
+  // after. Off, the same parts are drawn as tiles and nodes. Panel 2 always
+  // fits the coffee curve.
+  const [bio, setBio] = useState(true);
 
   return (
     <div className="app">
       <header className="app-topbar app-topbar--wide">
         <div className="app-topbar__inner">
-          <Link to="/examples" className="app-lockup-link" aria-label="Examples">
+          <Link
+            to="/examples"
+            className="app-lockup-link"
+            aria-label="Examples"
+          >
             <Wordmark size="sm" />
           </Link>
           <span className="mnist-crumb">Examples</span>
@@ -57,9 +65,10 @@ export function ActivationPage() {
             <p className="eyebrow">Interactive example</p>
             <h1>Activation functions</h1>
             <p className="mnist-lede">
-              A neuron adds up its inputs, each multiplied by a weight, and
-              passes the sum through an activation function. Pick the function
-              here and it applies to the first two panels.
+              Each neuron in a layer is the sum of each of the inputs from the
+              previous layer multiplied by learned weights and then passed
+              through an <b>activation function</b>. This process is the key
+              element of a neural network. Don't move on until it makes sense.
             </p>
           </div>
 
@@ -67,7 +76,11 @@ export function ActivationPage() {
               over the two panels it drives and scrolls away before the third,
               which compares activations side by side. */}
           <div className="af-followed">
-            <div className="af-controls" role="group" aria-label="Activation function">
+            <div
+              className="af-controls"
+              role="group"
+              aria-label="Activation function"
+            >
               <span className="af-controls__label">Activation</span>
               <div className="af-controls__buttons">
                 {ACTS.map((a) => (
@@ -84,66 +97,97 @@ export function ActivationPage() {
                 ))}
               </div>
               <div className="af-controls__end">
-                <Switch label="Neuroscience" checked={bio} onChange={(e) => setBio(e.target.checked)} />
+                <Switch
+                  label="Neuroscience"
+                  checked={bio}
+                  onChange={(e) => setBio(e.target.checked)}
+                />
               </div>
             </div>
 
             <Card className="af-panel" padding="md">
               <h2 className="af-h2">One neuron</h2>
               <p className="af-sub">
-                Set the inputs and the weights. Make the sum go negative and see
-                what each activation does with it.
+                In the dark background section is one neuron from a layer. Above
+                it are three input neurons. We default to viewing them as actual
+                neurons from a brain. Triangular (pyramidal) neurons give
+                positive outputs while circular (inhibitory) neurons give
+                negative outputs.
+                <br />
+                <br />
+                Just as the connection strengths between neurons are learned by
+                the brain, the weights between artificial neural network layers
+                are learned.
+                <br />
+                <br />
+                The most important thing is that the summed inputs are then
+                passed through an "activation function", which adjusts the
+                output. Without the activation function, the neural network
+                cannot do its job (see next section). You can think of it as
+                similar to the brain again, where a neuron only fires when
+                enough of its inputs activate. In fact, it looks a lot like a
+                sigmoid function.
               </p>
               <NeuronPanel kind={kind} bio={bio} />
             </Card>
 
             <Card className="af-panel" padding="md">
-              <h2 className="af-h2">Add neurons</h2>
+              <h2 className="af-h2">Non-linear functions fit anything</h2>
               <p className="af-sub">
-                {bio ? (
-                  <>
-                    The dots are a neuron in visual cortex that fires most for a
-                    bar tilted at 60°. Fit it with a network, then give the
-                    network more neurons.
-                  </>
-                ) : (
-                  <>
-                    The dots are how much someone enjoys a cup of coffee at each
-                    temperature: too cold, just right, too hot. Fit them with a
-                    network, then give the network more neurons.
-                  </>
-                )}
+                As we said above, non-linear functions are required for a neural
+                network to work. The universal approximation theorem states that
+                non-linear functions can be combined to fit any function (if
+                there are enough; strictly, the functions must be
+                non-polynomial). That is to say, with more and more copies of
+                simple non-linear functions, our model can solve any problem.
+                That's the key trick of an LLM. Notice here that it can be any
+                non-linear function, but it just can't be linear.
               </p>
-              <GrowPanel key={bio ? "cortex" : "coffee"} kind={kind} bio={bio} onPickKind={setKind} />
-              <p className="af-note">
-                {bio
-                  ? "The dots are an idealised tuning curve, not a recording."
-                  : "The dots are an illustrative curve, not a survey."}{" "}
-                Each fit is the best a network of that size and activation can
-                do, found by gradient descent in your browser — the same result
-                every time.
-              </p>
+              <GrowPanel kind={kind} onPickKind={setKind} />
             </Card>
           </div>
 
           <Card className="af-panel" padding="md">
             <h2 className="af-h2">Why ReLU won</h2>
             <p className="af-sub">
-              The sigmoid came first because it looks like a real neuron: silent,
-              then firing, then flat out at its fastest rate. Stack it and move
-              the input.
+              Neural networks are trained by measuring their derivatives. We can
+              get an intuition into this by looking at the activation function
+              above. The slope of the function is its derivative. The steepest
+              slope of a sigmoid is 0.25, whereas a ReLU is 1.0 throughout. This
+              becomes a problem in fixing errors. In a deep network, the error
+              gets scaled in each layer, getting smaller and smaller to the
+              point of being inconsequential.
+              <br />
+              <br />
+              The tanh is better, but suffers from the same problem at the
+              extremes.
             </p>
             <DepthPanel />
-            <p className="af-note">
-              Every layer here has weight 1 and no bias, so the activation is the
-              only difference. The bar is how much a neuron moves when the input
-              moves — the number training uses to decide how to change the early
-              weights. A sigmoid's slope is never more than ¼, so each layer
-              shrinks it at least fourfold; a ReLU passes it on whole. Deep
-              networks trained with ReLU from 2010 (Nair &amp; Hinton; Glorot,
-              Bordes &amp; Bengio, 2011), and AlexNet's 2012 image-recognition
-              result used it throughout.
+          </Card>
+
+          <Card className="af-panel" padding="md">
+            <h2 className="af-h2">One last problem</h2>
+            <p className="af-sub">
+              ReLU led to the massive innovations in neural networks, but it
+              still isn't perfect. Specifically, if the value ever goes below 0,
+              the output is <b>always zero</b>. That means that -0.1 and -one
+              million lead to the same output. These neurons can be thought of
+              as "lost".
+              <br />
+              <br />
+              The most recent innovations are GeLU and SwiGLU. ReLU is a
+              rectified linear unit (i.e. it is linear, but anything below 0 is
+              set to 0). GeLU is the Gaussian Error linear unit. Rather than a
+              rectifying function or "gate", it uses a Gaussian error function.
+              <br />
+              <br />
+              Specifically in transformers, they can do even better if they can
+              learn their own error functions. The "Swish" function was designed
+              to allow that. It can approximate a linear function, a GeLU, and a
+              ReLU, depending on the learned values. The top LLMs use SwiGLUs
+              today.
             </p>
+            <GeluPanel />
           </Card>
         </div>
       </div>

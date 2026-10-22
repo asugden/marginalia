@@ -12,8 +12,18 @@ import { Tooltip } from "../../components/index.js";
 import type { Literal, Program, Role } from "./lang.js";
 import { TOOLTIPS } from "./tooltips.js";
 
-export const ROLE_ORDER: Role[] = ["control", "input", "output", "time", "setup", "serial"];
-export const ROLE_INFO: Record<Role, { glyph: string; name: string; hint: string }> = {
+export const ROLE_ORDER: Role[] = [
+  "control",
+  "input",
+  "output",
+  "time",
+  "setup",
+  "serial",
+];
+export const ROLE_INFO: Record<
+  Role,
+  { glyph: string; name: string; hint: string }
+> = {
   setup: { glyph: "⚙", name: "Setup", hint: "Control pins, input, and output" },
   output: { glyph: "→", name: "Output", hint: "control actuators" },
   input: { glyph: "←", name: "Input", hint: "read from sensors" },
@@ -22,8 +32,10 @@ export const ROLE_INFO: Record<Role, { glyph: string; name: string; hint: string
   serial: { glyph: "✉", name: "Serial", hint: "Print to the computer" },
 };
 
-const KEYWORDS = /^(if|else|while|for|do|return|break|continue|void|const|static|unsigned)\b/;
-const TYPES = /^(int|float|double|bool|boolean|long|short|byte|char|word|String|u?int\d+_t|size_t)\b/;
+const KEYWORDS =
+  /^(if|else|while|for|do|return|break|continue|void|const|static|unsigned)\b/;
+const TYPES =
+  /^(int|float|double|bool|boolean|long|short|byte|char|word|String|u?int\d+_t|size_t)\b/;
 const CALLS: Record<string, Role> = {
   pinMode: "setup",
   digitalWrite: "output",
@@ -59,10 +71,12 @@ export function CodeView(p: CodeViewProps) {
   const lines = p.source.split("\n");
   if (lines[lines.length - 1] === "") lines.pop();
   const lineStarts: number[] = [0];
-  for (let i = 0; i < p.source.length; i++) if (p.source[i] === "\n") lineStarts.push(i + 1);
+  for (let i = 0; i < p.source.length; i++)
+    if (p.source[i] === "\n") lineStarts.push(i + 1);
 
   const setup = p.prog.funcs.get("setup");
-  const inSetup = (n: number) => !!setup && n > setup.line && n < setup.body.endLine;
+  const inSetup = (n: number) =>
+    !!setup && n > setup.line && n < setup.body.endLine;
 
   // Literals by line, draggable only where the source text is the literal
   // itself (not a #define standing in for it).
@@ -79,7 +93,9 @@ export function CodeView(p: CodeViewProps) {
       {lines.map((text, idx) => {
         const n = idx + 1;
         const roles = p.prog.roles.get(n);
-        const primary = roles ? ROLE_ORDER.find((r) => roles.has(r)) : undefined;
+        const primary = roles
+          ? ROLE_ORDER.find((r) => roles.has(r))
+          : undefined;
         const note = p.notes.get(n);
         const fresh = note && p.now - note.at < 250;
         const isCur = p.current === n;
@@ -93,18 +109,34 @@ export function CodeView(p: CodeViewProps) {
         ].join(" ");
         const eng = p.english?.get(n);
         return (
-          <div key={n} className={cls} data-line={n} onPointerEnter={() => p.onHoverLine(n)}>
+          <div
+            key={n}
+            className={cls}
+            data-line={n}
+            onPointerEnter={() => p.onHoverLine(n)}
+          >
             <span className="cd-num">{n}</span>
-            <span className="cd-glyphs" title={roles ? [...roles].map((r) => ROLE_INFO[r].name).join(" · ") : undefined}>
-              {roles && ROLE_ORDER.filter((r) => roles.has(r)).map((r) => (
-                <span key={r} className={`cd-glyph cd-glyph--${r}`}>
-                  {ROLE_INFO[r].glyph}
-                </span>
-              ))}
+            <span
+              className="cd-glyphs"
+              title={
+                roles
+                  ? [...roles].map((r) => ROLE_INFO[r].name).join(" · ")
+                  : undefined
+              }
+            >
+              {roles &&
+                ROLE_ORDER.filter((r) => roles.has(r)).map((r) => (
+                  <span key={r} className={`cd-glyph cd-glyph--${r}`}>
+                    {ROLE_INFO[r].glyph}
+                  </span>
+                ))}
             </span>
             <span className="cd-text">
               {p.delayLine === n && p.delayProgress !== null && (
-                <span className="cd-delaybar" style={{ width: `${p.delayProgress * 100}%` }} />
+                <span
+                  className="cd-delaybar"
+                  style={{ width: `${p.delayProgress * 100}%` }}
+                />
               )}
               <Highlighted
                 text={text}
@@ -117,7 +149,11 @@ export function CodeView(p: CodeViewProps) {
               {eng && <span className="cd-english">{eng}</span>}
             </span>
             <span className={`cd-note${fresh ? " cd-note--fresh" : ""}`}>
-              {miss.length > 0 && <span className="cd-missed">missed {miss[miss.length - 1]!.label}</span>}
+              {miss.length > 0 && (
+                <span className="cd-missed">
+                  missed {miss[miss.length - 1]!.label}
+                </span>
+              )}
               {note?.text}
             </span>
           </div>
@@ -151,7 +187,14 @@ function Highlighted({
     if (s < pos) continue;
     out.push(...highlight(text.slice(pos, s), `${pos}`));
     out.push(
-      <DragLit key={`lit${i}`} index={i} lit={lit} shown={litText.get(i) ?? lit.text} onChange={onLitChange} onCommit={onLitCommit} />,
+      <DragLit
+        key={`lit${i}`}
+        index={i}
+        lit={lit}
+        shown={litText.get(i) ?? lit.text}
+        onChange={onLitChange}
+        onCommit={onLitCommit}
+      />,
     );
     pos = e;
   }
@@ -165,7 +208,7 @@ function highlight(s: string, key: string): React.ReactNode[] {
   let i = 0;
   let plain = "";
   const flush = () => {
-    if (plain) out.push(plain), (plain = "");
+    if (plain) (out.push(plain), (plain = ""));
   };
   while (i < s.length) {
     const rest = s.slice(i);
@@ -195,7 +238,15 @@ function highlight(s: string, key: string): React.ReactNode[] {
     if (word && (i === 0 || !/\w/.test(s[i - 1]!))) {
       flush();
       const role = CALLS[word];
-      const cls = role ? `cd-tok-call cd-tok-call--${role}` : KEYWORDS.test(word) ? "cd-tok-kw" : TYPES.test(word) ? "cd-tok-type" : /^[A-Z][A-Z0-9_]+$/.test(word) ? "cd-tok-const" : "";
+      const cls = role
+        ? `cd-tok-call cd-tok-call--${role}`
+        : KEYWORDS.test(word)
+          ? "cd-tok-kw"
+          : TYPES.test(word)
+            ? "cd-tok-type"
+            : /^[A-Z][A-Z0-9_]+$/.test(word)
+              ? "cd-tok-const"
+              : "";
       const token = cls ? (
         <span key={`${key}w${i}`} className={cls}>
           {word}
@@ -208,7 +259,12 @@ function highlight(s: string, key: string): React.ReactNode[] {
       const isCall = /^\s*\(/.test(s.slice(i + word.length));
       out.push(
         tip && isCall ? (
-          <Tooltip key={`${key}t${i}`} label={tip} placement="top" className="cd-tip">
+          <Tooltip
+            key={`${key}t${i}`}
+            label={tip}
+            placement="top"
+            className="cd-tip"
+          >
             {token}
           </Tooltip>
         ) : (
@@ -289,14 +345,18 @@ function DragLit({
     if (!s) return;
     if (toggle) {
       const v = lit.value ? 0 : 1;
-      onChange(index, v, lit.kind === "level" ? (v ? "HIGH" : "LOW") : v ? "true" : "false");
+      onChange(
+        index,
+        v,
+        lit.kind === "level" ? (v ? "HIGH" : "LOW") : v ? "true" : "false",
+      );
     }
     onCommit(index);
   };
   return (
     <span
       className={toggle ? "cd-lit cd-lit--toggle" : "cd-lit"}
-      title={toggle ? "Click to flip" : "Drag left or right"}
+      title={toggle ? "Click to toggle" : "Drag left or right"}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}

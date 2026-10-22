@@ -49,21 +49,12 @@
    design-system equivalent for a proportional provenance meter. Segment colors
    reuse the editor/viewer status tokens so the bar reads the same as a
    snapshot's legend. */
-.prov-subs__row { cursor: default; }
-/* Collapsed prior snapshots — quieter than the document row they hang under. */
-.prov-subs__row.is-earlier { background: var(--surface-sunken); }
-.prov-subs__row.is-earlier .app-list__sub { padding-left: 0.9rem; }
-/* Inline "N earlier" disclosure inside the row's sub-line. */
-.prov-subs__more {
-  appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
-  font: inherit; color: var(--text-secondary); text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.prov-subs__more:hover { color: var(--text-strong); }
-
 .prov-subs__origins {
   display: inline-flex; align-items: center; gap: 0.55rem;
-  width: 13rem; max-width: 40vw;
+  /* A floor, not a fixed width: the label beside the bar ("36% typed") is
+     nowrap, and a fixed box once clipped a longer label mid-word. The bar
+     takes whatever the label leaves; the label is never cut. */
+  min-width: 13rem;
 }
 .prov-subs__bar {
   display: flex; flex: 1; height: 8px; min-width: 4rem;

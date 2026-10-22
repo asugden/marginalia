@@ -36,3 +36,18 @@ export function absoluteTime(ms: number): string {
     minute: "2-digit",
   });
 }
+
+/** How far past a deadline something landed, in the two largest units:
+ *  "3 min", "2 h 15 min", "1 d 4 h". Never rounds a late thing down to zero. */
+export function lateness(ms: number): string {
+  const min = Math.max(1, Math.round(ms / 60_000));
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) {
+    const m = min % 60;
+    return m ? `${h} h ${m} min` : `${h} h`;
+  }
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return rh ? `${d} d ${rh} h` : `${d} d`;
+}

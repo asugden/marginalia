@@ -3,9 +3,10 @@
 // you've authored in another course (v1.0 §4 copy-on-use model — the copy
 // is independent of the source).
 //
-// The component renders its own in-body page header (eyebrow + title +
-// scope) alongside the list, modal, and primary "New agent" action. The
-// course-level chrome (nav strip, course switcher) lives in CourseLayout.
+// Assign ▸ Agents. Laid out like Assign ▸ Writing and Code: a PageHeader,
+// then one Section whose header carries the actions — "From another course"
+// beside the primary "New" — and rows ending in Edit and a Delete danger link.
+// The course-level chrome (nav strip, course switcher) lives in CourseLayout.
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -18,15 +19,14 @@ import {
 } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import {
-  Avatar,
   Badge,
+  ItemCard,
   Button,
-  IconButton,
   PageHeader,
+  Section,
   SubLabel,
   useConfirm,
 } from "../components/index.js";
-import { PlusIcon, TrashIcon } from "../icons.js";
 
 export function AuthorListPage() {
   const { courseId } = useCourse();
@@ -109,94 +109,90 @@ export function AuthorListPage() {
   return (
     <div className="app-page">
       <PageHeader
-        eyebrow="Instructor · Agents"
+        eyebrow="Instructor · Assign"
         title="Agents"
-        scope="AI tutors your students can chat with — each carries a voice and, optionally, an outline of topics or a library of sources."
-        actions={
-          <>
-            <Button variant="subtle" icon={<PlusIcon size={16} />} onClick={openPicker}>
-              From another course
-            </Button>
-            <Button
-              variant="primary"
-              icon={<PlusIcon size={16} />}
-              href={`/course/${courseId}/instructor/agents/new`}
-            >
-              New agent
-            </Button>
-          </>
-        }
+        scope="Agents your students can chat with — each carries a voice and, optionally, an outline of topics or a library of sources."
       />
 
       {error && <p className="error">{error}</p>}
 
+      <Section
+        kicker="Agents for this course"
+        meta={agents ? `${agents.length}` : undefined}
+        actions={
+          <>
+            <Button variant="subtle" size="sm" onClick={openPicker}>
+              From another course
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              href={`/course/${courseId}/instructor/agents/new`}
+            >
+              New
+            </Button>
+          </>
+        }
+      >
       {agents === null ? (
         <p className="muted">Loading…</p>
       ) : agents.length === 0 ? (
         <p className="app-empty">
           You haven&rsquo;t built any agents yet.{" "}
           <Link to={`/course/${courseId}/instructor/agents/new`}>Make the first one</Link>.
-          An agent is a tutor your students can chat with — a voice, optionally
-          an outline of topics, and optionally a library of sources to ground
-          its answers.
+          An agent is something your students can chat with — a voice,
+          optionally an outline of topics, and optionally a library of sources
+          to ground its answers.
         </p>
       ) : (
         <div className="app-list">
           {agents.map((a) => (
-            <div className="app-list__row" key={a.id}>
-              <Avatar name={a.title} agent={a.hasBackbone} />
-              <div className="app-list__main">
-                <div className="app-list__title">{a.title}</div>
-                <div
-                  className="app-list__sub"
-                  style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}
-                >
-                  <Badge tone={a.hasBackbone ? "brand" : "ghost"}>
-                    {a.hasBackbone ? "guided" : "free-form"}
-                  </Badge>
-                  {a.hasCollection && (
-                    <Badge tone="info" dot>
-                      grounded
-                    </Badge>
-                  )}
+            <ItemCard
+              key={a.id}
+              kind="agent"
+              seed={a.id}
+              title={a.title}
+              href={`/course/${courseId}/instructor/agents/${a.id}`}
+              sub={[
+                a.hasBackbone ? "Guided" : "Free-form",
+                a.hasCollection ? "Grounded in sources" : null,
+                a.hasVariants ? "Hidden split running" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              meta={
+                <>
                   {a.hasVariants && (
-                    <Badge tone="warning" dot>
-                      hidden split
-                    </Badge>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      href={`/course/${courseId}/instructor/agents/${a.id}/variants`}
+                    >
+                      Results
+                    </Button>
                   )}
-                </div>
-              </div>
-              <div className="app-list__meta">
-                {a.hasVariants && (
                   <Button
-                    variant="ghost"
+                    variant="subtle"
                     size="sm"
-                    href={`/course/${courseId}/instructor/agents/${a.id}/variants`}
+                    href={`/course/${courseId}/instructor/agents/${a.id}`}
                   >
-                    Results
+                    Edit
                   </Button>
-                )}
-                <Button
-                  variant="subtle"
-                  size="sm"
-                  href={`/course/${courseId}/instructor/agents/${a.id}`}
-                >
-                  Edit
-                </Button>
-                <IconButton
-                  variant="ghost"
-                  size="sm"
-                  title="Delete agent"
-                  disabled={deletingId === a.id}
-                  onClick={() => onDelete(a)}
-                >
-                  <TrashIcon size={16} />
-                </IconButton>
-              </div>
-            </div>
+                  <button
+                    type="button"
+                    className="danger-link"
+                    disabled={deletingId === a.id}
+                    onClick={() => onDelete(a)}
+                  >
+                    Delete
+                  </button>
+                </>
+              }
+            />
           ))}
         </div>
       )}
+      </Section>
 
       {pickerOpen && (
         <div

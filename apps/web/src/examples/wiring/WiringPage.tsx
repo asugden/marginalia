@@ -511,7 +511,7 @@ function Readout({
         <span className="wr-kicker">Board</span>
         {analysis.short ? (
           <span className="wr-status wr-status--bad">
-            Short circuit: it shut itself off
+            Short circuit: the board shut off
           </span>
         ) : (
           <span className="wr-status wr-status--ok">Powered</span>
@@ -904,7 +904,7 @@ function PinPanel({
         )}
         {pin.inputOnly && (
           <span className="wr-tip">
-            Input only: it can read a voltage, never drive one.
+            Input only: it can read voltages, but not control them.
           </span>
         )}
       </div>

@@ -11,7 +11,7 @@ import { listAgents, type AgentSummary } from "../client.js";
 import { logPerf, readBootstrap } from "../bootstrap.js";
 import { ArrowIcon, PlusIcon } from "../icons.js";
 import { relativeTime } from "../time.js";
-import { Avatar, Badge, Button, IconButton } from "../components/index.js";
+import { Badge, Button, IconButton, ItemMark } from "../components/index.js";
 
 export function AgentsPanel({
   courseId,
@@ -81,7 +81,7 @@ export function AgentsPanel({
     <section className="app-modpanel app-modpanel--open" data-module="agents">
       <div className="app-modpanel__head">
         <div className="app-modpanel__heading">
-          <span className="eyebrow">Tutors to talk to</span>
+          <span className="eyebrow">Conversational agents</span>
           {/* With the module items gone from the student top line, the panel
               heading is the way into the module's full page. */}
           <h2><Link to={`${base}/agents`}>Agents</Link></h2>
@@ -200,7 +200,7 @@ function AgentRow({
       }}
     >
       <span className="app-agent__index">{String(n).padStart(2, "0")}</span>
-      <Avatar name={a.title} agent={a.hasBackbone} size="lg" />
+      <ItemMark kind="agent" seed={a.id} />
       <div className="app-agent__main">
         <div className="app-agent__title">{a.title}</div>
         <div className="app-agent__meta">
