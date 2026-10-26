@@ -4,9 +4,9 @@
 // so an item keeps its colour across renames and on every page that lists it.
 // Tones and sizes live in css/cards.css.
 
-import { ChatIcon, CodeIcon, CursorIcon, DocIcon, WritingIcon } from "../icons.js";
+import { ChatIcon, CodeIcon, CursorIcon, DocIcon, UsersIcon, WritingIcon } from "../icons.js";
 
-export type ItemMarkKind = "writing" | "code" | "agent" | "example" | "reading";
+export type ItemMarkKind = "writing" | "code" | "agent" | "example" | "reading" | "questions";
 
 const LABEL: Record<ItemMarkKind, string> = {
   writing: "Writing",
@@ -14,6 +14,7 @@ const LABEL: Record<ItemMarkKind, string> = {
   agent: "Agent",
   example: "Example",
   reading: "Reading",
+  questions: "Questions",
 };
 
 /** How many tones cards.css defines (`.card-mark--tone-0` …). */
@@ -39,7 +40,9 @@ export function ItemMark({ kind, seed }: { kind: ItemMarkKind; seed: string }) {
           ? ChatIcon
           : kind === "example"
             ? CursorIcon
-            : DocIcon;
+            : kind === "questions"
+              ? UsersIcon
+              : DocIcon;
   return (
     <span
       className={`card-mark card-mark--tone-${toneFor(seed)}`}

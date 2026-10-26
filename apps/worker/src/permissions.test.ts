@@ -24,11 +24,12 @@ const CAPS: Capability[] = [
   "manage_students",
   "view_submissions",
   "run_attendance",
+  "run_questions",
   "manage_staff",
 ];
 const EXPECTED: Record<string, Capability[]> = {
   instructor: CAPS,
-  ta: ["manage_students", "view_submissions", "run_attendance"],
+  ta: ["manage_students", "view_submissions", "run_attendance", "run_questions"],
   student: [],
 };
 

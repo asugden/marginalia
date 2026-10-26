@@ -119,6 +119,35 @@ const AttendanceDisplayPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.DisplayPage })));
 const AttendanceCheckInPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.CheckInPage })));
+// Questions module — anonymous audience questions on boards staff open in
+// class. See apps/web/src/modules/questions/README.md.
+const QuestionsStaffBoardsPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StaffBoardsPage })));
+const QuestionsStaffBoardPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StaffBoardPage })));
+const QuestionsStudentBoardsPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StudentBoardsPage })));
+const QuestionsStudentBoardPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StudentBoardPage })));
+// The "a board just opened" prompt. The course shells mount it themselves; the
+// full-screen editors below live outside them, so their routes add it.
+const LiveBoardButton = lazy(() =>
+  import("./modules/questions/components/LiveBoardButton.js").then((m) => ({ default: m.LiveBoardButton })));
+
+/** A full-screen course page plus the live question-board prompt. */
+function WithLiveBoard({ children }: { children: React.ReactNode }) {
+  const { courseId } = useParams<{ courseId: string }>();
+  return (
+    <>
+      {children}
+      {courseId && (
+        <Suspense fallback={null}>
+          <LiveBoardButton courseId={courseId} />
+        </Suspense>
+      )}
+    </>
+  );
+}
 
 // Two course-rooted shells. The student is the primary surface and owns the
 // clean course root (/course/:courseId/*, StudentLayout); the instructor view
@@ -303,6 +332,8 @@ const routes = [
       // Open-or-create the caller's notebook for an assignment, then redirect
       // to it. A literal segment, so it can't collide with a notebook id.
       { path: "code/assignment/:assignmentId", element: lz(<CodeOpenAssignment />) },
+      { path: "questions", element: lz(<QuestionsStudentBoardsPage />) },
+      { path: "questions/:boardId", element: lz(<QuestionsStudentBoardPage />) },
       // v1.2 legacy: old /write* course-scoped paths → /writing*.
       { path: "write", element: <LegacyWriteRedirect /> },
       { path: "write/agents", element: <LegacyWriteRedirect suffix="agents" /> },
@@ -311,10 +342,16 @@ const routes = [
   // The provenance editor is its own full-screen surface (own prov-shell
   // chrome), so it mounts as a standalone course-scoped route rather than a
   // StudentLayout child — avoids stacking the student topbar above its header.
-  { path: "/course/:courseId/writing/:id", element: lz(<ProvenanceEditorPage />) },
+  {
+    path: "/course/:courseId/writing/:id",
+    element: lz(<WithLiveBoard><ProvenanceEditorPage /></WithLiveBoard>),
+  },
   // The notebook is a full-screen surface like the writing editor, so it
   // mounts outside StudentLayout for the same reason.
-  { path: "/course/:courseId/code/:notebookId", element: lz(<CodeNotebookPage />) },
+  {
+    path: "/course/:courseId/code/:notebookId",
+    element: lz(<WithLiveBoard><CodeNotebookPage /></WithLiveBoard>),
+  },
   // The instructor's starter-notebook editor — same surface, starter mode.
   {
     path: "/course/:courseId/instructor/code/:assignmentId/starter",
@@ -396,6 +433,8 @@ const routes = [
       { path: "code/:assignmentId", element: <ParamRedirect to="submissions/code/:assignmentId" /> },
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
+      { path: "questions", element: lz(<QuestionsStaffBoardsPage />) },
+      { path: "questions/:boardId", element: lz(<QuestionsStaffBoardPage />) },
     ],
   },
 

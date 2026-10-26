@@ -614,7 +614,7 @@ shape, so learning one teaches the rest.
    turned on. An **All** item (the combined list, in due order) appears
    only when more than one type is on.
 3. **Review holds everything that comes back:** Submissions (every type,
-   by assignment) and Attendance. Submissions are never split into a
+   by assignment), Attendance, and Questions. Submissions are never split into a
    tab per type, and never shown as a flat feed of snapshots.
 4. **Build holds ingredients, never assignments.** Voices and libraries
    are what assignments are made *from*. If students are handed it,

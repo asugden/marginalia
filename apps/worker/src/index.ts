@@ -79,6 +79,7 @@ import { routeCode } from "./modules/code/routes.js";
 import { routeExamples } from "./modules/examples/routes.js";
 import { routeCourseItems } from "./modules/course-items/routes.js";
 import { routeOnboarding } from "./modules/onboarding/routes.js";
+import { routeQuestions } from "./modules/questions/routes.js";
 import {
   ensureItem as ensureCourseItem,
   removeItemForPayload as removeCourseItemForPayload,
@@ -353,6 +354,13 @@ async function route(
   // Self-contained module; see apps/worker/src/modules/attendance/README.md.
   if (head === "attendance") {
     const handled = await routeAttendance(req, env, url, identity, parts);
+    if (handled) return handled;
+  }
+
+  // /api/questions/* — anonymous audience questions on boards staff open
+  // during class. See apps/worker/src/modules/questions/README.md.
+  if (head === "questions") {
+    const handled = await routeQuestions(req, env, url, identity, parts);
     if (handled) return handled;
   }
 

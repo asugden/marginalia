@@ -878,6 +878,7 @@ export type Capability =
   | "manage_students"
   | "view_submissions"
   | "run_attendance"
+  | "run_questions"
   | "manage_staff";
 
 /** Whether an enrollment's role holds a capability. Missing enrollment or an

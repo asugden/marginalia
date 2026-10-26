@@ -13,6 +13,9 @@
 //   * Completed — done work, entirely separate at the bottom, so finishing
 //     something moves it rather than making it vanish.
 //
+// Plus a Questions panel after To do, shown only once the course has opened a
+// question board: the newest few boards and a link to all of them.
+//
 // Every card is the shared ItemCard (the same card instructors see), whole
 // card clickable, with one status control on the right: Start (accent) for
 // work not begun, Continue for work under way, and no button once done — the
@@ -29,6 +32,8 @@ import { listNotebooks, type NotebookSummaryDTO } from "../modules/code/api.js";
 import { listAgents, type AgentSummary } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { listCourseItems, type CourseItemDTO } from "../modules/course-items/api.js";
+import { listBoards, type BoardDTO } from "../modules/questions/api.js";
+import { BoardCard } from "../modules/questions/components/BoardCard.js";
 import { itemTitle } from "../modules/course-items/title.js";
 import {
   buildStudentWork,
@@ -73,6 +78,7 @@ export function DashboardPage() {
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
   const [notebooks, setNotebooks] = useState<NotebookSummaryDTO[] | null>(null);
+  const [boards, setBoards] = useState<BoardDTO[]>([]);
   const [sort, setSort] = useState<SortMode>(readSort);
   const [showAll, setShowAll] = useState(false);
 
@@ -92,6 +98,7 @@ export function DashboardPage() {
       setAgents,
       [],
     );
+    void settle(listBoards(courseId, ctrl.signal).then((r) => r.boards), setBoards, []);
     return () => ctrl.abort();
   }, [courseId, provenanceEnabled, codeEnabled, agentsEnabled]);
 
@@ -194,6 +201,27 @@ export function DashboardPage() {
             )}
           </div>
         </section>
+
+        {boards.length > 0 && (
+          <section className="app-modpanel app-modpanel--open" data-module="questions">
+            <div className="app-modpanel__head">
+              <div className="app-modpanel__heading">
+                <span className="eyebrow">In class</span>
+                <h2>Questions</h2>
+              </div>
+              <Button variant="subtle" size="sm" href={`${base}/questions`}>
+                All boards
+              </Button>
+            </div>
+            <div className="app-modpanel__body">
+              <div className="app-list">
+                {boards.slice(0, 3).map((b) => (
+                  <BoardCard key={b.id} board={b} href={`${base}/questions/${b.id}`} />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {!loading && explore.length > 0 && (
           <section className="app-modpanel app-modpanel--open" data-module="explore">

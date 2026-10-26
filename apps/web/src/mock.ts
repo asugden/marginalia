@@ -490,6 +490,7 @@ export async function getMe(): Promise<MeResponse> {
           "manage_students",
           "view_submissions",
           "run_attendance",
+          "run_questions",
           "manage_staff",
         ],
         joinedAt: Date.now(),

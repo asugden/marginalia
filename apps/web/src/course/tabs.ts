@@ -11,7 +11,8 @@
 //            Writing, Code, Agents, Examples — plus "All", the combined list,
 //            shown only when more than one type is on. Create, edit, publish.
 //   Review — what COMES BACK: Submissions (every type, listed by assignment,
-//            each opening that assignment's submissions) and Attendance.
+//            each opening that assignment's submissions), Attendance, and
+//            Questions (the audience's questions for each presenter).
 //   Build  — the ingredients assignments are made FROM: voices and libraries.
 //            Never handed to a student directly.
 //
@@ -178,6 +179,15 @@ export const TABS: TabSpec[] = [
     description:
       "QR check-in for in-person classes. Each session shows a rotating code on a projector; students scan from their phones.",
     visible: (e) => !!e?.showAttendance,
+  },
+  {
+    slug: "questions",
+    requires: "run_questions",
+    band: "review",
+    label: "Questions",
+    description:
+      "Anonymous questions from the audience, one board per presenter. Open a board in class and everyone is prompted to ask.",
+    visible: () => true,
   },
 
   // ── Build ────────────────────────────────────────────────────────────────
