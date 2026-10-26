@@ -4,13 +4,30 @@
 // staff can hide or delete any of them.
 
 import { useState } from "react";
-import { Badge, Button, Textarea, type useConfirm } from "../../../components/index.js";
+import {
+  Badge,
+  Button,
+  Textarea,
+  type useConfirm,
+} from "../../../components/index.js";
 import { relativeTime } from "../../../time.js";
-import { ApiError, askQuestion, deleteQuestion, updateQuestion, type EntryDTO } from "../api.js";
+import {
+  ApiError,
+  askQuestion,
+  deleteQuestion,
+  updateQuestion,
+  type EntryDTO,
+} from "../api.js";
 
 const MAX_CHARS = 1_000;
 
-export function Composer({ boardId, onAsked }: { boardId: string; onAsked: () => void }) {
+export function Composer({
+  boardId,
+  onAsked,
+}: {
+  boardId: string;
+  onAsked: () => void;
+}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +70,15 @@ export function Composer({ boardId, onAsked }: { boardId: string; onAsked: () =>
         }}
       />
       <div className="q-compose__foot">
-        <span className="q-compose__note">Your name isn't shown to anyone.</span>
-        <Button variant="primary" onClick={submit} loading={busy} disabled={busy || !text.trim()}>
+        <span className="q-compose__note">
+          Your question will be anonymous.
+        </span>
+        <Button
+          variant="primary"
+          onClick={submit}
+          loading={busy}
+          disabled={busy || !text.trim()}
+        >
           Ask
         </Button>
       </div>
@@ -170,13 +194,20 @@ export function QuestionRow({
                 variant="subtle"
                 size="sm"
                 disabled={busy}
-                onClick={() => run(() => updateQuestion(entry.id, { hidden: !entry.hidden }))}
+                onClick={() =>
+                  run(() => updateQuestion(entry.id, { hidden: !entry.hidden }))
+                }
               >
                 {entry.hidden ? "Show" : "Hide"}
               </Button>
             )}
             {canDelete && (
-              <Button variant="danger" size="sm" disabled={busy} onClick={remove}>
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={busy}
+                onClick={remove}
+              >
                 Delete
               </Button>
             )}

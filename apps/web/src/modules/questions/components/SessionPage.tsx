@@ -14,7 +14,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Button, Input, PageHeader, Section, useConfirm } from "../../../components/index.js";
+import {
+  Button,
+  Input,
+  PageHeader,
+  Section,
+  useConfirm,
+} from "../../../components/index.js";
 import {
   ApiError,
   createBoard,
@@ -37,7 +43,11 @@ const OPEN_POLL_MS = 4_000;
 const IDLE_POLL_MS = 20_000;
 
 export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
-  const { courseId = "", sessionId = "", boardId } = useParams<{
+  const {
+    courseId = "",
+    sessionId = "",
+    boardId,
+  } = useParams<{
     courseId: string;
     sessionId: string;
     boardId?: string;
@@ -62,7 +72,8 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
     const load = boardId
       ? getBoard(boardId).then((r) => {
           // A board id from another session (a stale link) belongs there.
-          if (r.board.sessionId !== sessionId) throw new ApiError("Board not found", 404);
+          if (r.board.sessionId !== sessionId)
+            throw new ApiError("Board not found", 404);
           setEntries(r.entries);
           return r;
         })
@@ -81,7 +92,8 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
         setMissing(null);
       })
       .catch((e) => {
-        if (e instanceof ApiError && e.status === 404) setMissing(boardId ? "board" : "session");
+        if (e instanceof ApiError && e.status === 404)
+          setMissing(boardId ? "board" : "session");
         else setError((e as Error).message);
       });
   }, [boardId, sessionId, navigate, toBoard]);
@@ -93,7 +105,11 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
     refresh();
   }, [refresh]);
 
-  usePoll(refresh, session?.status === "open" ? OPEN_POLL_MS : IDLE_POLL_MS, !!session);
+  usePoll(
+    refresh,
+    session?.status === "open" ? OPEN_POLL_MS : IDLE_POLL_MS,
+    !!session,
+  );
 
   const base = questionsBase(courseId, staffShell);
   // A board link we can't resolve before the session has loaded (deleted, or
@@ -109,7 +125,15 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
     );
   }
   if (!session) {
-    return <div className="app-page">{error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}</div>;
+    return (
+      <div className="app-page">
+        {error ? (
+          <p className="error">{error}</p>
+        ) : (
+          <p className="muted">Loading…</p>
+        )}
+      </div>
+    );
   }
 
   const controls = staffShell && staff;
@@ -129,7 +153,10 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
   const removeBoard = async (b: BoardDTO) => {
     const ok = await confirm({
       title: `Delete “${b.title}”?`,
-      body: b.questionCount > 0 ? `Its ${b.questionCount} question${b.questionCount === 1 ? "" : "s"} will be deleted too.` : undefined,
+      body:
+        b.questionCount > 0
+          ? `Its ${b.questionCount} question${b.questionCount === 1 ? "" : "s"} will be deleted too.`
+          : undefined,
       confirmLabel: "Delete",
       danger: true,
     });
@@ -140,7 +167,9 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
       const rest = boards.filter((x) => x.id !== b.id);
       const idx = boards.findIndex((x) => x.id === b.id);
       const next = rest[Math.min(idx, rest.length - 1)];
-      navigate(next ? toBoard(next.id) : `${base}/${session.id}`, { replace: true });
+      navigate(next ? toBoard(next.id) : `${base}/${session.id}`, {
+        replace: true,
+      });
       if (!next) refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -148,12 +177,12 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
   };
 
   const scope = open
-    ? "Open. Ask as many questions as you like, on any presenter's board — everyone sees them, without names."
+    ? "Ask questions anonymously on any board as long as the session is open."
     : session.status === "closed"
-      ? "Closed to new questions. Every board stays readable."
+      ? "The session is closed, but boards stay readable."
       : controls
-        ? "Draft — students can't see this session until you open it. Add a board for each presenter now, or as you go."
-        : "Draft — only course staff can see this session.";
+        ? "Draft: students cannot see the session until you open it. Boards can optionally be added in advance."
+        : "Draft: only course staff can see this session.";
 
   return (
     <div className={(staffShell ? "ds-staff-page" : "app-page") + " q-session"}>
@@ -166,12 +195,24 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
             <StatusBadge status={session.status} />
             {controls &&
               (open ? (
-                <Button variant="subtle" onClick={() => act(() => updateSession(session.id, { status: "closed" }))}>
+                <Button
+                  variant="subtle"
+                  onClick={() =>
+                    act(() => updateSession(session.id, { status: "closed" }))
+                  }
+                >
                   Close session
                 </Button>
               ) : (
-                <Button variant="primary" onClick={() => act(() => updateSession(session.id, { status: "open" }))}>
-                  {session.status === "draft" ? "Open session" : "Reopen session"}
+                <Button
+                  variant="primary"
+                  onClick={() =>
+                    act(() => updateSession(session.id, { status: "open" }))
+                  }
+                >
+                  {session.status === "draft"
+                    ? "Open session"
+                    : "Reopen session"}
                 </Button>
               ))}
           </span>
@@ -186,7 +227,9 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
           <Link
             key={b.id}
             to={toBoard(b.id)}
-            className={"q-tabs__tab" + (b.id === boardId ? " q-tabs__tab--active" : "")}
+            className={
+              "q-tabs__tab" + (b.id === boardId ? " q-tabs__tab--active" : "")
+            }
             aria-current={b.id === boardId ? "page" : undefined}
           >
             <span className="q-tabs__name">{b.title}</span>
@@ -209,10 +252,14 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
       {error && <p className="error">{error}</p>}
 
       {missing === "board" ? (
-        <p className="muted">That board has been deleted. Pick another above.</p>
+        <p className="muted">
+          That board has been deleted. Pick another above.
+        </p>
       ) : !board ? (
         <p className="muted">
-          {controls ? "No boards yet. Add one for each presenter with + Board." : "No boards yet. They'll appear here as presenters are added."}
+          {controls
+            ? "No boards yet. Add one for each presenter with + Board."
+            : "No boards yet. They'll appear here as presenters are added."}
         </p>
       ) : (
         <>
@@ -231,10 +278,18 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
                 <h2 className="q-board__title">{board.title}</h2>
                 {controls && (
                   <span className="q-row__actions">
-                    <Button variant="subtle" size="sm" onClick={() => setRenaming(true)}>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      onClick={() => setRenaming(true)}
+                    >
                       Rename
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => removeBoard(board)}>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => removeBoard(board)}
+                    >
                       Delete
                     </Button>
                   </span>
@@ -243,11 +298,20 @@ export function SessionPage({ staffShell = false }: { staffShell?: boolean }) {
             )}
           </div>
 
-          {open && <Composer key={board.id} boardId={board.id} onAsked={refresh} />}
+          {open && (
+            <Composer key={board.id} boardId={board.id} onAsked={refresh} />
+          )}
 
-          <Section kicker="Questions" meta={`${entries.length}${open ? " · updates live" : ""}`}>
+          <Section
+            kicker="Questions"
+            meta={`${entries.length}${open ? " · updates live" : ""}`}
+          >
             {entries.length === 0 ? (
-              <p className="muted">{open ? "No questions yet. Be the first." : "No questions were asked."}</p>
+              <p className="muted">
+                {open
+                  ? "No questions yet. Be the first."
+                  : "No questions were asked."}
+              </p>
             ) : (
               <ol className="q-list">
                 {entries.map((e) => (
@@ -306,7 +370,11 @@ function AddBoard({
 
   if (!editing) {
     return (
-      <button type="button" className="q-tabs__add" onClick={() => setEditing(true)}>
+      <button
+        type="button"
+        className="q-tabs__add"
+        onClick={() => setEditing(true)}
+      >
         + Board
       </button>
     );
