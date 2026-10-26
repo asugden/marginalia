@@ -1,8 +1,8 @@
 import { Badge } from "../../../components/index.js";
-import type { BoardStatus } from "../api.js";
+import type { SessionStatus } from "../api.js";
 
-/** A board's state, as every list shows it. */
-export function StatusBadge({ status }: { status: BoardStatus }) {
+/** A session's state, as every list and header shows it. */
+export function StatusBadge({ status }: { status: SessionStatus }) {
   if (status === "open") {
     return (
       <Badge tone="success" dot>

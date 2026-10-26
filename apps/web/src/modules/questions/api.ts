@@ -5,16 +5,26 @@ const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const fetchInit: RequestInit = API_BASE ? { credentials: "include" } : {};
 
-export type BoardStatus = "draft" | "open" | "closed";
+export type SessionStatus = "draft" | "open" | "closed";
 
-export interface BoardDTO {
+/** One class meeting's worth of boards; the open/closed window. */
+export interface SessionDTO {
   id: string;
   courseId: string;
   title: string;
-  status: BoardStatus;
+  status: SessionStatus;
   createdAt: number;
   openedAt: number | null;
   closedAt: number | null;
+  boardCount: number;
+}
+
+/** One presenter's board within a session. */
+export interface BoardDTO {
+  id: string;
+  sessionId: string;
+  title: string;
+  position: number;
   questionCount: number;
 }
 
@@ -56,67 +66,89 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const q = encodeURIComponent;
+const send = (method: string, body?: unknown): RequestInit => ({
+  method,
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
 
-export function listBoards(courseId: string, signal?: AbortSignal) {
-  return call<{ boards: BoardDTO[]; staff: boolean }>(
-    `/api/questions/boards?courseId=${q(courseId)}`,
+// ── sessions ───────────────────────────────────────────────────────────────
+
+export function listSessions(courseId: string, signal?: AbortSignal) {
+  return call<{ sessions: SessionDTO[]; staff: boolean }>(
+    `/api/questions/sessions?courseId=${q(courseId)}`,
     { signal },
   );
 }
 
-export function liveBoard(courseId: string, signal?: AbortSignal) {
-  return call<{ board: BoardDTO | null }>(`/api/questions/live?courseId=${q(courseId)}`, { signal });
+export function liveSession(courseId: string, signal?: AbortSignal) {
+  return call<{ session: SessionDTO | null }>(`/api/questions/live?courseId=${q(courseId)}`, { signal });
 }
+
+export function getSession(sessionId: string, signal?: AbortSignal) {
+  return call<{ session: SessionDTO; boards: BoardDTO[]; staff: boolean }>(
+    `/api/questions/sessions/${q(sessionId)}`,
+    { signal },
+  );
+}
+
+export async function createSession(courseId: string, title: string): Promise<SessionDTO> {
+  return (await call<{ session: SessionDTO }>(`/api/questions/sessions`, send("POST", { courseId, title })))
+    .session;
+}
+
+export async function updateSession(
+  sessionId: string,
+  patch: { title?: string; status?: "open" | "closed" },
+): Promise<SessionDTO> {
+  return (await call<{ session: SessionDTO }>(`/api/questions/sessions/${q(sessionId)}`, send("PATCH", patch)))
+    .session;
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await call(`/api/questions/sessions/${q(sessionId)}`, send("DELETE"));
+}
+
+// ── boards ─────────────────────────────────────────────────────────────────
 
 export function getBoard(boardId: string, signal?: AbortSignal) {
-  return call<{ board: BoardDTO; entries: EntryDTO[]; staff: boolean }>(
-    `/api/questions/boards/${q(boardId)}`,
-    { signal },
-  );
+  return call<{
+    board: BoardDTO;
+    session: SessionDTO;
+    boards: BoardDTO[];
+    entries: EntryDTO[];
+    staff: boolean;
+  }>(`/api/questions/boards/${q(boardId)}`, { signal });
 }
 
-export async function createBoard(courseId: string, title: string): Promise<BoardDTO> {
-  const r = await call<{ board: BoardDTO }>(`/api/questions/boards`, {
-    method: "POST",
-    body: JSON.stringify({ courseId, title }),
-  });
-  return r.board;
+export async function createBoard(sessionId: string, title: string): Promise<BoardDTO> {
+  return (
+    await call<{ board: BoardDTO }>(`/api/questions/sessions/${q(sessionId)}/boards`, send("POST", { title }))
+  ).board;
 }
 
-export async function updateBoard(
-  boardId: string,
-  patch: { title?: string; status?: "open" | "closed" },
-): Promise<BoardDTO> {
-  const r = await call<{ board: BoardDTO }>(`/api/questions/boards/${q(boardId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(patch),
-  });
-  return r.board;
+export async function renameBoard(boardId: string, title: string): Promise<BoardDTO> {
+  return (await call<{ board: BoardDTO }>(`/api/questions/boards/${q(boardId)}`, send("PATCH", { title })))
+    .board;
 }
 
 export async function deleteBoard(boardId: string): Promise<void> {
-  await call(`/api/questions/boards/${q(boardId)}`, { method: "DELETE" });
+  await call(`/api/questions/boards/${q(boardId)}`, send("DELETE"));
 }
 
+// ── questions ──────────────────────────────────────────────────────────────
+
 export async function askQuestion(boardId: string, body: string): Promise<EntryDTO> {
-  const r = await call<{ entry: EntryDTO }>(`/api/questions/boards/${q(boardId)}/entries`, {
-    method: "POST",
-    body: JSON.stringify({ body }),
-  });
-  return r.entry;
+  return (await call<{ entry: EntryDTO }>(`/api/questions/boards/${q(boardId)}/entries`, send("POST", { body })))
+    .entry;
 }
 
 export async function updateQuestion(
   entryId: string,
   patch: { body?: string; hidden?: boolean },
 ): Promise<EntryDTO> {
-  const r = await call<{ entry: EntryDTO }>(`/api/questions/entries/${q(entryId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(patch),
-  });
-  return r.entry;
+  return (await call<{ entry: EntryDTO }>(`/api/questions/entries/${q(entryId)}`, send("PATCH", patch))).entry;
 }
 
 export async function deleteQuestion(entryId: string): Promise<void> {
-  await call(`/api/questions/entries/${q(entryId)}`, { method: "DELETE" });
+  await call(`/api/questions/entries/${q(entryId)}`, send("DELETE"));
 }

@@ -1,13 +1,14 @@
-// The "a board just opened" prompt. Mounted by every course shell (and the
+// The "a session just opened" prompt. Mounted by every course shell (and the
 // full-screen editors, which live outside them), so it reaches a person
-// wherever they are in the course. It polls /live and, while some board is
-// open, shows a floating button that jumps to it — unless they are already on
-// that board, or dismissed it. Dismissal is remembered per opening, so a board
-// that closes and reopens prompts again.
+// wherever they are in the course. It polls /live and, while some session is
+// open, shows a floating button that jumps to it — unless they are already
+// inside that session, or dismissed it. Dismissal is remembered per opening,
+// so a session that closes and reopens prompts again.
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { liveBoard, type BoardDTO } from "../api.js";
+import { liveSession, type SessionDTO } from "../api.js";
+import { sessionPath } from "./paths.js";
 import { usePoll } from "./usePoll.js";
 
 const POLL_MS = 15_000;
@@ -21,38 +22,37 @@ function readDismissed(): string | null {
   }
 }
 
-export function LiveBoardButton({
+export function LiveSessionButton({
   courseId,
   staff = false,
 }: {
   courseId: string;
-  /** Link to the staff board page instead of the student one. */
+  /** Link into the staff shell instead of the student one. */
   staff?: boolean;
 }) {
   const location = useLocation();
-  const [board, setBoard] = useState<BoardDTO | null>(null);
+  const [session, setSession] = useState<SessionDTO | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(readDismissed);
 
   const refresh = useCallback(() => {
-    liveBoard(courseId)
-      .then((r) => setBoard(r.board))
+    liveSession(courseId)
+      .then((r) => setSession(r.session))
       // A failed poll leaves the last answer standing; the next one retries.
       .catch(() => {});
   }, [courseId]);
 
   // First check on mount (and on switching course), then on the interval.
   useEffect(() => {
-    setBoard(null);
+    setSession(null);
     refresh();
   }, [refresh]);
   usePoll(refresh, POLL_MS);
 
-  if (!board) return null;
-  const href = staff
-    ? `/course/${courseId}/instructor/questions/${board.id}`
-    : `/course/${courseId}/questions/${board.id}`;
-  if (location.pathname === href) return null;
-  const key = `${board.id}:${board.openedAt ?? ""}`;
+  if (!session) return null;
+  const href = sessionPath(courseId, staff, session.id);
+  // Anywhere inside the session (its board list or one of its boards).
+  if (location.pathname === href || location.pathname.startsWith(href + "/")) return null;
+  const key = `${session.id}:${session.openedAt ?? ""}`;
   if (dismissed === key) return null;
 
   const dismiss = () => {
@@ -70,7 +70,7 @@ export function LiveBoardButton({
         <span className="q-live__dot" aria-hidden />
         <span className="q-live__text">
           <span className="q-live__kicker">Questions open</span>
-          <span className="q-live__title">{board.title}</span>
+          <span className="q-live__title">{session.title}</span>
         </span>
         <span className="q-live__arrow" aria-hidden>
           →

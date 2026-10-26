@@ -121,28 +121,32 @@ const AttendanceCheckInPage = lazy(() =>
   import("./modules/attendance/index.js").then((m) => ({ default: m.CheckInPage })));
 // Questions module — anonymous audience questions on boards staff open in
 // class. See apps/web/src/modules/questions/README.md.
-const QuestionsStaffBoardsPage = lazy(() =>
-  import("./modules/questions/index.js").then((m) => ({ default: m.StaffBoardsPage })));
+const QuestionsStaffSessionsPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StaffSessionsPage })));
+const QuestionsStaffSessionPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StaffSessionPage })));
 const QuestionsStaffBoardPage = lazy(() =>
   import("./modules/questions/index.js").then((m) => ({ default: m.StaffBoardPage })));
-const QuestionsStudentBoardsPage = lazy(() =>
-  import("./modules/questions/index.js").then((m) => ({ default: m.StudentBoardsPage })));
+const QuestionsStudentSessionsPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StudentSessionsPage })));
+const QuestionsStudentSessionPage = lazy(() =>
+  import("./modules/questions/index.js").then((m) => ({ default: m.StudentSessionPage })));
 const QuestionsStudentBoardPage = lazy(() =>
   import("./modules/questions/index.js").then((m) => ({ default: m.StudentBoardPage })));
-// The "a board just opened" prompt. The course shells mount it themselves; the
-// full-screen editors below live outside them, so their routes add it.
-const LiveBoardButton = lazy(() =>
-  import("./modules/questions/components/LiveBoardButton.js").then((m) => ({ default: m.LiveBoardButton })));
+// The "a session just opened" prompt. The course shells mount it themselves;
+// the full-screen editors below live outside them, so their routes add it.
+const LiveSessionButton = lazy(() =>
+  import("./modules/questions/components/LiveSessionButton.js").then((m) => ({ default: m.LiveSessionButton })));
 
-/** A full-screen course page plus the live question-board prompt. */
-function WithLiveBoard({ children }: { children: React.ReactNode }) {
+/** A full-screen course page plus the live question-session prompt. */
+function WithLiveSession({ children }: { children: React.ReactNode }) {
   const { courseId } = useParams<{ courseId: string }>();
   return (
     <>
       {children}
       {courseId && (
         <Suspense fallback={null}>
-          <LiveBoardButton courseId={courseId} />
+          <LiveSessionButton courseId={courseId} />
         </Suspense>
       )}
     </>
@@ -332,8 +336,9 @@ const routes = [
       // Open-or-create the caller's notebook for an assignment, then redirect
       // to it. A literal segment, so it can't collide with a notebook id.
       { path: "code/assignment/:assignmentId", element: lz(<CodeOpenAssignment />) },
-      { path: "questions", element: lz(<QuestionsStudentBoardsPage />) },
-      { path: "questions/:boardId", element: lz(<QuestionsStudentBoardPage />) },
+      { path: "questions", element: lz(<QuestionsStudentSessionsPage />) },
+      { path: "questions/:sessionId", element: lz(<QuestionsStudentSessionPage />) },
+      { path: "questions/:sessionId/:boardId", element: lz(<QuestionsStudentBoardPage />) },
       // v1.2 legacy: old /write* course-scoped paths → /writing*.
       { path: "write", element: <LegacyWriteRedirect /> },
       { path: "write/agents", element: <LegacyWriteRedirect suffix="agents" /> },
@@ -344,13 +349,13 @@ const routes = [
   // StudentLayout child — avoids stacking the student topbar above its header.
   {
     path: "/course/:courseId/writing/:id",
-    element: lz(<WithLiveBoard><ProvenanceEditorPage /></WithLiveBoard>),
+    element: lz(<WithLiveSession><ProvenanceEditorPage /></WithLiveSession>),
   },
   // The notebook is a full-screen surface like the writing editor, so it
   // mounts outside StudentLayout for the same reason.
   {
     path: "/course/:courseId/code/:notebookId",
-    element: lz(<WithLiveBoard><CodeNotebookPage /></WithLiveBoard>),
+    element: lz(<WithLiveSession><CodeNotebookPage /></WithLiveSession>),
   },
   // The instructor's starter-notebook editor — same surface, starter mode.
   {
@@ -433,8 +438,9 @@ const routes = [
       { path: "code/:assignmentId", element: <ParamRedirect to="submissions/code/:assignmentId" /> },
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
-      { path: "questions", element: lz(<QuestionsStaffBoardsPage />) },
-      { path: "questions/:boardId", element: lz(<QuestionsStaffBoardPage />) },
+      { path: "questions", element: lz(<QuestionsStaffSessionsPage />) },
+      { path: "questions/:sessionId", element: lz(<QuestionsStaffSessionPage />) },
+      { path: "questions/:sessionId/:boardId", element: lz(<QuestionsStaffBoardPage />) },
     ],
   },
 

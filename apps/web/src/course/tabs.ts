@@ -186,7 +186,7 @@ export const TABS: TabSpec[] = [
     band: "review",
     label: "Questions",
     description:
-      "Anonymous questions from the audience, one board per presenter. Open a board in class and everyone is prompted to ask.",
+      "Anonymous questions from the audience: a session per class meeting, a board per presenter. Open a session and everyone is prompted to ask.",
     visible: () => true,
   },
 

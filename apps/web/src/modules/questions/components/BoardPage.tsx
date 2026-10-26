@@ -1,10 +1,10 @@
-// One board: its questions, live, and (while it's open) a box to ask one.
-// Mounted twice — under the student shell and under the staff shell. The
-// server says whether the caller is staff; staff additionally get Open/Close
-// and per-question Hide and Delete.
+// One presenter's board: its questions, live, and (while the session is
+// open) a box to ask one. Mounted in both shells; the server says whether the
+// caller is staff, and staff additionally get the session's Open/Close and
+// per-question Hide and Delete.
 //
 // Questions carry no names, for anyone. A person's own questions are marked
-// "Yours" (to them alone) and stay editable until the board closes.
+// "Yours" (to them alone) and stay editable until the session closes.
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -15,12 +15,14 @@ import {
   askQuestion,
   deleteQuestion,
   getBoard,
-  listBoards,
-  updateBoard,
   updateQuestion,
+  updateSession,
   type BoardDTO,
   type EntryDTO,
+  type SessionDTO,
 } from "../api.js";
+import { boardPath, questionsBase, sessionPath } from "./paths.js";
+import { StatusBadge } from "./StatusBadge.js";
 import { usePoll } from "./usePoll.js";
 
 const OPEN_POLL_MS = 4_000;
@@ -28,24 +30,23 @@ const IDLE_POLL_MS = 20_000;
 const MAX_CHARS = 1_000;
 
 export function BoardPage({ staffShell = false }: { staffShell?: boolean }) {
-  const { courseId, boardId } = useParams<{ courseId: string; boardId: string }>();
-  const base = staffShell
-    ? `/course/${courseId}/instructor/questions`
-    : `/course/${courseId}/questions`;
+  const { courseId = "", boardId = "" } = useParams<{ courseId: string; boardId: string }>();
 
   const [board, setBoard] = useState<BoardDTO | null>(null);
+  const [session, setSession] = useState<SessionDTO | null>(null);
+  const [siblings, setSiblings] = useState<BoardDTO[]>([]);
   const [entries, setEntries] = useState<EntryDTO[]>([]);
   const [staff, setStaff] = useState(false);
-  const [siblings, setSiblings] = useState<BoardDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   const { confirm, dialog } = useConfirm();
 
   const refresh = useCallback(() => {
-    if (!boardId) return;
     getBoard(boardId)
       .then((r) => {
         setBoard(r.board);
+        setSession(r.session);
+        setSiblings(r.boards);
         setEntries(r.entries);
         setStaff(r.staff);
         setMissing(false);
@@ -63,28 +64,19 @@ export function BoardPage({ staffShell = false }: { staffShell?: boolean }) {
     refresh();
   }, [refresh]);
 
-  // The other boards, for previous / next. Refetched when this board's
-  // status changes, since opening a draft adds it to a student's list.
-  useEffect(() => {
-    if (!courseId) return;
-    listBoards(courseId)
-      .then((r) => setSiblings(r.boards))
-      .catch(() => {});
-  }, [courseId, board?.status]);
-
-  usePoll(refresh, board?.status === "open" ? OPEN_POLL_MS : IDLE_POLL_MS, !!board);
+  usePoll(refresh, session?.status === "open" ? OPEN_POLL_MS : IDLE_POLL_MS, !!board);
 
   if (missing) {
     return (
       <div className="app-page">
         <PageHeader eyebrow="Questions" title="Board not found" />
         <p className="muted">
-          It may have been deleted. <Link to={base}>See all boards</Link>.
+          It may have been deleted. <Link to={questionsBase(courseId, staffShell)}>See all sessions</Link>.
         </p>
       </div>
     );
   }
-  if (!board) {
+  if (!board || !session) {
     return (
       <div className="app-page">
         {error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}
@@ -92,15 +84,15 @@ export function BoardPage({ staffShell = false }: { staffShell?: boolean }) {
     );
   }
 
-  const open = board.status === "open";
-  // Boards list newest first; "previous" is the one before this in class.
+  const open = session.status === "open";
   const idx = siblings.findIndex((b) => b.id === board.id);
-  const newer = idx > 0 ? siblings[idx - 1] : undefined;
-  const older = idx >= 0 ? siblings[idx + 1] : undefined;
+  const prev = idx > 0 ? siblings[idx - 1] : undefined;
+  const next = idx >= 0 ? siblings[idx + 1] : undefined;
+  const toBoard = (b: BoardDTO) => boardPath(courseId, staffShell, session.id, b.id);
 
   const setStatus = async (status: "open" | "closed") => {
     try {
-      setBoard(await updateBoard(board.id, { status }));
+      await updateSession(session.id, { status });
       refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -108,50 +100,45 @@ export function BoardPage({ staffShell = false }: { staffShell?: boolean }) {
   };
 
   const scope = open
-    ? "Open. Ask as many questions as you like — they appear here for everyone, without names."
-    : board.status === "closed"
-      ? "Closed to new questions."
-      : "Draft — only course staff can see this board until it's opened.";
+    ? "Ask as many questions as you like — they appear here for everyone, without names."
+    : session.status === "closed"
+      ? "This session is closed to new questions."
+      : "Draft — only course staff can see this session until it's opened.";
 
   return (
-    <div className="app-page q-board">
+    <div className={(staffShell ? "ds-staff-page" : "app-page") + " q-board"}>
       <PageHeader
-        eyebrow="Questions"
+        eyebrow={session.title}
         title={board.title}
         scope={scope}
         actions={
           staff ? (
             open ? (
               <Button variant="subtle" onClick={() => setStatus("closed")}>
-                Close
+                Close session
               </Button>
             ) : (
               <Button variant="primary" onClick={() => setStatus("open")}>
-                {board.status === "draft" ? "Open" : "Reopen"}
+                {session.status === "draft" ? "Open session" : "Reopen session"}
               </Button>
             )
-          ) : undefined
+          ) : (
+            <StatusBadge status={session.status} />
+          )
         }
       />
 
-      <nav className="q-board__nav" aria-label="Boards">
-        {older ? (
-          <Link to={`${base}/${older.id}`}>← {older.title}</Link>
-        ) : (
-          <span />
-        )}
-        <Link to={base}>All boards</Link>
-        {newer ? <Link to={`${base}/${newer.id}`}>{newer.title} →</Link> : <span />}
+      <nav className="q-board__nav" aria-label="Presenters">
+        {prev ? <Link to={toBoard(prev)}>← {prev.title}</Link> : <span />}
+        <Link to={sessionPath(courseId, staffShell, session.id)}>All boards</Link>
+        {next ? <Link to={toBoard(next)}>{next.title} →</Link> : <span />}
       </nav>
 
       {error && <p className="error">{error}</p>}
 
       {open && <Composer boardId={board.id} onAsked={refresh} />}
 
-      <Section
-        kicker="Questions"
-        meta={`${entries.length}${open ? " · updates live" : ""}`}
-      >
+      <Section kicker="Questions" meta={`${entries.length}${open ? " · updates live" : ""}`}>
         {entries.length === 0 ? (
           <p className="muted">{open ? "No questions yet. Be the first." : "No questions were asked."}</p>
         ) : (
@@ -191,11 +178,11 @@ function Composer({ boardId, onAsked }: { boardId: string; onAsked: () => void }
       onAsked();
     } catch (e) {
       setError(
-        e instanceof ApiError && e.code === "board_closed"
-          ? "This board just closed, so your question wasn't added."
+        e instanceof ApiError && e.code === "session_closed"
+          ? "The session just closed, so your question wasn't added."
           : (e as Error).message,
       );
-      if (e instanceof ApiError && e.code === "board_closed") onAsked();
+      if (e instanceof ApiError && e.code === "session_closed") onAsked();
     } finally {
       setBusy(false);
     }

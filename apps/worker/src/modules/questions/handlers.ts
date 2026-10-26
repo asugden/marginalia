@@ -1,10 +1,15 @@
 // Request handlers for the questions module. See README.md.
 //
-// Two kinds of caller, both enrolled in the board's course:
+// A session (one class meeting) holds boards (one per presenter). The session
+// is the window: while it is open, anyone enrolled asks questions on any of
+// its boards.
+//
+// Two kinds of caller, both enrolled in the course:
 //   - Staff (a role holding `run_questions`) create, rename, open, close and
-//     delete boards, and hide or delete any question.
-//   - Everyone, staff included, reads open and closed boards and asks
-//     questions while a board is open; each person may edit or delete their
+//     delete sessions; add, rename and delete boards; and hide or delete any
+//     question.
+//   - Everyone, staff included, reads open and closed sessions and asks
+//     questions while a session is open; each person may edit or delete their
 //     own questions until it closes.
 //
 // No response ever carries a question's author. That is the module's one
@@ -14,7 +19,14 @@ import type { Env } from "../../env.js";
 import type { Identity } from "../../auth.js";
 import { can } from "../../permissions.js";
 import * as repo from "./repo.js";
-import { rowToBoard, rowToEntry, type QuestionBoardRow, type QuestionEntryRow } from "./types.js";
+import {
+  rowToBoard,
+  rowToEntry,
+  rowToSession,
+  type QuestionBoardRow,
+  type QuestionEntryRow,
+  type QuestionSessionRow,
+} from "./types.js";
 
 const MAX_TITLE_CHARS = 120;
 const MAX_BODY_CHARS = 1_000;
@@ -27,7 +39,7 @@ const json = (body: unknown, status = 200) =>
 const error = (message: string, status: number, code?: string) =>
   json(code ? { error: message, code } : { error: message }, status);
 
-/** Who the caller is in a course: their id and whether they run boards. */
+/** Who the caller is in a course: their id and whether they run sessions. */
 interface Member {
   userId: string;
   staff: boolean;
@@ -43,41 +55,53 @@ async function member(env: Env, identity: Identity, courseId: string): Promise<M
   return { userId: identity.userId, staff: can(row.role, "run_questions") };
 }
 
-async function staffMember(env: Env, identity: Identity, courseId: string): Promise<Member | Response> {
-  const m = await member(env, identity, courseId);
-  if (m instanceof Response) return m;
-  if (!m.staff) return error("Course staff only", 403);
-  return m;
-}
+const staffOnly = () => error("Course staff only", 403);
 
 /**
- * Resolve a board and the caller's standing in its course. A draft board is
- * reported as missing to students, so its existence (and title) stays private
- * until staff open it.
+ * Resolve a session and the caller's standing in its course. A draft session
+ * is reported as missing to students, so its existence (and title) stays
+ * private until staff open it.
  */
+async function sessionFor(
+  env: Env,
+  identity: Identity,
+  sessionId: string,
+): Promise<{ session: QuestionSessionRow; m: Member } | Response> {
+  const session = await repo.getSession(env.DB, sessionId);
+  if (!session) return error("Session not found", 404);
+  const m = await member(env, identity, session.course_id);
+  if (m instanceof Response) return m;
+  if (session.status === "draft" && !m.staff) return error("Session not found", 404);
+  return { session, m };
+}
+
 async function boardFor(
   env: Env,
   identity: Identity,
   boardId: string,
-): Promise<{ board: QuestionBoardRow; m: Member } | Response> {
+): Promise<{ board: QuestionBoardRow; session: QuestionSessionRow; m: Member } | Response> {
   const board = await repo.getBoard(env.DB, boardId);
   if (!board) return error("Board not found", 404);
-  const m = await member(env, identity, board.course_id);
-  if (m instanceof Response) return m;
-  if (board.status === "draft" && !m.staff) return error("Board not found", 404);
-  return { board, m };
+  const resolved = await sessionFor(env, identity, board.session_id);
+  if (resolved instanceof Response) {
+    return resolved.status === 404 ? error("Board not found", 404) : resolved;
+  }
+  return { board, ...resolved };
 }
 
 async function entryFor(
   env: Env,
   identity: Identity,
   entryId: string,
-): Promise<{ entry: QuestionEntryRow; board: QuestionBoardRow; m: Member } | Response> {
+): Promise<
+  | { entry: QuestionEntryRow; board: QuestionBoardRow; session: QuestionSessionRow; m: Member }
+  | Response
+> {
   const entry = await repo.getEntry(env.DB, entryId);
   if (!entry) return error("Question not found", 404);
   const resolved = await boardFor(env, identity, entry.board_id);
   if (resolved instanceof Response) return resolved;
-  // A student asking for a hidden question learns nothing about it.
+  // A student asking for someone else's hidden question learns nothing about it.
   if (entry.hidden_at !== null && !resolved.m.staff && entry.user_id !== resolved.m.userId) {
     return error("Question not found", 404);
   }
@@ -100,63 +124,145 @@ function cleanBody(v: unknown): string | Response {
   return b;
 }
 
-const closedError = () => error("This board is closed to new questions", 409, "board_closed");
+const closedError = () => error("This session is closed to new questions", 409, "session_closed");
 
 async function readJson(req: Request): Promise<Record<string, unknown>> {
   const body = (await req.json().catch(() => null)) as unknown;
   return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
 }
 
-// ── boards ─────────────────────────────────────────────────────────────────
+async function boardsOf(env: Env, session: QuestionSessionRow, staff: boolean) {
+  const rows = await repo.listBoards(env.DB, session, staff);
+  return rows.map((r) => rowToBoard(r, r.question_count));
+}
 
-/** GET /boards?courseId= → { boards, staff } */
-export async function listBoardsRoute(env: Env, identity: Identity, url: URL): Promise<Response> {
+// ── sessions ───────────────────────────────────────────────────────────────
+
+/** GET /sessions?courseId= → { sessions, staff } */
+export async function listSessionsRoute(env: Env, identity: Identity, url: URL): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
   const m = await member(env, identity, courseId);
   if (m instanceof Response) return m;
-  const rows = await repo.listBoards(env.DB, courseId, m.staff);
-  return json({ boards: rows.map((r) => rowToBoard(r, r.question_count)), staff: m.staff });
+  const rows = await repo.listSessions(env.DB, courseId, m.staff);
+  return json({ sessions: rows.map((r) => rowToSession(r, r.board_count)), staff: m.staff });
 }
 
-/** GET /live?courseId= → { board: BoardDTO | null }. Polled by every open
+/** GET /live?courseId= → { session: SessionDTO | null }. Polled by every open
  *  page in the course, so it is one indexed query and nothing else. */
-export async function liveBoardRoute(env: Env, identity: Identity, url: URL): Promise<Response> {
+export async function liveSessionRoute(env: Env, identity: Identity, url: URL): Promise<Response> {
   const courseId = url.searchParams.get("courseId");
   if (!courseId) return error("courseId is required", 400);
   const m = await member(env, identity, courseId);
   if (m instanceof Response) return m;
-  const row = await repo.latestOpenBoard(env.DB, courseId);
-  return json({ board: row ? rowToBoard(row, 0) : null });
+  const row = await repo.latestOpenSession(env.DB, courseId);
+  return json({ session: row ? rowToSession(row, 0) : null });
 }
 
-/** POST /boards { courseId, title } → { board }. Created as a draft. */
-export async function createBoardRoute(req: Request, env: Env, identity: Identity): Promise<Response> {
+/** POST /sessions { courseId, title } → { session }. Created as a draft. */
+export async function createSessionRoute(req: Request, env: Env, identity: Identity): Promise<Response> {
   const body = await readJson(req);
   const courseId = typeof body.courseId === "string" ? body.courseId : null;
   if (!courseId) return error("courseId is required", 400);
-  const m = await staffMember(env, identity, courseId);
+  const m = await member(env, identity, courseId);
   if (m instanceof Response) return m;
+  if (!m.staff) return staffOnly();
   const title = cleanTitle(body.title);
   if (title instanceof Response) return title;
-  const row = await repo.createBoard(env.DB, courseId, title, m.userId);
+  const row = await repo.createSession(env.DB, courseId, title, m.userId);
+  return json({ session: rowToSession(row, 0) }, 201);
+}
+
+/** GET /sessions/:id → { session, boards, staff } */
+export async function getSessionRoute(env: Env, identity: Identity, sessionId: string): Promise<Response> {
+  const resolved = await sessionFor(env, identity, sessionId);
+  if (resolved instanceof Response) return resolved;
+  const { session, m } = resolved;
+  const boards = await boardsOf(env, session, m.staff);
+  return json({ session: rowToSession(session, boards.length), boards, staff: m.staff });
+}
+
+/** PATCH /sessions/:id { title?, status?: "open" | "closed" } → { session } */
+export async function updateSessionRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  sessionId: string,
+): Promise<Response> {
+  const resolved = await sessionFor(env, identity, sessionId);
+  if (resolved instanceof Response) return resolved;
+  const { session, m } = resolved;
+  if (!m.staff) return staffOnly();
+  const body = await readJson(req);
+  if (body.title !== undefined) {
+    const title = cleanTitle(body.title);
+    if (title instanceof Response) return title;
+    await repo.renameSession(env.DB, session.id, session.course_id, title);
+  }
+  if (body.status !== undefined) {
+    if (body.status !== "open" && body.status !== "closed") {
+      return error("status must be open or closed", 400);
+    }
+    if (body.status === "closed" && session.status === "draft") {
+      return error("Open the session before closing it", 400);
+    }
+    if (body.status !== session.status) {
+      await repo.setSessionStatus(env.DB, session.id, session.course_id, body.status);
+    }
+  }
+  const fresh = (await repo.getSession(env.DB, session.id))!;
+  const boards = await repo.listBoards(env.DB, fresh, true);
+  return json({ session: rowToSession(fresh, boards.length) });
+}
+
+/** DELETE /sessions/:id → { ok } — the session, its boards, their questions. */
+export async function deleteSessionRoute(env: Env, identity: Identity, sessionId: string): Promise<Response> {
+  const resolved = await sessionFor(env, identity, sessionId);
+  if (resolved instanceof Response) return resolved;
+  if (!resolved.m.staff) return staffOnly();
+  await repo.deleteSession(env.DB, resolved.session.id, resolved.session.course_id);
+  return json({ ok: true });
+}
+
+// ── boards ─────────────────────────────────────────────────────────────────
+
+/** POST /sessions/:id/boards { title } → { board }. Appended to the session;
+ *  allowed while it is open, for the presenter nobody planned for. */
+export async function createBoardRoute(
+  req: Request,
+  env: Env,
+  identity: Identity,
+  sessionId: string,
+): Promise<Response> {
+  const resolved = await sessionFor(env, identity, sessionId);
+  if (resolved instanceof Response) return resolved;
+  if (!resolved.m.staff) return staffOnly();
+  const title = cleanTitle((await readJson(req)).title);
+  if (title instanceof Response) return title;
+  const row = await repo.createBoard(env.DB, resolved.session, title);
   return json({ board: rowToBoard(row, 0) }, 201);
 }
 
-/** GET /boards/:id → { board, entries, staff } */
+/** GET /boards/:id → { board, session, boards, entries, staff }. `boards` is
+ *  the whole session, for moving between presenters. */
 export async function getBoardRoute(env: Env, identity: Identity, boardId: string): Promise<Response> {
   const resolved = await boardFor(env, identity, boardId);
   if (resolved instanceof Response) return resolved;
-  const { board, m } = resolved;
-  const entries = await repo.listEntries(env.DB, board, m.staff);
+  const { board, session, m } = resolved;
+  const [entries, boards] = await Promise.all([
+    repo.listEntries(env.DB, board, m.staff),
+    boardsOf(env, session, m.staff),
+  ]);
   return json({
     board: rowToBoard(board, entries.length),
+    session: rowToSession(session, boards.length),
+    boards,
     entries: entries.map((e) => rowToEntry(e, m.userId)),
     staff: m.staff,
   });
 }
 
-/** PATCH /boards/:id { title?, status?: "open" | "closed" } → { board } */
+/** PATCH /boards/:id { title } → { board } */
 export async function updateBoardRoute(
   req: Request,
   env: Env,
@@ -166,41 +272,26 @@ export async function updateBoardRoute(
   const resolved = await boardFor(env, identity, boardId);
   if (resolved instanceof Response) return resolved;
   const { board, m } = resolved;
-  if (!m.staff) return error("Course staff only", 403);
-  const body = await readJson(req);
-  if (body.title !== undefined) {
-    const title = cleanTitle(body.title);
-    if (title instanceof Response) return title;
-    await repo.renameBoard(env.DB, board.id, board.course_id, title);
-  }
-  if (body.status !== undefined) {
-    if (body.status !== "open" && body.status !== "closed") {
-      return error("status must be open or closed", 400);
-    }
-    if (body.status === "closed" && board.status === "draft") {
-      return error("Open the board before closing it", 400);
-    }
-    if (body.status !== board.status) {
-      await repo.setBoardStatus(env.DB, board.id, board.course_id, body.status);
-    }
-  }
-  const fresh = (await repo.getBoard(env.DB, board.id))!;
-  const entries = await repo.listEntries(env.DB, fresh, true);
-  return json({ board: rowToBoard(fresh, entries.length) });
+  if (!m.staff) return staffOnly();
+  const title = cleanTitle((await readJson(req)).title);
+  if (title instanceof Response) return title;
+  await repo.renameBoard(env.DB, board, title);
+  const entries = await repo.listEntries(env.DB, board, true);
+  return json({ board: rowToBoard({ ...board, title }, entries.length) });
 }
 
 /** DELETE /boards/:id → { ok } — the board and every question on it. */
 export async function deleteBoardRoute(env: Env, identity: Identity, boardId: string): Promise<Response> {
   const resolved = await boardFor(env, identity, boardId);
   if (resolved instanceof Response) return resolved;
-  if (!resolved.m.staff) return error("Course staff only", 403);
-  await repo.deleteBoard(env.DB, resolved.board.id, resolved.board.course_id);
+  if (!resolved.m.staff) return staffOnly();
+  await repo.deleteBoard(env.DB, resolved.board);
   return json({ ok: true });
 }
 
 // ── questions ──────────────────────────────────────────────────────────────
 
-/** POST /boards/:id/entries { body } → { entry }. Open boards only. */
+/** POST /boards/:id/entries { body } → { entry }. Open sessions only. */
 export async function createEntryRoute(
   req: Request,
   env: Env,
@@ -209,8 +300,8 @@ export async function createEntryRoute(
 ): Promise<Response> {
   const resolved = await boardFor(env, identity, boardId);
   if (resolved instanceof Response) return resolved;
-  const { board, m } = resolved;
-  if (board.status !== "open") return closedError();
+  const { board, session, m } = resolved;
+  if (session.status !== "open") return closedError();
   const text = cleanBody((await readJson(req)).body);
   if (text instanceof Response) return text;
   const row = await repo.createEntry(env.DB, board, m.userId, text);
@@ -219,7 +310,7 @@ export async function createEntryRoute(
 
 /**
  * PATCH /entries/:id { body?, hidden? } → { entry }
- *   body   — the author, while the board is open.
+ *   body   — the author, while the session is open.
  *   hidden — staff, at any time.
  */
 export async function updateEntryRoute(
@@ -230,17 +321,17 @@ export async function updateEntryRoute(
 ): Promise<Response> {
   const resolved = await entryFor(env, identity, entryId);
   if (resolved instanceof Response) return resolved;
-  const { entry, board, m } = resolved;
+  const { entry, session, m } = resolved;
   const body = await readJson(req);
   if (body.body !== undefined) {
     if (entry.user_id !== m.userId) return error("You can only edit your own questions", 403);
-    if (board.status !== "open") return closedError();
+    if (session.status !== "open") return closedError();
     const text = cleanBody(body.body);
     if (text instanceof Response) return text;
     await repo.updateEntryBody(env.DB, entry, text);
   }
   if (body.hidden !== undefined) {
-    if (!m.staff) return error("Course staff only", 403);
+    if (!m.staff) return staffOnly();
     if (typeof body.hidden !== "boolean") return error("hidden must be a boolean", 400);
     await repo.setEntryHidden(env.DB, entry, body.hidden);
   }
@@ -248,15 +339,15 @@ export async function updateEntryRoute(
   return json({ entry: rowToEntry(fresh, m.userId) });
 }
 
-/** DELETE /entries/:id → { ok }. The author while the board is open; staff
+/** DELETE /entries/:id → { ok }. The author while the session is open; staff
  *  at any time. */
 export async function deleteEntryRoute(env: Env, identity: Identity, entryId: string): Promise<Response> {
   const resolved = await entryFor(env, identity, entryId);
   if (resolved instanceof Response) return resolved;
-  const { entry, board, m } = resolved;
+  const { entry, session, m } = resolved;
   if (!m.staff) {
     if (entry.user_id !== m.userId) return error("You can only delete your own questions", 403);
-    if (board.status !== "open") return closedError();
+    if (session.status !== "open") return closedError();
   }
   await repo.deleteEntry(env.DB, entry);
   return json({ ok: true });

@@ -46,7 +46,7 @@ import {
 import { MenuIcon, SignOutIcon, UserIcon } from "../icons.js";
 import { signOut } from "../session.js";
 import { TourPanel } from "../modules/onboarding/components/TourPanel.js";
-import { LiveBoardButton } from "../modules/questions/components/LiveBoardButton.js";
+import { LiveSessionButton } from "../modules/questions/components/LiveSessionButton.js";
 
 export function StudentLayout() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -312,7 +312,7 @@ export function StudentLayout() {
           <Outlet />
         </div>
         <TourPanel courseId={courseId} />
-        <LiveBoardButton courseId={courseId} />
+        <LiveSessionButton courseId={courseId} />
       </div>
     </CourseContext.Provider>
   );

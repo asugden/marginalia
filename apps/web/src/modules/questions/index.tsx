@@ -1,16 +1,18 @@
 // Questions module entry. Pages are imported via this barrel so the main
 // router only needs one import path per route. See ./README.md.
+//
+// Each page is mounted twice — under the student shell and the staff shell —
+// and differs only in where its links point and which register it wears.
 
 import { BoardPage } from "./components/BoardPage.js";
+import { SessionPage } from "./components/SessionPage.js";
+import { SessionsPage } from "./components/SessionsPage.js";
 
-export { StaffBoardsPage } from "./components/StaffBoardsPage.js";
-export { StudentBoardsPage } from "./components/StudentBoardsPage.js";
-export { LiveBoardButton } from "./components/LiveBoardButton.js";
+export { LiveSessionButton } from "./components/LiveSessionButton.js";
 
-export function StudentBoardPage() {
-  return <BoardPage />;
-}
-
-export function StaffBoardPage() {
-  return <BoardPage staffShell />;
-}
+export const StudentSessionsPage = () => <SessionsPage />;
+export const StudentSessionPage = () => <SessionPage />;
+export const StudentBoardPage = () => <BoardPage />;
+export const StaffSessionsPage = () => <SessionsPage staffShell />;
+export const StaffSessionPage = () => <SessionPage staffShell />;
+export const StaffBoardPage = () => <BoardPage staffShell />;

@@ -1,19 +1,33 @@
 // Shared types for the questions module.
 
-export type BoardStatus = "draft" | "open" | "closed";
+export type SessionStatus = "draft" | "open" | "closed";
 
-export interface QuestionBoardRow {
+export interface QuestionSessionRow {
   id: string;
   course_id: string;
   title: string;
-  status: BoardStatus;
+  status: SessionStatus;
   created_by: string;
   created_at: number;
   opened_at: number | null;
   closed_at: number | null;
 }
 
-/** A board row with its visible question count, as the list query returns it. */
+/** A session row with its board count, as the list query returns it. */
+export interface QuestionSessionListRow extends QuestionSessionRow {
+  board_count: number;
+}
+
+export interface QuestionBoardRow {
+  id: string;
+  session_id: string;
+  course_id: string;
+  title: string;
+  position: number;
+  created_at: number;
+}
+
+/** A board row with its visible question count. */
 export interface QuestionBoardListRow extends QuestionBoardRow {
   question_count: number;
 }
@@ -29,14 +43,22 @@ export interface QuestionEntryRow {
   hidden_at: number | null;
 }
 
-export interface BoardDTO {
+export interface SessionDTO {
   id: string;
   courseId: string;
   title: string;
-  status: BoardStatus;
+  status: SessionStatus;
   createdAt: number;
   openedAt: number | null;
   closedAt: number | null;
+  boardCount: number;
+}
+
+export interface BoardDTO {
+  id: string;
+  sessionId: string;
+  title: string;
+  position: number;
   /** Questions the caller can see: staff count hidden ones, students don't. */
   questionCount: number;
 }
@@ -56,7 +78,7 @@ export interface EntryDTO {
   hidden: boolean;
 }
 
-export function rowToBoard(row: QuestionBoardRow, questionCount: number): BoardDTO {
+export function rowToSession(row: QuestionSessionRow, boardCount: number): SessionDTO {
   return {
     id: row.id,
     courseId: row.course_id,
@@ -65,6 +87,16 @@ export function rowToBoard(row: QuestionBoardRow, questionCount: number): BoardD
     createdAt: row.created_at,
     openedAt: row.opened_at,
     closedAt: row.closed_at,
+    boardCount,
+  };
+}
+
+export function rowToBoard(row: QuestionBoardRow, questionCount: number): BoardDTO {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    title: row.title,
+    position: row.position,
     questionCount,
   };
 }
