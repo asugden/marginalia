@@ -7,8 +7,8 @@ opened by pointing at the part of the figure it builds (click to pin).
 
 - `types.ts` — `CodeVersion` / `CodeSection`, the shape of an example's
   code content.
-- `useCodeView.ts` — on/off (one setting shared by every example) and the
-  version pick (per example), remembered in this browser only.
+- `useCodeView.ts` — on/off (always starts off, not remembered) and the
+  version pick (per example, remembered in this browser only).
 - `CodeToggle.tsx` — the DS `Switch` and, for several versions, the DS
   `Dropdown` (never the native `Select`).
 - `CodePopover.tsx` — the one open box (with a pager when several share a

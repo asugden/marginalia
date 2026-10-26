@@ -55,7 +55,7 @@ const SHAPE_HINTS: Record<Difficulty, string> = {
 const RES = 180;
 
 export function NaiveBayesPage() {
-  const [dim, setDim] = useState<1 | 2>(2);
+  const [dim, setDim] = useState<1 | 2>(1);
   const [nClasses, setNClasses] = useState<2 | 3>(2);
   const [difficulty, setDifficulty] = useState<Difficulty>("round");
   const [seed, setSeed] = useState(20250902);
