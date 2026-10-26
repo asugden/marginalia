@@ -13,6 +13,9 @@
 //   * Completed — done work, entirely separate at the bottom, so finishing
 //     something moves it rather than making it vanish.
 //
+// Plus a Questions panel after To do, shown only once the course has opened a
+// question session: the newest few sessions and a link to all of them.
+//
 // Every card is the shared ItemCard (the same card instructors see), whole
 // card clickable, with one status control on the right: Start (accent) for
 // work not begun, Continue for work under way, and no button once done — the
@@ -29,6 +32,8 @@ import { listNotebooks, type NotebookSummaryDTO } from "../modules/code/api.js";
 import { listAgents, type AgentSummary } from "../client.js";
 import { useCourse } from "../course/useCourse.js";
 import { listCourseItems, type CourseItemDTO } from "../modules/course-items/api.js";
+import { listSessions, type SessionDTO } from "../modules/questions/api.js";
+import { SessionCard } from "../modules/questions/components/cards.js";
 import { itemTitle } from "../modules/course-items/title.js";
 import {
   buildStudentWork,
@@ -73,6 +78,7 @@ export function DashboardPage() {
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [docs, setDocs] = useState<DocumentSummary[] | null>(null);
   const [notebooks, setNotebooks] = useState<NotebookSummaryDTO[] | null>(null);
+  const [sessions, setSessions] = useState<SessionDTO[]>([]);
   const [sort, setSort] = useState<SortMode>(readSort);
   const [showAll, setShowAll] = useState(false);
 
@@ -92,6 +98,7 @@ export function DashboardPage() {
       setAgents,
       [],
     );
+    void settle(listSessions(courseId, ctrl.signal).then((r) => r.sessions), setSessions, []);
     return () => ctrl.abort();
   }, [courseId, provenanceEnabled, codeEnabled, agentsEnabled]);
 
@@ -194,6 +201,27 @@ export function DashboardPage() {
             )}
           </div>
         </section>
+
+        {sessions.length > 0 && (
+          <section className="app-modpanel app-modpanel--open" data-module="questions">
+            <div className="app-modpanel__head">
+              <div className="app-modpanel__heading">
+                <span className="eyebrow">In class</span>
+                <h2>Questions</h2>
+              </div>
+              <Button variant="subtle" size="sm" href={`${base}/questions`}>
+                All sessions
+              </Button>
+            </div>
+            <div className="app-modpanel__body">
+              <div className="app-list">
+                {sessions.slice(0, 3).map((s) => (
+                  <SessionCard key={s.id} session={s} href={`${base}/questions/${s.id}`} />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {!loading && explore.length > 0 && (
           <section className="app-modpanel app-modpanel--open" data-module="explore">

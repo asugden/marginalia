@@ -4,10 +4,10 @@
 // Handlers ask `can(role, "author")`, never `role === "instructor"`, so what a
 // role may do is written down once and changed in one place.
 //
-//                     author  manage_students  view_submissions  run_attendance  manage_staff
-//   instructor          ✓           ✓                 ✓                ✓              ✓
-//   ta                  ✗           ✓                 ✓                ✓              ✗
-//   student             ✗           ✗                 ✗                ✗              ✗
+//                     author  manage_students  view_submissions  run_attendance  run_questions  manage_staff
+//   instructor          ✓           ✓                 ✓                ✓              ✓              ✓
+//   ta                  ✗           ✓                 ✓                ✓              ✓              ✗
+//   student             ✗           ✗                 ✗                ✗              ✗              ✗
 //
 // `manage_staff` is adding or changing TAs. Adding instructors is never a
 // course capability: only an instance admin may do it (see assignableRoles).
@@ -27,6 +27,8 @@ export type Capability =
   | "view_submissions"
   /** Open, run, and export attendance sessions. */
   | "run_attendance"
+  /** Create, open, close, and moderate question boards. */
+  | "run_questions"
   /** Add, change, and remove TAs. */
   | "manage_staff";
 
@@ -36,9 +38,15 @@ const TABLE: Record<EnrollmentRole, ReadonlySet<Capability>> = {
     "manage_students",
     "view_submissions",
     "run_attendance",
+    "run_questions",
     "manage_staff",
   ]),
-  ta: new Set<Capability>(["manage_students", "view_submissions", "run_attendance"]),
+  ta: new Set<Capability>([
+    "manage_students",
+    "view_submissions",
+    "run_attendance",
+    "run_questions",
+  ]),
   student: new Set<Capability>(),
 };
 
