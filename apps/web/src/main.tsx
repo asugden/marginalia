@@ -125,14 +125,10 @@ const QuestionsStaffSessionsPage = lazy(() =>
   import("./modules/questions/index.js").then((m) => ({ default: m.StaffSessionsPage })));
 const QuestionsStaffSessionPage = lazy(() =>
   import("./modules/questions/index.js").then((m) => ({ default: m.StaffSessionPage })));
-const QuestionsStaffBoardPage = lazy(() =>
-  import("./modules/questions/index.js").then((m) => ({ default: m.StaffBoardPage })));
 const QuestionsStudentSessionsPage = lazy(() =>
   import("./modules/questions/index.js").then((m) => ({ default: m.StudentSessionsPage })));
 const QuestionsStudentSessionPage = lazy(() =>
   import("./modules/questions/index.js").then((m) => ({ default: m.StudentSessionPage })));
-const QuestionsStudentBoardPage = lazy(() =>
-  import("./modules/questions/index.js").then((m) => ({ default: m.StudentBoardPage })));
 // The "a session just opened" prompt. The course shells mount it themselves;
 // the full-screen editors below live outside them, so their routes add it.
 const LiveSessionButton = lazy(() =>
@@ -337,8 +333,8 @@ const routes = [
       // to it. A literal segment, so it can't collide with a notebook id.
       { path: "code/assignment/:assignmentId", element: lz(<CodeOpenAssignment />) },
       { path: "questions", element: lz(<QuestionsStudentSessionsPage />) },
-      { path: "questions/:sessionId", element: lz(<QuestionsStudentSessionPage />) },
-      { path: "questions/:sessionId/:boardId", element: lz(<QuestionsStudentBoardPage />) },
+      // One route, optional board: switching boards keeps the page mounted.
+      { path: "questions/:sessionId/:boardId?", element: lz(<QuestionsStudentSessionPage />) },
       // v1.2 legacy: old /write* course-scoped paths → /writing*.
       { path: "write", element: <LegacyWriteRedirect /> },
       { path: "write/agents", element: <LegacyWriteRedirect suffix="agents" /> },
@@ -439,8 +435,8 @@ const routes = [
       { path: "attendance", element: lz(<AttendanceSessionListPage />) },
       { path: "attendance/sessions/:id", element: lz(<AttendanceDisplayPage />) },
       { path: "questions", element: lz(<QuestionsStaffSessionsPage />) },
-      { path: "questions/:sessionId", element: lz(<QuestionsStaffSessionPage />) },
-      { path: "questions/:sessionId/:boardId", element: lz(<QuestionsStaffBoardPage />) },
+      // One route, optional board: switching boards keeps the page mounted.
+      { path: "questions/:sessionId/:boardId?", element: lz(<QuestionsStaffSessionPage />) },
     ],
   },
 

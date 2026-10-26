@@ -3,7 +3,7 @@
 // can create, open, close, rename and delete sessions.
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button, PageHeader, Section, useConfirm } from "../../../components/index.js";
 import { createSession, deleteSession, listSessions, updateSession, type SessionDTO } from "../api.js";
 import { SessionCard } from "./cards.js";
@@ -13,6 +13,7 @@ import { usePoll } from "./usePoll.js";
 
 export function SessionsPage({ staffShell = false }: { staffShell?: boolean }) {
   const { courseId = "" } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<SessionDTO[] | null>(null);
   const [staff, setStaff] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +71,13 @@ export function SessionsPage({ staffShell = false }: { staffShell?: boolean }) {
           <CreateForm
             label="Session name"
             placeholder="e.g. Presentations — Day 1"
-            onCreate={(t) => act(() => createSession(courseId, t))}
+            onCreate={(t) =>
+              // Straight into the new session, where its boards are added.
+              act(async () => {
+                const s = await createSession(courseId, t);
+                navigate(sessionPath(courseId, staffShell, s.id));
+              })
+            }
           />
         </Section>
       )}

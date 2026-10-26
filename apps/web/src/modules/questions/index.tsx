@@ -4,7 +4,6 @@
 // Each page is mounted twice — under the student shell and the staff shell —
 // and differs only in where its links point and which register it wears.
 
-import { BoardPage } from "./components/BoardPage.js";
 import { SessionPage } from "./components/SessionPage.js";
 import { SessionsPage } from "./components/SessionsPage.js";
 
@@ -12,7 +11,5 @@ export { LiveSessionButton } from "./components/LiveSessionButton.js";
 
 export const StudentSessionsPage = () => <SessionsPage />;
 export const StudentSessionPage = () => <SessionPage />;
-export const StudentBoardPage = () => <BoardPage />;
 export const StaffSessionsPage = () => <SessionsPage staffShell />;
 export const StaffSessionPage = () => <SessionPage staffShell />;
-export const StaffBoardPage = () => <BoardPage staffShell />;
