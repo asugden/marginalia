@@ -63,9 +63,9 @@ export function Composer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          if (e.key === "Enter" && (e.shiftKey || e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void submit();
+            if (!busy) void submit();
           }
         }}
       />
